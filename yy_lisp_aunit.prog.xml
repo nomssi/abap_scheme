@@ -12,6 +12,12 @@
     <RLOAD>E</RLOAD>
     <UCCHECK>X</UCCHECK>
    </PROGDIR>
+   <TPOOL>
+    <item>
+     <ID>R</ID>
+     <LENGTH>18</LENGTH>
+    </item>
+   </TPOOL>
    <I18N_TPOOL>
     <item>
      <LANGUAGE>E</LANGUAGE>

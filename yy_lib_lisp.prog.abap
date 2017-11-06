@@ -569,6 +569,7 @@
        proc_eqv,      ##called
 
        proc_is_number,     ##called
+       proc_is_integer,     ##called
        proc_is_string,     ##called
        proc_is_symbol,     ##called
        proc_is_hash,       ##called
@@ -959,6 +960,7 @@
        env->define_value( symbol = 'string?'     type = lcl_lisp=>type_native value = 'PROC_IS_STRING' ).
        env->define_value( symbol = 'hash?'       type = lcl_lisp=>type_native value = 'PROC_IS_HASH' ).
        env->define_value( symbol = 'number?'     type = lcl_lisp=>type_native value = 'PROC_IS_NUMBER' ).
+       env->define_value( symbol = 'integer?'    type = lcl_lisp=>type_native value = 'PROC_IS_INTEGER' ).
        env->define_value( symbol = 'list?'       type = lcl_lisp=>type_native value = 'PROC_IS_LIST' ).
        env->define_value( symbol = 'alist?'      type = lcl_lisp=>type_native value = 'PROC_IS_ALIST' ).
        env->define_value( symbol = 'procedure?'  type = lcl_lisp=>type_native value = 'PROC_IS_PROCEDURE' ).
@@ -1968,6 +1970,14 @@
      METHOD proc_is_number.
        _is_type number.
      ENDMETHOD.                    "proc_is_number
+
+     METHOD proc_is_integer.
+       result = false.
+       CHECK list IS BOUND AND list->car IS BOUND.
+       CHECK list->car->type EQ lcl_lisp=>type_number
+         AND list->car->number EQ CONV int8( list->car->number ).
+       result = true.
+     ENDMETHOD.                    "proc_is_integer
 
      METHOD proc_is_symbol.
        _is_type symbol.
