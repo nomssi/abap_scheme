@@ -36,4 +36,4 @@ The current version was tested on ABAP Netweaver 7.50 and can be cloned with <a 
 ## FAQ
 For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
 
-![abap_scheme](http://wiki.scn.sap.com/wiki/download/attachments/428605896/abap_lisp.png)
+![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_lisp_workbench.png)
