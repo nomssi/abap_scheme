@@ -1,5 +1,4 @@
-# abap_scheme
-LISP interpreter in ABAP
+# Scheme interpreter in ABAP
 
 [![Language: ABAP](https://img.shields.io/badge/Language-ABAP-blue.svg?style=flat)](https://www.sap.com/developer/topics/abap-platform.html)
 [![License: MIT](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat)](https://opensource.org/licenses/MIT)
