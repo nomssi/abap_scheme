@@ -32,3 +32,8 @@ This project started as a fork of https://github.com/mydoghasworms/abap-lisp. I 
 ### Requirements
 
 The current version was tested on ABAP Netweaver 7.50 and can be cloned with <a href="http://docs.abapgit.org/">ABAP GIT</a>. For an older version, check the <a href="https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP">SCN Code Gallery</a>.
+
+## FAQ
+For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
+
+![abap_scheme](http://wiki.scn.sap.com/wiki/download/attachments/428605896/abap_lisp.png)
