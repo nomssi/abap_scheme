@@ -941,6 +941,8 @@
                   expected = '1' ).
        code_test( code =  '(remainder -5 -4)'
                   expected = '-1' ).
+       code_test( code =  '(remainder -17 -9)'
+                  expected = '-8' ).
      ENDMETHOD.                    "math_remainder
 
      METHOD math_modulo.
@@ -1301,6 +1303,10 @@
        METHODS foldl FOR TESTING.
        METHODS map FOR TESTING.
        METHODS filter FOR TESTING.
+       METHODS apply_1 FOR TESTING.
+       METHODS apply_2 FOR TESTING.
+       METHODS apply_3 FOR TESTING.
+       METHODS apply_4 FOR TESTING.
    ENDCLASS.                    "ltc_higher_order DEFINITION
 
 *----------------------------------------------------------------------*
@@ -1397,6 +1403,33 @@
                          |     '(1 2 3 4 5 7) )|
                   expected = |( 5 7 )| ).
      ENDMETHOD.                    "filter
+
+     METHOD apply_1.
+       code_test( code = |(apply + (list 3 4))|
+                  expected = '7' ).
+     ENDMETHOD.
+
+     METHOD apply_2.
+       code_test( code = |(apply + 1 -2 3 '(10 20))|
+                  expected = |32| ).
+     ENDMETHOD.
+
+     METHOD apply_3.
+       code_test( code = |(define arguments '(10 50 100))|
+                  expected = |arguments| ).
+       code_test( code = |(apply + arguments)|
+                  expected = '160' ).
+     ENDMETHOD.
+
+     METHOD apply_4.
+       code_test( code = |(define compose| &
+                         |  (lambda (f g)| &
+                         |    (lambda args| &
+                         |      (f (apply g args)))))|
+                  expected = |compose| ).
+       code_test( code = |((compose sqrt *) 12 75)|
+                  expected = '30' ).
+     ENDMETHOD.
 
    ENDCLASS.                    "ltc_higher_order IMPLEMENTATION
 

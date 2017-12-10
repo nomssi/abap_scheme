@@ -121,6 +121,7 @@
       <TEXT_NAME>ICON_TEST</TEXT_NAME>
       <ICON_ID>@12@</ICON_ID>
       <FUN_TEXT>Execute</FUN_TEXT>
+      <ICON_TEXT>Run</ICON_TEXT>
       <INFO_TEXT>Evaluate</INFO_TEXT>
      </RSMPE_FUNT>
      <RSMPE_FUNT>

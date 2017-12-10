@@ -49,6 +49,7 @@
    END-OF-DEFINITION.
 
    DEFINE validate_number.
+     validate &1.
      IF &1->type NE lcl_lisp=>type_number.
        throw( |{ &1->to_string( ) } is not a number | && &2 ).
      ENDIF.
@@ -117,7 +118,7 @@
 * Macro that implements the logic for call of ABAP math statements
    DEFINE _math.
      result = nil.
-     validate: list, list->car.
+     validate: list.
      validate_number list->car &2.
      _is_last_param list.
      TRY.
@@ -130,12 +131,12 @@
      DATA carry TYPE f.
 
      result = nil.
-     validate: list, list->car.
+     validate: list.
      validate_number list->car &2.
      _is_last_param list.
      TRY.
-         carry = list->car->number.
-         result = lcl_lisp=>new_number( &1( carry ) ).
+       carry = list->car->number.
+       result = lcl_lisp=>new_number( &1( carry ) ).
      _catch_arithmetic_error.
      ENDTRY.
    END-OF-DEFINITION.
@@ -719,6 +720,11 @@
                              RETURNING VALUE(result) TYPE  REF TO lcl_lisp
                              RAISING   lcx_lisp_exception.
 
+       METHODS eval_apply IMPORTING io_head       TYPE REF TO lcl_lisp
+                                    environment   TYPE REF TO lcl_lisp_environment
+                          RETURNING VALUE(result) TYPE  REF TO lcl_lisp
+                          RAISING   lcx_lisp_exception.
+
        METHODS extract_arguments IMPORTING io_head TYPE REF TO lcl_lisp
                                  EXPORTING eo_pars TYPE REF TO lcl_lisp
                                            eo_args TYPE REF TO lcl_lisp
@@ -732,16 +738,16 @@
                                               io_args TYPE REF TO lcl_lisp
                                               io_env  TYPE REF TO lcl_lisp_environment
                                     RAISING   lcx_lisp_exception.
-       METHODS init_letrec IMPORTING io_head TYPE REF TO lcl_lisp
-                                     io_env  TYPE REF TO lcl_lisp_environment
+       METHODS init_letrec IMPORTING io_head       TYPE REF TO lcl_lisp
+                                     io_env        TYPE REF TO lcl_lisp_environment
                            RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
                            RAISING   lcx_lisp_exception.
-       METHODS init_let_star IMPORTING io_head TYPE REF TO lcl_lisp
-                                       io_env  TYPE REF TO lcl_lisp_environment
+       METHODS init_let_star IMPORTING io_head       TYPE REF TO lcl_lisp
+                                       io_env        TYPE REF TO lcl_lisp_environment
                              RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
                              RAISING   lcx_lisp_exception.
-       METHODS init_named_let IMPORTING io_head TYPE REF TO lcl_lisp
-                                        io_env  TYPE REF TO lcl_lisp_environment
+       METHODS init_named_let IMPORTING io_head       TYPE REF TO lcl_lisp
+                                        io_env        TYPE REF TO lcl_lisp_environment
                               RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
                               RAISING   lcx_lisp_exception.
 
@@ -882,8 +888,7 @@
 * so that when it is evaluated later, it returns the quote elements unmodified
            next_char( ).            " Skip past single quote
            element = lcl_lisp=>new_cons( io_car = lcl_lisp=>new_symbol( 'quote' )
-                                         io_cdr = lcl_lisp=>new_cons( io_cdr = lcl_lisp=>nil
-                                                                      io_car = parse_token( ) ) ).
+                                         io_cdr = lcl_lisp=>new_cons( io_car = parse_token( ) ) ).
          WHEN c_text_quote.
            match_string( CHANGING cv_val = sval ).
            element = lcl_lisp=>new_string( sval ).
@@ -1100,6 +1105,19 @@
                                io_env = lo_env ).
      ENDMETHOD.                    "eval_function
 
+     METHOD eval_apply.
+       "      (apply proc arg1 . . . args) procedure
+       "The apply procedure calls proc with the elements of the list (append (list arg1 . . . ) args) as the actual arguments.
+       validate: io_head,
+                 io_head->car, " proc
+                 io_head->cdr. " argument list
+
+       result = eval( element = lcl_lisp=>new_cons( io_car = io_head->car
+                                                    io_cdr = evaluate_parameters( io_list = io_head->cdr
+                                                                                  environment = environment ) )
+                      environment = environment ).
+     ENDMETHOD.
+
      METHOD evaluate_list.
 *      Evaluate lambda
        result = nil.
@@ -1289,6 +1307,7 @@
                                          environment = environment )  ).
 
                  WHEN 'if'.
+                   "                   validate lr_tail->cdr. "I do not have a test case yet where it fails here
                    IF eval( element = lr_tail->car
                             environment = environment  ) NE false.
                      result = eval( element = lr_tail->cdr->car
@@ -1296,6 +1315,7 @@
                    ELSEIF lr_tail->cdr->cdr = nil.
                      result = false.
                    ELSE.
+                     "                     validate lr_tail->cdr->cdr. " missing test case, comment out
                      result = eval( element = lr_tail->cdr->cdr->car
                                     environment = environment ).
                    ENDIF.
@@ -1365,8 +1385,34 @@
                    result = evaluate_list( io_head = lr_tail
                                            io_env = environment ).
 
+*                 WHEN 'case'.
+* (case <key> <clause1> <clause2> <clause3> ... )
+* <key> can be any expression. Each <clause> has the form
+* ((<datum1> ...) <expression1> <expression2> ...)
+* It is an error if any of the <datum> are the same anywhere in the expression
+* Alternatively, a <clause> can be of the form
+* ((<datum1> ...) => <expression1> )
+* The last <clause> can be an "else clause" which has one of the forms
+*  (else <expression1> <expression2> ... )
+*  or
+*  (else => <expression>).
+
+*                 WHEN 'unless'.
+
+                 WHEN 'when'.
+                   "                   validate lr_tail->car, lr_tail->cdr. "I do not have a test case yet where it fails here
+                   IF eval( element = lr_tail->car
+                            environment = environment  ) NE false.
+                     result = evaluate_list( io_head = lr_tail->cdr
+                                             io_env = environment ).
+                   ENDIF.
+
                  WHEN 'read'.
                    result = read( lr_tail ).
+
+                 WHEN 'apply'.
+                   result = eval_apply( io_head = lr_tail
+                                        environment = environment ).
 
                  WHEN OTHERS.
 *---           NATIVE PROCEDURES AND LAMBDAS
@@ -1429,8 +1475,7 @@
          IF sy-tabix EQ 1.
            lo_conscell = result = lo_elem.
          ELSE.
-           lo_conscell = lo_conscell->cdr = lcl_lisp=>new_cons( io_car = lo_elem
-                                                                io_cdr = nil ).
+           lo_conscell = lo_conscell->cdr = lcl_lisp=>new_cons( io_car = lo_elem ).
          ENDIF.
        ENDLOOP.
      ENDMETHOD.
@@ -1457,7 +1502,7 @@
 * NATIVE PROCEDURES
 **********************************************************************
      METHOD proc_append.
-*      All parameters execpt the last must be lists, the last must be
+*      All parameters except the last must be lists, the last must be
 *      a cons cell. Creates a new list appending all parameters
 
 *      But if the last element in the list is not a cons cell, we cannot append
@@ -1849,6 +1894,7 @@
 
        result = false.
 
+*      Object a and Object b are both #t or both #f or both the empty list.
        IF ( a EQ true AND b EQ true )
          OR ( a EQ false AND b EQ false )
          OR ( a EQ nil AND b EQ nil ).
@@ -1860,12 +1906,26 @@
 
        CASE a->type.
          WHEN lcl_lisp=>type_number.
+* obj1 and obj2 are both exact numbers and are numerically equal (in the sense of =).
+*obj1 and obj2 are both inexact numbers such that they are numerically equal (in the sense of =)
+*and they yield the same results (in the sense of eqv?) when passed as arguments to any other
+*procedure that can be defined as a finite composition of Scheme’s standard arithmetic procedures,
+*provided it does not result in a NaN value.
            CHECK a->number = b->number.
+
          WHEN lcl_lisp=>type_symbol OR lcl_lisp=>type_string.
+* obj1 and obj2 are both symbols and are the same symbol according to the symbol=? procedure (section 6.5).
+* obj1 and obj2 are both characters and are the same character according to the char=? procedure (section 6.6).
            CHECK a->value = b->value.
+
          WHEN lcl_lisp=>type_conscell OR lcl_lisp=>type_lambda.
+* obj1 and obj2 are procedures whose location tags are equal (section 4.1.4).
+
            CHECK a->car EQ b->car AND a->cdr EQ b->cdr.
+
          WHEN OTHERS.
+* obj1 and obj2 are pairs, vectors, bytevectors, records, or strings that denote the same location  in the store (section 3.4).
+
            CHECK a = b.
        ENDCASE.
        result = true.
@@ -2059,7 +2119,7 @@
        DATA carry TYPE f.
 
        result = nil.
-       validate: list, list->car.
+       validate: list.
        validate_number list->car '[asinh]'.
        _is_last_param list.
        TRY.
@@ -2073,7 +2133,7 @@
        DATA carry TYPE f.
 
        result = nil.
-       validate: list, list->car.
+       validate: list.
        validate_number list->car '[acosh]'.
        _is_last_param list.
        TRY.
@@ -2087,7 +2147,7 @@
        DATA carry TYPE f.
 
        result = nil.
-       validate: list, list->car.
+       validate: list.
        validate_number list->car '[atanh]'.
        _is_last_param list.
        TRY.
@@ -2099,7 +2159,7 @@
 
      METHOD proc_expt.
        result = nil.
-       validate: list, list->car, list->cdr.
+       validate: list, list->cdr.
        validate_number: list->car '[expt]',
                         list->cdr->car '[expt]'.
        _is_last_param list->cdr.
@@ -2135,7 +2195,7 @@
 
      METHOD proc_round.
        result = nil.
-       validate: list, list->car.
+       validate: list.
        validate_number list->car '[round]'.
        _is_last_param list.
        TRY.
@@ -2146,7 +2206,7 @@
 
      METHOD proc_remainder.
        result = nil.
-       validate: list, list->car, list->cdr.
+       validate: list, list->cdr.
        validate_number: list->car '[remainder]',
                         list->cdr->car '[remainder]'.
        _is_last_param list->cdr.
@@ -2159,7 +2219,7 @@
 
      METHOD proc_modulo.
        result = nil.
-       validate: list, list->car, list->cdr.
+       validate: list, list->cdr.
        validate_number: list->car '[modulo]',
                         list->cdr->car '[modulo]'.
        _is_last_param list->cdr.
@@ -2187,7 +2247,7 @@
 
      METHOD proc_quotient.
        result = nil.
-       validate: list, list->car, list->cdr.
+       validate: list, list->cdr.
        validate_number: list->car '[quotient]',
                         list->cdr->car '[quotient]'.
        _is_last_param list->cdr.
