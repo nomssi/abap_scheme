@@ -31,6 +31,14 @@
 *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 *  THE SOFTWARE.
 
+  CONSTANTS:
+    c_error_incorect_input TYPE string VALUE 'Incorrect input',
+    c_error_unexpected_end TYPE string VALUE 'Unexpected end',
+    c_error_iterator_invalid_head TYPE string VALUE `Iterator: Invalid head of list`.
+  CONSTANTS:
+    c_area_eval  TYPE string VALUE `Eval`,
+    c_area_parse TYPE string VALUE `Parse`.
+
 * Macro to simplify the definition of a native procedure
    DEFINE _proc_meth.
      METHODS &1 IMPORTING list TYPE REF TO lcl_lisp
@@ -45,7 +53,7 @@
    END-OF-DEFINITION.
 
    DEFINE validate.
-     assert_is_bound &1 'Incorrect input'.
+     assert_is_bound &1 c_error_incorect_input.
    END-OF-DEFINITION.
 
    DEFINE validate_number.
@@ -152,8 +160,6 @@
 *----------------------------------------------------------------------*
    CLASS lcx_lisp_exception DEFINITION INHERITING FROM cx_dynamic_check.
      PUBLIC SECTION.
-       CONSTANTS: c_area_eval  TYPE string VALUE `Eval`,
-                  c_area_parse TYPE string VALUE `Parse`.
        METHODS constructor IMPORTING message TYPE string
                                      area    TYPE string OPTIONAL.
        METHODS get_text REDEFINITION.
@@ -795,8 +801,8 @@
        ELSEIF index > length.
          RAISE EXCEPTION TYPE lcx_lisp_exception
            EXPORTING
-             message = |Unexpected end|
-             area    = lcx_lisp_exception=>c_area_parse.
+             message = c_error_unexpected_end
+             area    = c_area_parse.
        ENDIF.
      ENDMETHOD.                    "next_char
 
@@ -1030,7 +1036,7 @@
        RAISE EXCEPTION TYPE lcx_lisp_exception
          EXPORTING
            message = message
-           area    = lcx_lisp_exception=>c_area_eval.
+           area    = c_area_eval.
      ENDMETHOD.                    "throw
 
      METHOD assign_symbol.
@@ -2934,7 +2940,7 @@
        RAISE EXCEPTION TYPE lcx_lisp_exception
          EXPORTING
            message = |Symbol { symbol } is unbound|
-           area    = lcx_lisp_exception=>c_area_eval.
+           area    = c_area_eval.
      ENDMETHOD.
 
      METHOD define_value.
@@ -3154,7 +3160,7 @@
        RAISE EXCEPTION TYPE lcx_lisp_exception
          EXPORTING
            message = message
-           area    = lcx_lisp_exception=>c_area_eval.
+           area    = c_area_eval.
      ENDMETHOD.                    "eval_err
 
    ENDCLASS.                    "lcl_lisp IMPLEMENTATION
@@ -3165,7 +3171,7 @@
    CLASS lcl_lisp_iterator IMPLEMENTATION.
 
      METHOD new.
-       assert_is_bound io_elem `Iterator: Invalid head of list`.
+       assert_is_bound io_elem c_error_iterator_invalid_head.
        ro_iter = NEW #( ).
        ro_iter->elem = io_elem.
        ro_iter->first = abap_true.
