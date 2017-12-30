@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # abap_scheme
 LISP interpreter in ABAP with Editor
 =======
@@ -40,4 +39,3 @@ The current version was tested on ABAP Netweaver 7.50 and can be cloned with <a 
 For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
 
 ![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_lisp_workbench.png)
->>>>>>> parent of d0a35d0... apply and other changes
