@@ -439,11 +439,19 @@
          find IMPORTING symbol     TYPE any
               RETURNING VALUE(env) TYPE REF TO lcl_lisp_environment
               RAISING   lcx_lisp_exception,
+<<<<<<< HEAD
          get IMPORTING symbol      TYPE any
              RETURNING VALUE(cell) TYPE REF TO lcl_lisp
              RAISING   lcx_lisp_exception,
          set IMPORTING symbol  TYPE string
                        element TYPE REF TO lcl_lisp,
+=======
+         lookup IMPORTING symbol      TYPE any
+                RETURNING VALUE(cell) TYPE REF TO lcl_lisp
+                RAISING   lcx_lisp_exception,
+         define IMPORTING symbol  TYPE string
+                          element TYPE REF TO lcl_lisp,
+>>>>>>> parent of d0a35d0... apply and other changes
 *        Convenience method to add a value and create the cell
          define_value IMPORTING symbol         TYPE string
                                 type           TYPE lcl_lisp=>tv_type
@@ -547,8 +555,11 @@
        proc_append,   ##called
        proc_append_unsafe,   ##called
        proc_reverse,  ##called
+<<<<<<< HEAD
        proc_map,      ##called
        proc_for_each, ##called
+=======
+>>>>>>> parent of d0a35d0... apply and other changes
        proc_car,      ##called
        proc_cdr,      ##called
        proc_cons,     ##called
@@ -578,7 +589,11 @@
        proc_eqv,      ##called
 
        proc_is_number,     ##called
+<<<<<<< HEAD
        proc_is_integer,    ##called
+=======
+       proc_is_integer,     ##called
+>>>>>>> parent of d0a35d0... apply and other changes
        proc_is_string,     ##called
        proc_is_symbol,     ##called
        proc_is_hash,       ##called
@@ -620,8 +635,11 @@
 
        proc_remainder,    ##called
        proc_modulo,       ##called
+<<<<<<< HEAD
 * Formating
        proc_num_to_string, ##called
+=======
+>>>>>>> parent of d0a35d0... apply and other changes
 * Not in the spec: Just adding it anyway
        proc_random,       ##called
        proc_eq,           ##called
@@ -724,6 +742,7 @@
                                              environment    TYPE REF TO lcl_lisp_environment
                                    RETURNING VALUE(ro_args) TYPE REF TO lcl_lisp
                                    RAISING   lcx_lisp_exception.
+<<<<<<< HEAD
 
        METHODS evaluate_apply IMPORTING io_list        TYPE REF TO lcl_lisp
                                         environment    TYPE REF TO lcl_lisp_environment
@@ -735,22 +754,38 @@
                              RETURNING VALUE(result)  TYPE REF TO lcl_lisp
                              RAISING   lcx_lisp_exception.
 
+=======
+>>>>>>> parent of d0a35d0... apply and other changes
        METHODS eval_function IMPORTING io_head       TYPE REF TO lcl_lisp
                                        io_args       TYPE REF TO lcl_lisp
                                        environment   TYPE REF TO lcl_lisp_environment
                              RETURNING VALUE(result) TYPE  REF TO lcl_lisp
                              RAISING   lcx_lisp_exception.
 
+<<<<<<< HEAD
        METHODS execute IMPORTING io_head       TYPE REF TO lcl_lisp
                                  io_args       TYPE REF TO lcl_lisp
                                  environment   TYPE REF TO lcl_lisp_environment
                        RETURNING VALUE(result) TYPE  REF TO lcl_lisp
                        RAISING   lcx_lisp_exception.
+=======
+       METHODS eval_apply IMPORTING io_head       TYPE REF TO lcl_lisp
+                                    environment   TYPE REF TO lcl_lisp_environment
+                          RETURNING VALUE(result) TYPE  REF TO lcl_lisp
+                          RAISING   lcx_lisp_exception.
+>>>>>>> parent of d0a35d0... apply and other changes
 
        METHODS extract_arguments IMPORTING io_head TYPE REF TO lcl_lisp
                                  EXPORTING eo_pars TYPE REF TO lcl_lisp
                                            eo_args TYPE REF TO lcl_lisp
                                  RAISING   lcx_lisp_exception.
+<<<<<<< HEAD
+=======
+       METHODS evaluate_list IMPORTING io_head       TYPE REF TO lcl_lisp
+                                       io_env        TYPE REF TO lcl_lisp_environment
+                             RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                             RAISING   lcx_lisp_exception.
+>>>>>>> parent of d0a35d0... apply and other changes
 
        METHODS evaluate_in_sequence IMPORTING io_pars TYPE REF TO lcl_lisp
                                               io_args TYPE REF TO lcl_lisp
@@ -769,6 +804,7 @@
                               RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
                               RAISING   lcx_lisp_exception.
 
+<<<<<<< HEAD
        METHODS:
          eval_element
            IMPORTING element       TYPE REF TO lcl_lisp
@@ -783,6 +819,8 @@
            RETURNING VALUE(result) TYPE REF TO lcl_lisp
            RAISING   lcx_lisp_exception.
 
+=======
+>>>>>>> parent of d0a35d0... apply and other changes
    ENDCLASS.                    "lcl_lisp_interpreter DEFINITION
 
 *----------------------------------------------------------------------*
@@ -951,6 +989,7 @@
        nil = lcl_lisp=>nil.
        true = lcl_lisp=>true.
        false = lcl_lisp=>false.
+<<<<<<< HEAD
        env->set( symbol = 'nil'  element = nil ).
        env->set( symbol = '#f' element = false ).
        env->set( symbol = '#t' element = true ).
@@ -967,6 +1006,22 @@
        env->define_value( symbol = 'reverse'  type = lcl_lisp=>type_native value   = 'PROC_REVERSE' ).
        env->define_value( symbol = 'map'      type = lcl_lisp=>type_native value   = 'PROC_MAP' ).
        env->define_value( symbol = 'for-each' type = lcl_lisp=>type_native value   = 'PROC_FOR_EACH' ).
+=======
+       env->define( symbol = 'nil'  element = nil ).
+       env->define( symbol = '#f' element = false ).
+       env->define( symbol = '#t' element = true ).
+
+*      Add native functions to environment
+       env->define_value( symbol = '+'       type = lcl_lisp=>type_native value   = 'PROC_ADD' ).
+       env->define_value( symbol = '-'       type = lcl_lisp=>type_native value   = 'PROC_SUBTRACT' ).
+       env->define_value( symbol = '*'       type = lcl_lisp=>type_native value   = 'PROC_MULTIPLY' ).
+       env->define_value( symbol = '/'       type = lcl_lisp=>type_native value   = 'PROC_DIVIDE' ).
+       env->define_value( symbol = 'append'  type = lcl_lisp=>type_native value   = 'PROC_APPEND' ).
+       env->define_value( symbol = 'append!' type = lcl_lisp=>type_native value   = 'PROC_APPEND_UNSAFE' ).
+       env->define_value( symbol = 'list'    type = lcl_lisp=>type_native value   = 'PROC_LIST' ).
+       env->define_value( symbol = 'length'  type = lcl_lisp=>type_native value   = 'PROC_LENGTH' ).
+       env->define_value( symbol = 'reverse' type = lcl_lisp=>type_native value   = 'PROC_REVERSE' ).
+>>>>>>> parent of d0a35d0... apply and other changes
 
        env->define_value( symbol = 'memq'    type = lcl_lisp=>type_native value   = 'PROC_MEMQ' ).
        env->define_value( symbol = 'memv'    type = lcl_lisp=>type_native value   = 'PROC_MEMV' ).
@@ -1005,8 +1060,12 @@
        env->define_value( symbol = 'procedure?'  type = lcl_lisp=>type_native value = 'PROC_IS_PROCEDURE' ).
        env->define_value( symbol = 'symbol?'     type = lcl_lisp=>type_native value = 'PROC_IS_SYMBOL' ).
        env->define_value( symbol = 'type'        type = lcl_lisp=>type_native value = 'PROC_IS_TYPE' ).
+<<<<<<< HEAD
 *      Format
        env->define_value( symbol = 'number->string' type = lcl_lisp=>type_native value = 'PROC_NUM_TO_STRING' ).
+=======
+
+>>>>>>> parent of d0a35d0... apply and other changes
 *      Math
        env->define_value( symbol = 'abs' type = lcl_lisp=>type_native value = 'PROC_ABS' ).
        env->define_value( symbol = 'sin' type = lcl_lisp=>type_native value = 'PROC_SIN' ).
@@ -1058,7 +1117,11 @@
        DATA lr_ref TYPE REF TO data.
 *      Define a value in the environment for SYST
        GET REFERENCE OF syst INTO lr_ref.
+<<<<<<< HEAD
        env->set( symbol = 'ab-sy' element = lcl_lisp=>new_data( lr_ref ) ).
+=======
+       env->define( symbol = 'ab-sy' element = lcl_lisp=>new_data( lr_ref ) ).
+>>>>>>> parent of d0a35d0... apply and other changes
      ENDMETHOD.                    "constructor
 
      METHOD throw.
@@ -1071,6 +1134,7 @@
      METHOD assign_symbol.
        CASE element->car->type.
          WHEN lcl_lisp=>type_symbol.
+<<<<<<< HEAD
 *          call the set method of the current environment using the unevaluated first parameter
 *          (second list element) as the symbol key and the evaluated second parameter as the value.
            environment->set( symbol  = element->car->value
@@ -1078,6 +1142,12 @@
                                              environment = environment ) ).
            result = lcl_lisp=>new_symbol( element->car->value ).
 
+=======
+           environment->define( symbol  = element->car->value
+                                element = eval( element = element->cdr->car
+                                                environment = environment ) ).
+           result = lcl_lisp=>new_symbol( element->car->value ).
+>>>>>>> parent of d0a35d0... apply and other changes
 *        Function shorthand (define (id arg ... ) body ...+)
          WHEN lcl_lisp=>type_conscell.
 *          define's function shorthand allows us to define a function by specifying a list as the
@@ -1086,8 +1156,13 @@
                                           io_cdr = element->cdr
                                           io_env = environment ).
 *          Add function to the environment with symbol
+<<<<<<< HEAD
            environment->set( symbol  = element->car->car->value
                              element = result ).
+=======
+           environment->define( symbol  = element->car->car->value
+                                element = result ).
+>>>>>>> parent of d0a35d0... apply and other changes
 *          TODO: Here and above: Scheme does not return a value for define; should we?
            result = lcl_lisp=>new_symbol( element->car->car->value ).
          WHEN OTHERS.
@@ -1101,7 +1176,11 @@
          WHEN lcl_lisp=>type_symbol.
 *          re-define symbol in the original environment, but
 *          evaluate parameters in the current environment
+<<<<<<< HEAD
            environment->find( result->value )->set(
+=======
+           environment->find( result->value )->define(
+>>>>>>> parent of d0a35d0... apply and other changes
               symbol  = result->value
               element = eval( element = element->cdr->car
                               environment = environment ) ).
@@ -1124,12 +1203,17 @@
          lo_arg->car = eval( element = lo_iter->next( )
                              environment = environment ).
          IF lo_iter->has_next( ) EQ abap_false.
+<<<<<<< HEAD
+=======
+           lo_arg->cdr = nil.
+>>>>>>> parent of d0a35d0... apply and other changes
            EXIT.
          ENDIF.
          lo_arg = lo_arg->cdr = lcl_lisp=>new_cons( ).
        ENDWHILE.
      ENDMETHOD.                    "evaluate_parameters
 
+<<<<<<< HEAD
      METHOD evaluate_apply.
 *      (apply proc arg1 . . . argn rest)
 *      Parameter io_list is list arg1 ... argn rest
@@ -1180,6 +1264,8 @@
        ENDWHILE.
      ENDMETHOD.                    "evaluate_list
 
+=======
+>>>>>>> parent of d0a35d0... apply and other changes
      METHOD eval_function.
 *      The function (LAMBDA) receives its own local environment in which to execute,
 *      where parameters become symbols that are mapped to the corresponding arguments
@@ -1189,6 +1275,7 @@
                                                                      environment = environment )
                                       io_pars = io_head->first( ) ).   " Pointer to formal parameters
        result = evaluate_list( io_head = io_head->rest( )
+<<<<<<< HEAD
                                io_environment = lo_env ).
      ENDMETHOD.                    "eval_function
 
@@ -1226,6 +1313,34 @@
        ENDCASE.
      ENDMETHOD.
 
+=======
+                               io_env = lo_env ).
+     ENDMETHOD.                    "eval_function
+
+     METHOD eval_apply.
+       "      (apply proc arg1 . . . args) procedure
+       "The apply procedure calls proc with the elements of the list (append (list arg1 . . . ) args) as the actual arguments.
+       validate: io_head,
+                 io_head->car, " proc
+                 io_head->cdr. " argument list
+
+       result = eval( element = lcl_lisp=>new_cons( io_car = io_head->car
+                                                    io_cdr = evaluate_parameters( io_list = io_head->cdr
+                                                                                  environment = environment ) )
+                      environment = environment ).
+     ENDMETHOD.
+
+     METHOD evaluate_list.
+*      Evaluate lambda
+       result = nil.
+       DATA(lo_iter) = lcl_lisp_iterator=>new( io_head ).
+       WHILE lo_iter->has_next( ).
+         result = eval( element = lo_iter->next( )
+                        environment = io_env ).
+       ENDWHILE.
+     ENDMETHOD.                    "evaluate_list
+
+>>>>>>> parent of d0a35d0... apply and other changes
      METHOD extract_arguments.
        eo_args = eo_pars = nil.                "list of parameters
 
@@ -1295,8 +1410,13 @@
        WHILE lo_par IS BOUND AND lo_par NE nil   " Nil means no parameters to map
          AND lo_arg IS BOUND AND lo_arg NE nil.  " Nil means no parameters to map
 
+<<<<<<< HEAD
          ro_env->set( symbol = lo_par->car->value
                       element = lo_arg->car ).
+=======
+         ro_env->define( symbol = lo_par->car->value
+                         element = lo_arg->car ).
+>>>>>>> parent of d0a35d0... apply and other changes
          lo_par = lo_par->cdr.
          lo_arg = lo_arg->cdr.
        ENDWHILE.
@@ -1317,9 +1437,15 @@
          CHECK lo_par NE nil.        " Nil would mean no parameters to map
 *        Assign argument to its corresponding symbol in the newly created environment
 *        NOTE: element of the argument list is evaluated before being defined in the environment
+<<<<<<< HEAD
          io_env->set( symbol = lo_par->value
                       element = eval( element = lo_args->next( )
                                       environment = io_env ) ).
+=======
+         io_env->define( symbol = lo_par->value
+                         element = eval( element = lo_args->next( )
+                                         environment = io_env ) ).
+>>>>>>> parent of d0a35d0... apply and other changes
        ENDWHILE.
      ENDMETHOD.
 
@@ -1375,6 +1501,7 @@
            result = element.
 
          WHEN OTHERS.
+<<<<<<< HEAD
            result = eval_element( element = element
                               environment = environment ).
        ENDCASE.
@@ -1508,6 +1635,115 @@
            result = lcl_lisp=>new_lambda( io_car = lr_tail->car         " List of parameters
                                           io_cdr = lr_tail->cdr         " Body
                                           io_env = environment ).
+=======
+           CASE element->type.
+             WHEN lcl_lisp=>type_number OR lcl_lisp=>type_string.
+               result = element.  "Number or string evaluates to itself
+
+             WHEN lcl_lisp=>type_symbol. "Symbol
+               result = environment->lookup( element->value ).
+
+*---         ### EVAL LIST
+             WHEN lcl_lisp=>type_conscell. "Cons Cell = List
+*              To evaluate list, we must first evaluate head value
+*              Evaluate first element of list to determine if it is a native procedure or lambda
+               DATA(lr_head) = element->car. "Unevaluated value
+               DATA(lr_tail) = element->cdr.
+
+               CASE lr_head->value.
+
+                 WHEN 'quote'. " Return the argument to quote unevaluated
+                   IF lr_tail->cdr NE nil.
+                     throw( |QUOTE can only take a single argument| ).
+                   ENDIF.
+                   result = lr_tail->car.
+
+                 WHEN 'newline'.
+                   result = lcl_lisp=>new_string( |\n| ).
+
+                 WHEN 'display'.
+                   result = write( eval( element = lr_tail->car
+                                         environment = environment )  ).
+
+                 WHEN 'if'.
+                   "                   validate lr_tail->cdr. "I do not have a test case yet where it fails here
+                   IF eval( element = lr_tail->car
+                            environment = environment  ) NE false.
+                     result = eval( element = lr_tail->cdr->car
+                                    environment = environment  ).
+                   ELSEIF lr_tail->cdr->cdr = nil.
+                     result = false.
+                   ELSE.
+                     "                     validate lr_tail->cdr->cdr. " missing test case, comment out
+                     result = eval( element = lr_tail->cdr->cdr->car
+                                    environment = environment ).
+                   ENDIF.
+
+                 WHEN 'and'.
+                   result = true.
+                   DATA(lo_ptr) = lr_tail.
+                   WHILE lo_ptr IS BOUND AND lo_ptr NE nil AND result NE false.
+                     result = eval( element = lo_ptr->car
+                                    environment = environment ).
+                     lo_ptr = lo_ptr->cdr.
+                   ENDWHILE.
+
+                 WHEN 'or'.
+                   result = false.
+                   lo_ptr = lr_tail.
+                   WHILE lo_ptr IS BOUND AND lo_ptr NE nil AND result EQ false.
+                     result = eval( element = lo_ptr->car
+                                    environment = environment ).
+                     lo_ptr = lo_ptr->cdr.
+                   ENDWHILE.
+
+                 WHEN 'cond'.
+                   lo_ptr = lr_tail.
+                   WHILE lo_ptr NE nil.
+                     DATA(lo_clause) = lo_ptr->car.
+                     IF lo_clause->car->value EQ 'else'
+                        OR eval( element = lo_clause->car
+                                 environment = environment ) NE false.
+                       result = evaluate_list( io_head = lo_clause->cdr
+                                               io_env = environment ).
+                       EXIT.
+                     ENDIF.
+                     lo_ptr = lo_ptr->cdr.
+                   ENDWHILE.
+
+                 WHEN 'define'.
+                   result = assign_symbol( element = lr_tail
+                                           environment = environment ).
+
+                 WHEN 'set!'.                        " Re-Assign symbol
+                   result = re_assign_symbol( element     = lr_tail
+                                              environment = environment ).
+
+                 WHEN 'let'.
+*                  (let ((x 10) (y 5)) (+ x y)) is syntactic sugar for  ( (lambda (x y) (+ x y)) 10 5)
+                   result = evaluate_list( io_head = lr_tail->cdr
+                                           io_env = init_named_let( io_head = lr_tail->car
+                                                                    io_env = environment ) ).
+
+                 WHEN 'letrec'.
+*                  (letrec ((a 5) (b (+ a 3)) b)
+                   result = evaluate_list( io_head = lr_tail->cdr
+                                           io_env = init_letrec( io_head = lr_tail->car
+                                                                 io_env = environment ) ).
+
+                 WHEN 'let*'.
+                   result = evaluate_list( io_head = lr_tail->cdr
+                                           io_env = init_let_star( io_head = lr_tail->car
+                                                                   io_env = environment ) ).
+
+                 WHEN 'lambda'.
+                   result = lcl_lisp=>new_lambda( io_car = lr_tail->car         " List of parameters
+                                                  io_cdr = lr_tail->cdr         " Body
+                                                  io_env = environment ).
+                 WHEN 'begin'.
+                   result = evaluate_list( io_head = lr_tail
+                                           io_env = environment ).
+>>>>>>> parent of d0a35d0... apply and other changes
 
 *                 WHEN 'case'.
 * (case <key> <clause1> <clause2> <clause3> ... )
@@ -1527,6 +1763,7 @@
                    "                   validate lr_tail->car, lr_tail->cdr. "I do not have a test case yet where it fails here
                    IF eval( element = lr_tail->car
                             environment = environment  ) NE false.
+<<<<<<< HEAD
                      result = evaluate_list( io_head        = lr_tail->cdr
                                              io_environment = environment ).
                    ENDIF.
@@ -1557,6 +1794,62 @@
        ENDCASE.
 
      ENDMETHOD.
+=======
+                     result = evaluate_list( io_head = lr_tail->cdr
+                                             io_env = environment ).
+                   ENDIF.
+
+                 WHEN 'read'.
+                   result = read( lr_tail ).
+
+                 WHEN 'apply'.
+                   result = eval_apply( io_head = lr_tail
+                                        environment = environment ).
+
+                 WHEN OTHERS.
+*---           NATIVE PROCEDURES AND LAMBDAS
+*              Other symbols at the start of the list must be evaluated first
+*              The evaluated head must be either a native procedure or lambda
+                   lr_head = eval( element = element->car
+                                   environment = environment ).
+
+                   CASE lr_head->type.
+
+                     WHEN lcl_lisp=>type_native.
+*---               NATIVE FUNCTION
+*                  Evaluate native function:
+                       CALL METHOD (lr_head->value)
+                         EXPORTING
+                           list   = evaluate_parameters( io_list = lr_tail
+                                                         environment = environment )
+                         RECEIVING
+                           result = result.
+
+                     WHEN lcl_lisp=>type_lambda.
+                       result = eval_function( io_head = lr_head
+                                               io_args = lr_tail
+                                               environment = environment ).
+
+                     WHEN lcl_lisp=>type_abap_function.
+*>>> TEST:         Support evaluation of ABAP function directly
+*                    Recompose as if calling a PROC (which we are). This is part of the test. If we make an ABAP function
+*                    call first-class, then we would need to revisit evaluating the whole of ELEMENT in one shot
+                       result = proc_abap_function_call( lcl_lisp=>new_cons( io_car = lr_head
+                                                                             io_cdr = lr_tail ) ).
+*<<< TEST
+                     WHEN OTHERS.
+                       throw( |Cannot evaluate { lr_head->to_string( ) } - not a function| ).
+
+                   ENDCASE.
+
+               ENDCASE.
+
+           ENDCASE.
+
+       ENDCASE.
+       assert_is_bound result `EVAL( ) came up empty-handed` .
+     ENDMETHOD.                    "eval
+>>>>>>> parent of d0a35d0... apply and other changes
 
      METHOD write.
        mi_port->write( io_elem ).
@@ -1635,6 +1928,7 @@
        ENDWHILE.
      ENDMETHOD.                    "proc_reverse
 
+<<<<<<< HEAD
      METHOD proc_map.
 *     (map proc list1 list2 ... ) The lists should all have the same length.
 *     Proc should accept as many arguments as there are lists and return a single value.
@@ -1673,6 +1967,8 @@
        ENDWHILE.
      ENDMETHOD.
 
+=======
+>>>>>>> parent of d0a35d0... apply and other changes
      METHOD proc_append_unsafe.  " append! (non functional)
 *      Takes two parameters: the first must be a list, and the second can
 *      be of any type. Appends the second param to the first.
@@ -2372,7 +2668,11 @@
 
      METHOD proc_random.
        result = nil.
+<<<<<<< HEAD
        validate: list.
+=======
+       validate: list, list->car.
+>>>>>>> parent of d0a35d0... apply and other changes
        validate_integer: list->car '[random]'.
        _is_last_param list.
        TRY.
@@ -2395,10 +2695,13 @@
        ENDTRY.
      ENDMETHOD.                    "proc_quotient
 
+<<<<<<< HEAD
      METHOD proc_num_to_string.
        result = lcl_lisp=>new_string( list->to_string( ) ).
      ENDMETHOD.
 
+=======
+>>>>>>> parent of d0a35d0... apply and other changes
 **********************************************************************
 *       _                   _           _ _ _        _
 *  __ _| |__   __ _ _ __   | |__  _   _(_) | |_     (_)_ __  ___
@@ -2653,6 +2956,7 @@
            CREATE DATA line LIKE LINE OF <table>.
            ASSIGN line->* TO <line>.
 
+<<<<<<< HEAD
              element = nil.
 
              DATA lo_conscell TYPE REF TO lcl_lisp. " Lisp-side  (target)
@@ -2666,6 +2970,23 @@
                ENDIF.
                lo_conscell->car = data_to_element( <line> ).
              ENDLOOP.
+=======
+           IF <table> IS INITIAL.
+             element = nil.
+           ELSE.
+             DATA lo_conscell TYPE REF TO lcl_lisp. " Lisp-side  (target)
+
+*            Create list with cell for each row AND Set pointer to start of list
+             lo_conscell = element = lcl_lisp=>new_cons( ).
+             LOOP AT <table> INTO <line>.
+               IF sy-tabix > 1.          "Move pointer only from second line onward
+                 lo_conscell = lo_conscell->cdr = lcl_lisp=>new_cons( ).
+               ENDIF.
+               lo_conscell->car = data_to_element( <line> ).
+             ENDLOOP.
+             lo_conscell->cdr = nil.     "Terminate list
+           ENDIF.
+>>>>>>> parent of d0a35d0... apply and other changes
 
          WHEN cl_abap_typedescr=>kind_struct.
            element = structure_to_element( data ).
@@ -3061,12 +3382,19 @@
        ENDIF.
      ENDMETHOD.                    "find
 
+<<<<<<< HEAD
      METHOD get.
 *      takes a symbol key and uses the find logic to locate the environment with the key,
 *      then returns the matching value. If no key is found up the outer chain,
 *      then throws/raises a "not found" error.
        TRY.
            cell = VALUE #( map[ symbol = symbol ]-value DEFAULT outer->get( symbol ) ).
+=======
+     METHOD lookup.
+*      Lookup a value in the current environment or in the parent (outer) environment
+       TRY.
+           cell = VALUE #( map[ symbol = symbol ]-value DEFAULT outer->lookup( symbol ) ).
+>>>>>>> parent of d0a35d0... apply and other changes
          CATCH cx_root.
            unbound_symbol( symbol ).
        ENDTRY.
@@ -3082,11 +3410,19 @@
      METHOD define_value.
        element = lcl_lisp=>new_elem( type = type
                                      value = value ).
+<<<<<<< HEAD
        set( symbol = symbol
             element = element ).
      ENDMETHOD.                    "define_cell
 
      METHOD set.
+=======
+       define( symbol = symbol
+               element = element ).
+     ENDMETHOD.                    "define_cell
+
+     METHOD define.
+>>>>>>> parent of d0a35d0... apply and other changes
 *      Add a value to the (local) environment
        DATA(ls_map) = VALUE ts_map( symbol = symbol
                                     value = element ).
@@ -3110,16 +3446,27 @@
 
          ADD 1 TO lv_count.
 *        NOTE: Each element of the argument list is evaluated before being defined in the environment
+<<<<<<< HEAD
          set( symbol = lo_par->car->value
               element = lo_arg->car ).
+=======
+         define( symbol = lo_par->car->value
+                 element = lo_arg->car ).
+>>>>>>> parent of d0a35d0... apply and other changes
 
          lo_par = lo_par->cdr.
          lo_arg = lo_arg->rest( ).
        ENDWHILE.
 
+<<<<<<< HEAD
 *       IF lo_arg NE lcl_lisp=>nil.  " Excessive number of arguments
 *         lcl_lisp=>throw( |Expected { lv_count } parameter(s), found { io_args->to_string( ) }| ).
 *       ENDIF.
+=======
+       IF lo_arg NE lcl_lisp=>nil.  " Excessive number of arguments
+         lcl_lisp=>throw( |Expected { lv_count } parameter(s), found { io_args->to_string( ) }| ).
+       ENDIF.
+>>>>>>> parent of d0a35d0... apply and other changes
      ENDMETHOD.                    "parameters_to_symbols
 
    ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
