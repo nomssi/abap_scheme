@@ -1303,10 +1303,23 @@
        METHODS foldl FOR TESTING.
        METHODS map FOR TESTING.
        METHODS filter FOR TESTING.
+
        METHODS apply_1 FOR TESTING.
        METHODS apply_2 FOR TESTING.
        METHODS apply_3 FOR TESTING.
        METHODS apply_4 FOR TESTING.
+
+       METHODS map_1 FOR TESTING.
+       METHODS map_2 FOR TESTING.
+       METHODS map_3 FOR TESTING.
+       METHODS map_4 FOR TESTING.
+       METHODS map_5 FOR TESTING.
+       METHODS map_6 FOR TESTING.
+
+       METHODS for_each_1 FOR TESTING.
+       METHODS for_each_2 FOR TESTING.
+       METHODS for_each_3 FOR TESTING.
+
    ENDCLASS.                    "ltc_higher_order DEFINITION
 
 *----------------------------------------------------------------------*
@@ -1429,6 +1442,59 @@
                   expected = |compose| ).
        code_test( code = |((compose sqrt *) 12 75)|
                   expected = '30' ).
+     ENDMETHOD.
+
+     METHOD map_1.
+       code_test( code = |(define (cadr list) (car (cdr list)))|
+                  expected = |cadr| ).
+       code_test( code = |(map cadr '((a b) (d e) (g h)))|
+                  expected = '(b e h)' ).
+     ENDMETHOD.
+
+     METHOD map_2.
+       code_test( code = |(map + (list 3 4))|
+                  expected = 'Error' ).
+     ENDMETHOD.
+
+     METHOD map_3.
+       code_test( code = |(map (lambda (n) (expt n n))| &
+                         |'(1 2 3 4 5))|
+                  expected = '(1 4 27 256 3125)' ).
+     ENDMETHOD.
+
+     METHOD map_4.
+       code_test( code = |(map + '(1 2 3) '(4 5 6))|
+                  expected = '(5 7 9)' ).
+     ENDMETHOD.
+
+     METHOD map_5.
+       code_test( code = |(let ((count 0))| &
+                         |  (map (lambda (ignored)| &
+                         |         (set! count (+ count 1))| &
+                         |          count)| &
+                         |'(a b)))|
+                  expected = |( 1 2 )| ).  " or ( 2 1 )
+     ENDMETHOD.
+
+     METHOD map_6.
+       code_test( code = |(map (lambda (n) (+ n 3))| &
+                         |     '(1 2 3 4 5) )|
+                  expected = |( 4 5 6 7 8 )| ).
+     ENDMETHOD.
+
+     METHOD for_each_1.
+       code_test( code = |(for-each + (list 3 4))|
+                  expected = '4' ).  " unspecified
+     ENDMETHOD.
+
+     METHOD for_each_2.
+       code_test( code = |(for-each (lambda (x) x) '(1 2 3 4))|
+                  expected = '4' ).   " unspecified
+     ENDMETHOD.
+
+     METHOD for_each_3.
+       code_test( code = |(for-each even? '())|
+                  expected = '#f' ).   " unspecified
      ENDMETHOD.
 
    ENDCLASS.                    "ltc_higher_order IMPLEMENTATION
