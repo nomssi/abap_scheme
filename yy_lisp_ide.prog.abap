@@ -15,6 +15,7 @@ CLASS lcl_container DEFINITION.
     DATA mo_output TYPE REF TO cl_gui_container READ-ONLY.
     DATA mo_log TYPE REF TO cl_gui_container READ-ONLY.
     DATA mo_alv TYPE REF TO cl_gui_container READ-ONLY.
+    DATA mo_console TYPE REF TO cl_gui_container READ-ONLY.
   PRIVATE SECTION.
     DATA mo_splitter_h TYPE REF TO cl_gui_splitter_container.
     DATA mo_splitter_v TYPE REF TO cl_gui_splitter_container.
@@ -73,7 +74,11 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
     DATA mo_source TYPE REF TO lcl_editor.
     DATA mo_output TYPE REF TO lcl_editor.
     DATA mo_log TYPE REF TO lcl_editor.
+    DATA mo_console TYPE REF TO lcl_editor.
     DATA mo_alv TYPE REF TO cl_salv_table.
+
+    DATA print_offset TYPE i.
+    DATA buffer TYPE string.
 
     METHODS:
       constructor,
@@ -83,6 +88,12 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
       user_command IMPORTING iv_code        TYPE syucomm
                    RETURNING VALUE(rv_flag) TYPE flag.
     METHODS welcome RETURNING VALUE(text) TYPE string.
+    METHODS console_header RETURNING VALUE(text) TYPE string.
+
+    METHODS flush RETURNING VALUE(rv_text) TYPE string.
+
+    METHODS writeln IMPORTING text TYPE string.
+    METHODS add IMPORTING text TYPE string.
 
 ENDCLASS.                    "lcl_ide DEFINITION
 
@@ -106,7 +117,10 @@ CLASS lcl_ide IMPLEMENTATION.
           iv_toolbar = abap_true,
       mo_log
         EXPORTING
-          io_container = mo_cont->mo_log.
+          io_container = mo_cont->mo_log,
+      mo_console
+        EXPORTING
+          io_container = mo_cont->mo_console.
     refresh( ).
   ENDMETHOD.                    "constructor
 
@@ -150,9 +164,13 @@ CLASS lcl_ide IMPLEMENTATION.
     ENDIF.
     CHECK sy-subrc EQ 0 AND lv_user_response NE 'A' AND line_exists( lt_fields[ 1 ] ).
     rv_input = lt_fields[ 1 ]-value.
+    mo_console->append_string( rv_input && |\n| ).
   ENDMETHOD.
 
   METHOD lif_port~write.
+    DATA lx_error TYPE REF TO cx_root.
+    DATA lo_elem TYPE REF TO lcl_lisp.
+
     FIELD-SYMBOLS <lt_table> TYPE STANDARD TABLE.
 
     CASE element->type.
@@ -167,23 +185,62 @@ CLASS lcl_ide IMPLEMENTATION.
             mo_alv->get_functions( )->set_all( abap_true ).
             mo_alv->display( ).
 
-          CATCH cx_root INTO DATA(lx_error).
+          CATCH cx_root INTO lx_error.
             lcl_lisp=>throw( lx_error->get_text( ) ).
         ENDTRY.
 
+      WHEN lcl_lisp=>type_conscell.
+        writeln( `(` ).
+        lo_elem = element.
+        DO.
+          ADD 2 TO print_offset.
+          lif_port~write( lo_elem->car ).
+          SUBTRACT 2 FROM print_offset.
+          IF lo_elem->cdr IS NOT BOUND OR lo_elem->cdr EQ lcl_lisp=>nil.
+            EXIT.
+          ENDIF.
+          lo_elem = lo_elem->cdr.
+        ENDDO.
+        add( ` )` ).
+        mo_console->append_string( flush( ) ).
+
       WHEN OTHERS.
+        TRY.
+            add( element->to_string( ) ).
+            mo_console->append_string( flush( ) ).
+        CATCH cx_root INTO lx_error.
+          mo_console->append_string( lx_error->get_text( ) ).
+        ENDTRY.
     ENDCASE.
   ENDMETHOD.                    "lif_console~write
+
+  METHOD flush.
+    rv_text = buffer.
+    CLEAR buffer.
+  ENDMETHOD.                    "get
+
+  METHOD add.
+    buffer = buffer && text.
+  ENDMETHOD.                    "add
+
+  METHOD writeln.
+    add( |\\n{ repeat( val = ` ` occ = print_offset ) }{ text }| ).
+  ENDMETHOD.
 
   METHOD welcome.
     text = |==> Welcome to ABAP List Processing!\n|.
   ENDMETHOD.                    "welcome
+
+  METHOD console_header.
+    text = |==> ABAP Lisp -- Console { sy-uname } -- { sy-datlo DATE = ENVIRONMENT } { sy-uzeit TIME = ENVIRONMENT }\n|.
+  ENDMETHOD.
 
   METHOD first_output.
     CHECK mv_first EQ abap_true.
     CLEAR mv_first.
     cl_gui_textedit=>set_focus( mo_source ).
     mo_log->append_string( |{ welcome( ) }\n| ).
+    mo_console->append_string( console_header( ) ).
   ENDMETHOD.                    "first_output
 
   METHOD evaluate.
@@ -192,6 +249,8 @@ CLASS lcl_ide IMPLEMENTATION.
         DATA(response) = mo_int->eval_repl( code ).
 
         mo_output->append_source( code ).
+
+        mo_console->append_source( response ).
 
         mo_source->delete_text( ).
         mo_source->update_status( |[ { mo_int->runtime } µs ] { response }| ).
@@ -209,6 +268,7 @@ CLASS lcl_ide IMPLEMENTATION.
 
   METHOD free_controls.
     FREE mo_alv.
+    mo_console->free( ).
     mo_log->free( ).
     mo_output->free( ).
     mo_source->free( ).
@@ -293,7 +353,7 @@ CLASS lcl_container IMPLEMENTATION.
     mo_splitter_v_h->set_row_mode( mode = mo_splitter_v_h->mode_relative ).
 
     mo_output  = mo_splitter_v_h->get_container( row = 1 column = 1 ).
-    mo_alv = mo_splitter_v_h->get_container( row = 2 column = 1 ).
+    mo_console = mo_alv = mo_splitter_v_h->get_container( row = 2 column = 1 ).
 
     mo_splitter_v = NEW #( parent  = mo_left
                            rows    = 2
@@ -309,7 +369,8 @@ CLASS lcl_container IMPLEMENTATION.
     FREE: mo_input,
           mo_output,
           mo_log,
-          mo_alv.
+          mo_alv,
+          mo_console.
     FREE mo_left.
     FREE mo_splitter_h.
     FREE mo_splitter_v.
@@ -349,7 +410,7 @@ CLASS lcl_editor IMPLEMENTATION.
 
   METHOD format_input.
     ADD 1 TO mv_counter.
-    rv_text = |${ mv_counter }> { code }\n|.
+    rv_text = | ${ mv_counter }> { code }\n|.
   ENDMETHOD.                    "format_input
 
   METHOD append_source.
