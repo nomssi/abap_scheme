@@ -11,18 +11,21 @@ After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> 
 
 This project started as a fork of https://github.com/mydoghasworms/abap-lisp. I converted the regression tests to ABAP Unit and added validations, an editor and more <a href="https://mitpress.mit.edu/sicp/">Scheme</a> features, so this is now a _LISP_ interpreter with ABAP integration. I can't call it _Scheme_ until issue #1 is resolved.
 
+### Requirements
+
+The current version was tested on ABAP Netweaver 7.50 and can be cloned with <a href="http://docs.abapgit.org/">ABAP GIT</a>. For an older version, check the <a href="https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP">SCN Code Gallery</a>.
+
 ### Architecture
 
-- Report ZZ_LISP_IDE - Main report: The ABAP LISP Workbench
+- Report ZZ_LISP_IDE - Main report
 - Include YY_LIB_LISP - Custom version of ABAP LISP
 - Include YY_LISP_AUNIT - ABAP Unit tests
 - Include YY_LISP_IDE 
 
 ![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_lisp_workbench.png)
-
-### Requirements
-
-The current version was tested on ABAP Netweaver 7.50 and can be cloned with <a href="http://docs.abapgit.org/">ABAP GIT</a>. For an older version, check the <a href="https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP">SCN Code Gallery</a>.
+The ABAP LISP Workbench has two commands:
+- Execute the Scheme code (F8)
+- Refresh will reset the environment and the console
 
 ### ABAP Integration
 #### Interpreter
