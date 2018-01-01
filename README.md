@@ -24,8 +24,8 @@ The current version was tested on ABAP Netweaver 7.50 and can be cloned with <a 
 
 ![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_lisp_workbench.png)
 The ABAP LISP Workbench has two commands:
-- Execute the Scheme code (F8)
-- Refresh will reset the environment and the console
+- Evaluate (F8) executes the Scheme code 
+- Refresh (Shift-F2) will delete the source and console and reset the environment
 
 ### ABAP Integration
 #### Interpreter
