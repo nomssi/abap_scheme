@@ -231,17 +231,17 @@
 
      METHOD basic_string_value.
        code_test( code = '"string value"'
-                  expected = `string value` ).
+                  expected = `"string value"` ).
      ENDMETHOD.                    "basic_string_value
 
      METHOD basic_string_esc_double_quote.
        code_test( code = '"string value with \" escaped double quote"'
-                  expected = 'string value with \" escaped double quote' ).
+                  expected = '"string value with \\\" escaped double quote"' ).
      ENDMETHOD.                    "basic_string_esc_double_quote
 
      METHOD basic_string_quot_esc_dbl_quot.
        code_test( code = '(quote "string value with \" escaped double quote")'
-                  expected = 'string value with \" escaped double quote' ).
+                  expected = '"string value with \\\" escaped double quote"' ).
      ENDMETHOD.                    "basic_string_quot_esc_dbl_quot
 
      METHOD basic_multiple_expr.
@@ -330,25 +330,25 @@
 
      METHOD empty.
        parse_test( code = ''
-                   expected = | nil| ).
+                   expected = || ).
      ENDMETHOD.                    "lambda
 
      METHOD lambda.
        parse_test( code = '(define a(lambda()20))'
-                   expected = |\n( define a\n  ( lambda nil  ) )| ).
+                   expected = |\n( define a\n  ( lambda  ) )| ).
      ENDMETHOD.                    "lambda
 
      METHOD lambda_comments.
        parse_test( code = |;; Comments\n| &
                           |(define a(lambda()20)) ; comments|
-                   expected = |\n( define a\n  ( lambda nil  ) )| ).
+                   expected = |\n( define a\n  ( lambda  ) )| ).
      ENDMETHOD.                    "lambda
 
      METHOD riff_shuffle.
        parse_test( code = riff_shuffle_code( )
                    expected =
    |\n( define riff-shuffle\n  ( lambda\n    ( deck )\n    ( begin\n      ( define take\n        ( lambda| &
-   |\n          ( n seq )\n          ( if\n            ( <= n  )\n            ( quote nil )\n            ( cons| &
+   |\n          ( n seq )\n          ( if\n            ( <= n  )\n            ( quote )\n            ( cons| &
    |\n              ( car seq )\n              ( take\n                ( - n  )\n                ( cdr seq ) ) ) ) ) )| &
    |\n      ( define drop\n        ( lambda\n          ( n seq )\n          ( if\n            ( <= n  ) seq| &
    |\n            ( drop\n              ( - n  )\n              ( cdr seq ) ) ) ) )\n      ( define mid\n| &
@@ -989,14 +989,23 @@
        METHODS is_list_2 FOR TESTING.
        METHODS is_list_3 FOR TESTING.
        METHODS is_list_4 FOR TESTING.
+       METHODS is_list_5 FOR TESTING.
+       METHODS is_list_6 FOR TESTING.
+       METHODS is_list_7 FOR TESTING.
 
        METHODS list_nil_1 FOR TESTING.
        METHODS list_nil_2 FOR TESTING.
        METHODS list_test_1 FOR TESTING.
        METHODS list_test_2 FOR TESTING.
        METHODS list_append_1 FOR TESTING.
-       METHODS list_append_error FOR TESTING.
+       METHODS list_append_2 FOR TESTING.
        METHODS list_append_3 FOR TESTING.
+
+       METHODS list_append_4 FOR TESTING.
+       METHODS list_append_5 FOR TESTING.
+       METHODS list_append_6 FOR TESTING.
+       METHODS list_append_error FOR TESTING.
+
        METHODS list_append_arg_0 FOR TESTING.
        METHODS list_append_arg_1 FOR TESTING.
        METHODS list_append_arg_2 FOR TESTING.
@@ -1004,18 +1013,39 @@
        METHODS list_length_0 FOR TESTING.
        METHODS list_length_1 FOR TESTING.
        METHODS list_length_2 FOR TESTING.
+       METHODS list_length_3 FOR TESTING.
+       METHODS list_length_4 FOR TESTING.
+       METHODS list_length_5 FOR TESTING.
 
        METHODS list_memq_0 FOR TESTING.
        METHODS list_memq_1 FOR TESTING.
        METHODS list_memq_2 FOR TESTING.
        METHODS list_memq_3 FOR TESTING.
+       METHODS list_memq_4 FOR TESTING.  " unspecified
 
        METHODS list_member FOR TESTING.
        METHODS list_memv FOR TESTING.
 
+       METHODS list_assq_0 FOR TESTING.
+       METHODS list_assq_1 FOR TESTING.
+       METHODS list_assq_2 FOR TESTING.
+       METHODS list_assq_3 FOR TESTING.
+       METHODS list_assq_4 FOR TESTING.
+
+       METHODS list_assv_0 FOR TESTING.
+       METHODS list_assoc_0 FOR TESTING.
+
 *   CAR & CDR test
        METHODS list_car_1 FOR TESTING.
+       METHODS list_car_2 FOR TESTING.
+       METHODS list_car_3 FOR TESTING.
+       METHODS list_car_4 FOR TESTING.
+       METHODS list_car_5 FOR TESTING.
+
        METHODS list_cdr_1 FOR TESTING.
+       METHODS list_cdr_2 FOR TESTING.
+       METHODS list_cdr_3 FOR TESTING.
+       METHODS list_cdr_4 FOR TESTING.
        METHODS list_car_car_cdr FOR TESTING.
        METHODS list_car_nil FOR TESTING.
        METHODS list_car_list FOR TESTING.
@@ -1027,6 +1057,28 @@
        METHODS code_count.
        METHODS list_count_1 FOR TESTING.
        METHODS list_count_2 FOR TESTING.
+
+       METHODS list_reverse_1 FOR TESTING.
+       METHODS list_reverse_2 FOR TESTING.
+
+       METHODS list_pair_1 FOR TESTING.
+       METHODS list_pair_2 FOR TESTING.
+       METHODS list_pair_3 FOR TESTING.
+       METHODS list_pair_4 FOR TESTING.
+
+       METHODS list_cons_1 FOR TESTING.
+       METHODS list_cons_2 FOR TESTING.
+       METHODS list_cons_3 FOR TESTING.
+       METHODS list_cons_4 FOR TESTING.
+       METHODS list_cons_5 FOR TESTING.
+
+       METHODS list_make_list FOR TESTING.
+       METHODS list_ref FOR TESTING.
+       METHODS list_ref_1 FOR TESTING.
+       METHODS list_has FOR TESTING.
+
+       METHODS list_tail FOR TESTING.
+
    ENDCLASS.                    "ltc_list DEFINITION
 
 *----------------------------------------------------------------------*
@@ -1045,24 +1097,39 @@
      ENDMETHOD.                    "teardown
 
      METHOD is_list_1.
-       code_test( code = '(list? ''())'
+       code_test( code = |(list? '())|
                   expected = 'true' ).
      ENDMETHOD.
 
      METHOD is_list_2.
-       code_test( code = '(list? ''(1))'
+       code_test( code = |(list? '(1))|
                   expected = 'true' ).
      ENDMETHOD.
 
      METHOD is_list_3.
-       code_test( code = '(list? 1)'
+       code_test( code = |(list? 1)|
                   expected = 'false' ).
      ENDMETHOD.
 
      METHOD is_list_4.
-       code_test( code = '(define x (append ''(1 2) 3))'
+       code_test( code = |(list? '(a b c))|
+                  expected = 'true' ).
+     ENDMETHOD.
+
+     METHOD is_list_5.
+       code_test( code = |(define x (append '(1 2) 3))|
                   expected = 'x' ).
        code_test( code = '(list? x)'
+                  expected = 'false' ).
+     ENDMETHOD.
+
+     METHOD is_list_6.
+       code_test( code = |(list? (cons 'a 'b))|
+                  expected = 'false' ).
+     ENDMETHOD.
+
+     METHOD is_list_7.
+       code_test( code = |(list? '(a . b))|
                   expected = 'false' ).
      ENDMETHOD.
 
@@ -1094,15 +1161,35 @@
                   expected = '( 22 ( 23 24 ) . 23 )' ).
      ENDMETHOD.                    "list_append_1
 
-     METHOD list_append_error.
-       code_test( code = '(append (append (list 22 (list 23 24)) 23) 28)'  "Should give an error
-                  expected = 'Eval: ( ( 23 24 ) . 23 ) is not a proper list' ).
+     METHOD list_append_2.
+       code_test( code = |(append '(1 3) '(4 6) '(9 12) '(56 90 91))|
+                  expected = '( 1 3 4 6 9 12 56 90 91 )' ).
      ENDMETHOD.
 
      METHOD list_append_3.
        code_test( code = '(append (list 1) (list 2))'
                   expected = '( 1 2 )' ).
      ENDMETHOD.                    "list_append_3
+
+     METHOD list_append_4.
+       code_test( code = '(append 5 (list 22 23))'
+                  expected = 'Eval: 5 is not a list' ).
+     ENDMETHOD.
+
+     METHOD list_append_5.
+       code_test( code = |(append (cons 5 6) (list 22 23))|
+                  expected = 'Eval: ( 5 . 6 ) is not a proper list' ).
+     ENDMETHOD.
+
+     METHOD list_append_6.
+       code_test( code = '(append (list 22 23) 4)'
+                  expected = '( 22 23 . 4 )' ).
+     ENDMETHOD.
+
+     METHOD list_append_error.
+       code_test( code = '(append (append (list 22 (list 23 24)) 23) 28)'  "Should give an error
+                  expected = 'Eval: ( 22 ( 23 24 ) . 23 ) is not a proper list' ).
+     ENDMETHOD.
 
      METHOD list_append_arg_0.
        code_test( code = '(append)'
@@ -1111,12 +1198,12 @@
 
      METHOD list_append_arg_1.
        code_test( code = '(append 3)'
-                  expected = '3' ).
+                  expected = 'Eval: Incorrect input' ).
      ENDMETHOD.
 
      METHOD list_append_arg_2.
        code_test( code = |(append '(3))|
-                  expected = '( 3 )' ).
+                  expected = 'Eval: Incorrect input' ).
      ENDMETHOD.
 
      METHOD list_length_0.
@@ -1135,6 +1222,21 @@
        code_test( code = '(length (list 22 (list 23 24)))'
                   expected = '2' ).
      ENDMETHOD.                    "list_length_2
+
+     METHOD list_length_3.
+       code_test( code = |(length '()|
+                  expected = '0' ).
+     ENDMETHOD.                    "list_length_0
+
+     METHOD list_length_4.
+       code_test( code = |(length '(a b c))|
+                  expected = '3' ).
+     ENDMETHOD.                    "list_length_1
+
+     METHOD list_length_5.
+       code_test( code = |(length '(a (b) (c d e)))|
+                  expected = '3' ).
+     ENDMETHOD.
 
      METHOD list_memq_0.
        code_test( code = |(memq 'a '(a b c))|
@@ -1162,9 +1264,52 @@
                   expected = '( ( a ) c )' ).
      ENDMETHOD.
 
+     METHOD list_memq_4.
+       code_test( code = |(memq 101 '(100 101 102))|
+                  expected = '( 101 102 )' ).  " unspecified!!
+     ENDMETHOD.
+
      METHOD list_memv.
        code_test( code = |(memv 101 '(100 101 102))|
                   expected = '( 101 102 )' ).
+     ENDMETHOD.
+
+     METHOD list_assq_0.
+       code_test( code = |(define e '((a 1) (b 2) (c 3)))| &
+                         |(assq 'a e)|
+                  expected = '( a 1 )' ).
+     ENDMETHOD.
+
+     METHOD list_assq_1.
+       code_test( code = |(define e '((a 1) (b 2) (c 3)))| &
+                         |(assq 'b e)|
+                  expected = '( b 2 )' ).
+     ENDMETHOD.
+
+     METHOD list_assq_2.
+       code_test( code = |(define e '((a 1) (b 2) (c 3)))| &
+                         |(assq 'd e)|
+                  expected = 'false' ).
+     ENDMETHOD.
+
+     METHOD list_assq_3.
+       code_test( code = |(assq (list 'a) '(((a)) ((b)) ((c))))|
+                  expected = '( ( a ) )' ).
+     ENDMETHOD.
+
+     METHOD list_assq_4.
+       code_test( code = |(assq 5 '((2 3) (5 7) (11 13)))|
+                  expected = '( 5 7 )' ).   " unspecified
+     ENDMETHOD.
+
+     METHOD list_assv_0.
+       code_test( code = |(assv 5 '((2 3) (5 7) (11 13)))|
+                  expected = '( 5 7 )' ).
+     ENDMETHOD.
+
+     METHOD list_assoc_0.
+       code_test( code = |(assoc 11 '((2 3) (5 7) (11 13)))|
+                  expected = '( 11 13 )' ).
      ENDMETHOD.
 
 * CAR & CDR test
@@ -1174,9 +1319,44 @@
                   expected = '22' ).
      ENDMETHOD.                    "list_car_1
 
+     METHOD list_car_2.
+       code_test( code = '(car ''(a b c))'
+                  expected = 'a' ).
+     ENDMETHOD.
+
+     METHOD list_car_3.
+       code_test( code = '(car ''((a) b c d))'
+                  expected = '( a )' ).
+     ENDMETHOD.
+
+     METHOD list_car_4.
+       code_test( code = '(car ''(1 . 2))'
+                  expected = '1' ).
+     ENDMETHOD.
+
+     METHOD list_car_5.
+       code_test( code = '(car ''())'
+                  expected = 'Exception' ).
+     ENDMETHOD.
+
      METHOD list_cdr_1.
        code_test( code = '(cdr (list 22 (list 23 24)))'
                   expected = '( ( 23 24 ) )' ).
+     ENDMETHOD.                    "list_cdr_1
+
+     METHOD list_cdr_2.
+       code_test( code = |(cdr '((a) b c d))|
+                  expected = '( b c d )' ).
+     ENDMETHOD.                    "list_cdr_1
+
+     METHOD list_cdr_3.
+       code_test( code = |(cdr '(1 . 2))|
+                  expected = '2' ).
+     ENDMETHOD.                    "list_cdr_1
+
+     METHOD list_cdr_4.
+       code_test( code = |(cdr '())|
+                  expected = 'Error' ).
      ENDMETHOD.                    "list_cdr_1
 
      METHOD list_car_car_cdr.
@@ -1237,6 +1417,86 @@
        code_count( ).
        code_test( code = |(count (quote the) (quote (the more the merrier the bigger the better)))|
                   expected = '4' ).
+     ENDMETHOD.
+
+     METHOD list_reverse_1.
+       code_test( code = |(reverse '(a b c))|
+                  expected = '( c b a )' ).
+     ENDMETHOD.
+
+     METHOD list_reverse_2.
+       code_test( code = |(reverse '(a (b c) d (e (f))))|
+                  expected = '( ( e ( f ) ) d ( b c ) a )' ).
+     ENDMETHOD.
+
+     METHOD list_pair_1.
+       code_test( code = |(pair? '(a . b))|
+                  expected = 'true' ).
+     ENDMETHOD.
+
+     METHOD list_pair_2.
+       code_test( code = |(pair? '(a b c))|
+                  expected = 'true' ).
+     ENDMETHOD.
+
+     METHOD list_pair_3.
+       code_test( code = |(pair? '())|
+                  expected = 'false' ).
+     ENDMETHOD.
+
+     METHOD list_pair_4.
+       code_test( code = |(pair? '#(a b))|
+                  expected = 'false' ).
+     ENDMETHOD.
+
+     METHOD list_cons_1.
+       code_test( code = |(cons 'a '())|
+                  expected = '( a )' ).
+     ENDMETHOD.
+
+     METHOD list_cons_2.
+       code_test( code = |(cons '(a) '(b c d))|
+                  expected = '( ( a ) b c d )' ).
+     ENDMETHOD.
+
+     METHOD list_cons_3.
+       code_test( code = |(cons "a" '(b c))|
+                  expected = '( "a" b c )' ).
+     ENDMETHOD.
+
+     METHOD list_cons_4.
+       code_test( code = |(cons 'a 3)|
+                  expected = '( a . 3 )' ).
+     ENDMETHOD.
+
+     METHOD list_cons_5.
+       code_test( code = |(cons '(a b) 'c)|
+                  expected = '( ( a b ) . c )' ).
+     ENDMETHOD.
+
+     METHOD list_make_list.
+       code_test( code = '(make-list 5)'
+                  expected = '( nil nil nil nil nil )' ).
+     ENDMETHOD.
+
+     METHOD list_tail.
+       code_test( code = |(list-tail '(a b c d) 2)|
+                  expected = '( c d )' ).
+     ENDMETHOD.
+
+     METHOD list_ref.
+       code_test( code = |(list-ref '(40 30 11 9) 1)|
+                  expected = '30' ).
+     ENDMETHOD.
+
+     METHOD list_ref_1.
+       code_test( code = |(list-ref '(a b c d) 2)|
+                  expected = 'c' ).
+     ENDMETHOD.
+
+     METHOD list_has.
+       code_test( code = |(memq 2 '(4 3 762 2))|
+                  expected = '( 2 )' ).
      ENDMETHOD.
 
    ENDCLASS.                    "ltc_list IMPLEMENTATION
@@ -1540,6 +1800,9 @@
        METHODS compa_nil_3 FOR TESTING.
        METHODS compa_nil_4 FOR TESTING.
 
+       METHODS compa_null_1 FOR TESTING.
+       METHODS compa_null_2 FOR TESTING.
+
        METHODS compa_string FOR TESTING.
    ENDCLASS.                    "ltc_comparison DEFINITION
 
@@ -1681,6 +1944,16 @@
                   expected = 'false' ).
      ENDMETHOD.                    "compa_nil_4
 
+     METHOD compa_null_1.
+       code_test( code = '(null? ())'
+                  expected = 'Eval: Incorrect input' ).
+     ENDMETHOD.                    "compa_nil_1
+
+     METHOD compa_null_2.
+       code_test( code = |(null? '())|
+                  expected = 'true' ).
+     ENDMETHOD.                    "compa_nil_2
+
      METHOD compa_string.
        code_test( code = '(define str "A string")'
                   expected = 'str' ).
@@ -1820,7 +2093,7 @@
        code_test( code = '(hash-insert h1 ''sparrow "whoosh")'
                   expected = 'nil' ).
        code_test( code = '(hash-get h1 ''sparrow)'
-                  expected = 'whoosh' ).
+                  expected = '"whoosh"' ).
        code_test( code = '(hash-keys h1)'
                   expected = '( dog cat sparrow )' ).
      ENDMETHOD.                    "hash
@@ -1874,7 +2147,7 @@
        code_test( code = '(ab-set t005g "LAND1" "ZA")'  " Set field "LAND1" to "ZA"
                   expected = 'nil' ).
        code_test( code = '(ab-get t005g "LAND1")'       " Return the value of field "LAND1"
-                  expected = 'ZA' ).
+                  expected = '"ZA"' ).
      ENDMETHOD.                    "abap_data
 
      METHOD empty_structure.
@@ -1883,16 +2156,16 @@
        code_test( code = '(ab-set-value t005g ''("000" "ZA" "ABC" "JHB"))'
                   expected = 'nil' ).
        code_test( code = '(ab-get-value t005g)'
-                  expected = '( 000 ZA ABC JHB )' ).
+                  expected = '( "000" "ZA" "ABC" "JHB" )' ).
        code_test( code = '(ab-get t005g "LAND1")'
-                  expected = 'ZA' ).
+                  expected = '"ZA"' ).
      ENDMETHOD.                    "empty_structure
 
      METHOD user_name.
        DATA lv_uname TYPE string.
        lv_uname = sy-uname.
        code_test( code = '(ab-get ab-sy "UNAME")'
-                  expected = lv_uname ).
+                  expected = |"{ lv_uname }"| ).
      ENDMETHOD.                    "user_name
 
    ENDCLASS.                    "ltc_abap_integration IMPLEMENTATION
@@ -1948,7 +2221,7 @@
        code_test( code = '(f1)'
                   expected = '<ABAP function module TH_USER_INFO>' ).
        code_test( code = '(ab-get f1 "ADDRSTR")'
-                  expected = get_ip_address( ) ).
+                  expected = |"{ get_ip_address( ) }"| ).
      ENDMETHOD.                    "fm_user_info
 
      METHOD fm_test_rfc.
@@ -1962,7 +2235,7 @@
        code_test( code = '(f2)'
                   expected = '<ABAP function module TH_TEST_RFC>' ).
        code_test( code = '(ab-get f2 "TEXT_OUT")'
-                  expected = 'Calling from ABAP Lisp' ).
+                  expected = '"Calling from ABAP Lisp"' ).
      ENDMETHOD.                    "fm_test_rfc
 
      METHOD get_first_profile.
@@ -2005,7 +2278,7 @@
        code_test( code = '(define profile (ab-get profiles 1))'
                   expected = 'profile' ).
        code_test( code = '(ab-get profile "BAPIPROF")'
-                  expected = get_first_profile( ) ).
+                  expected = |"{ get_first_profile( ) }"| ).
      ENDMETHOD.                    "fm_user_details
 
    ENDCLASS.                    "ltc_abap_function_module IMPLEMENTATION

@@ -206,7 +206,7 @@ CLASS lcl_ide IMPLEMENTATION.
 
       WHEN OTHERS.
         TRY.
-            add( element->to_string( ) ).
+            add( element->write( ) ).
             mo_console->append_string( flush( ) ).
         CATCH cx_root INTO lx_error.
           mo_console->append_string( lx_error->get_text( ) ).
