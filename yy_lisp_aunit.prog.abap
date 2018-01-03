@@ -1194,12 +1194,12 @@
 
      METHOD list_append_4.
        code_test( code = '(append 5 (list 22 23))'
-                  expected = 'Eval: 5 is not a list' ).
+                  expected = 'Eval: append: 5 is not a proper list' ).
      ENDMETHOD.
 
      METHOD list_append_5.
        code_test( code = |(append (cons 5 6) (list 22 23))|
-                  expected = 'Eval: ( 5 . 6 ) is not a proper list' ).
+                  expected = 'Eval: append: ( 5 . 6 ) is not a proper list' ).
      ENDMETHOD.
 
      METHOD list_append_6.
@@ -1229,7 +1229,7 @@
 
      METHOD list_append_error.
        code_test( code = '(append (append (list 22 (list 23 24)) 23) 28)'  "Should give an error
-                  expected = 'Eval: ( 22 ( 23 24 ) . 23 ) is not a proper list' ).
+                  expected = 'Eval: append: ( 22 ( 23 24 ) . 23 ) is not a proper list' ).
      ENDMETHOD.
 
      METHOD list_append_arg_0.

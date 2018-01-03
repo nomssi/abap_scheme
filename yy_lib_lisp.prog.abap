@@ -1757,6 +1757,21 @@
         CHECK lo_arg NE nil.
 
 *       result must be a list
+        IF result = nil.
+          result = lo_arg->car.
+          CONTINUE.
+        ELSE.
+          DATA(lo_ptr) = result.
+          WHILE  lo_ptr NE nil AND lo_ptr->type = lcl_lisp=>type_conscell.
+            lo_ptr = lo_ptr->cdr.
+          ENDWHILE.
+
+          IF lo_ptr NE nil.
+            throw( |append: { result->to_string( ) } is not a proper list| ).
+          ENDIF.
+
+        ENDIF.
+
         DATA(lo_iter) = reverse_list( result )->new_iterator( ).
         CHECK lo_iter->has_next( ).
         result = lcl_lisp_new=>cons( io_car = lo_iter->next( )
