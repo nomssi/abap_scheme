@@ -499,7 +499,7 @@
                          |                     (and (not (zero? n))| &
                          |                          (is-even? (- n 1))))) )| &
                          |(is-odd? 11))|
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.
 
      METHOD letrec_2.
@@ -513,88 +513,88 @@
        code_test( code = |(define x 5)|
                   expected = 'x' ).
        code_test( code = |(symbol? 'x)|
-                  expected = 'true' ).
+                  expected = '#t' ).
        code_test( code = |(symbol? (car '(a b)))|
-                  expected = 'true' ).
+                  expected = '#t' ).
        code_test( code = |(symbol? x)|
-                  expected = 'false' ).
+                  expected = '#f' ).
        code_test( code = |(symbol? 'nil)|
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.
 
      METHOD is_symbol_false.
        code_test( code = |(symbol? "bar")|
-                  expected = 'false' ).
+                  expected = '#f' ).
        code_test( code = |(symbol? 4)|
-                  expected = 'false' ).
+                  expected = '#f' ).
        code_test( code = |(symbol? '())|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD is_hash_true.
        code_test( code = |(define h (make-hash '(dog 4 car 5))|
                   expected = 'h' ).
        code_test( code = |(hash? h)|
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.
 
      METHOD is_hash_false.
        code_test( code = |(hash? 5)|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD is_procedure_true.
        code_test( code = |(define (fn x) (+ x 5))|
                   expected = 'fn' ).
        code_test( code = |(procedure? fn)|
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.
 
      METHOD is_procedure_true_1.
        code_test( code = |(procedure? car)|
-                  expected = 'true' ).
+                  expected = '#t' ).
        code_test( code = |(procedure? 'car)|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD is_procedure_true_2.
        code_test( code = |(procedure? (lambda (x) (* x x)))|
-                  expected = 'true' ).
+                  expected = '#t' ).
        code_test( code = |(procedure? '(lambda (x) (* x x)))|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD is_procedure_false.
        code_test( code = |(define x 5)|
                   expected = 'x' ).
        code_test( code = |(procedure? x)|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD is_string_true.
        code_test( code = |(define txt "Badenkop")|
                   expected = 'txt' ).
        code_test( code = |(string? txt)|
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.
 
      METHOD is_string_false.
        code_test( code = |(string? 34)|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD is_number_true.
        code_test( code = |(define n 5)|
                   expected = 'n' ).
        code_test( code = |(number? n)|
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.
 
      METHOD is_number_false.
        code_test( code = |(define d "5")|
                   expected = 'd' ).
        code_test( code = |(number? d)|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
    ENDCLASS.                    "ltc_basic IMPLEMENTATION
@@ -733,6 +733,16 @@
        METHODS math_remainder FOR TESTING.
        METHODS math_modulo FOR TESTING.
        METHODS math_random FOR TESTING.
+
+       METHODS math_min_0 FOR TESTING.
+       METHODS math_min_1 FOR TESTING.
+       METHODS math_min_2 FOR TESTING.
+       METHODS math_min_3 FOR TESTING.
+
+       METHODS math_max_0 FOR TESTING.
+       METHODS math_max_1 FOR TESTING.
+       METHODS math_max_2 FOR TESTING.
+       METHODS math_max_3 FOR TESTING.
 
    ENDCLASS.                    "ltc_math DEFINITION
 
@@ -968,17 +978,57 @@
        code_test( code =  '(random 0)'
                   expected = '0' ).
        code_test( code =  '(begin (define a (random 1)) (or (= a 0) (= a 1)) )'
-                  expected = 'true' ).
+                  expected = '#t' ).
        code_test( code =  '(random -5 4)'
                   expected = 'Eval: ( -5 4 ) Parameter mismatch' ).
        code_test( code =  '(random -4)'
                   expected = |Eval: { NEW cx_abap_random( textid = '68D40B4034D28D24E10000000A114BF5' )->get_text( ) }| ). " Invalid interval boundaries
        code_test( code =  '(< (random 10) 11)'
-                  expected = 'true' ).
+                  expected = '#t' ).
        code_test( code =  '(random 100000000000000)'
                   expected = |Eval: { NEW cx_sy_conversion_overflow( textid = '5E429A39EE412B43E10000000A11447B'
                                                                      value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
      ENDMETHOD.                    "math_modulo
+
+     METHOD math_min_0.
+       code_test( code =  '(min 0 34)'
+                  expected = '0' ).
+     ENDMETHOD.
+
+     METHOD math_min_1.
+       code_test( code =  '(min 3 4)'
+                  expected = '3' ).
+     ENDMETHOD.
+
+     METHOD math_min_2.
+       code_test( code =  '(min 3.9 4)'
+                  expected = '3.9' ).
+     ENDMETHOD.
+
+     METHOD math_min_3.
+       code_test( code =  '(min 0 -2 3.9 4 90)'
+                  expected = '-2' ).
+     ENDMETHOD.
+
+     METHOD math_max_0.
+       code_test( code =  '(max 0 34)'
+                  expected = '34' ).
+     ENDMETHOD.
+
+     METHOD math_max_1.
+       code_test( code =  '(max 3 4)'
+                  expected = '4' ).
+     ENDMETHOD.
+
+     METHOD math_max_2.
+       code_test( code =  '(max 3.9 4)'
+                  expected = '4' ).
+     ENDMETHOD.
+
+     METHOD math_max_3.
+       code_test( code =  '(max -3 3.9 9 4)'
+                  expected = '9' ).
+     ENDMETHOD.
 
    ENDCLASS.                    "ltc_math IMPLEMENTATION
 
@@ -1114,39 +1164,39 @@
 
      METHOD is_list_1.
        code_test( code = |(list? '())|
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.
 
      METHOD is_list_2.
        code_test( code = |(list? '(1))|
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.
 
      METHOD is_list_3.
        code_test( code = |(list? 1)|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD is_list_4.
        code_test( code = |(list? '(a b c))|
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.
 
      METHOD is_list_5.
        code_test( code = |(define x (append '(1 2) 3))|
                   expected = 'x' ).
        code_test( code = '(list? x)'
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD is_list_6.
        code_test( code = |(list? (cons 'a 'b))|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD is_list_7.
        code_test( code = |(list? '(a . b))|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD list_nil_1.
@@ -1291,12 +1341,12 @@
 
      METHOD list_memq_2.
        code_test( code = |(memq 'a '(b c d))|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD list_memq_3.
        code_test( code = |(memq (list 'a) '(b (a) c))|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD list_member.
@@ -1333,12 +1383,12 @@
        code_test( code = |(define e '((a 1) (b 2) (c 3)))|
                   expected = 'e' ).
        code_test( code = |(assq 'd e)|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD list_assq_3.
        code_test( code = |(assq (list 'a) '(((a)) ((b)) ((c))))|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD list_assq_4.
@@ -1485,22 +1535,22 @@
 
      METHOD list_pair_1.
        code_test( code = |(pair? '(a . b))|
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.
 
      METHOD list_pair_2.
        code_test( code = |(pair? '(a b c))|
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.
 
      METHOD list_pair_3.
        code_test( code = |(pair? '())|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD list_pair_4.
        code_test( code = |(pair? '#(a b))|
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD list_cons_1.
@@ -1883,70 +1933,70 @@
      METHOD compa_gt_1.
 *   Test GT
        code_test( code = '(> 1 2)'
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.                    "compa_gt_1
 
      METHOD compa_gt_2.
        code_test( code = '(> 2 1)'
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.                    "compa_gt_2
 
      METHOD compa_gt_3.
        code_test( code = '(> 4 3 2 1)'
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.                    "compa_gt_3
 
      METHOD compa_gt_4.
        code_test( code = '(> 4 3 2 2)'
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.                    "compa_gt_4
 *
      METHOD compa_gte_1.
 *   Test GTE
        code_test( code = '(>= 2 2)'
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.                    "compa_gte_1
 
      METHOD compa_gte_2.
        code_test( code = '(>= 4 3 3 2)'
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.                    "compa_gte_2
 
      METHOD compa_gte_3.
        code_test( code = '(>= 1 4)'
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.                    "compa_gte_3
 
      METHOD compa_lte_1.
 *   Test LT
        code_test( code = '(< 1 2 3)'
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.                    "compa_lte_1
 
      METHOD compa_lte_2.
        code_test( code = '(< 1 2 2)'
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.                    "compa_lte_2
 
      METHOD compa_lte_3.
        code_test( code = '(< 3 1)'
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.                    "compa_lte_3
 
      METHOD compa_equal_1.
 *   Test equal?
        code_test( code = '(equal? 22 23)'
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.                    "compa_equal_1
 
      METHOD compa_equal_2.
        code_test( code = '(equal? 22 22)'
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.                    "compa_equal_2
 
      METHOD compa_equal_3.
        code_test( code = '(equal? (list 21) (list 21))'
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.                    "compa_equal_3
 
      METHOD compa_if_1.
@@ -1957,7 +2007,7 @@
 
      METHOD compa_if_2.
        code_test( code = '(if (< 2 1) 23)'
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.                    "compa_if_2
 
      METHOD compa_if_3.
@@ -1968,18 +2018,18 @@
      METHOD compa_eq_1.
 *      Test =
        code_test( code = '(= 2 3)'
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.                    "compa_eq_1
 
      METHOD compa_eq_2.
        code_test( code = '(= 3 3)'
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.                    "compa_eq_2
 
      METHOD compa_eq_3.
 *      equality of many things
        code_test( code = '(= (+ 3 4) 7 (+ 2 5))'
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.                    "compa_eq_2
 
      METHOD compa_nil_1.
@@ -1990,17 +2040,17 @@
 
      METHOD compa_nil_2.
        code_test( code = '(nil? nil)'
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.                    "compa_nil_2
 
      METHOD compa_nil_3.
        code_test( code = '(nil? (cdr (list 1)))'
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.                    "compa_nil_3
 
      METHOD compa_nil_4.
        code_test( code = '(nil? (cdr (list 1 2)))'
-                  expected = 'false' ).
+                  expected = '#f' ).
      ENDMETHOD.                    "compa_nil_4
 
      METHOD compa_null_1.
@@ -2010,7 +2060,7 @@
 
      METHOD compa_null_2.
        code_test( code = |(null? '())|
-                  expected = 'true' ).
+                  expected = '#t' ).
      ENDMETHOD.                    "compa_nil_2
 
      METHOD compa_string.

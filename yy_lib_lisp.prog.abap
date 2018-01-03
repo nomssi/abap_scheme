@@ -104,7 +104,7 @@
     result = true.
   END-OF-DEFINITION.
 
-  DEFINE _is_type.
+  DEFINE _is_type. " argument in list->car
     result = false.
     CHECK list IS BOUND AND list->car IS BOUND.
     IF list->car->type EQ lcl_lisp=>type_&1.
@@ -604,7 +604,6 @@
       proc_is_string,     ##called
       proc_is_symbol,     ##called
       proc_is_hash,       ##called
-      proc_is_type,       ##called
       proc_is_procedure,  ##called
       proc_is_list,       ##called
       proc_is_pair,       ##called
@@ -643,6 +642,8 @@
 
       proc_remainder,    ##called
       proc_modulo,       ##called
+      proc_max,          ##called
+      proc_min,          ##called
 * Formating
       proc_num_to_string, ##called
 * Not in the spec: Just adding it anyway
@@ -1056,7 +1057,6 @@
       env->define_value( symbol = 'alist?'      type = lcl_lisp=>type_native value = 'PROC_IS_ALIST' ).
       env->define_value( symbol = 'procedure?'  type = lcl_lisp=>type_native value = 'PROC_IS_PROCEDURE' ).
       env->define_value( symbol = 'symbol?'     type = lcl_lisp=>type_native value = 'PROC_IS_SYMBOL' ).
-      env->define_value( symbol = 'type'        type = lcl_lisp=>type_native value = 'PROC_IS_TYPE' ).
 *      Format
       env->define_value( symbol = 'number->string' type = lcl_lisp=>type_native value = 'PROC_NUM_TO_STRING' ).
 *      Math
@@ -1086,7 +1086,9 @@
       env->define_value( symbol = 'remainder' type = lcl_lisp=>type_native value = 'PROC_REMAINDER' ).
       env->define_value( symbol = 'modulo'    type = lcl_lisp=>type_native value = 'PROC_MODULO' ).
       env->define_value( symbol = 'quotient'  type = lcl_lisp=>type_native value = 'PROC_QUOTIENT' ).
-      env->define_value( symbol = 'random'  type = lcl_lisp=>type_native value   = 'PROC_RANDOM' ).
+      env->define_value( symbol = 'random'    type = lcl_lisp=>type_native value = 'PROC_RANDOM' ).
+      env->define_value( symbol = 'max'       type = lcl_lisp=>type_native value = 'PROC_MAX' ).
+      env->define_value( symbol = 'min'       type = lcl_lisp=>type_native value = 'PROC_MIN' ).
 
       env->define_value( symbol = 'zero?'     type = lcl_lisp=>type_native value = 'PROC_IS_ZERO' ).
       env->define_value( symbol = 'positive?' type = lcl_lisp=>type_native value = 'PROC_IS_POSITIVE' ).
@@ -2475,7 +2477,7 @@
       _is_type number.
     ENDMETHOD.                    "proc_is_number
 
-    METHOD proc_is_integer.
+    METHOD proc_is_integer. " argument in list->car
       result = false.
       CHECK list IS BOUND AND list->car IS BOUND.
       CHECK list->car->type EQ lcl_lisp=>type_number
@@ -2487,9 +2489,10 @@
       _is_type symbol.
     ENDMETHOD.
 
-    METHOD proc_is_list.
+    METHOD proc_is_list.  " argument in list->car
+      validate list.
+
       result = false.
-      CHECK list IS BOUND.
 
       DATA(lo_ptr) = list->car.
       WHILE lo_ptr->cdr IS BOUND AND lo_ptr->cdr NE nil.
@@ -2500,7 +2503,7 @@
       result = true.
     ENDMETHOD.                    "proc_is_list
 
-    METHOD proc_is_pair.
+    METHOD proc_is_pair. " argument in list->car
       result = false.
       CHECK list IS BOUND AND list NE nil AND list->type = lcl_lisp=>type_conscell.
       result = true.
@@ -2520,10 +2523,6 @@
       result = proc_is_list( list ).
       throw( |Not supported yet ALIST?| ).
     ENDMETHOD.                    "proc_is_alist
-
-    METHOD proc_is_type.
-      throw( |Not supported yet IS_TYPE?| ).
-    ENDMETHOD.                    "proc_is_type
 
     METHOD proc_abs.
       _math abs '[abs]'.
@@ -2709,6 +2708,36 @@
 
     METHOD proc_num_to_string.
       result = lcl_lisp_new=>string( list->to_string( ) ).
+    ENDMETHOD.
+
+    METHOD proc_max.
+      validate list.
+
+      result = nil.
+      DATA(iter) = list->new_iterator( ).
+      result = iter->next( ).
+      validate_number result '[max]'.
+
+      WHILE iter->has_next( ).
+        DATA(cell) = iter->next( ).
+        validate_number cell '[max]'.
+        result->number = nmax( val1 = cell->number val2 = result->number ).
+      ENDWHILE.
+    ENDMETHOD.
+
+    METHOD proc_min.
+      validate list.
+
+      result = nil.
+      DATA(iter) = list->new_iterator( ).
+      result = iter->next( ).
+      validate_number result '[min]'.
+
+      WHILE iter->has_next( ).
+        DATA(cell) = iter->next( ).
+        validate_number cell '[min]'.
+        result->number = nmin( val1 = cell->number val2 = result->number ).
+      ENDWHILE.
     ENDMETHOD.
 
 **********************************************************************
@@ -3467,8 +3496,8 @@
 
     METHOD class_constructor.
       nil = lcl_lisp_new=>null( ).
-      false = lcl_lisp_new=>symbol( 'false' ).
-      true = lcl_lisp_new=>symbol( 'true' ).
+      false = lcl_lisp_new=>symbol( '#f' ).
+      true = lcl_lisp_new=>symbol( '#t' ).
       new_line = lcl_lisp_new=>string( |\n| ).
     ENDMETHOD.                    "class_constructor
 
