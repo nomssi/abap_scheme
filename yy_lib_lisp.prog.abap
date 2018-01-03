@@ -2054,7 +2054,7 @@
 
       result = false.
 
-      DATA(lo_sublist) = list->cdr.
+      DATA(lo_sublist) = list->cdr->car.
       DATA(lo_item) = list->car.
       WHILE lo_sublist NE nil.
         IF proc_equivalence( a = lo_sublist->car
@@ -2071,7 +2071,7 @@
 
       result = false.
 
-      DATA(lo_sublist) = list->cdr.
+      DATA(lo_sublist) = list->cdr->car.
       DATA(lo_item) = list->car.
       WHILE lo_sublist NE nil.
         IF proc_compare( a = lo_sublist->car
