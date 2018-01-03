@@ -3500,8 +3500,8 @@
       DATA(lo_elem) = me.
       WHILE lo_elem IS BOUND AND lo_elem NE nil.
         str = str && COND string( WHEN lo_elem->type NE type_conscell     " If item is not a cons cell
-                                     THEN | . { lo_elem->to_string( ) }|      " indicate with dot notation:
-                                     ELSE | { lo_elem->car->to_string( ) }| ).
+                                     THEN | . { lo_elem->write( ) }|      " indicate with dot notation:
+                                     ELSE | { lo_elem->car->write( ) }| ).
         lo_elem = lo_elem->cdr.
       ENDWHILE.
 
