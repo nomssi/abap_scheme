@@ -514,12 +514,20 @@
                   expected = 'x' ).
        code_test( code = |(symbol? 'x)|
                   expected = 'true' ).
+       code_test( code = |(symbol? (car '(a b)))|
+                  expected = 'true' ).
        code_test( code = |(symbol? x)|
                   expected = 'false' ).
+       code_test( code = |(symbol? 'nil)|
+                  expected = 'true' ).
      ENDMETHOD.
 
      METHOD is_symbol_false.
+       code_test( code = |(symbol? "bar")|
+                  expected = 'false' ).
        code_test( code = |(symbol? 4)|
+                  expected = 'false' ).
+       code_test( code = |(symbol? '())|
                   expected = 'false' ).
      ENDMETHOD.
 
@@ -997,6 +1005,7 @@
        METHODS list_nil_2 FOR TESTING.
        METHODS list_test_1 FOR TESTING.
        METHODS list_test_2 FOR TESTING.
+       METHODS list_append_0 FOR TESTING.
        METHODS list_append_1 FOR TESTING.
        METHODS list_append_2 FOR TESTING.
        METHODS list_append_3 FOR TESTING.
@@ -1004,6 +1013,10 @@
        METHODS list_append_4 FOR TESTING.
        METHODS list_append_5 FOR TESTING.
        METHODS list_append_6 FOR TESTING.
+       METHODS list_append_7 FOR TESTING.
+       METHODS list_append_8 FOR TESTING.
+       METHODS list_append_9 FOR TESTING.
+       METHODS list_append_10 FOR TESTING.
        METHODS list_append_error FOR TESTING.
 
        METHODS list_append_arg_0 FOR TESTING.
@@ -1034,6 +1047,8 @@
 
        METHODS list_assv_0 FOR TESTING.
        METHODS list_assoc_0 FOR TESTING.
+       METHODS list_assoc_1 FOR TESTING.
+       METHODS list_assoc_2 FOR TESTING.
 
 *   CAR & CDR test
        METHODS list_car_1 FOR TESTING.
@@ -1073,6 +1088,7 @@
        METHODS list_cons_5 FOR TESTING.
 
        METHODS list_make_list FOR TESTING.
+       METHODS list_make_list_2 FOR TESTING.
        METHODS list_ref FOR TESTING.
        METHODS list_ref_1 FOR TESTING.
        METHODS list_has FOR TESTING.
@@ -1155,6 +1171,11 @@
                   expected = '( 22 ( 23 24 ) )' ).
      ENDMETHOD.                    "list_test_2
 
+     METHOD list_append_0.
+       code_test( code = |(append '(x) '(y))|
+                  expected = '( x y )' ).
+     ENDMETHOD.
+
      METHOD list_append_1.
 *   Test append
        code_test( code = '(append (list 22 (list 23 24)) 23)'
@@ -1186,6 +1207,26 @@
                   expected = '( 22 23 . 4 )' ).
      ENDMETHOD.
 
+     METHOD list_append_7.
+       code_test( code = |(append '() 'a)|
+                  expected = 'a' ).
+     ENDMETHOD.
+
+     METHOD list_append_8.
+       code_test( code = |(append '(a) '(b c d))|
+                  expected = '( a b c d )' ).
+     ENDMETHOD.
+
+     METHOD list_append_9.
+       code_test( code = |(append '(a (b)) '((c)))|
+                  expected = '( a ( b ) ( c ) )' ).
+     ENDMETHOD.
+
+     METHOD list_append_10.
+       code_test( code = |(append '(a b) (cons 'c  'd))|
+                  expected = '( a b c . d )' ).
+     ENDMETHOD.
+
      METHOD list_append_error.
        code_test( code = '(append (append (list 22 (list 23 24)) 23) 28)'  "Should give an error
                   expected = 'Eval: ( 22 ( 23 24 ) . 23 ) is not a proper list' ).
@@ -1193,17 +1234,17 @@
 
      METHOD list_append_arg_0.
        code_test( code = '(append)'
-                  expected = 'Eval: Incorrect input' ).
+                  expected = 'nil' ).
      ENDMETHOD.
 
      METHOD list_append_arg_1.
        code_test( code = '(append 3)'
-                  expected = 'Eval: Incorrect input' ).
+                  expected = '3' ).
      ENDMETHOD.
 
      METHOD list_append_arg_2.
        code_test( code = |(append '(3))|
-                  expected = 'Eval: Incorrect input' ).
+                  expected = '( 3 )' ).
      ENDMETHOD.
 
      METHOD list_length_0.
@@ -1275,26 +1316,29 @@
      ENDMETHOD.
 
      METHOD list_assq_0.
-       code_test( code = |(define e '((a 1) (b 2) (c 3)))| &
-                         |(assq 'a e)|
+       code_test( code = |(define e '((a 1) (b 2) (c 3)))|
+                  expected = 'e' ).
+       code_test( code = |(assq 'a e)|
                   expected = '( a 1 )' ).
      ENDMETHOD.
 
      METHOD list_assq_1.
-       code_test( code = |(define e '((a 1) (b 2) (c 3)))| &
-                         |(assq 'b e)|
+       code_test( code = |(define e '((a 1) (b 2) (c 3)))|
+                  expected = 'e' ).
+       code_test( code = |(assq 'b e)|
                   expected = '( b 2 )' ).
      ENDMETHOD.
 
      METHOD list_assq_2.
-       code_test( code = |(define e '((a 1) (b 2) (c 3)))| &
-                         |(assq 'd e)|
+       code_test( code = |(define e '((a 1) (b 2) (c 3)))|
+                  expected = 'e' ).
+       code_test( code = |(assq 'd e)|
                   expected = 'false' ).
      ENDMETHOD.
 
      METHOD list_assq_3.
        code_test( code = |(assq (list 'a) '(((a)) ((b)) ((c))))|
-                  expected = '( ( a ) )' ).
+                  expected = 'false' ).
      ENDMETHOD.
 
      METHOD list_assq_4.
@@ -1310,6 +1354,16 @@
      METHOD list_assoc_0.
        code_test( code = |(assoc 11 '((2 3) (5 7) (11 13)))|
                   expected = '( 11 13 )' ).
+     ENDMETHOD.
+
+     METHOD list_assoc_1.
+       code_test( code = |(assoc (list 'a) '(((a)) ((b)) ((c))))|
+                  expected = '( ( a ) )' ).
+     ENDMETHOD.
+
+     METHOD list_assoc_2.
+       code_test( code = |(assoc 2.0 '((1 1) (2 4) (3 9)))|
+                  expected = '( 2 4 )' ).
      ENDMETHOD.
 
 * CAR & CDR test
@@ -1477,6 +1531,11 @@
      METHOD list_make_list.
        code_test( code = '(make-list 5)'
                   expected = '( nil nil nil nil nil )' ).
+     ENDMETHOD.
+
+     METHOD list_make_list_2.
+       code_test( code = '(make-list 3 2)'
+                  expected = '( 2 2 2 )' ).
      ENDMETHOD.
 
      METHOD list_tail.

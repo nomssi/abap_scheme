@@ -32,9 +32,9 @@
 *  THE SOFTWARE.
 
   CONSTANTS:
-    c_error_incorect_input  TYPE string VALUE 'Incorrect input',
-    c_error_unexpected_end  TYPE string VALUE 'Unexpected end',
-    c_error_eval            TYPE string VALUE `EVAL( ) came up empty-handed`.
+    c_error_incorect_input TYPE string VALUE 'Incorrect input',
+    c_error_unexpected_end TYPE string VALUE 'Unexpected end',
+    c_error_eval           TYPE string VALUE `EVAL( ) came up empty-handed`.
   CONSTANTS:
     c_area_eval  TYPE string VALUE `Eval`,
     c_area_parse TYPE string VALUE `Parse`.
@@ -143,8 +143,8 @@
     validate_number list->car &2.
     _is_last_param list.
     TRY.
-      carry = list->car->number.
-      result = lcl_lisp_new=>number( &1( carry ) ).
+    carry = list->car->number.
+    result = lcl_lisp_new=>number( &1( carry ) ).
     _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -252,9 +252,9 @@
       METHODS rest RETURNING VALUE(ro_cdr) TYPE REF TO lcl_lisp.
       METHODS new_iterator RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_iterator
                            RAISING   lcx_lisp_exception.
-      METHODS prepend IMPORTING io_elem TYPE REF TO lcl_lisp
+      METHODS prepend IMPORTING io_elem         TYPE REF TO lcl_lisp
                       RETURNING VALUE(ro_first) TYPE REF TO lcl_lisp.
-      METHODS append IMPORTING io_elem TYPE REF TO lcl_lisp
+      METHODS append IMPORTING io_elem        TYPE REF TO lcl_lisp
                      RETURNING VALUE(ro_last) TYPE REF TO lcl_lisp
                      RAISING   lcx_lisp_exception.
 
@@ -276,7 +276,7 @@
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS null RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS symbol IMPORTING value          TYPE any
-                               RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS number IMPORTING value          TYPE any
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS string IMPORTING value          TYPE any
@@ -299,7 +299,7 @@
   ENDCLASS.
 
   INTERFACE lif_port.
-    METHODS write IMPORTING element TYPE REF TO lcl_lisp
+    METHODS write IMPORTING element         TYPE REF TO lcl_lisp
                   RETURNING VALUE(rv_input) TYPE string.
     METHODS read IMPORTING iv_input        TYPE string OPTIONAL
                  RETURNING VALUE(rv_input) TYPE string.
@@ -333,10 +333,11 @@
       METHODS next RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                    RAISING   cx_dynamic_check.
     PRIVATE SECTION.
+      DATA active TYPE flag.
       DATA elem TYPE REF TO lcl_lisp.
 
       METHODS constructor IMPORTING io_elem TYPE REF TO lcl_lisp
-                          RAISING lcx_lisp_exception.
+                          RAISING   lcx_lisp_exception.
   ENDCLASS.                    "lcl_lisp_iterator DEFINITION
 
   TYPES tt_lisp_iterator TYPE STANDARD TABLE OF REF TO lcl_lisp_iterator WITH EMPTY KEY.
@@ -812,19 +813,23 @@
                     RAISING   lcx_lisp_exception.
 
       METHODS new_iterator_table IMPORTING io_head        TYPE REF TO lcl_lisp
-                                           environment TYPE REF TO lcl_lisp_environment
+                                           environment    TYPE REF TO lcl_lisp_environment
                                  RETURNING VALUE(rt_iter) TYPE tt_lisp_iterator
                                  RAISING   lcx_lisp_exception.
 
-      METHODS map_apply_proc IMPORTING io_proc     TYPE REF TO lcl_lisp
-                                       it_iter     TYPE tt_lisp_iterator
-                                       environment TYPE REF TO lcl_lisp_environment
+      METHODS map_apply_proc IMPORTING io_proc       TYPE REF TO lcl_lisp
+                                       it_iter       TYPE tt_lisp_iterator
+                                       environment   TYPE REF TO lcl_lisp_environment
                              RETURNING VALUE(result) TYPE REF TO lcl_lisp
                              RAISING   lcx_lisp_exception.
 
-      METHODS check_iterator_length IMPORTING it_iter TYPE tt_lisp_iterator
+      METHODS check_iterator_length IMPORTING it_iter      TYPE tt_lisp_iterator
                                               iv_statement TYPE clike
                                     RAISING   lcx_lisp_exception.
+
+      METHODS reverse_list IMPORTING io_list TYPE REF TO lcl_lisp
+                           RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                           RAISING   lcx_lisp_exception.
 
   ENDCLASS.                    "lcl_lisp_interpreter DEFINITION
 
@@ -1406,7 +1411,7 @@
 *     ...))
     METHOD  init_letrec.
       ro_env = lcl_lisp_environment=>new( io_env ).
-*      Before evaluating the parameter, we create them all with dummy values
+*     Before evaluating the parameter, we create them all with dummy values
       DATA(lo_dummy) = lcl_lisp_new=>string( '*letrec-dummy*' ).
 
       extract_arguments( EXPORTING io_head = io_head
@@ -1731,37 +1736,53 @@
 * NATIVE PROCEDURES
 **********************************************************************
     METHOD proc_append.
-*     All parameters except the last must be lists, the last must be a cons cell.
 *     Creates a new list appending all parameters
+*     All parameters except the last must be lists, the last must be a cons cell.
+      validate list.
 
-*     But if the last element in the list is not a cons cell, we cannot append
-      result = nil.
-      CHECK list IS BOUND.
-      validate list->car.
+*     No arguments: return nil
+      result = list.
+      CHECK list NE nil.
+
+*     One argument: return argument
       result = list->car.
 
-      CHECK list->cdr IS BOUND AND list->cdr NE nil.
-      validate list->cdr->car.
-      result = list->cdr->car.
+      CHECK list->cdr NE nil.
 
-      CHECK list->car NE nil.
-      DATA(lo_iter) = proc_reverse( list )->new_iterator( ).
-      WHILE lo_iter->has_next( ).
+*     At least 2 arguments, and the second argument is not nil
+      DATA(lo_arg) = list.
+      WHILE lo_arg->cdr NE nil.
+        lo_arg = lo_arg->cdr.
+
+        CHECK lo_arg NE nil.
+
+*       result must be a list
+        DATA(lo_iter) = reverse_list( result )->new_iterator( ).
+        CHECK lo_iter->has_next( ).
         result = lcl_lisp_new=>cons( io_car = lo_iter->next( )
-                                     io_cdr = result ).
+                                     io_cdr = lo_arg->car ).
+
+        WHILE lo_iter->has_next( ).
+          result = lcl_lisp_new=>cons( io_car = lo_iter->next( )
+                                       io_cdr = result ).
+        ENDWHILE.
+
       ENDWHILE.
     ENDMETHOD.                    "proc_append
 
-    METHOD proc_reverse.
-*      But if the last element in the list is not a cons cell, we cannot append
-      validate: list, list->car.
-
+    METHOD reverse_list.
       result = nil.
-      DATA(iter) = list->car->new_iterator( ).
+      DATA(iter) = io_list->new_iterator( ).
       WHILE iter->has_next( ).
         result = lcl_lisp_new=>cons( io_car = iter->next( )
                                      io_cdr = result ).
       ENDWHILE.
+    ENDMETHOD.
+
+    METHOD proc_reverse.
+      validate: list, list->car.
+
+      result = reverse_list( list->car ).
     ENDMETHOD.                    "proc_reverse
 
     METHOD new_iterator_table.
@@ -1905,11 +1926,17 @@
       result = lcl_lisp=>nil.
       CHECK list->car->number GT 0.
 
-      result = lcl_lisp_new=>cons( ).  " first
+      IF list->cdr EQ nil.
+        DATA(lo_default) = nil.
+      ELSE.
+        lo_default = list->cdr->car.
+      ENDIF.
+
+      result = lcl_lisp_new=>cons( io_car = lo_default ).  " first
       DATA(lo_ptr) = result.
 
       DO list->car->number - 1 TIMES.
-        lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( ).
+        lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = lo_default ).
       ENDDO.
     ENDMETHOD.
 
@@ -2088,12 +2115,12 @@
 
       result = false.
 
-      DATA(lo_sublist) = list->cdr.
-      DATA(lo_item) = list->car.
+      DATA(lo_sublist) = list->cdr->car.
+      DATA(lo_key) = list->car.
       WHILE lo_sublist NE nil.
         DATA(lo_pair) = lo_sublist->car.
         IF proc_equivalence( a = lo_pair->car
-                             b = lo_item ) NE false.
+                             b = lo_key ) NE false.
           result = lo_pair.
           RETURN.
         ENDIF.
@@ -2106,12 +2133,12 @@
 
       result = false.
 
-      DATA(lo_sublist) = list->cdr.
-      DATA(lo_item) = list->car.
+      DATA(lo_sublist) = list->cdr->car.
+      DATA(lo_key) = list->car.
       WHILE lo_sublist NE nil.
         DATA(lo_pair) = lo_sublist->car.
         IF proc_compare( a = lo_pair->car
-                         b = lo_item ) NE false.
+                         b = lo_key ) NE false.
           result = lo_pair.
           RETURN.
         ENDIF.
@@ -2296,10 +2323,8 @@
 
       result = false.
 
-*      Object a and Object b are both #t or both #f or both the empty list.
-      IF ( a EQ true AND b EQ true )
-        OR ( a EQ false AND b EQ false )
-        OR ( a EQ nil AND b EQ nil ).
+*     Object a and Object b are both #t or both #f or both the empty list.
+      IF ( a EQ true AND b EQ true ) OR ( a EQ false AND b EQ false ) OR ( a EQ nil AND b EQ nil ).
         result = true.
         RETURN.
       ENDIF.
@@ -2342,8 +2367,10 @@
       CASE a->type.
         WHEN lcl_lisp=>type_number.
           CHECK a->number = b->number.
+
         WHEN lcl_lisp=>type_symbol OR lcl_lisp=>type_string.
           CHECK a->value = b->value.
+
         WHEN lcl_lisp=>type_conscell OR lcl_lisp=>type_lambda.
           CHECK proc_compare( a = a->car
                               b = b->car ) NE false
@@ -3472,9 +3499,9 @@
       str = lcl_parser=>c_open_paren.
       DATA(lo_elem) = me.
       WHILE lo_elem IS BOUND AND lo_elem NE nil.
-        str = str && COND string( WHEN lo_elem->type NE type_conscell      " If item is not a cons cell
-                                     THEN | . { lo_elem->write( ) }|      " indicate with dot notation:
-                                     ELSE | { lo_elem->car->write( ) }| ).
+        str = str && COND string( WHEN lo_elem->type NE type_conscell     " If item is not a cons cell
+                                     THEN | . { lo_elem->to_string( ) }|      " indicate with dot notation:
+                                     ELSE | { lo_elem->car->to_string( ) }| ).
         lo_elem = lo_elem->cdr.
       ENDWHILE.
 
@@ -3543,13 +3570,14 @@
     METHOD constructor.
       elem = io_elem.
       first = abap_true.
-      CHECK elem EQ lcl_lisp=>nil OR
-         ( elem->car EQ lcl_lisp=>nil AND elem->cdr EQ lcl_lisp=>nil ).
-      lcl_lisp=>throw( |{ elem->to_string( ) } is not a list| ).
+      active = xsdbool( elem NE lcl_lisp=>nil AND
+         ( elem->car NE lcl_lisp=>nil OR elem->cdr EQ lcl_lisp=>nil ) ).
     ENDMETHOD.
 
     METHOD has_next.
-      rv_flag = xsdbool( first EQ abap_true OR ( elem->cdr IS BOUND AND elem->cdr NE lcl_lisp=>nil ) ).
+*     if the last element in the list is not a cons cell, we cannot append
+      rv_flag = xsdbool( active EQ abap_true AND
+               ( first EQ abap_true OR ( elem->cdr IS BOUND AND elem->cdr NE lcl_lisp=>nil ) ) ).
     ENDMETHOD.                    "has_next
 
     METHOD next.
