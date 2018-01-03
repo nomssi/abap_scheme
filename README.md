@@ -9,7 +9,7 @@
 After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's 
 <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a>.
 
-This project started as a fork of https://github.com/mydoghasworms/abap-lisp. I converted the regression tests to ABAP Unit and added validations, an editor and more <a href="https://mitpress.mit.edu/sicp/">Scheme</a> features, so this is now a _LISP_ interpreter with ABAP integration. I can't call it _Scheme_ until issue #1 is resolved.
+This project started as a fork of https://github.com/mydoghasworms/abap-lisp. I converted the regression tests to ABAP Unit and added validations, an editor and more <a href="https://mitpress.mit.edu/sicp/">Scheme</a> features, so this is now a _LISP_ interpreter with ABAP integration. I can't call it [Scheme](http://www.r7rs.org/) until issue #1 is resolved.
 
 ### Requirements
 
