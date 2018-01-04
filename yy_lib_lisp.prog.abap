@@ -229,7 +229,7 @@
 *----------------------------------------------------------------------*
   CLASS lcl_lisp DEFINITION INHERITING FROM lcl_elem FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
-* Can this be replaced by a mesh? cf. DEMO_RND_PARSER_AST
+*     Can this be replaced by a mesh? cf. DEMO_RND_PARSER_AST
       DATA car TYPE REF TO lcl_lisp.
       DATA cdr TYPE REF TO lcl_lisp.
 
@@ -240,14 +240,14 @@
       CLASS-DATA true      TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA new_line  TYPE REF TO  lcl_lisp READ-ONLY.
 
-*      Specifically for lambdas:
+*     Specifically for lambdas:
       DATA environment TYPE REF TO lcl_lisp_environment.
-*      Format
+*     Format
       METHODS to_string RETURNING VALUE(str) TYPE string
                         RAISING   lcx_lisp_exception.
       METHODS write RETURNING VALUE(str) TYPE string
                     RAISING   lcx_lisp_exception.
-*      Utilities
+*     Utilities
       METHODS first RETURNING VALUE(ro_car) TYPE REF TO lcl_lisp.
       METHODS rest RETURNING VALUE(ro_cdr) TYPE REF TO lcl_lisp.
       METHODS new_iterator RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_iterator
@@ -332,6 +332,7 @@
       METHODS has_next RETURNING VALUE(rv_flag) TYPE flag.
       METHODS next RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                    RAISING   cx_dynamic_check.
+      METHODS clone RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_iterator.
     PRIVATE SECTION.
       DATA active TYPE flag.
       DATA elem TYPE REF TO lcl_lisp.
@@ -464,7 +465,7 @@
             RAISING   lcx_lisp_exception,
         set IMPORTING symbol  TYPE string
                       element TYPE REF TO lcl_lisp,
-*        Convenience method to add a value and create the cell
+*       Convenience method to add a value and create the cell
         define_value IMPORTING symbol         TYPE string
                                type           TYPE lcl_lisp=>tv_type
                                value          TYPE any OPTIONAL
@@ -821,18 +822,46 @@
       METHODS map_apply_proc IMPORTING io_proc       TYPE REF TO lcl_lisp
                                        it_iter       TYPE tt_lisp_iterator
                                        environment   TYPE REF TO lcl_lisp_environment
+                             EXPORTING ev_has_next   TYPE flag
                              RETURNING VALUE(result) TYPE REF TO lcl_lisp
                              RAISING   lcx_lisp_exception.
-
-      METHODS check_iterator_length IMPORTING it_iter      TYPE tt_lisp_iterator
-                                              iv_statement TYPE clike
-                                    RAISING   lcx_lisp_exception.
 
       METHODS reverse_list IMPORTING io_list TYPE REF TO lcl_lisp
                            RETURNING VALUE(result) TYPE REF TO lcl_lisp
                            RAISING   lcx_lisp_exception.
 
   ENDCLASS.                    "lcl_lisp_interpreter DEFINITION
+
+* TO DO: implement
+*This place ...  Is equivalent to this place ...
+*(caar x)        (car (car x))
+*(cadr x)        (car (cdr x))
+*(cdar x)        (cdr (car x))
+*(cddr x)        (cdr (cdr x))
+*(caaar x)       (car (car (car x)))
+*(caadr x)       (car (car (cdr x)))
+*(cadar x)       (car (cdr (car x)))
+*(caddr x)       (car (cdr (cdr x)))
+*(cdaar x)       (cdr (car (car x)))
+*(cdadr x)       (cdr (car (cdr x)))
+*(cddar x)       (cdr (cdr (car x)))
+*(cdddr x)       (cdr (cdr (cdr x)))
+*(caaaar x)      (car (car (car (car x))))
+*(caaadr x)      (car (car (car (cdr x))))
+*(caadar x)      (car (car (cdr (car x))))
+*(caaddr x)      (car (car (cdr (cdr x))))
+*(cadaar x)      (car (cdr (car (car x))))
+*(cadadr x)      (car (cdr (car (cdr x))))
+*(caddar x)      (car (cdr (cdr (car x))))
+*(cadddr x)      (car (cdr (cdr (cdr x))))
+*(cdaaar x)      (cdr (car (car (car x))))
+*(cdaadr x)      (cdr (car (car (cdr x))))
+*(cdadar x)      (cdr (car (cdr (car x))))
+*(cdaddr x)      (cdr (car (cdr (cdr x))))
+*(cddaar x)      (cdr (cdr (car (car x))))
+*(cddadr x)      (cdr (cdr (car (cdr x))))
+*(cdddar x)      (cdr (cdr (cdr (car x))))
+*(cddddr x)      (cdr (cdr (cdr (cdr x))))
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_parser IMPLEMENTATION
@@ -1235,32 +1264,36 @@
 * Proc is always called in the same dynamic environment as map itself. The order in which proc is applied to the elements of the
 * list s is unspecified. If multiple returns occur from map, the values returned by earlier returns are not mutated.
       DATA lo_map TYPE REF TO lcl_lisp.
-      validate: io_list, io_list->car, io_list->cdr.
+      validate: io_list, io_list->car.
 
       result = nil.
       DATA(lo_proc) = io_list->car.
 
-*     iterator for first list (all list should have same length)
-      DATA(lo_iter) = io_list->cdr->car->new_iterator( ).
-      CHECK lo_iter->has_next( ). " First element of list
-
       DATA(lt_iter) = new_iterator_table( io_head = io_list->cdr
                                           environment = environment ).
+      CHECK lines( lt_iter ) GT 0.
+*     iterator for first (parameter evaluated) list (all list should have same length)
+      DATA(lo_first) = lt_iter[ 1 ]->clone( ).
+"     map terminates when the shortest list runs out.
+      DATA(lv_has_next) = abap_true.
 
-      " create function call (proc list1-[1] list2-[1]... listn-[1])
-      " evaluate, add result as 1st list element of new list
-      result = lo_map = lcl_lisp_new=>cons( io_car = map_apply_proc( io_proc = lo_proc
-                                                                     it_iter = lt_iter
-                                                                     environment = environment ) ).
-      WHILE lo_iter->has_next( ).
+      IF lo_first->has_next( ) AND lv_has_next EQ abap_true.
+        " create function call (proc list1-[1] list2-[1]... listn-[1])
+        " evaluate, add result as 1st list element of new list
+        result = lo_map = lcl_lisp_new=>cons( io_car = map_apply_proc( EXPORTING io_proc = lo_proc
+                                                                                 it_iter = lt_iter
+                                                                                 environment = environment
+                                                                       IMPORTING ev_has_next = lv_has_next  ) ).
+      ENDIF.
+
+      WHILE lo_first->has_next( ) AND lv_has_next EQ abap_true.
         " evaluate function call (proc list1[k] list2[k]... listn[k]); add result as k-th list element
-        lo_map = lo_map->cdr = lcl_lisp_new=>cons( io_car = map_apply_proc( io_proc = lo_proc
-                                                                            it_iter = lt_iter
-                                                                            environment = environment ) ).
+        lo_map = lo_map->cdr = lcl_lisp_new=>cons( io_car = map_apply_proc( EXPORTING io_proc = lo_proc
+                                                                                      it_iter = lt_iter
+                                                                                      environment = environment
+                                                                            IMPORTING ev_has_next = lv_has_next  ) ).
       ENDWHILE.
 
-      check_iterator_length( it_iter = lt_iter
-                             iv_statement = `map` ).
     ENDMETHOD.
 
     METHOD evaluate_for_each.
@@ -1270,32 +1303,25 @@
 * The for-each procedure applies proc element-wise to the elements of the lists for its side effects, in order from the
 * first elements to the last.
 * Proc is always called in the same dynamic environment as for-each itself. The return values of for-each are unspecified.
-      validate: io_list, io_list->car, io_list->cdr.
+      validate: io_list, io_list->car.
 
       result = nil.
       DATA(lo_proc) = io_list->car.
 
       DATA(lt_iter) = new_iterator_table( io_head = io_list->cdr
                                           environment = environment ).
-
-*     iterator for first list (all list should have same length)
-      DATA(lo_iter) = io_list->cdr->car->new_iterator( ).
-      WHILE lo_iter->has_next( ).
+      CHECK lines( lt_iter ) GT 0.
+*     iterator for first (parameter evaluated) list (all list should have same length)
+      DATA(lo_first) = lt_iter[ 1 ]->clone( ).
+"     for-each terminates when the shortest list runs out.
+      DATA(lv_has_next) = abap_true.
+      WHILE lo_first->has_next( ) AND lv_has_next EQ abap_true.
         " evaluate function call (proc list1[k] list2[k]... listn[k])
-        result = map_apply_proc( io_proc = lo_proc
-                                 it_iter = lt_iter
-                                 environment = environment ).
+        result = map_apply_proc( EXPORTING io_proc = lo_proc
+                                           it_iter = lt_iter
+                                           environment = environment
+                                 IMPORTING ev_has_next = lv_has_next ).
       ENDWHILE.
-
-      check_iterator_length( it_iter = lt_iter
-                             iv_statement = `for-each` ).
-    ENDMETHOD.
-
-    METHOD check_iterator_length.
-      LOOP AT it_iter INTO DATA(lo_iter).
-        CHECK lo_iter->has_next( ).
-        throw( iv_statement && `: lists should all have the same length` ).
-      ENDLOOP.
     ENDMETHOD.
 
     METHOD evaluate_list.
@@ -1811,8 +1837,8 @@
 *     build internal table of list interators
       DATA(iter) = io_head->new_iterator( ).
       WHILE iter->has_next( ).
-        DATA(lo_next) = evaluate_parameters( io_list = iter->next( )
-                                             environment = environment ).
+        DATA(lo_next) = eval( element = iter->next( )
+                              environment = environment ).
 *        TRY.
 *          DATA(debug0_txt) = lo_next->to_string( ).
 *          CATCH cx_root.
@@ -1823,11 +1849,14 @@
 
     METHOD map_apply_proc.
       " evaluate function call (proc list1[k] list2[k]... listn[k])
+      ev_has_next = abap_true.
 
       result = lcl_lisp_new=>cons( io_car = io_proc ).
       DATA(lo_ptr) = result.
       LOOP AT it_iter INTO DATA(lo_iter).
         lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = lo_iter->next( ) ).
+        CHECK ev_has_next = abap_true.
+        ev_has_next = lo_iter->has_next( ).
       ENDLOOP.
       result = eval( element = result
                      environment = environment ).
@@ -1865,22 +1894,22 @@
     ENDMETHOD.                    "proc_append_unsafe
 
     METHOD proc_car.
-      validate: list, list->car.
-      IF list->car = nil.
-        result = nil.
-        RETURN.
+      validate: list.
+      DATA(lo_arg) = list->car.
+      IF lo_arg = nil.
+        throw( `car: argument is nil - Exception` ).
       ENDIF.
-      result = list->car->car.
+      result = lo_arg->car.
     ENDMETHOD.                    "proc_car
 
     METHOD proc_cdr.
-      validate: list, list->car, list->cdr.
+      validate: list.
 
-      IF list->cdr = nil AND list->car = nil.
-        result = nil.
-        RETURN.
+      DATA(lo_arg) = list->car.
+      IF lo_arg = nil.
+        throw( `cdr: argument is nil - Exception` ).
       ENDIF.
-      result = list->car->cdr.
+      result = lo_arg->cdr.
     ENDMETHOD.                    "proc_cdr
 
     METHOD proc_cons.
@@ -2504,8 +2533,11 @@
     ENDMETHOD.                    "proc_is_list
 
     METHOD proc_is_pair. " argument in list->car
+      validate list.
+
       result = false.
-      CHECK list IS BOUND AND list NE nil AND list->type = lcl_lisp=>type_conscell.
+      DATA(lo_arg) = list->car.
+      CHECK lo_arg NE nil AND lo_arg->type = lcl_lisp=>type_conscell.
       result = true.
     ENDMETHOD.                    "proc_is_list
 
@@ -3616,6 +3648,10 @@
       first = abap_true.
       active = xsdbool( elem NE lcl_lisp=>nil AND
          ( elem->car NE lcl_lisp=>nil OR elem->cdr EQ lcl_lisp=>nil ) ).
+    ENDMETHOD.
+
+    METHOD clone.
+      ro_iter = NEW lcl_lisp_iterator( elem ).
     ENDMETHOD.
 
     METHOD has_next.

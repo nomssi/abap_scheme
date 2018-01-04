@@ -389,18 +389,27 @@
        METHODS letrec_1 FOR TESTING.
        METHODS letrec_2 FOR TESTING.
 
+       METHODS letrec_star_1 FOR TESTING.
+
        METHODS is_symbol_true FOR TESTING.
        METHODS is_symbol_false FOR TESTING.
        METHODS is_hash_true FOR TESTING.
        METHODS is_hash_false FOR TESTING.
+
        METHODS is_procedure_true FOR TESTING.
        METHODS is_procedure_true_1 FOR TESTING.
        METHODS is_procedure_true_2 FOR TESTING.
        METHODS is_procedure_false FOR TESTING.
+
        METHODS is_string_true FOR TESTING.
        METHODS is_string_false FOR TESTING.
        METHODS is_number_true FOR TESTING.
        METHODS is_number_false FOR TESTING.
+
+       METHODS and_1 FOR TESTING.
+       METHODS and_2 FOR TESTING.
+       METHODS and_3 FOR TESTING.
+       METHODS and_4 FOR TESTING.
 
    ENDCLASS.                    "ltc_basic DEFINITION
 
@@ -509,6 +518,35 @@
                   expected = '8' ).
      ENDMETHOD.
 
+     METHOD letrec_star_1.
+       code_test( code =
+          |;; Returns the arithmetic, geometric, and\n| &
+          |;; harmonic means of a nested list of numbers\n| &
+          |(define (means ton)| &
+          |  (letrec*| &
+          |     ((mean| &
+          |        (lambda (f g)| &
+          |          (f (/ (sum g ton) n))))| &
+          |      (sum| &
+          |        (lambda (g ton)| &
+          |          (if (null? ton)| &
+          |            (+)| &
+          |            (if (number? ton)| &
+          |                (g ton)| &
+          |                (+ (sum g (car ton))| &
+          |                   (sum g (cdr ton)))))))| &
+          |      (n (sum (lambda (x) 1) ton)))| &
+          |    (values (mean values values)| &
+          |            (mean exp log)| &
+          |            (mean / /))))|
+                  expected = 'means' ).
+
+**      evaluating (means '(3 (1 4))) returns three values:
+**       8/3, 2.28942848510666 (approximately), and 36/19.
+*       code_test( code = |(means '(3 (1 4)))|
+*                  expected = |8/3 2.28942848510666 36/19| ).
+     ENDMETHOD.
+
      METHOD is_symbol_true.
        code_test( code = |(define x 5)|
                   expected = 'x' ).
@@ -595,6 +633,26 @@
                   expected = 'd' ).
        code_test( code = |(number? d)|
                   expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD and_1.
+       code_test( code = |(and (= 2 2) (> 2 1))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD and_2.
+       code_test( code = |(and (= 2 2) (< 2 1))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD and_3.
+       code_test( code = |(and 1 2 'c '(f g)) |
+                  expected = '( f g )' ).
+     ENDMETHOD.
+
+     METHOD and_4.
+       code_test( code = |(and)|
+                  expected = '#t' ).
      ENDMETHOD.
 
    ENDCLASS.                    "ltc_basic IMPLEMENTATION
@@ -1440,7 +1498,7 @@
 
      METHOD list_car_5.
        code_test( code = '(car ''())'
-                  expected = 'Exception' ).
+                  expected = 'Eval: car: argument is nil - Exception' ).
      ENDMETHOD.
 
      METHOD list_cdr_1.
@@ -1460,7 +1518,7 @@
 
      METHOD list_cdr_4.
        code_test( code = |(cdr '())|
-                  expected = 'Error' ).
+                  expected = 'Eval: cdr: argument is nil - Exception' ).
      ENDMETHOD.                    "list_cdr_1
 
      METHOD list_car_car_cdr.
@@ -1470,7 +1528,7 @@
 
      METHOD list_car_nil.
        code_test( code = '(car nil)'
-                  expected = 'nil' ).
+                  expected = 'Eval: car: argument is nil - Exception' ).
      ENDMETHOD.                    "list_car_nil
 
      METHOD list_car_list.
@@ -1688,6 +1746,7 @@
        METHODS for_each_1 FOR TESTING.
        METHODS for_each_2 FOR TESTING.
        METHODS for_each_3 FOR TESTING.
+       METHODS for_each_4 FOR TESTING.
 
    ENDCLASS.                    "ltc_higher_order DEFINITION
 
@@ -1817,23 +1876,23 @@
        code_test( code = |(define (cadr list) (car (cdr list)))|
                   expected = |cadr| ).
        code_test( code = |(map cadr '((a b) (d e) (g h)))|
-                  expected = '(b e h)' ).
+                  expected = '( b e h )' ).
      ENDMETHOD.
 
      METHOD map_2.
        code_test( code = |(map + (list 3 4))|
-                  expected = 'Error' ).
+                  expected = '( 3 4 )' ).
      ENDMETHOD.
 
      METHOD map_3.
        code_test( code = |(map (lambda (n) (expt n n))| &
                          |'(1 2 3 4 5))|
-                  expected = '(1 4 27 256 3125)' ).
+                  expected = '( 1 4 27 256 3125 )' ).
      ENDMETHOD.
 
      METHOD map_4.
-       code_test( code = |(map + '(1 2 3) '(4 5 6))|
-                  expected = '(5 7 9)' ).
+       code_test( code = |(map + '(1 2 3) '(4 5 6 7))|
+                  expected = '( 5 7 9 )' ).
      ENDMETHOD.
 
      METHOD map_5.
@@ -1863,7 +1922,12 @@
 
      METHOD for_each_3.
        code_test( code = |(for-each even? '())|
-                  expected = '#f' ).   " unspecified
+                  expected = 'nil' ).   " #f, unspecified
+     ENDMETHOD.
+
+     METHOD for_each_4.
+       code_test( code = |(for-each + (list 3 4) '(4 5))|
+                  expected = '9' ).  " unspecified
      ENDMETHOD.
 
    ENDCLASS.                    "ltc_higher_order IMPLEMENTATION
