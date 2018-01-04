@@ -334,7 +334,6 @@
                    RAISING   cx_dynamic_check.
       METHODS clone RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_iterator.
     PRIVATE SECTION.
-      DATA active TYPE flag.
       DATA elem TYPE REF TO lcl_lisp.
 
       METHODS constructor IMPORTING io_elem TYPE REF TO lcl_lisp
@@ -509,7 +508,7 @@
         c_escape_char  TYPE char1 VALUE '\',
         c_text_quote   TYPE char1 VALUE '"',
         c_lisp_quote   TYPE char1 VALUE '''', "LISP single quote = QUOTE
-        "c_abap_data    TYPE char1 VALUE '@',
+        c_lisp_dot     TYPE char1 VALUE '.',
         c_lisp_comment TYPE char1 VALUE ';'.
       DATA code TYPE string.
       DATA length TYPE i.
@@ -565,12 +564,12 @@
 
 * Functions for dealing with lists:
       _proc_meth:
-      proc_append,   ##called
+      proc_append,          ##called
       proc_append_unsafe,   ##called
-      proc_reverse,  ##called
-      proc_car,      ##called
-      proc_cdr,      ##called
-      proc_cons,     ##called
+      proc_reverse,         ##called
+      proc_car,             ##called
+      proc_cdr,             ##called
+      proc_cons,            ##called
 
       proc_memq,     ##called
       proc_memv,     ##called
@@ -724,7 +723,8 @@
                                RAISING   lcx_lisp_exception.
       METHODS proc_compare IMPORTING a             TYPE REF TO lcl_lisp
                                      b             TYPE REF TO lcl_lisp
-                           RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                                     comp          TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
+                              RETURNING VALUE(result) TYPE REF TO lcl_lisp
                            RAISING   lcx_lisp_exception.
       METHODS create_element_from_data
         IMPORTING ir_data       TYPE REF TO data
@@ -1035,7 +1035,7 @@
       env->set( symbol = '#f' element = false ).
       env->set( symbol = '#t' element = true ).
 
-*      Add native functions to environment
+*     Add native functions to environment
       env->define_value( symbol = '+'        type = lcl_lisp=>type_native value   = 'PROC_ADD' ).
       env->define_value( symbol = '-'        type = lcl_lisp=>type_native value   = 'PROC_SUBTRACT' ).
       env->define_value( symbol = '*'        type = lcl_lisp=>type_native value   = 'PROC_MULTIPLY' ).
@@ -1782,44 +1782,57 @@
 
       CHECK list->cdr NE nil.
 
-* TO DO: Optimize - reverse the list of argument,
-*        so the nested reverse does not need to work on longer lists
+      DATA(lo_iter) = list->new_iterator( ).
+      WHILE lo_iter->has_next( ).
 
-*     At least 2 arguments, and the second argument is not nil
-      DATA(lo_arg) = list.
-      WHILE lo_arg->cdr NE nil.
-        lo_arg = lo_arg->cdr.
+*       copy first list, reassign result
+        DATA(first) = lo_iter->next( ).
+        CHECK first NE nil.
 
-        CHECK lo_arg NE nil.
+        IF first->type = lcl_lisp=>type_conscell.
+          result = lcl_lisp_new=>cons( io_car = first->car ).
 
-*       result must be a list
-        IF result = nil.
-          result = lo_arg->car.
-          CONTINUE.
-        ELSE.
-          DATA(lo_ptr) = result.
-          WHILE  lo_ptr NE nil AND lo_ptr->type = lcl_lisp=>type_conscell.
-            lo_ptr = lo_ptr->cdr.
+          DATA(lo_last) = result.
+          DATA(lo_arg) = first->cdr.
+          WHILE lo_arg NE nil AND lo_arg->type = lcl_lisp=>type_conscell.
+            lo_last = lo_last->cdr = lcl_lisp_new=>cons( io_car = lo_arg->car ).
+            lo_arg = lo_arg->cdr.
           ENDWHILE.
 
-          IF lo_ptr NE nil.
-            throw( |append: { result->to_string( ) } is not a proper list| ).
+          IF lo_arg NE nil.
+            lo_last = lo_last->cdr = lo_arg.
           ENDIF.
 
+        ELSE.
+
+          lo_arg = result = first.
         ENDIF.
 
-        DATA(lo_iter) = reverse_list( result )->new_iterator( ).
-        CHECK lo_iter->has_next( ).
-        result = lcl_lisp_new=>cons( io_car = lo_iter->next( )
-                                     io_cdr = lo_arg->car ).
+        EXIT.
+      ENDWHILE.
 
-        WHILE lo_iter->has_next( ).
-          result = lcl_lisp_new=>cons( io_car = lo_iter->next( )
-                                       io_cdr = result ).
+*     Append next list
+      WHILE lo_iter->has_next( ).
+
+        IF lo_arg NE nil.
+          throw( |append: { first->to_string( ) } is not a proper list| ).
+        ENDIF.
+
+        first = lo_arg = lo_iter->next( ).
+        CHECK first NE nil.
+
+*       Append lo_arg to result, from last element on
+        WHILE lo_arg NE nil AND lo_arg->type = lcl_lisp=>type_conscell.
+          lo_last = lo_last->cdr = lcl_lisp_new=>cons( io_car = lo_arg->car ).
+          lo_arg = lo_arg->cdr.
         ENDWHILE.
 
+        CHECK lo_arg NE nil.
+        lo_last = lo_last->cdr = lo_arg.
+
       ENDWHILE.
-    ENDMETHOD.                    "proc_append
+
+    ENDMETHOD.
 
     METHOD reverse_list.
       result = nil.
@@ -1871,16 +1884,16 @@
     ENDMETHOD.
 
     METHOD proc_append_unsafe.  " append! (non functional)
-*      Takes two parameters: the first must be a list, and the second can
-*      be of any type. Appends the second param to the first.
+*     Takes two parameters: the first must be a list, and the second can
+*     be of any type. Appends the second param to the first.
 
-*      But if the last element in the list is not a cons cell, we cannot append
+*     But if the last element in the list is not a cons cell, we cannot append
       validate: list, list->car, list->cdr.
 
       IF list->car EQ nil.
         result = list->cdr->car.
       ELSE.
-*        Get to last element in list - this can make APPEND expensive, like LENGTH
+*       Get to last element in list - this can make APPEND expensive, like LENGTH
         DATA(lo_last) = list->car.
         IF lo_last->type NE lcl_lisp=>type_conscell.
           throw( |{ lo_last->to_string( ) } is not a list| ).
@@ -2122,10 +2135,13 @@
       result = false.
 
       DATA(lo_sublist) = list->cdr->car.
+      DATA(lo_compare) = list->cdr->cdr.
       DATA(lo_item) = list->car.
+
       WHILE lo_sublist NE nil.
         IF proc_compare( a = lo_sublist->car
-                         b = lo_item ) NE false.
+                         b = lo_item
+                         comp = lo_compare ) NE false.
           result = lo_sublist.
           RETURN.
         ENDIF.
@@ -2425,6 +2441,15 @@
 
     METHOD proc_compare.
       validate: a, b.
+
+      IF comp NE nil.
+        DATA(lo_arg) = lcl_lisp_new=>cons( io_car = b ).
+        result = execute( io_head = comp
+                          io_args = lcl_lisp_new=>cons( io_car = a
+                                                        io_cdr = lo_arg  )
+                          environment = comp->environment ).
+        RETURN.
+      ENDIF.
 
       result = false.
       CHECK a->type EQ b->type.
@@ -3665,8 +3690,6 @@
     METHOD constructor.
       elem = io_elem.
       first = abap_true.
-      active = xsdbool( elem NE lcl_lisp=>nil AND
-         ( elem->car NE lcl_lisp=>nil OR elem->cdr EQ lcl_lisp=>nil ) ).
     ENDMETHOD.
 
     METHOD clone.
@@ -3675,7 +3698,7 @@
 
     METHOD has_next.
 *     if the last element in the list is not a cons cell, we cannot append
-      rv_flag = xsdbool( active EQ abap_true AND
+      rv_flag = xsdbool( elem NE lcl_lisp=>nil AND
                ( first EQ abap_true OR ( elem->cdr IS BOUND AND elem->cdr NE lcl_lisp=>nil ) ) ).
     ENDMETHOD.                    "has_next
 
