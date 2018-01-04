@@ -599,6 +599,7 @@
       proc_lte,      ##called
       proc_eql,      ##called
       proc_eqv,      ##called
+      proc_not,      ##called
 
       proc_is_number,     ##called
       proc_is_integer,    ##called
@@ -1044,6 +1045,7 @@
       env->define_value( symbol = 'list'     type = lcl_lisp=>type_native value   = 'PROC_LIST' ).
       env->define_value( symbol = 'length'   type = lcl_lisp=>type_native value   = 'PROC_LENGTH' ).
       env->define_value( symbol = 'reverse'  type = lcl_lisp=>type_native value   = 'PROC_REVERSE' ).
+      env->define_value( symbol = 'not'      type = lcl_lisp=>type_native value   = 'PROC_NOT' ).
 
       env->define_value( symbol = 'make-list'  type = lcl_lisp=>type_native value   = 'PROC_MAKE_LIST' ).
       env->define_value( symbol = 'list-tail'  type = lcl_lisp=>type_native value   = 'PROC_LIST_TAIL' ).
@@ -1374,6 +1376,9 @@
 *          call first-class, then we would need to revisit evaluating the whole of ELEMENT in one shot
           result = proc_abap_function_call( lcl_lisp_new=>cons( io_car = io_head
                                                                 io_cdr = io_args ) ).
+*<<< TEST
+*        WHEN lcl_lisp=>type_abap_method.
+*>>> TEST: Support evaluation of ABAP methods directly
 *<<< TEST
         WHEN OTHERS.
           throw( |Cannot evaluate { io_head->to_string( ) } - not a function| ).
@@ -1777,6 +1782,9 @@
 
       CHECK list->cdr NE nil.
 
+* TO DO: Optimize - reverse the list of argument,
+*        so the nested reverse does not need to work on longer lists
+
 *     At least 2 arguments, and the second argument is not nil
       DATA(lo_arg) = list.
       WHILE lo_arg->cdr NE nil.
@@ -1913,11 +1921,22 @@
     ENDMETHOD.                    "proc_cdr
 
     METHOD proc_cons.
-*      Create new cell and prepend it to second parameter
+*     Create new cell and prepend it to second parameter
       validate: list, list->car, list->cdr.
 
       result = lcl_lisp_new=>cons( io_car = list->car
                                    io_cdr = list->cdr->car ).
+    ENDMETHOD.                    "proc_cons
+
+    METHOD proc_not.
+*     Create new cell and prepend it to second parameter
+      validate: list.
+
+      IF list->car EQ false.
+        result = true.
+      ELSE.
+        result = false.
+      ENDIF.
     ENDMETHOD.                    "proc_cons
 
 * (defun list-length (x)

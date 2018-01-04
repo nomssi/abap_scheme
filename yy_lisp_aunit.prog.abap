@@ -411,6 +411,15 @@
        METHODS and_3 FOR TESTING.
        METHODS and_4 FOR TESTING.
 
+       METHODS not_1 FOR TESTING.
+       METHODS not_2 FOR TESTING.
+       METHODS not_3 FOR TESTING.
+       METHODS not_4 FOR TESTING.
+       METHODS not_5 FOR TESTING.
+       METHODS not_6 FOR TESTING.
+       METHODS not_7 FOR TESTING.
+       METHODS not_8 FOR TESTING.
+
    ENDCLASS.                    "ltc_basic DEFINITION
 
 *----------------------------------------------------------------------*
@@ -653,6 +662,46 @@
      METHOD and_4.
        code_test( code = |(and)|
                   expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD not_1.
+       code_test( code = |(not #t)|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD not_2.
+       code_test( code = |(not 3)|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD not_3.
+       code_test( code = |(not (list 3))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD not_4.
+       code_test( code = |(not #f)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD not_5.
+       code_test( code = |(not '())|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD not_6.
+       code_test( code = |(not (list))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD not_7.
+       code_test( code = |(not 'nil)|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD not_8.
+       code_test( code = |(not (= 2 2))|
+                  expected = '#f' ).
      ENDMETHOD.
 
    ENDCLASS.                    "ltc_basic IMPLEMENTATION
