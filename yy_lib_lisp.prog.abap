@@ -1164,7 +1164,7 @@
                                             environment = environment ) ).
           result = lcl_lisp_new=>symbol( element->car->value ).
 
-*        Function shorthand (define (id arg ... ) body ...+)
+*       Function shorthand (define (id arg ... ) body ...+)
         WHEN lcl_lisp=>type_conscell.
 *         define's function shorthand allows us to define a function by specifying a list as the
 *         first argument where the first element is a symbol and consecutive elements are arguments
@@ -1342,9 +1342,11 @@
 *     where parameters become symbols that are mapped to the corresponding arguments
       validate io_head.
       DATA(lo_env) = lcl_lisp_environment=>new( io_head->environment ).
+
       lo_env->parameters_to_symbols( io_args = evaluate_parameters( io_list = io_args           " Pointer to arguments
                                                                     environment = environment )
                                      io_pars = io_head->first( ) ).   " Pointer to formal parameters
+
       result = evaluate_list( io_head = io_head->rest( )
                               io_environment = lo_env ).
     ENDMETHOD.                    "eval_function
@@ -3518,25 +3520,41 @@
 *      Assign each argument to its corresponding symbol in the newly created environment
       DATA lv_count TYPE i.
 
-      DATA(lo_par) = io_pars.                " Pointer to formal parameters
-      DATA(lo_arg) = io_args.                " Pointer to arguments
-      WHILE lo_par NE lcl_lisp=>nil.         " Nil would mean no parameters to map
-        IF lo_arg = lcl_lisp=>nil.           " Premature end of arguments
-          lcl_lisp=>throw( |Missing parameter(s) { lo_par->to_string( ) }| ).
-        ENDIF.
+      " they are 3 cases here
+      CASE io_pars->type.
+        WHEN lcl_lisp=>type_conscell.   "Do we have a proper list?
+          "1) list -> fixed number of parameters
+          "2) TO DO: dotted pair -> first part : fixed number of parameters, second part variable
 
-        ADD 1 TO lv_count.
-*        NOTE: Each element of the argument list is evaluated before being defined in the environment
-        set( symbol = lo_par->car->value
-             element = lo_arg->car ).
+          DATA(lo_par) = io_pars.                " Pointer to formal parameters
+          DATA(lo_arg) = io_args.                " Pointer to arguments
 
-        lo_par = lo_par->cdr.
-        lo_arg = lo_arg->rest( ).
-      ENDWHILE.
+          WHILE lo_par NE lcl_lisp=>nil.         " Nil would mean no parameters to map
+            IF lo_arg = lcl_lisp=>nil.           " Premature end of arguments
+              lcl_lisp=>throw( |Missing parameter(s) { lo_par->to_string( ) }| ).
+            ENDIF.
 
-*       IF lo_arg NE lcl_lisp=>nil.  " Excessive number of arguments
-*         lcl_lisp=>throw( |Expected { lv_count } parameter(s), found { io_args->to_string( ) }| ).
-*       ENDIF.
+            ADD 1 TO lv_count.
+
+*           NOTE: Each element of the argument list is evaluated before being defined in the environment
+            set( symbol = lo_par->car->value
+                 element = lo_arg->car ).
+
+            lo_par = lo_par->cdr.
+            lo_arg = lo_arg->rest( ).
+          ENDWHILE.
+
+           IF lo_arg NE lcl_lisp=>nil.  " Excessive number of arguments
+             lcl_lisp=>throw( |Expected { lv_count } parameter(s), found { io_args->to_string( ) }| ).
+           ENDIF.
+
+        WHEN lcl_lisp=>type_symbol.
+          "3) args is a symbol to be bound to a variable number of parameters
+            set( symbol = io_pars->value
+                 element = io_args ).
+
+      ENDCASE.
+
     ENDMETHOD.                    "parameters_to_symbols
 
   ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
