@@ -8,7 +8,7 @@
 
 After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a>.
 
-This is my [Make a Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) learning project that started as a fork of https://github.com/mydoghasworms/abap-lisp. that was inspired by http://norvig.com/lispy2.html.
+This is my [Make a Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) learning project that started as a fork of https://github.com/mydoghasworms/abap-lisp that was inspired by [Peter Norvig](http://norvig.com/lispy2.html).
 
 I converted the regression tests to ABAP Unit, added validations, an editor and many [Scheme](http://www.r7rs.org/) features but I won't call this LISP interpreter a _Scheme_ until issue #1 is resolved.
 
