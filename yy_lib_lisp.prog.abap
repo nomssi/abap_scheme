@@ -273,14 +273,14 @@
       CLASS-METHODS throw IMPORTING message TYPE string
                           RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
-      CLASS-METHODS new IMPORTING type           TYPE tv_type
-                                  io_car         TYPE REF TO lcl_lisp DEFAULT nil
-                                  io_cdr         TYPE REF TO lcl_lisp DEFAULT nil
-                        RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
-
       METHODS list_to_string RETURNING VALUE(str) TYPE string
                              RAISING   lcx_lisp_exception.
   ENDCLASS.                    "lcl_lisp DEFINITION
+
+  TYPES tt_lisp TYPE STANDARD TABLE OF REF TO lcl_lisp WITH EMPTY KEY.
+  CLASS lcl_lisp_vector DEFINITION DEFERRED.
+  CLASS lcl_lisp_abapfunction DEFINITION DEFERRED.
+  CLASS lcl_lisp_hash DEFINITION DEFERRED.
 
   CLASS lcl_lisp_new DEFINITION.
     PUBLIC SECTION.
@@ -295,7 +295,9 @@
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
 
       CLASS-METHODS elem IMPORTING type           TYPE lcl_lisp=>tv_type
-                                   value          TYPE any
+                                   io_car         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
+                                   io_cdr         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
+                                   value          TYPE any OPTIONAL
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS data IMPORTING ref            TYPE REF TO data OPTIONAL
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
@@ -304,13 +306,29 @@
       CLASS-METHODS cons IMPORTING io_car         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                                    io_cdr         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                          RETURNING VALUE(ro_cons) TYPE REF TO lcl_lisp.
+
+      CLASS-METHODS vector IMPORTING it_vector TYPE tt_lisp
+                                     iv_mutable TYPE flag
+                           RETURNING VALUE(ro_vec) TYPE REF TO lcl_lisp_vector.
+
       CLASS-METHODS lambda IMPORTING io_car           TYPE REF TO lcl_lisp
                                      io_cdr           TYPE REF TO lcl_lisp
                                      io_env           TYPE REF TO lcl_lisp_environment
                            RETURNING VALUE(ro_lambda) TYPE REF TO lcl_lisp.
 
+      CLASS-METHODS function IMPORTING io_list        TYPE REF TO lcl_lisp
+                             RETURNING VALUE(ro_func) TYPE REF TO lcl_lisp_abapfunction
+                             RAISING   lcx_lisp_exception.
+
+      CLASS-METHODS hash IMPORTING io_list        TYPE REF TO lcl_lisp
+                         RETURNING VALUE(ro_hash) TYPE REF TO lcl_lisp_hash
+                         RAISING   lcx_lisp_exception.
+
       CLASS-METHODS quote IMPORTING io_elem        TYPE REF TO lcl_lisp
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+    PRIVATE SECTION.
+      CLASS-METHODS node IMPORTING type           TYPE lcl_lisp=>tv_type
+                         RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
   ENDCLASS.
 
 *  CLASS lcl_lisp_builder DEFINITION.
@@ -374,12 +392,9 @@
 * Hash is a specialized ABAP Lisp type for quick lookup of elements
 * using a symbol or string key (backed by an ABAP hash table)
 *----------------------------------------------------------------------*
-  CLASS lcl_lisp_hash DEFINITION INHERITING FROM lcl_lisp.
+  CLASS lcl_lisp_hash DEFINITION INHERITING FROM lcl_lisp
+    CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
-
-      CLASS-METHODS new_hash IMPORTING list           TYPE REF TO lcl_lisp
-                             RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_hash
-                             RAISING   lcx_lisp_exception.
       CLASS-METHODS from_list IMPORTING list           TYPE REF TO lcl_lisp
                                         msg            TYPE string
                               RETURNING VALUE(ro_hash) TYPE REF TO lcl_lisp_hash
@@ -404,9 +419,12 @@
       TYPES tt_hash TYPE HASHED TABLE OF ts_hash WITH UNIQUE KEY key.
       DATA hash TYPE tt_hash.
 
+      METHODS fill IMPORTING list           TYPE REF TO lcl_lisp
+                   RAISING   lcx_lisp_exception.
   ENDCLASS.                    "lcl_lisp_hash DEFINITION
 
-  CLASS lcl_lisp_vector DEFINITION INHERITING FROM lcl_lisp CREATE PROTECTED.
+  CLASS lcl_lisp_vector DEFINITION INHERITING FROM lcl_lisp
+    CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
 
       CLASS-METHODS init IMPORTING size TYPE sytabix
@@ -438,14 +456,9 @@
       METHODS to_string REDEFINITION.
 
     PROTECTED SECTION.
-      TYPES tt_lisp_vector TYPE STANDARD TABLE OF REF TO lcl_lisp WITH EMPTY KEY.
-      DATA vector TYPE tt_lisp_vector.
+      DATA vector TYPE tt_lisp.
       DATA mo_length TYPE REF TO lcl_lisp.
       DATA mutable TYPE flag VALUE abap_true.
-
-      METHODS constructor IMPORTING it_vector TYPE tt_lisp_vector
-                                    iv_mutable TYPE flag.
-
   ENDCLASS.
 
 *----------------------------------------------------------------------*
@@ -454,12 +467,9 @@
 * Specialized element representing an ABAP function module that can
 * be called
 *----------------------------------------------------------------------*
-  CLASS lcl_lisp_abapfunction DEFINITION INHERITING FROM lcl_lisp.
+  CLASS lcl_lisp_abapfunction DEFINITION INHERITING FROM lcl_lisp CREATE PROTECTED
+    FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
-      CLASS-METHODS new_function
-        IMPORTING list           TYPE REF TO lcl_lisp
-        RETURNING VALUE(ro_func) TYPE REF TO lcl_lisp_abapfunction
-        RAISING   lcx_lisp_exception.
 
       METHODS call IMPORTING list           TYPE REF TO lcl_lisp
                    RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
@@ -1547,8 +1557,6 @@
 *     ...))
     METHOD  init_letrec.
       ro_env = lcl_lisp_environment=>new( io_env ).
-*     Before evaluating the parameter, we create them all with dummy values
-      DATA(lo_dummy) = lcl_lisp_new=>string( '*letrec-dummy*' ).
 
       extract_arguments( EXPORTING io_head = io_head
                          IMPORTING eo_pars = DATA(lo_pars)
@@ -1623,8 +1631,6 @@
 
     METHOD  init_letrec_star.
       ro_env = lcl_lisp_environment=>new( io_env ).
-*     Before evaluating the parameter, we create them all with dummy values
-      DATA(lo_dummy) = lcl_lisp_new=>string( '*letrec-dummy*' ).
 
       extract_arguments( EXPORTING io_head = io_head
                          IMPORTING eo_pars = DATA(lo_pars)
@@ -1682,8 +1688,8 @@
 
         WHEN lcl_lisp=>type_hash.
 *>>> TEST
-          result = lcl_lisp_hash=>new_hash( eval( element = CAST lcl_lisp_hash( element )->get( element )
-                                                  environment = environment ) ).
+          result = lcl_lisp_new=>hash( eval( element = CAST lcl_lisp_hash( element )->get( element )
+                                             environment = environment ) ).
 *<<< TEST
 *        otherwise just return the original AST value
         WHEN OTHERS.
@@ -2803,7 +2809,7 @@
 *--------------------------------------------------------------------*
 *    Hash-related functions
     METHOD proc_make_hash.
-      result = lcl_lisp_hash=>new_hash( list ).
+      result = lcl_lisp_new=>hash( list ).
     ENDMETHOD.                    "proc_make_hash
 
 *    Get an element from a hash
@@ -3176,7 +3182,7 @@
 
 **********************************************************************
     METHOD proc_abap_function.
-      result = lcl_lisp_abapfunction=>new_function( list ).
+      result = lcl_lisp_new=>function( list ).
     ENDMETHOD.                    "proc_abap_function
 
     METHOD proc_abap_table. "Create a table data
@@ -3644,20 +3650,6 @@
       ENDIF.
     ENDMETHOD.                    "read_interface
 
-    METHOD new_function.
-      validate: list, list->car.
-
-      ro_func ?= new( type_abap_function ).
-*      Determine the parameters of the function module to populate parameter table
-      ro_func->value = ro_func->read_interface( list->car->value ).
-*(let (( profiles
-*        (let ( (f3 (ab-function "BAPI_USER_GET_DETAIL"))  )
-*        ( begin (ab-set f3 "USERNAME" (ab-get ab-sy "UNAME") )
-*                  (f3) (ab-get f3 "PROFILES")  ) )
-*        ) )
-*   (let ((profile (ab-get profiles 1)) )
-*             (ab-get profile "BAPIPROF" )  )
-    ENDMETHOD.                    "new_function
 *(define bapi-userdetail (ab-function "BAPI_USER_GET_DETAIL"))  ;; Assign interface of BAPI_USER_GET_DETAIL to a symbol
 *(ab-set bapi-userdetail "USERNAME" (ab-get ab-sy "UNAME"))     ;; Set parameter "USERNAME" to current user
 
@@ -3935,16 +3927,6 @@
       ro_iter = NEW lcl_lisp_iterator( me ).
     ENDMETHOD.
 
-    METHOD new.
-      ro_elem = SWITCH #( type
-                  WHEN type_hash THEN NEW lcl_lisp_hash( )
-                  WHEN type_abap_function THEN NEW lcl_lisp_abapfunction( )
-                  ELSE NEW lcl_lisp( ) ).
-      ro_elem->type = type.
-      ro_elem->car = io_car.
-      ro_elem->cdr = io_cdr.
-    ENDMETHOD.                    "new
-
     METHOD list_to_string.
       str = lcl_parser=>c_open_paren.
       DATA(lo_elem) = me.
@@ -4054,8 +4036,14 @@
 
   CLASS lcl_lisp_new IMPLEMENTATION.
 
+    METHOD node.
+      ro_elem = NEW lcl_lisp( ).
+      ro_elem->type = type.
+    ENDMETHOD.
+
     METHOD elem.
-      ro_elem = lcl_lisp=>new( type ).
+      ro_elem = node( type ).
+
       CASE type.
         WHEN lcl_lisp=>type_number.
           ro_elem->number = value.
@@ -4067,33 +4055,32 @@
     ENDMETHOD.                    "new_elem
 
     METHOD string.
-      ro_elem = elem( type = lcl_lisp=>type_string
-                      value = value ).
+      ro_elem = node( lcl_lisp=>type_string ).
+      ro_elem->value = value.
     ENDMETHOD.                    "new_string
 
     METHOD symbol.
-      ro_elem = elem( type = lcl_lisp=>type_symbol
-                       value = value ).
+      ro_elem = node( lcl_lisp=>type_symbol ).
+      ro_elem->value = value.
     ENDMETHOD.                    "new_symbol
 
     METHOD null.
-      ro_elem = elem( type = lcl_lisp=>type_null
-                      value = 'nil' ).
+      ro_elem = node( lcl_lisp=>type_null ).
+      ro_elem->value = 'nil'.
     ENDMETHOD.                    "new_symbol
 
     METHOD number.
-      ro_elem = elem( type = lcl_lisp=>type_number
-                      value = value ).
+      ro_elem = node( lcl_lisp=>type_number ).
+      ro_elem->number = value.
     ENDMETHOD.                    "new_number
 
     METHOD atom.
-      DATA lv_num TYPE decfloat34 ##needed.
-*      Check whether the token can be converted to a float, to cover all
-*      manner of number formats, including scientific, otherwise treat it
-*      as a symbol (but we still store it as a string to preserve the original value
-*      and let the ABAP kernel do the heavy lifting later on)
+*     Check whether the token can be converted to a float, to cover all
+*     manner of number formats, including scientific, otherwise treat it
+*     as a symbol (but we still store it as a string to preserve the original value
+*     and let the ABAP kernel do the heavy lifting later on)
       TRY.
-          MOVE EXACT value TO lv_num. "If this passes, it's a number
+          DATA(lv_num) = EXACT decfloat34( value ) ##needed. "If this passes, it's a number
           ro_elem = number( value ).
         CATCH cx_sy_conversion_no_number.
           ro_elem = symbol( value ).
@@ -4101,36 +4088,63 @@
     ENDMETHOD.                    "new_atom
 
     METHOD data.
-      ro_elem = lcl_lisp=>new( lcl_lisp=>type_abap_data ).
+      ro_elem = node( lcl_lisp=>type_abap_data ).
       ro_elem->data = ref.
     ENDMETHOD.                    "new_data
 
     METHOD table.
-      ro_elem = lcl_lisp=>new( lcl_lisp=>type_abap_table ).
+      ro_elem = node( lcl_lisp=>type_abap_table ).
       ro_elem->data = ref.
     ENDMETHOD.                    "new_table
 
     METHOD cons.
-      ro_cons = lcl_lisp=>new( type = lcl_lisp=>type_conscell
-                               io_car = io_car
-                               io_cdr = io_cdr ).
+      ro_cons = node( lcl_lisp=>type_conscell ).
+      ro_cons->car = io_car.
+      ro_cons->cdr = io_cdr.
     ENDMETHOD.                    "new_cons
 
+    METHOD vector.
+      ro_vec = NEW lcl_lisp_vector( ).
+      ro_vec->type = lcl_lisp=>type_vector.
+      ro_vec->vector = it_vector.
+      ro_vec->mutable = iv_mutable.
+      ro_vec->mo_length = number( lines( it_vector ) ).
+    ENDMETHOD.
+
     METHOD lambda.
-*      The lambda is a special cell that stores a pointer to a list of parameters
-*      and a pointer to a list which is the body to be evaluated later on
-      ro_lambda = lcl_lisp=>new( type = lcl_lisp=>type_lambda
-                                 io_car = io_car                         " List of parameters
-                                 io_cdr = io_cdr ).                      " Body
-*      Store the reference to the environment in which the lambda was created
-*      (lexical scope) e.g. if the lambda is created inside another lambda
-*      we want that environment to be present when we evaluate the new lambda
+*     The lambda is a special cell that stores a pointer to a list of parameters
+*     and a pointer to a list which is the body to be evaluated later on
+      ro_lambda = node( lcl_lisp=>type_lambda ).
+      ro_lambda->car = io_car.               " List of parameters
+      ro_lambda->cdr = io_cdr.               " Body
+
+*     Store the reference to the environment in which the lambda was created
+*     (lexical scope) e.g. if the lambda is created inside another lambda
+*     we want that environment to be present when we evaluate the new lambda
       ro_lambda->environment = io_env.
     ENDMETHOD.                    "new_lambda
+
+    METHOD hash.
+      validate io_list.
+
+      ro_hash = NEW lcl_lisp_hash( ).
+      ro_hash->type = lcl_lisp=>type_hash.
+      ro_hash->fill( io_list->car ).
+
+    ENDMETHOD.
 
     METHOD quote.
       ro_elem = cons( io_car = symbol( 'quote' )
                       io_cdr = cons( io_car = io_elem )  ).
+    ENDMETHOD.
+
+    METHOD function.
+      validate: io_list, io_list->car.
+
+      ro_func = NEW lcl_lisp_abapfunction( ).
+      ro_func->type = lcl_lisp=>type_abap_function.
+*     Determine the parameters of the function module to populate parameter table
+      ro_func->value = ro_func->read_interface( io_list->car->value ).
     ENDMETHOD.
 
   ENDCLASS.
@@ -4169,10 +4183,10 @@
 *----------------------------------------------------------------------*
   CLASS lcl_lisp_hash IMPLEMENTATION.
 
-    METHOD new_hash.
-      validate: list, list->car.
-      ro_elem ?= new( type_hash ).
-      DATA(lo_head) = list->car.
+    METHOD fill.
+      validate: list.
+
+      DATA(lo_head) = list.
       CHECK lo_head->type = type_conscell.
 
 *     Can accept a parameter which should be a list of alternating symbols/strings and elements
@@ -4184,7 +4198,7 @@
         ENDIF.
         CHECK lo_iter->has_next( ).
         INSERT VALUE #( key = lo_key->value
-                        element = lo_iter->next( ) ) INTO TABLE ro_elem->hash.
+                        element = lo_iter->next( ) ) INTO TABLE hash.
       ENDWHILE.
     ENDMETHOD.                    "new_hash
 
@@ -4243,32 +4257,25 @@
  CLASS lcl_lisp_vector IMPLEMENTATION.
 
    METHOD init.
-     DATA lt_vector TYPE tt_lisp_vector.
+     DATA lt_vector TYPE tt_lisp.
 
      DO size TIMES.
        APPEND io_fill TO lt_vector.
      ENDDO.
-     ro_vector = NEW lcl_lisp_vector( it_vector = lt_vector
-                                      iv_mutable = mutable ).
-   ENDMETHOD.
-
-   METHOD constructor.
-     super->constructor( ).
-     vector = it_vector.
-     mutable = iv_mutable.
-     mo_length = lcl_lisp_new=>number( lines( vector ) ).
+     ro_vector = lcl_lisp_new=>vector( it_vector = lt_vector
+                                       iv_mutable = mutable ).
    ENDMETHOD.
 
    METHOD from_list.
-     DATA lt_vector TYPE tt_lisp_vector.
+     DATA lt_vector TYPE tt_lisp.
 
      DATA(lo_ptr) = io_list.
      WHILE lo_ptr NE nil.
        APPEND lo_ptr->car TO lt_vector.
        lo_ptr = lo_ptr->cdr.
      ENDWHILE.
-     ro_vector = NEW lcl_lisp_vector( it_vector = lt_vector
-                                      iv_mutable = iv_mutable ).
+     ro_vector = lcl_lisp_new=>vector( it_vector = lt_vector
+                                       iv_mutable = iv_mutable ).
    ENDMETHOD.
 
    METHOD to_list.
