@@ -1,4 +1,4 @@
-# abap_scheme
+:# abap_scheme
 # LISP interpreter in ABAP with Editor
 
 [![Language: ABAP](https://img.shields.io/badge/Language-ABAP-blue.svg?style=flat)](https://www.sap.com/developer/topics/abap-platform.html)
@@ -8,7 +8,7 @@
 
 After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a>.
 
-So this is my learning project that started as a fork of https://github.com/mydoghasworms/abap-lisp, itself inspired by [Peter Norvig](http://norvig.com/lispy2.html). You can [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) too. My contributions 
+So this is my learning project that started as a fork of https://github.com/mydoghasworms/abap-lisp, itself inspired by [Peter Norvig](http://norvig.com/lispy2.html). You can [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) too. My contributions:
 - more validations to make the code stable, a lot more Scheme features are accepted
 - regression tests in ABAP Unit, a good example of TDD: first create tests of a [Scheme](http://www.r7rs.org/) feature, then implement it
 - an editor, with console and environment screen make it fun to use
