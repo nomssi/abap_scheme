@@ -261,6 +261,8 @@
 
       METHODS error_not_a_list IMPORTING context TYPE string DEFAULT space
                                RAISING   lcx_lisp_exception.
+      METHODS error_not_a_pair IMPORTING context TYPE string DEFAULT space
+                               RAISING   lcx_lisp_exception.
 
       CLASS-METHODS throw IMPORTING message TYPE string
                           RAISING   lcx_lisp_exception.
@@ -589,6 +591,11 @@
       proc_cdr,             ##called
       proc_cons,            ##called
 
+      proc_caar,             ##called
+      proc_cadr,             ##called
+      proc_cdar,             ##called
+      proc_cddr,             ##called
+
       proc_memq,     ##called
       proc_memv,     ##called
       proc_member,   ##called
@@ -817,6 +824,11 @@
                                     io_env        TYPE REF TO lcl_lisp_environment
                           RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
                           RAISING   lcx_lisp_exception.
+      METHODS init_letrec_star IMPORTING io_head       TYPE REF TO lcl_lisp
+                                         io_env        TYPE REF TO lcl_lisp_environment
+                              RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
+                              RAISING   lcx_lisp_exception.
+
       METHODS init_let_star IMPORTING io_head       TYPE REF TO lcl_lisp
                                       io_env        TYPE REF TO lcl_lisp_environment
                             RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
@@ -853,37 +865,6 @@
                            RAISING   lcx_lisp_exception.
 
   ENDCLASS.                    "lcl_lisp_interpreter DEFINITION
-
-* TO DO: implement
-*This place ...  Is equivalent to this place ...
-*(caar x)        (car (car x))
-*(cadr x)        (car (cdr x))
-*(cdar x)        (cdr (car x))
-*(cddr x)        (cdr (cdr x))
-*(caaar x)       (car (car (car x)))
-*(caadr x)       (car (car (cdr x)))
-*(cadar x)       (car (cdr (car x)))
-*(caddr x)       (car (cdr (cdr x)))
-*(cdaar x)       (cdr (car (car x)))
-*(cdadr x)       (cdr (car (cdr x)))
-*(cddar x)       (cdr (cdr (car x)))
-*(cdddr x)       (cdr (cdr (cdr x)))
-*(caaaar x)      (car (car (car (car x))))
-*(caaadr x)      (car (car (car (cdr x))))
-*(caadar x)      (car (car (cdr (car x))))
-*(caaddr x)      (car (car (cdr (cdr x))))
-*(cadaar x)      (car (cdr (car (car x))))
-*(cadadr x)      (car (cdr (car (cdr x))))
-*(caddar x)      (car (cdr (cdr (car x))))
-*(cadddr x)      (car (cdr (cdr (cdr x))))
-*(cdaaar x)      (cdr (car (car (car x))))
-*(cdaadr x)      (cdr (car (car (cdr x))))
-*(cdadar x)      (cdr (car (cdr (car x))))
-*(cdaddr x)      (cdr (car (cdr (cdr x))))
-*(cddaar x)      (cdr (cdr (car (car x))))
-*(cddadr x)      (cdr (cdr (car (cdr x))))
-*(cdddar x)      (cdr (cdr (cdr (car x))))
-*(cddddr x)      (cdr (cdr (cdr (cdr x))))
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_parser IMPLEMENTATION
@@ -1092,6 +1073,13 @@
       env->define_value( symbol = 'eq?'     type = lcl_lisp=>type_native value   = 'PROC_EQ' ).
       env->define_value( symbol = 'eqv?'    type = lcl_lisp=>type_native value   = 'PROC_EQV' ).
       env->define_value( symbol = 'equal?'  type = lcl_lisp=>type_native value   = 'PROC_EQUAL' ).
+
+      env->define_value( symbol = 'caar'    type = lcl_lisp=>type_native value   = 'PROC_CAAR' ).
+      env->define_value( symbol = 'cadr'    type = lcl_lisp=>type_native value   = 'PROC_CADR' ).
+      env->define_value( symbol = 'cdar'    type = lcl_lisp=>type_native value   = 'PROC_CDAR' ).
+      env->define_value( symbol = 'cddr'    type = lcl_lisp=>type_native value   = 'PROC_CDDR' ).
+
+
 *      Hash-related functions
       env->define_value( symbol = 'make-hash'   type = lcl_lisp=>type_native value   = 'PROC_MAKE_HASH' ).
       env->define_value( symbol = 'hash-get'    type = lcl_lisp=>type_native value   = 'PROC_HASH_GET' ).
@@ -1540,6 +1528,30 @@
                             io_env = ro_env ).
     ENDMETHOD.
 
+    METHOD  init_letrec_star.
+      ro_env = lcl_lisp_environment=>new( io_env ).
+*     Before evaluating the parameter, we create them all with dummy values
+      DATA(lo_dummy) = lcl_lisp_new=>string( '*letrec-dummy*' ).
+
+      extract_arguments( EXPORTING io_head = io_head
+                         IMPORTING eo_pars = DATA(lo_pars)
+                                   eo_args = DATA(lo_args) ).
+      DATA(lo_par) = lo_pars.
+      DATA(lo_arg) = lo_args.
+      WHILE lo_par IS BOUND AND lo_par NE nil   " Nil means no parameters to map
+        AND lo_arg IS BOUND AND lo_arg NE nil.  " Nil means no parameters to map
+
+        ro_env->set( symbol = lo_par->car->value
+                     element = lo_arg->car ).
+        lo_par = lo_par->cdr.
+        lo_arg = lo_arg->cdr.
+      ENDWHILE.
+
+      evaluate_in_sequence( io_args = lo_args      " Pointer to arguments e.g. (4, (+ x 4)
+                            io_pars = lo_pars      " Pointer to formal parameters (x y)
+                            io_env = ro_env ).
+    ENDMETHOD.
+
 **********************************************************************
 *
 *------------------------------- EVAL( ) ----------------------------
@@ -1685,6 +1697,10 @@
           result = evaluate_list( io_head = lr_tail->cdr
                                   io_environment = init_letrec( io_head = lr_tail->car
                                                                 io_env = environment ) ).
+        WHEN 'letrec*'.
+          result = evaluate_list( io_head = lr_tail->cdr
+                                  io_environment = init_letrec_star( io_head = lr_tail->car
+                                                                     io_env = environment ) ).
 
         WHEN 'let*'.
           result = evaluate_list( io_head = lr_tail->cdr
@@ -1952,8 +1968,8 @@
     METHOD proc_car.
       validate: list.
       DATA(lo_arg) = list->car.
-      IF lo_arg = nil.
-        throw( `car: argument is nil - Exception` ).
+      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+        lo_arg->error_not_a_pair( `car: ` ).
       ENDIF.
       result = lo_arg->car.
     ENDMETHOD.                    "proc_car
@@ -1962,8 +1978,8 @@
       validate: list.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg = nil.
-        throw( `cdr: argument is nil - Exception` ).
+      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+        lo_arg->error_not_a_pair( `cdr: ` ).
       ENDIF.
       result = lo_arg->cdr.
     ENDMETHOD.                    "proc_cdr
@@ -1986,6 +2002,68 @@
         result = false.
       ENDIF.
     ENDMETHOD.                    "proc_cons
+
+    METHOD proc_caar.
+      validate: list.
+      DATA(lo_arg) = list->car.
+      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+        lo_arg->error_not_a_pair( `caar: ` ).
+      ENDIF.
+
+      lo_arg = lo_arg->car.
+      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+        lo_arg->error_not_a_pair( `caar: ` ).
+      ENDIF.
+
+      result = lo_arg->car.
+    ENDMETHOD.                    "proc_car
+
+    METHOD proc_cadr.
+      validate: list.
+
+      DATA(lo_arg) = list->car.
+      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+        lo_arg->error_not_a_pair( `cadr: ` ).
+      ENDIF.
+
+      lo_arg = lo_arg->cdr.
+      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+        lo_arg->error_not_a_pair( `cadr: ` ).
+      ENDIF.
+
+      result = lo_arg->car.
+    ENDMETHOD.                    "proc_cdr
+
+    METHOD proc_cdar.
+      validate: list.
+      DATA(lo_arg) = list->car.
+      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+        lo_arg->error_not_a_pair( `cdar: ` ).
+      ENDIF.
+
+      lo_arg = lo_arg->car.
+      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+        lo_arg->error_not_a_pair( `cdar: ` ).
+      ENDIF.
+
+      result = lo_arg->cdr.
+    ENDMETHOD.                    "proc_car
+
+    METHOD proc_cddr.
+      validate: list.
+
+      DATA(lo_arg) = list->car.
+      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+        lo_arg->error_not_a_pair( `cddr: ` ).
+      ENDIF.
+
+      lo_arg = lo_arg->cdr.
+      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+        lo_arg->error_not_a_pair( `cddr: ` ).
+      ENDIF.
+
+      result = lo_arg->cdr.
+    ENDMETHOD.                    "proc_cdr
 
 * (defun list-length (x)
 *   (do ((n 0 (+ n 2))           ;Counter.
@@ -2184,7 +2262,7 @@
       ENDWHILE.
     ENDMETHOD.
 
-* ( assq obj alist) - Alist (for association list") must be a list of pairs.
+* ( assq obj alist) - alist (for association list") must be a list of pairs.
 * Find the first pair in alist whose car field is obj, and returns that pair.
 * If no pair in alist has obj as its car, then #f (not the empty list) is returned.
 * Assq uses eq? to compare obj with the car fields of the pairs in alist, while
@@ -2598,16 +2676,16 @@
     ENDMETHOD.
 
     METHOD proc_is_list.  " argument in list->car
-      validate list.
+      validate: list, list->car.
 
       result = false.
 
       DATA(lo_ptr) = list->car.
-      WHILE lo_ptr->cdr IS BOUND AND lo_ptr->cdr NE nil.
+      WHILE lo_ptr NE nil AND lo_ptr->type = lcl_lisp=>type_conscell.
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
-      CHECK ( list EQ nil OR lo_ptr EQ nil )
-        OR ( lo_ptr IS BOUND AND lo_ptr->type = lcl_lisp=>type_conscell AND lo_ptr->cdr EQ nil  ).
+
+      CHECK lo_ptr EQ nil.
       result = true.
     ENDMETHOD.                    "proc_is_list
 
@@ -2630,9 +2708,21 @@
       ENDCASE.
     ENDMETHOD.
 
-    METHOD proc_is_alist.
-      result = proc_is_list( list ).
-      throw( |Not supported yet ALIST?| ).
+    METHOD proc_is_alist. " not in standard?
+      validate: list.
+
+      result = false.
+
+      DATA(lo_arg) = list->car.
+      WHILE lo_arg NE nil AND lo_arg->type = lcl_lisp=>type_conscell.
+        IF lo_arg->car->type = lcl_lisp=>type_conscell.
+          RETURN.
+        ENDIF.
+        lo_arg = lo_arg->cdr.
+      ENDWHILE.
+
+      CHECK lo_arg EQ nil.
+      result = true.
     ENDMETHOD.                    "proc_is_alist
 
     METHOD proc_abs.
@@ -3684,7 +3774,7 @@
         WHEN type_lambda.
           str = |<lambda> { car->list_to_string( ) }|.
         WHEN type_null.
-          str = value.
+          str = 'nil'.
         WHEN type_symbol.
           str = value.
         WHEN type_string.
@@ -3717,6 +3807,10 @@
 
     METHOD error_not_a_list.
       throw( context && to_string( ) && ` is not a list` ).
+    ENDMETHOD.
+
+    METHOD error_not_a_pair.
+      throw( context && to_string( ) && ` is not a pair` ).
     ENDMETHOD.
 
     METHOD write.

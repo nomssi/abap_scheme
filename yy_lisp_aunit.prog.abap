@@ -4,18 +4,17 @@
 *& ported from ZUSR_LISP_TEST by JNN (www.informatik-dv.com)
 
 *&---------------------------------------------------------------------*
-*& https://github.com/mydoghasworms/abap-lisp
+*& https://github.com/nomssi/abap_scheme
 *& Tests for the Lisp interpreter written in ABAP
-*& Copy and paste this code into a type 1 (report) program, making sure
-*& the necessary dependencies are met
 *&---------------------------------------------------------------------*
-*& Martin Ceronio, martin.ceronio@infosize.co.za
-*& June 2015
+*& Martin Ceronio, martin.ceronio@infosize.co.za June 2015
+*& Jacques Nomssi, nomssi@gmail.com
 *& MIT License (see below)
 *&---------------------------------------------------------------------*
 *  The MIT License (MIT)
 *
 *  Copyright (c) 2015 Martin Ceronio
+*  Copyright (c) 2017, 2018 Jacques Nomssi Nzali
 *
 *  Permission is hereby granted, free of charge, to any person obtaining a copy
 *  of this software and associated documentation files (the "Software"), to deal
@@ -389,7 +388,8 @@
        METHODS letrec_1 FOR TESTING.
        METHODS letrec_2 FOR TESTING.
 
-       METHODS letrec_star_1 FOR TESTING.
+       METHODS letrec_star_0 FOR TESTING.
+       METHODS values_0 FOR TESTING.
 
        METHODS is_symbol_true FOR TESTING.
        METHODS is_symbol_false FOR TESTING.
@@ -527,7 +527,32 @@
                   expected = '8' ).
      ENDMETHOD.
 
-     METHOD letrec_star_1.
+     METHOD letrec_star_0.
+       code_test( code =
+          |;; Returns the harmonic means of a nested list of numbers\n| &
+          |(define (means ton)| &
+          |  (letrec*| &
+          |     ((mean| &
+          |        (lambda (f g)| &
+          |          (f (/ (sum g ton) n))))| &
+          |      (sum| &
+          |        (lambda (g ton)| &
+          |          (if (null? ton)| &
+          |            (+)| &
+          |            (if (number? ton)| &
+          |                (g ton)| &
+          |                (+ (sum g (car ton))| &
+          |                   (sum g (cdr ton)))))))| &
+          |      (n (sum (lambda (x) 1) ton)))| &
+          |   (mean / /)|
+                  expected = 'means' ).
+
+*      evaluating (means '(3 (1 4))) returns 36/19.
+       code_test( code = |(floor (* 19 (means '(3 (1 4)))))|
+                  expected = |36| ).
+     ENDMETHOD.
+
+     METHOD values_0.
        code_test( code =
           |;; Returns the arithmetic, geometric, and\n| &
           |;; harmonic means of a nested list of numbers\n| &
@@ -1252,6 +1277,25 @@
 
        METHODS list_tail FOR TESTING.
 
+       METHODS list_caar_1 FOR TESTING.
+       METHODS list_caar_2 FOR TESTING.
+       METHODS list_caar_3 FOR TESTING.
+
+       METHODS list_cadr_1 FOR TESTING.
+       METHODS list_cadr_2 FOR TESTING.
+       METHODS list_cadr_3 FOR TESTING.
+       METHODS list_cadr_4 FOR TESTING.
+
+       METHODS list_cdar_1 FOR TESTING.
+       METHODS list_cdar_2 FOR TESTING.
+       METHODS list_cdar_3 FOR TESTING.
+       METHODS list_cdar_4 FOR TESTING.
+
+       METHODS list_cddr_1 FOR TESTING.
+       METHODS list_cddr_2 FOR TESTING.
+       METHODS list_cddr_3 FOR TESTING.
+       METHODS list_cddr_4 FOR TESTING.
+       METHODS list_cddr_5 FOR TESTING.
    ENDCLASS.                    "ltc_list DEFINITION
 
 *----------------------------------------------------------------------*
@@ -1536,18 +1580,18 @@
      ENDMETHOD.
 
      METHOD list_car_3.
-       code_test( code = '(car ''((a) b c d))'
+       code_test( code = |(car '((a) b c d))|
                   expected = '( a )' ).
      ENDMETHOD.
 
      METHOD list_car_4.
-       code_test( code = '(car ''(1 . 2))'
+       code_test( code = |(car '(1 . 2))|
                   expected = '1' ).
      ENDMETHOD.
 
      METHOD list_car_5.
        code_test( code = '(car ''())'
-                  expected = 'Eval: car: argument is nil - Exception' ).
+                  expected = 'Eval: car: nil is not a pair' ).
      ENDMETHOD.
 
      METHOD list_cdr_1.
@@ -1567,7 +1611,7 @@
 
      METHOD list_cdr_4.
        code_test( code = |(cdr '())|
-                  expected = 'Eval: cdr: argument is nil - Exception' ).
+                  expected = 'Eval: cdr: nil is not a pair' ).
      ENDMETHOD.                    "list_cdr_1
 
      METHOD list_car_car_cdr.
@@ -1577,13 +1621,93 @@
 
      METHOD list_car_nil.
        code_test( code = '(car nil)'
-                  expected = 'Eval: car: argument is nil - Exception' ).
+                  expected = 'Eval: car: nil is not a pair' ).
      ENDMETHOD.                    "list_car_nil
 
      METHOD list_car_list.
        code_test( code = '(car (list 1))'
                   expected = '1' ).
      ENDMETHOD.                    "list_car_list
+
+     METHOD list_caar_1.
+       code_test( code = |(caar '(1  2))|
+                  expected = 'Eval: caar: 1 is not a pair' ).
+     ENDMETHOD.
+
+     METHOD list_caar_2.
+       code_test( code = |(caar '())|
+                  expected = 'Eval: caar: nil is not a pair' ).
+     ENDMETHOD.
+
+     METHOD list_caar_3.
+       code_test( code = |(caar '((1 2)  2))|
+                  expected = '1' ).
+     ENDMETHOD.
+
+     METHOD list_cadr_1.
+       code_test( code = |(cadr '())|
+                  expected = 'Eval: cadr: nil is not a pair' ).
+     ENDMETHOD.
+
+     METHOD list_cadr_2.
+       code_test( code = |(cadr '(1 2))|
+                  expected = '2' ).
+     ENDMETHOD.
+
+     METHOD list_cadr_3.
+       code_test( code = |(cadr '(1 (2 7)))|
+                  expected = '( 2 7 )' ).
+     ENDMETHOD.
+
+     METHOD list_cadr_4.
+       code_test( code = |(cadr '((1)))|
+                  expected = 'Eval: cadr: nil is not a pair' ).
+     ENDMETHOD.
+
+     METHOD list_cdar_1.
+       code_test( code = |(cdar '(1  2))|
+                  expected = 'Eval: cdar: 1 is not a pair' ).
+     ENDMETHOD.
+
+     METHOD list_cdar_2.
+       code_test( code = |(cdar '())|
+                  expected = 'Eval: cdar: nil is not a pair' ).
+     ENDMETHOD.
+
+     METHOD list_cdar_3.
+       code_test( code = |(cdar '((b c)  2))|
+                  expected = '( c )' ).
+     ENDMETHOD.
+
+     METHOD list_cdar_4.
+       code_test( code = |(cdar '((c) 2))|
+                  expected = 'nil' ).
+     ENDMETHOD.
+
+     METHOD list_cddr_1.
+       code_test( code = |(cddr '())|
+                  expected = 'Eval: cddr: nil is not a pair' ).
+     ENDMETHOD.
+
+     METHOD list_cddr_2.
+       code_test( code = |(cddr '(1  2))|
+                  expected = 'nil' ).
+     ENDMETHOD.
+
+     METHOD list_cddr_3.
+       code_test( code = |(cddr '(1 (2 6)))|
+                  expected = 'nil' ).
+     ENDMETHOD.
+
+     METHOD list_cddr_4.
+       code_test( code = |(cddr '(1 (2)))|
+                  expected = 'nil' ).
+     ENDMETHOD.
+
+     METHOD list_cddr_5.
+       code_test( code = |(cddr '(1 2 6))|
+                  expected = '( 6 )' ).
+     ENDMETHOD.
 
      METHOD list_cons_two_lists.
 *   Test CONS
@@ -1922,8 +2046,6 @@
      ENDMETHOD.
 
      METHOD map_1.
-       code_test( code = |(define (cadr list) (car (cdr list)))|
-                  expected = |cadr| ).
        code_test( code = |(map cadr '((a b) (d e) (g h)))|
                   expected = '( b e h )' ).
      ENDMETHOD.
