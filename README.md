@@ -1,4 +1,4 @@
-:# abap_scheme
+# abap_scheme
 # LISP interpreter in ABAP with Editor
 
 [![Language: ABAP](https://img.shields.io/badge/Language-ABAP-blue.svg?style=flat)](https://www.sap.com/developer/topics/abap-platform.html)
