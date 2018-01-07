@@ -1842,6 +1842,86 @@
    ENDCLASS.                    "ltc_list IMPLEMENTATION
 
 *----------------------------------------------------------------------*
+
+   CLASS ltc_vector DEFINITION INHERITING FROM ltc_interpreter
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PRIVATE SECTION.
+       METHODS setup.
+       METHODS teardown.
+
+     METHODS vector_0 FOR TESTING.
+     METHODS vector_1 FOR TESTING.
+     METHODS vector_ref_1 FOR TESTING.
+     METHODS vector_ref_2 FOR TESTING.
+     METHODS vector_set_1 FOR TESTING.
+     METHODS vector_set_2 FOR TESTING.
+     METHODS vector_to_list_1 FOR TESTING.
+     METHODS vector_to_list_2 FOR TESTING.
+     METHODS list_to_vector_1 FOR TESTING.
+
+   ENDCLASS.
+
+   CLASS ltc_vector IMPLEMENTATION.
+
+     METHOD setup.
+       CREATE OBJECT mo_int.
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
+
+     METHOD vector_0.
+       code_test( code = |(vector? '#())|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD vector_1.
+       code_test( code = |(vector 0 '(2 3 4) "Anna")|
+                  expected = |#( 0 ( 2 3 4 ) "Anna" )| ).
+     ENDMETHOD.
+
+     METHOD vector_ref_1.
+       code_test( code = |(vector-ref '#(1 1 2 3 5 8 13 21) 5)|
+                  expected = '8' ).
+     ENDMETHOD.
+
+     METHOD vector_ref_2.
+       code_test( code = |(vector-ref '#(1 1 2 3 5 8 13 21)| &
+                         |    (round (* 2 (acos -1))) )|
+                  expected = '13' ).
+     ENDMETHOD.
+
+     METHOD vector_set_1.
+       code_test( code = |(let ((vec (vector 0 '(2 2 2 2) "Anna"))) | &
+                         |  (vector-set! vec 1 '("Sue" "Sue"))| &
+                         | vec)|
+                  expected = '#( 0 ( "Sue" "Sue" ) "Anna" )' ).
+     ENDMETHOD.
+
+     METHOD vector_set_2.
+       code_test( code = |(vector-set! '#(0 1 2) 1 "doe")|
+                  expected = 'Eval: constant vector cannot be changed' ).
+     ENDMETHOD.
+
+     METHOD vector_to_list_1.
+       code_test( code = |(vector->list '#(dah dah didah))|
+                  expected = '( dah dah didah )' ).
+     ENDMETHOD.
+
+     METHOD vector_to_list_2.
+       code_test( code = |(vector->list '#(dah dah didah) 1 2)|
+                  expected = '( dah )' ).
+     ENDMETHOD.
+
+     METHOD list_to_vector_1.
+       code_test( code = |(list->vector '(dididit dah))|
+                  expected = '#( dididit dah )' ).
+     ENDMETHOD.
+
+   ENDCLASS.
+
+*----------------------------------------------------------------------*
 *       CLASS ltc_library_function DEFINITION
 *----------------------------------------------------------------------*
 *

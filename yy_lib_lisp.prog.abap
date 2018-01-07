@@ -86,13 +86,13 @@
     DATA(cell) = list->cdr.
     carry = list->car->number.
     WHILE cell NE nil.
-      validate cell->car.
-      validate_number list->car &2.
-      IF carry &1 cell->car->number.
-        RETURN.
-      ENDIF.
-      carry = cell->car->number.
-      cell = cell->cdr.
+    validate cell->car.
+    validate_number list->car &2.
+    IF carry &1 cell->car->number.
+    RETURN.
+    ENDIF.
+    carry = cell->car->number.
+    cell = cell->cdr.
     ENDWHILE.
     result = true.
   END-OF-DEFINITION.
@@ -105,7 +105,7 @@
     validate_number list->car &2.
     carry = list->car->number.
     IF sign( carry ) NE &1.
-      RETURN.
+    RETURN.
     ENDIF.
     result = true.
   END-OF-DEFINITION.
@@ -207,12 +207,12 @@
         type_number TYPE tv_type VALUE 'N',
         type_string TYPE tv_type VALUE '"'.
       CONSTANTS:
-        type_null      TYPE tv_type VALUE '0',
-        type_conscell  TYPE tv_type VALUE 'C',
-        type_lambda    TYPE tv_type VALUE '#',
-        type_native    TYPE tv_type VALUE 'P',
-        type_hash      TYPE tv_type VALUE 'H',
-        type_vector    TYPE tv_type VALUE 'V'.
+        type_null     TYPE tv_type VALUE '0',
+        type_conscell TYPE tv_type VALUE 'C',
+        type_lambda   TYPE tv_type VALUE '#',
+        type_native   TYPE tv_type VALUE 'P',
+        type_hash     TYPE tv_type VALUE 'H',
+        type_vector   TYPE tv_type VALUE 'V'.
 *      Types for ABAP integration:
       CONSTANTS:
         type_abap_data     TYPE tv_type VALUE 'D',
@@ -307,8 +307,8 @@
                                    io_cdr         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                          RETURNING VALUE(ro_cons) TYPE REF TO lcl_lisp.
 
-      CLASS-METHODS vector IMPORTING it_vector TYPE tt_lisp
-                                     iv_mutable TYPE flag
+      CLASS-METHODS vector IMPORTING it_vector     TYPE tt_lisp
+                                     iv_mutable    TYPE flag
                            RETURNING VALUE(ro_vec) TYPE REF TO lcl_lisp_vector.
 
       CLASS-METHODS lambda IMPORTING io_car           TYPE REF TO lcl_lisp
@@ -419,7 +419,7 @@
       TYPES tt_hash TYPE HASHED TABLE OF ts_hash WITH UNIQUE KEY key.
       DATA hash TYPE tt_hash.
 
-      METHODS fill IMPORTING list           TYPE REF TO lcl_lisp
+      METHODS fill IMPORTING list TYPE REF TO lcl_lisp
                    RAISING   lcx_lisp_exception.
   ENDCLASS.                    "lcl_lisp_hash DEFINITION
 
@@ -427,9 +427,9 @@
     CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
 
-      CLASS-METHODS init IMPORTING size TYPE sytabix
-                                   io_fill TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
-                                   mutable TYPE flag DEFAULT abap_true
+      CLASS-METHODS init IMPORTING size             TYPE sytabix
+                                   io_fill          TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
+                                   mutable          TYPE flag DEFAULT abap_true
                          RETURNING VALUE(ro_vector) TYPE REF TO lcl_lisp_vector
                          RAISING   lcx_lisp_exception.
 
@@ -446,10 +446,14 @@
                   RETURNING VALUE(result) TYPE REF TO lcl_lisp_vector
                   RAISING   lcx_lisp_exception.
 
-      METHODS get IMPORTING from           TYPE sytabix DEFAULT 1
-                            to             TYPE sytabix OPTIONAL
+      METHODS get IMPORTING index          TYPE sytabix
                   RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                   RAISING   lcx_lisp_exception.
+
+      METHODS get_list IMPORTING from           TYPE sytabix DEFAULT 0
+                                 to             TYPE sytabix OPTIONAL
+                       RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
+                       RAISING   lcx_lisp_exception.
 
       METHODS length RETURNING VALUE(ro_length) TYPE REF TO lcl_lisp.
 
@@ -583,13 +587,13 @@
               RAISING   lcx_lisp_exception.
     PRIVATE SECTION.
       CONSTANTS:
-        c_escape_char     TYPE char1 VALUE '\',
-        c_text_quote      TYPE char1 VALUE '"',
-        c_lisp_quote      TYPE char1 VALUE '''', "LISP single quote = QUOTE
-        c_lisp_dot        TYPE char1 VALUE '.',
-        c_lisp_hash       TYPE char1 VALUE '#',
-        c_lisp_comment    TYPE char1 VALUE ';',
-        c_peek_dummy      TYPE char1 VALUE 'Ü'.
+        c_escape_char  TYPE char1 VALUE '\',
+        c_text_quote   TYPE char1 VALUE '"',
+        c_lisp_quote   TYPE char1 VALUE '''', "LISP single quote = QUOTE
+        c_lisp_dot     TYPE char1 VALUE '.',
+        c_lisp_hash    TYPE char1 VALUE '#',
+        c_lisp_comment TYPE char1 VALUE ';',
+        c_peek_dummy   TYPE char1 VALUE 'Ü'.
       DATA code TYPE string.
       DATA length TYPE i.
       DATA index TYPE i.
@@ -664,9 +668,10 @@
       proc_assv,     ##called
       proc_assoc,    ##called
 
-      proc_make_list,  ##called
-      proc_list_tail,  ##called
-      proc_list_ref,   ##called
+      proc_make_list,       ##called
+      proc_list_tail,       ##called
+      proc_list_ref,        ##called
+      proc_list_to_vector,  ##called
 
       proc_length,   ##called
       proc_list,     ##called
@@ -823,7 +828,7 @@
       METHODS proc_compare IMPORTING a             TYPE REF TO lcl_lisp
                                      b             TYPE REF TO lcl_lisp
                                      comp          TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
-                              RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                           RETURNING VALUE(result) TYPE REF TO lcl_lisp
                            RAISING   lcx_lisp_exception.
       METHODS create_element_from_data
         IMPORTING ir_data       TYPE REF TO data
@@ -897,8 +902,8 @@
                           RAISING   lcx_lisp_exception.
       METHODS init_letrec_star IMPORTING io_head       TYPE REF TO lcl_lisp
                                          io_env        TYPE REF TO lcl_lisp_environment
-                              RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
-                              RAISING   lcx_lisp_exception.
+                               RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
+                               RAISING   lcx_lisp_exception.
 
       METHODS init_let_star IMPORTING io_head       TYPE REF TO lcl_lisp
                                       io_env        TYPE REF TO lcl_lisp_environment
@@ -931,7 +936,7 @@
                              RETURNING VALUE(result) TYPE REF TO lcl_lisp
                              RAISING   lcx_lisp_exception.
 
-      METHODS reverse_list IMPORTING io_list TYPE REF TO lcl_lisp
+      METHODS reverse_list IMPORTING io_list       TYPE REF TO lcl_lisp
                            RETURNING VALUE(result) TYPE REF TO lcl_lisp
                            RAISING   lcx_lisp_exception.
 
@@ -1143,9 +1148,10 @@
       env->define_value( symbol = 'reverse'  type = lcl_lisp=>type_native value   = 'PROC_REVERSE' ).
       env->define_value( symbol = 'not'      type = lcl_lisp=>type_native value   = 'PROC_NOT' ).
 
-      env->define_value( symbol = 'make-list'  type = lcl_lisp=>type_native value   = 'PROC_MAKE_LIST' ).
-      env->define_value( symbol = 'list-tail'  type = lcl_lisp=>type_native value   = 'PROC_LIST_TAIL' ).
-      env->define_value( symbol = 'list-ref'   type = lcl_lisp=>type_native value   = 'PROC_LIST_REF' ).
+      env->define_value( symbol = 'make-list'    type = lcl_lisp=>type_native value   = 'PROC_MAKE_LIST' ).
+      env->define_value( symbol = 'list-tail'    type = lcl_lisp=>type_native value   = 'PROC_LIST_TAIL' ).
+      env->define_value( symbol = 'list-ref'     type = lcl_lisp=>type_native value   = 'PROC_LIST_REF' ).
+      env->define_value( symbol = 'list->vector' type = lcl_lisp=>type_native value   = 'PROC_LIST_TO_VECTOR' ).
 
       env->define_value( symbol = 'memq'    type = lcl_lisp=>type_native value   = 'PROC_MEMQ' ).
       env->define_value( symbol = 'memv'    type = lcl_lisp=>type_native value   = 'PROC_MEMV' ).
@@ -1387,7 +1393,7 @@
       CHECK lines( lt_iter ) GT 0.
 *     iterator for first (parameter evaluated) list (all list should have same length)
       DATA(lo_first) = lt_iter[ 1 ].
-"     map terminates when the shortest list runs out.
+      "     map terminates when the shortest list runs out.
       DATA(lv_has_next) = abap_true.
 
       WHILE lo_first->has_next( ) AND lv_has_next EQ abap_true.
@@ -1426,7 +1432,7 @@
       CHECK lines( lt_iter ) GT 0.
 *     iterator for first (parameter evaluated) list (all list should have same length)
       DATA(lo_first) = lt_iter[ 1 ].
-"     for-each terminates when the shortest list runs out.
+      "     for-each terminates when the shortest list runs out.
       DATA(lv_has_next) = abap_true.
       WHILE lo_first->has_next( ) AND lv_has_next EQ abap_true.
         " evaluate function call (proc list1[k] list2[k]... listn[k])
@@ -1693,7 +1699,7 @@
 *<<< TEST
 *        otherwise just return the original AST value
         WHEN OTHERS.
-          result = element.  "Number or string evaluates to itself
+          result = element.  "Number or string evaluates to itself (also: vector constant)
 
       ENDCASE.
 
@@ -2291,8 +2297,8 @@
 
       TRY.
           DATA(lv_length) = EXACT sytabix( lo_size->number ).
-      CATCH cx_sy_conversion_error.
-        throw( |make-vector: { lo_size->to_string( ) } is not an integer | ).
+        CATCH cx_sy_conversion_error.
+          throw( |make-vector: { lo_size->to_string( ) } is not integer | ).
       ENDTRY.
 
       result = lcl_lisp_vector=>init( size = lv_length
@@ -2314,55 +2320,110 @@
     METHOD proc_vector_ref.
 *    (vector-ref vector k) procedure
 
-      validate: list, list->cdr.
+      validate: list.
       validate_vector list->car 'vector-ref'.
       DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
 
       validate: list->cdr.
-      DATA(lo_key) = list->cdr.
-      validate_number lo_key->car 'vector-ref from'.
+      DATA(lo_idx) = list->cdr->car.
+      validate_number lo_idx 'vector-ref'.
 
       TRY.
-          DATA(lv_from) = EXACT sytabix( lo_key->car->number ).
-      CATCH cx_sy_conversion_error.
-        throw( |vector-ref: from { lo_key->to_string( ) } is not an integer | ).
+          DATA(lv_from) = EXACT sytabix( lo_idx->number ).
+
+          result = lo_vec->get( lv_from ).
+
+        CATCH cx_sy_conversion_error.
+          throw( |vector-ref: { lo_idx->to_string( ) } is not integer | ).
       ENDTRY.
 
-      lo_key = lo_key->cdr.
-
-      IF lo_key NE nil.
-        validate_number lo_key->car 'vector-ref to'.
-
-        TRY.
-            DATA(lv_to) = EXACT sytabix( lo_key->car->number ).
-        CATCH cx_sy_conversion_error.
-          throw( |vector-ref: to { lo_key->to_string( ) } is not an integer | ).
-        ENDTRY.
-      ELSE.
-        lv_to = 0.
-      ENDIF.
-
-      result = lo_vec->get( from = lv_from
-                            to = lv_to ).
     ENDMETHOD.
 
     METHOD proc_vector_set.
 *    (vector-set! vector k obj) procedure
 
-      validate: list, list->cdr.
-      validate_number list->cdr->car 'vector-set!'.
+      validate: list.
+      validate_vector list->car 'vector-set!'.
+      DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
 
-      result = list->car.
-      DO list->cdr->car->number TIMES.
-        IF result->cdr EQ nil.
-          throw( `Error vector-set! - vector too short` ).
-        ENDIF.
-        result = result->cdr.
-      ENDDO.
-      result = result->car.
+      validate: list->cdr.
+      DATA(lo_idx) = list->cdr->car.
+      validate_number lo_idx 'vector-set!'.
+
+      TRY.
+          DATA(lv_index) = EXACT sytabix( lo_idx->number ).
+        CATCH cx_sy_conversion_error.
+          throw( |vector-set!: { lo_idx->to_string( ) } is not integer | ).
+      ENDTRY.
+
+      validate: list->cdr->cdr.
+
+      DATA(lo_obj) = list->cdr->cdr.
+      IF lo_obj NE nil.
+        lo_obj = lo_obj->car.
+      ENDIF.
+
+      lo_vec->set( index = lv_index
+                   io_elem = lo_obj ).
+*     Result is undefined, but must be valid
+      result = lo_obj.
     ENDMETHOD.
 
     METHOD proc_vector_to_list.
+*   (vector->list vector)
+*   (vector->list vector start) procedure
+*   (vector->list vector start end) procedure
+* The vector->list procedure returns a newly allocated list of the objects contained
+* in the elements of vector between start and end. Order is preserved.
+
+      validate: list.
+      validate_vector list->car 'vector->list'.
+      DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
+
+      DATA(lv_start) = 0.
+
+      validate: list->cdr.
+      IF list->cdr NE nil.
+        DATA(lo_start) = list->cdr->car.
+        validate_number lo_start 'vector->list start'.
+
+        TRY.
+            lv_start = EXACT sytabix( lo_start->number ).
+          CATCH cx_sy_conversion_error.
+            throw( |vector->list: start { lo_start->to_string( ) } is not integer | ).
+        ENDTRY.
+
+        validate list->cdr->cdr.
+        IF list->cdr->cdr NE nil.
+          DATA(lo_end) = list->cdr->cdr->car.
+          validate_number lo_end 'vector->list end'.
+
+          TRY.
+              DATA(lv_end) = EXACT sytabix( lo_end->number ).
+
+              result = lo_vec->get_list( from = lv_start
+                                         to = lv_end ).
+
+            CATCH cx_sy_conversion_error.
+              throw( |vector->list: end { lo_end->to_string( ) } is not integer | ).
+          ENDTRY.
+
+        ELSE.
+          result = lo_vec->get_list( from = lv_start ).
+        ENDIF.
+
+      ELSE.
+        result = lo_vec->get_list( ).
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD proc_list_to_vector.
+*   (list->vector list)
+* The list->vector procedure returns a newly created vector initialized
+* to the elements of the list list. Order is preserved.
+      validate: list.
+
+      result = lcl_lisp_vector=>from_list( list->car ).
     ENDMETHOD.
 
 * (memq obj list)  return the first sublist of
@@ -3848,14 +3909,14 @@
             lo_arg = lo_arg->rest( ).
           ENDWHILE.
 
-           IF lo_arg NE lcl_lisp=>nil.  " Excessive number of arguments
-             lcl_lisp=>throw( |Expected { lv_count } parameter(s), found { io_args->to_string( ) }| ).
-           ENDIF.
+          IF lo_arg NE lcl_lisp=>nil.  " Excessive number of arguments
+            lcl_lisp=>throw( |Expected { lv_count } parameter(s), found { io_args->to_string( ) }| ).
+          ENDIF.
 
         WHEN lcl_lisp=>type_symbol.
           "3) args is a symbol to be bound to a variable number of parameters
-            set( symbol = io_pars->value
-                 element = io_args ).
+          set( symbol = io_pars->value
+               element = io_args ).
 
       ENDCASE.
 
@@ -4254,65 +4315,96 @@
 
   ENDCLASS.                    "lcl_lisp_hash IMPLEMENTATION
 
- CLASS lcl_lisp_vector IMPLEMENTATION.
+  CLASS lcl_lisp_vector IMPLEMENTATION.
 
-   METHOD init.
-     DATA lt_vector TYPE tt_lisp.
+    METHOD init.
+      DATA lt_vector TYPE tt_lisp.
 
-     DO size TIMES.
-       APPEND io_fill TO lt_vector.
-     ENDDO.
-     ro_vector = lcl_lisp_new=>vector( it_vector = lt_vector
-                                       iv_mutable = mutable ).
-   ENDMETHOD.
+      DO size TIMES.
+        APPEND io_fill TO lt_vector.
+      ENDDO.
+      ro_vector = lcl_lisp_new=>vector( it_vector = lt_vector
+                                        iv_mutable = mutable ).
+    ENDMETHOD.
 
-   METHOD from_list.
-     DATA lt_vector TYPE tt_lisp.
+    METHOD from_list.
+      DATA lt_vector TYPE tt_lisp.
 
-     DATA(lo_ptr) = io_list.
-     WHILE lo_ptr NE nil.
-       APPEND lo_ptr->car TO lt_vector.
-       lo_ptr = lo_ptr->cdr.
-     ENDWHILE.
-     ro_vector = lcl_lisp_new=>vector( it_vector = lt_vector
-                                       iv_mutable = iv_mutable ).
-   ENDMETHOD.
+      DATA(lo_ptr) = io_list.
+      WHILE lo_ptr NE nil.
+        APPEND lo_ptr->car TO lt_vector.
+        lo_ptr = lo_ptr->cdr.
+      ENDWHILE.
+      ro_vector = lcl_lisp_new=>vector( it_vector = lt_vector
+                                        iv_mutable = iv_mutable ).
+    ENDMETHOD.
 
-   METHOD to_list.
-     ro_elem = lcl_lisp=>nil.
-     LOOP AT vector ASSIGNING FIELD-SYMBOL(<vec>).
-       AT FIRST.
-         ro_elem = lcl_lisp_new=>cons( io_car = <vec> ).
-         DATA(lo_ptr) = ro_elem.
-         CONTINUE.
-       ENDAT.
-       lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = <vec> ).
-     ENDLOOP.
-   ENDMETHOD.
+    METHOD to_list.
+      ro_elem = lcl_lisp=>nil.
+      LOOP AT vector ASSIGNING FIELD-SYMBOL(<vec>).
+        AT FIRST.
+          ro_elem = lcl_lisp_new=>cons( io_car = <vec> ).
+          DATA(lo_ptr) = ro_elem.
+          CONTINUE.
+        ENDAT.
+        lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = <vec> ).
+      ENDLOOP.
+    ENDMETHOD.
 
-   METHOD get.
-     ro_elem = vector[ from + 1 ].
-     CHECK to GT from.
-     DATA(lo_ptr) = lcl_lisp_new=>cons( io_car = ro_elem ).
-     ro_elem = lo_ptr.
-     LOOP AT vector FROM from + 2 TO to + 1 ASSIGNING FIELD-SYMBOL(<vec>).
-       lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = <vec> ).
-     ENDLOOP.
-   ENDMETHOD.
+    METHOD get.
+      DATA(lv_start) = index + 1.
 
-   METHOD set.
-     IF mutable EQ abap_false.
-       throw( |constant vector cannot be changed.| ).
-     ENDIF.
-     vector[ index + 1 ] = io_elem.
-   ENDMETHOD.
+      IF index BETWEEN 1 AND lines( vector ).
+        ro_elem = vector[ lv_start ].
+      ELSE.
+        throw( |vector-ref: out-of-bound position| ).
+      ENDIF.
+    ENDMETHOD.
 
-   METHOD length.
-     ro_length = mo_length.
-   ENDMETHOD.
+    METHOD get_list.
+      DATA lv_end TYPE sytabix.
 
-   METHOD to_string.
-     str = |#( { to_list( )->to_string( ) } )|.
-   ENDMETHOD.
+      DATA(lv_start) = from + 1.         " start is Inclusive
+
+      IF to IS SUPPLIED.
+        lv_end = to.                     " end is Exclusive
+      ELSE.
+        lv_end = lines( vector ).        " End of vector
+      ENDIF.
+
+      IF lv_end LT 1 OR lv_start GT lv_end.
+        throw( |vector-ref: out-of-bound position| ).
+      ENDIF.
+
+      ro_elem = nil.
+      CHECK lv_start BETWEEN 1 AND lv_end.
+
+
+      ro_elem = lcl_lisp_new=>cons( io_car = vector[ lv_start ] ).
+
+      DATA(lo_ptr) = ro_elem.
+      LOOP AT vector FROM lv_start + 1 TO lv_end ASSIGNING FIELD-SYMBOL(<vec>).
+        lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = <vec> ).
+      ENDLOOP.
+    ENDMETHOD.
+
+    METHOD set.
+      IF mutable EQ abap_false.
+        throw( |constant vector cannot be changed| ).
+      ENDIF.
+      IF index GE lines( vector ) OR index LT 0.
+        throw( |vector-set!: out-of-bound position { index }| ).
+      ENDIF.
+
+      vector[ index + 1 ] = io_elem.
+    ENDMETHOD.
+
+    METHOD length.
+      ro_length = mo_length.
+    ENDMETHOD.
+
+    METHOD to_string.
+      str = |#{ to_list( )->to_string( ) }|.
+    ENDMETHOD.
 
   ENDCLASS.
