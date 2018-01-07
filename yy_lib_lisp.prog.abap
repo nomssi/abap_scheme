@@ -75,37 +75,33 @@
     ENDIF.
   END-OF-DEFINITION.
 
-*  Macro that implements the logic for the comparison native
-*  procedures, where only the comparison operator differs
+* Macro that implements the logic for the comparison native
+* procedures, where only the comparison operator differs
   DEFINE _comparison.
-    DATA carry TYPE decfloat34.
-
     result = false.
-    validate: list, list->car.
+    validate: list.
     validate_number list->car &2.
     DATA(cell) = list->cdr.
-    carry = list->car->number.
+    DATA(carry) = list->car->number.  " CONV decfloat34( )
     WHILE cell NE nil.
-    validate cell->car.
-    validate_number list->car &2.
-    IF carry &1 cell->car->number.
-    RETURN.
-    ENDIF.
-    carry = cell->car->number.
-    cell = cell->cdr.
+      validate cell->car.
+      validate_number list->car &2.
+      IF carry &1 cell->car->number.
+        RETURN.
+      ENDIF.
+      carry = cell->car->number.
+      cell = cell->cdr.
     ENDWHILE.
     result = true.
   END-OF-DEFINITION.
 
   DEFINE _sign.
-    DATA carry TYPE decfloat34.
-
     result = false.
-    validate: list, list->car.
+    validate: list.
     validate_number list->car &2.
-    carry = list->car->number.
+    DATA(carry) = list->car->number.  " CONV decfloat34( )
     IF sign( carry ) NE &1.
-    RETURN.
+      RETURN.
     ENDIF.
     result = true.
   END-OF-DEFINITION.
@@ -132,6 +128,7 @@
 * Macro that implements the logic for call of ABAP math statements
   DEFINE _math.
     result = nil.
+
     validate: list.
     validate_number list->car &2.
     _is_last_param list.
@@ -142,6 +139,10 @@
   END-OF-DEFINITION.
 
   DEFINE _trigonometric.
+    _math &1 &2.
+  END-OF-DEFINITION.
+
+  DEFINE _trigonometric.
     DATA carry TYPE f.
 
     result = nil.
@@ -149,8 +150,8 @@
     validate_number list->car &2.
     _is_last_param list.
     TRY.
-    carry = list->car->number.
-    result = lcl_lisp_new=>number( &1( carry ) ).
+        carry = list->car->number.
+        result = lcl_lisp_new=>number( &1( carry ) ).
     _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -505,6 +506,7 @@
 
       DATA parameters TYPE abap_func_parmbind_tab.
       DATA exceptions TYPE abap_func_excpbind_tab.
+      DATA param_active TYPE abap_func_parmbind_tab.
       DATA interface TYPE ts_interface.
 
       METHODS read_interface IMPORTING iv_name              TYPE csequence
@@ -691,16 +693,18 @@
       proc_eqv,      ##called
       proc_not,      ##called
 
-      proc_is_number,     ##called
-      proc_is_integer,    ##called
-      proc_is_string,     ##called
-      proc_is_symbol,     ##called
-      proc_is_hash,       ##called
-      proc_is_procedure,  ##called
-      proc_is_list,       ##called
-      proc_is_pair,       ##called
-      proc_is_vector,     ##called
-      proc_is_alist,      ##called
+      proc_is_number,       ##called
+      proc_is_integer,      ##called
+      proc_is_string,       ##called
+      proc_is_symbol,       ##called
+      proc_is_hash,         ##called
+      proc_is_procedure,    ##called
+      proc_is_list,         ##called
+      proc_is_pair,         ##called
+      proc_is_boolean,      ##called
+      proc_list_is_boolean, ##called
+      proc_is_vector,       ##called
+      proc_is_alist,        ##called
 
 * Math
       proc_abs,      ##called
@@ -763,16 +767,17 @@
 
 * Built-in functions for ABAP integration:
       _proc_meth:
-      proc_abap_data,          ##called
-      proc_abap_function,      ##called
-      proc_abap_table,         ##called
-      proc_abap_append_row,    ##called
-      proc_abap_delete_row,    ##called
-      proc_abap_get_row,       ##called
-      proc_abap_get_value,     ##called
-      proc_abap_set_value,     ##called
-      proc_abap_set,           ##called
-      proc_abap_get,           ##called
+      proc_abap_data,           ##called
+      proc_abap_function,       ##called
+      proc_abap_function_param, ##called
+      proc_abap_table,          ##called
+      proc_abap_append_row,     ##called
+      proc_abap_delete_row,     ##called
+      proc_abap_get_row,        ##called
+      proc_abap_get_value,      ##called
+      proc_abap_set_value,      ##called
+      proc_abap_set,            ##called
+      proc_abap_get,            ##called
 * Called internally only:
       proc_abap_function_call. ##called
 
@@ -791,15 +796,23 @@
 
 *----  ABAP Integration support functions; mapping -----
       METHODS:
-*        Convert ABAP data to Lisp element
+*       Convert ABAP data to Lisp element
         data_to_element IMPORTING VALUE(data)    TYPE any
                         RETURNING VALUE(element) TYPE REF TO lcl_lisp
                         RAISING   lcx_lisp_exception,
-*        Convert Lisp element to ABAP Data
+
+        structure_to_element IMPORTING VALUE(struct)  TYPE any
+                             RETURNING VALUE(element) TYPE REF TO lcl_lisp
+                             RAISING   lcx_lisp_exception,
+
+        table_to_element IMPORTING VALUE(data)    TYPE any
+                         RETURNING VALUE(element) TYPE REF TO lcl_lisp
+                         RAISING   lcx_lisp_exception,
+*       Convert Lisp element to ABAP Data
         element_to_data IMPORTING VALUE(element) TYPE REF TO lcl_lisp
                         CHANGING  VALUE(data)    TYPE any "ref to data
                         RAISING   lcx_lisp_exception,
-*        Determine an ABAP data component from an element and an identifier
+*       Determine an ABAP data component from an element and an identifier
         get_element IMPORTING list         TYPE REF TO lcl_lisp
                     RETURNING VALUE(rdata) TYPE REF TO data
                     RAISING   lcx_lisp_exception.
@@ -834,9 +847,6 @@
         IMPORTING ir_data       TYPE REF TO data
         RETURNING VALUE(result) TYPE REF TO lcl_lisp.
 
-      METHODS structure_to_element IMPORTING VALUE(struct)  TYPE any
-                                   RETURNING VALUE(element) TYPE REF TO lcl_lisp
-                                   RAISING   lcx_lisp_exception.
       METHODS get_structure_field IMPORTING element           TYPE REF TO lcl_lisp
                                             VALUE(identifier) TYPE REF TO lcl_lisp
                                   RETURNING VALUE(rdata)      TYPE REF TO data
@@ -1202,9 +1212,12 @@
       env->define_value( symbol = 'list?'       type = lcl_lisp=>type_native value = 'PROC_IS_LIST' ).
       env->define_value( symbol = 'pair?'       type = lcl_lisp=>type_native value = 'PROC_IS_PAIR' ).
       env->define_value( symbol = 'vector?'     type = lcl_lisp=>type_native value = 'PROC_IS_VECTOR' ).
+      env->define_value( symbol = 'boolean?'    type = lcl_lisp=>type_native value = 'PROC_IS_BOOLEAN' ).
       env->define_value( symbol = 'alist?'      type = lcl_lisp=>type_native value = 'PROC_IS_ALIST' ).
       env->define_value( symbol = 'procedure?'  type = lcl_lisp=>type_native value = 'PROC_IS_PROCEDURE' ).
       env->define_value( symbol = 'symbol?'     type = lcl_lisp=>type_native value = 'PROC_IS_SYMBOL' ).
+      env->define_value( symbol = 'boolean=?'   type = lcl_lisp=>type_native value = 'PROC_LIST_IS_BOOLEAN' ).
+
 *      Format
       env->define_value( symbol = 'number->string' type = lcl_lisp=>type_native value = 'PROC_NUM_TO_STRING' ).
 *      Math
@@ -1247,6 +1260,7 @@
 *      Native functions for ABAP integration
       env->define_value( symbol = 'ab-data'       type = lcl_lisp=>type_native value   = 'PROC_ABAP_DATA' ).
       env->define_value( symbol = 'ab-function'   type = lcl_lisp=>type_native value   = 'PROC_ABAP_FUNCTION' ).
+      env->define_value( symbol = 'ab-func-param' type = lcl_lisp=>type_native value   = 'PROC_ABAP_FUNCTION_PARAM' ).
       env->define_value( symbol = 'ab-table'      type = lcl_lisp=>type_native value   = 'PROC_ABAP_TABLE' ).
       env->define_value( symbol = 'ab-append-row' type = lcl_lisp=>type_native value   = 'PROC_ABAP_APPEND_ROW' ).
       env->define_value( symbol = 'ab-delete-row' type = lcl_lisp=>type_native value   = 'PROC_ABAP_DELETE_ROW' ).
@@ -1258,7 +1272,7 @@
       env->define_value( symbol = 'ab-set' type = lcl_lisp=>type_native value = 'PROC_ABAP_SET' ).
 
       DATA lr_ref TYPE REF TO data.
-*      Define a value in the environment for SYST
+*     Define a value in the environment for SYST
       GET REFERENCE OF syst INTO lr_ref.
       env->set( symbol = 'ab-sy' element = lcl_lisp_new=>data( lr_ref ) ).
     ENDMETHOD.                    "constructor
@@ -1490,15 +1504,15 @@
                                   environment = environment ).
 
         WHEN lcl_lisp=>type_abap_function.
-*>>> TEST: Support evaluation of ABAP function directly
-*          Recompose as if calling a PROC (which we are). This is part of the test. If we make an ABAP function
-*          call first-class, then we would need to revisit evaluating the whole of ELEMENT in one shot
+*>> TEST: Support evaluation of ABAP function directly
+*         Recompose as if calling a PROC (which we are). This is part of the test. If we make an ABAP function
+*         call first-class, then we would need to revisit evaluating the whole of ELEMENT in one shot
           result = proc_abap_function_call( lcl_lisp_new=>cons( io_car = io_head
                                                                 io_cdr = io_args ) ).
-*<<< TEST
+*<< TEST
 *        WHEN lcl_lisp=>type_abap_method.
-*>>> TEST: Support evaluation of ABAP methods directly
-*<<< TEST
+*>> TEST: Support evaluation of ABAP methods directly
+*<< TEST
         WHEN OTHERS.
           throw( |Cannot evaluate { io_head->to_string( ) } - not a procedure| ).
 
@@ -2944,6 +2958,37 @@
       result = true.
     ENDMETHOD.                    "proc_is_list
 
+    METHOD proc_is_boolean. " argument in list->car
+      validate: list, list->car.
+
+      result = false.
+      CHECK list NE nil.
+
+      DATA(lo_arg) = list->car.
+      CHECK lo_arg EQ true OR lo_arg = false.
+
+      result = true.
+    ENDMETHOD.
+
+    METHOD proc_list_is_boolean.
+      validate list.
+
+      result = false.
+
+      DATA(lo_arg) = list.
+
+      WHILE lo_arg NE nil.
+        DATA(lo_next) = list->car.
+        IF lo_next NE true OR lo_next NE false.
+          RETURN.
+        ENDIF.
+        lo_arg = lo_arg->cdr.
+      ENDWHILE.
+
+      CHECK lo_arg = nil.
+      result = true.
+    ENDMETHOD.                    "proc_is_boolean
+
     METHOD proc_is_vector.  " argument in list->car
       validate: list, list->car.
 
@@ -3014,11 +3059,11 @@
     ENDMETHOD.                    "proc_sinh
 
     METHOD proc_cosh.
-      _trigonometric cosh '[acosh]'.
+      _trigonometric cosh '[cosh]'.
     ENDMETHOD.                    "proc_cosh
 
     METHOD proc_tanh.
-      _trigonometric tanh '[atanh]'.
+      _trigonometric tanh '[tanh]'.
     ENDMETHOD.                    "proc_tanh
 
     METHOD proc_asinh.
@@ -3211,14 +3256,14 @@
 
       IF list->car = nil OR ( list->car->type NE lcl_lisp=>type_string
                             AND list->car->type NE lcl_lisp=>type_symbol ).
-        throw( |AB-DATA: String or symbol required as name of type| ).
+        throw( |ab-data: String or symbol required as name of type| ).
       ENDIF.
 
       cl_abap_typedescr=>describe_by_name( EXPORTING p_name = list->car->value
                                            RECEIVING p_descr_ref = DATA(lr_desc)
                                            EXCEPTIONS OTHERS = 1 ).
       IF sy-subrc NE 0.
-        throw( |AB-DATA: Type { list->car->value } not found | ).
+        throw( |ab-data: type { list->car->value } not found | ).
       ENDIF.
 
       CASE lr_desc->kind.
@@ -3227,11 +3272,11 @@
         WHEN cl_abap_typedescr=>kind_elem OR cl_abap_typedescr=>kind_struct.
           result = lcl_lisp_new=>data( ).
         WHEN OTHERS.
-          throw( |AB-DATA: Type kind { lr_desc->kind } not supported yet| ).
+          throw( |ab-data: type kind { lr_desc->kind } not supported yet| ).
       ENDCASE.
-*      Create data as given type
+*     Create data as given type
       CREATE DATA result->data TYPE (list->car->value).
-*      Set value if supplied as second parameter
+*     Set value if supplied as second parameter
       IF list->cdr NE nil.
         element_to_data(
           EXPORTING
@@ -3246,12 +3291,16 @@
       result = lcl_lisp_new=>function( list ).
     ENDMETHOD.                    "proc_abap_function
 
+    METHOD proc_abap_function_param.
+      result = lcl_lisp=>nil.
+    ENDMETHOD.
+
     METHOD proc_abap_table. "Create a table data
       validate: list, list->car.
-*      First input: name of data type, second input: value
+*     First input: name of data type, second input: value
       result = lcl_lisp_new=>table( ).
       CREATE DATA result->data TYPE TABLE OF (list->car->value).
-*      Set value if supplied as second parameter
+*     Set value if supplied as second parameter
       IF list->cdr NE nil.
         element_to_data( EXPORTING element = list->cdr->car
                          CHANGING data    = result->data ).
@@ -3273,13 +3322,13 @@
       FIELD-SYMBOLS <data> TYPE any.
 
       validate: list, list->car.
-      DATA(lo_ptr) = list->car.
-      IF lo_ptr->type NE lcl_lisp=>type_abap_data AND
-         lo_ptr->type NE lcl_lisp=>type_abap_table.
-        throw( |AB-GET-VALUE requires ABAP data or table as parameter| ).
+      DATA(lo_ref) = list->car.
+      IF lo_ref->type NE lcl_lisp=>type_abap_data AND
+         lo_ref->type NE lcl_lisp=>type_abap_table.
+        throw( |ab-get-value requires ABAP data or table as parameter| ).
       ENDIF.
       TRY.
-          ASSIGN lo_ptr->data->* TO <data>.
+          ASSIGN lo_ref->data->* TO <data>.
           result = data_to_element( <data> ).
         CATCH cx_root INTO DATA(lx_root).
           throw( |Mapping error: { lx_root->get_text( ) }| ).
@@ -3290,12 +3339,13 @@
       FIELD-SYMBOLS <data> TYPE any.
 
       validate: list, list->car.
-      IF list->car->type NE lcl_lisp=>type_abap_data AND
-         list->car->type NE lcl_lisp=>type_abap_table.
-        throw( |AB-SET-VALUE requires ABAP data or table as first parameter| ).
+      DATA(lo_ref) = list->car.
+      IF lo_ref->type NE lcl_lisp=>type_abap_data AND
+         lo_ref->type NE lcl_lisp=>type_abap_table.
+        throw( |ab-set-value requires ABAP data or table as first parameter| ).
       ENDIF.
       TRY.
-          ASSIGN list->car->data->* TO <data>.
+          ASSIGN lo_ref->data->* TO <data>.
           element_to_data(
             EXPORTING
               element = list->cdr->car
@@ -3307,10 +3357,9 @@
       result = nil. "TODO: What should we return here?
     ENDMETHOD.                    "proc_abap_set_value
 
-**********************************************************************
     METHOD proc_abap_function_call. "Called internally only for execution of function module
       validate: list, list->car.
-*      The first parameter must be a function module instance
+*     The first parameter must be a function module instance
       IF list->car->type NE lcl_lisp=>type_abap_function.
         throw( |{ list->car->value } is not a function module reference| ).
       ENDIF.
@@ -3323,7 +3372,7 @@
     ENDMETHOD.                    "proc_abap_function_call
 
     METHOD create_element_from_data.
-*      Perform RTTI on determined data and generate appropriate response
+*     Perform RTTI on determined data and generate appropriate response
       DATA(lv_kind) = cl_abap_typedescr=>describe_by_data_ref( ir_data )->kind.
       CASE lv_kind.
         WHEN cl_abap_typedescr=>kind_table.
@@ -3331,33 +3380,36 @@
         WHEN cl_abap_typedescr=>kind_struct.
           result = lcl_lisp_new=>data( ir_data ).
         WHEN cl_abap_typedescr=>kind_elem.
-*          Give back immediate value
+*         Give back immediate value
           FIELD-SYMBOLS <value> TYPE any.
 
           ASSIGN ir_data->* TO <value>.
           result = data_to_element( <value> ).
         WHEN OTHERS.
-          throw( |AB-GET: Type kind { lv_kind } not supported yet| ). "Can do AB-TAB-WHERE some other time
+          throw( |ab-get: type kind { lv_kind } not supported yet| ). "Can do AB-TAB-WHERE some other time
       ENDCASE.
     ENDMETHOD.                    "create_element_from_data
 
     METHOD proc_abap_get.
-*      Ensure a valid first parameter is passed
-      IF list->car->type NE lcl_lisp=>type_abap_data
-        AND list->car->type NE lcl_lisp=>type_abap_function
-        AND list->car->type NE lcl_lisp=>type_abap_table.
-        throw( |AB-GET: First parameter must be ABAP data or table or a function| ).
+      validate: list, list->car.
+
+      DATA(lo_ref) = list->car.
+*     Ensure a valid first parameter is passed
+      IF lo_ref->type NE lcl_lisp=>type_abap_data
+        AND lo_ref->type NE lcl_lisp=>type_abap_function
+        AND lo_ref->type NE lcl_lisp=>type_abap_table.
+        throw( |ab-get: First parameter must be ABAP data or table or a function| ).
       ENDIF.
 
-*      Determine whether the data is elementary or not to decide if we need to get the element by identifier
-      IF list->car->data IS NOT INITIAL AND
-        cl_abap_typedescr=>describe_by_data_ref( list->car->data )->kind = cl_abap_typedescr=>kind_elem.
-*        Elementary type; can return the value without mapping
-        DATA(lr_data) = list->car->data.
+*     Determine whether the data is elementary or not to decide if we need to get the element by identifier
+      IF lo_ref->data IS NOT INITIAL AND
+        cl_abap_typedescr=>describe_by_data_ref( lo_ref->data )->kind = cl_abap_typedescr=>kind_elem.
+*       Elementary type; can return the value without mapping
+        DATA(lr_data) = lo_ref->data.
       ELSE.
-*        Could short-cut here and provide the value right away
+*       Could short-cut here and provide the value right away
         IF list->cdr = nil.
-          throw( |AB-GET: Complex type requires identifier for lookup| ).
+          throw( |ab-get: Complex type requires identifier for lookup| ).
         ELSE.
           lr_data = get_element( list ).
         ENDIF.
@@ -3371,35 +3423,37 @@
       FIELD-SYMBOLS <target> TYPE any.
       FIELD-SYMBOLS <source> TYPE any.
 
-*      Ensure a valid first parameter is passed
-      IF list->car->type NE lcl_lisp=>type_abap_data
-         AND list->car->type NE lcl_lisp=>type_abap_function
-         AND list->car->type NE lcl_lisp=>type_abap_table.
-        throw( |AB-SET: First parameter must be ABAP data or table or a function| ).
+      validate: list, list->car.
+
+      DATA(lo_ref) = list->car.
+*     Ensure a valid first parameter is passed
+      IF lo_ref->type NE lcl_lisp=>type_abap_data
+        AND lo_ref->type NE lcl_lisp=>type_abap_function
+        AND lo_ref->type NE lcl_lisp=>type_abap_table.
+        throw( |ab-set: First parameter must be ABAP data or table or a function| ).
       ENDIF.
 
-*      Determine whether the data is elementary or not to decide if we need to get the element by identifier
-      IF list->car->data IS NOT INITIAL AND cl_abap_typedescr=>describe_by_data_ref( list->car->data )->kind = cl_abap_typedescr=>kind_elem.
-*        Elementary type; can return the value without mapping
-        DATA(lr_target) = list->car->data.
-        DATA(lo_source) = list->cdr->car.
-*        lo_sdata = list->cdr->car->data. "Value to set is second argument
+*     Determine whether the data is elementary or not to decide if we need to get the element by identifier
+      IF lo_ref->data IS NOT INITIAL AND
+        cl_abap_typedescr=>describe_by_data_ref( lo_ref->data )->kind = cl_abap_typedescr=>kind_elem.
+*       Elementary type; can return the value without mapping
+        DATA(lr_target) = lo_ref->data.
+        DATA(lo_source) = list->cdr->car.  "Value to set is data ref from second argument
       ELSEIF list->cdr = nil.
-        throw( |AB-SET: Complex type requires identifier for lookup| ).
+        throw( |ab-set: Complex type requires identifier for lookup| ).
       ELSE.
         lr_target = get_element( list ).
-*       lr_sdata = list->cdr->cdr->car->data. "Value to set is third argument
-        lo_source = list->cdr->cdr->car.
+        lo_source = list->cdr->cdr->car.  "Value to set is data ref from third argument
       ENDIF.
 
-* Do we just assign the reference now? Probably should dereference source value
-* and copy the value...
-*      Perform RTTI on determined data and generate appropriate response
+*     Do we just assign the reference now?
+*     Probably should dereference source value and copy the value...
+*     Perform RTTI on determined data and generate appropriate response
       ASSIGN lr_target->* TO <target>.
 
-*      For elementary types, set value from second parameter, otherwise third
+*     For elementary types, set value from second parameter, otherwise third
       IF cl_abap_typedescr=>describe_by_data( <target> )->kind = cl_abap_typedescr=>kind_elem.
-*        For now, we will support setting data from a number, string or symbol
+*       For now, we will support setting data from a number, string or symbol
         CASE lo_source->type.
           WHEN lcl_lisp=>type_string OR lcl_lisp=>type_symbol.
             <target> = lo_source->value.
@@ -3407,7 +3461,7 @@
             <target> = lo_source->number.
         ENDCASE.
       ELSE.
-*        Complex types will just copy the whole value across
+*       Complex types will just copy the whole value across
         ASSIGN lo_source->data->* TO <source>.
         <target> = <source>.                        "Set the value
       ENDIF.
@@ -3417,59 +3471,59 @@
     ENDMETHOD. "proc_abap_set
 
     METHOD structure_to_element.
-      DATA lo_conscell TYPE REF TO lcl_lisp. " Lisp-side (target)
       FIELD-SYMBOLS <field> TYPE any.
 
-      lo_conscell = element = lcl_lisp_new=>cons( ).
+      element = nil.
       DO.
         ASSIGN COMPONENT sy-index OF STRUCTURE struct TO <field>.
         IF sy-subrc NE 0.
-          lo_conscell->cdr = nil. "Terminate list
-          EXIT.
+          RETURN.
         ENDIF.
-        IF sy-index > 1.          "Move pointer only from second field onward
-          lo_conscell = lo_conscell->cdr = lcl_lisp_new=>cons( ).
+        IF sy-index EQ 1.
+          element = lcl_lisp_new=>cons( io_car = data_to_element( <field> ) ).
+          DATA(lo_ptr) = element.
+        ELSE.          "Move pointer only from second field onward
+          lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = data_to_element( <field> ) ).
         ENDIF.
-        lo_conscell->car = data_to_element( <field> ).
       ENDDO.
     ENDMETHOD.                    "structure_to_element
 
-    METHOD data_to_element.
-*      Map ABAP Data to Lisp element
+    METHOD table_to_element.
+*     map ABAP Data to Lisp element
       FIELD-SYMBOLS <table> TYPE ANY TABLE.          " ABAP-side (source)
       DATA line TYPE REF TO data.
+*     Table type
+      FIELD-SYMBOLS <line> TYPE any.
 
-*      Determine type of the ABAP value
+      ASSIGN data TO <table>.
+      CREATE DATA line LIKE LINE OF <table>.
+      ASSIGN line->* TO <line>.
+
+      element = nil.
+*     Create list with cell for each row AND Set pointer to start of list
+      LOOP AT <table> INTO <line>.
+        IF sy-tabix EQ 1.
+          element = lcl_lisp_new=>cons( io_car = data_to_element( <line> ) ). "recursive call
+          DATA(lo_ptr) = element.
+        ELSE.   "Move pointer only from second line onward
+          lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = data_to_element( <line> ) ).
+        ENDIF.
+      ENDLOOP.
+    ENDMETHOD.
+
+    METHOD data_to_element.
+*     Determine type of the ABAP value
       DATA(lr_ddesc) = cl_abap_typedescr=>describe_by_data( data ).
       CASE lr_ddesc->kind.
 
         WHEN cl_abap_typedescr=>kind_table.
-*          Table type
-          FIELD-SYMBOLS <line> TYPE any.
-
-          ASSIGN data TO <table>.
-          CREATE DATA line LIKE LINE OF <table>.
-          ASSIGN line->* TO <line>.
-
-          element = nil.
-
-          DATA lo_conscell TYPE REF TO lcl_lisp. " Lisp-side  (target)
-
-*            Create list with cell for each row AND Set pointer to start of list
-          LOOP AT <table> INTO <line>.
-            IF sy-tabix EQ 1.
-              lo_conscell = element = lcl_lisp_new=>cons( io_car = data_to_element( <line> ) ).
-            ELSE.   "Move pointer only from second line onward
-              lo_conscell = lo_conscell->cdr = lcl_lisp_new=>cons( io_car = data_to_element( <line> ) ).
-            ENDIF.
-            lo_conscell->car = data_to_element( <line> ).
-          ENDLOOP.
+          element = table_to_element( data ).
 
         WHEN cl_abap_typedescr=>kind_struct.
           element = structure_to_element( data ).
 
         WHEN cl_abap_typedescr=>kind_elem.
-*          Elementary type
+*         Elementary type
           element = SWITCH #( lr_ddesc->type_kind
                        WHEN cl_abap_typedescr=>typekind_numeric OR cl_abap_typedescr=>typekind_num
                        THEN lcl_lisp_new=>number( data )
@@ -3477,9 +3531,9 @@
       ENDCASE.
     ENDMETHOD.                    "data_to_element
 
-*    Map Lisp element to ABAP Data
+*   Map Lisp element to ABAP Data
     METHOD element_to_data.
-*      ABAP-side (target) mapping:
+*     ABAP-side (target) mapping:
       FIELD-SYMBOLS <field> TYPE any.
       FIELD-SYMBOLS <line> TYPE any.
       FIELD-SYMBOLS <table> TYPE ANY TABLE.
@@ -3489,21 +3543,20 @@
       DATA line TYPE REF TO data.
       DATA table TYPE REF TO data.
 
-*      Determine type of the ABAP value
+*     Determine type of the ABAP value
       DATA(lr_ddesc) = cl_abap_typedescr=>describe_by_data( data ).
       CASE lr_ddesc->kind.
-*        Table type
+*       Table type
         WHEN cl_abap_typedescr=>kind_table.
-*          For this mapping to happen, the element must be a cons cell
+*         For this mapping to happen, the element must be a cons cell
           IF element->type NE lcl_lisp=>type_conscell.
             throw( |Mapping failed: Non-cell to table| ).
           ENDIF.
-*          Provide reference to table and line
+*         Provide reference to table and line
           table = REF #( data ).
           ASSIGN table->* TO <table>.
           CASE CAST cl_abap_tabledescr( lr_ddesc )->table_kind.
-            WHEN cl_abap_tabledescr=>tablekind_sorted OR
-                 cl_abap_tabledescr=>tablekind_hashed.
+            WHEN cl_abap_tabledescr=>tablekind_sorted OR cl_abap_tabledescr=>tablekind_hashed.
               ASSIGN table->* TO <sotab>. "Sorted table type
               CREATE DATA line LIKE LINE OF <sotab>.
             WHEN OTHERS.
@@ -3527,7 +3580,7 @@
           ENDWHILE.
 
         WHEN cl_abap_typedescr=>kind_struct.
-*          Structure
+*         Structure
           IF element->type NE lcl_lisp=>type_conscell.
             throw( |Mapping failed: Non-cell to structure| ).
           ENDIF.
@@ -3543,7 +3596,7 @@
             IF sy-index > 1. "Move cons cell pointer only from second element on
               lr_conscell = lr_conscell->cdr.
             ENDIF.
-*            Don't map nil values
+*           Don't map nil values
             CHECK lr_conscell->car NE nil.
 
             element_to_data( EXPORTING element = lr_conscell->car
@@ -3551,7 +3604,7 @@
           ENDDO.
 
         WHEN cl_abap_typedescr=>kind_elem.
-*          Elementary type
+*         Elementary type
           ASSIGN data TO <field>.
           <field> = COND #( WHEN element->type = lcl_lisp=>type_number THEN element->number ELSE element->value ).
 
@@ -3567,29 +3620,29 @@
 
       IF identifier = nil OR
         ( identifier->type NE lcl_lisp=>type_string AND identifier->type NE lcl_lisp=>type_symbol ).
-        throw( `AB-GET: String or symbol required to access structure field` ).
+        throw( `ab-get: String or symbol required to access structure field` ).
       ENDIF.
 
       ASSIGN element->data->* TO <struct>.
       ASSIGN COMPONENT identifier->value OF STRUCTURE <struct> TO <value>.
       IF sy-subrc NE 0.
-        throw( |AB-GET: Structure has no component { identifier->value }| ).
+        throw( |ab-get: Structure has no component { identifier->value }| ).
       ENDIF.
       rdata = REF #( <value> ).
     ENDMETHOD.                    "get_structure_field
 
     METHOD get_index_table_row.
-*      Second input for reading an index table must be a number (row index)
+*     Second input for reading an index table must be a number (row index)
       FIELD-SYMBOLS <idxtab> TYPE INDEX TABLE.
 
       IF identifier = nil OR identifier->type NE lcl_lisp=>type_number.
-        throw( |AB-GET: Numeric index required to read index table| ). "Can do AB-TAB-WHERE some other time
+        throw( |ab-get: Numeric index required to read index table| ). "Can do AB-TAB-WHERE some other time
       ENDIF.
       ASSIGN element->data->* TO <idxtab>.
       TRY.
           rdata = REF #( <idxtab>[ identifier->number ] ).
         CATCH cx_sy_itab_line_not_found.
-          throw( |AB-GET: No entry at index { identifier->number }| ). "Can do AB-TAB-WHERE some other time
+          throw( |ab-get: No entry at index { identifier->number }| ). "Can do AB-TAB-WHERE some other time
       ENDTRY.
     ENDMETHOD.                    "get_index_table_row
 
@@ -3620,23 +3673,23 @@
       DATA(identifier) = list->cdr->car. " Lisp element, string or symbol or index, to identify subcomponent of value
 
       IF element->type = lcl_lisp=>type_abap_function.
-*        Get function parameter by name
+*       Get function parameter by name
         rdata = CAST lcl_lisp_abapfunction( element )->get_function_parameter( identifier ).
       ELSE.
-*        First parameter is not function, but table or other data; examine the data
+*       First parameter is not function, but table or other data; examine the data
         DATA(lo_ddesc) = cl_abap_typedescr=>describe_by_data_ref( element->data ).
 
         CASE lo_ddesc->kind.
           WHEN cl_abap_typedescr=>kind_struct.
-*            Structure: Use second parameter as field name
+*           Structure: Use second parameter as field name
             rdata = get_structure_field( element = element
                                          identifier = identifier ).
           WHEN cl_abap_typedescr=>kind_elem.
-*            Elementary data: No qualifier / second parameter required
+*           Elementary data: No qualifier / second parameter required
             rdata = element->data.
 
           WHEN cl_abap_typedescr=>kind_table.
-*            Table: Second parameter is index (std table) or key (sorted table)
+*           Table: Second parameter is index (std table) or key (sorted table)
             CASE CAST cl_abap_tabledescr( lo_ddesc )->table_kind.
               WHEN cl_abap_tabledescr=>tablekind_sorted
                 OR cl_abap_tabledescr=>tablekind_hashed.
@@ -3666,23 +3719,7 @@
       function_name = iv_name.          "Name of function module
       parameters_generated = abap_false.
 
-*       DATA lv_is_callable TYPE flag.
-*       CALL FUNCTION 'CHECK_EXIST_LIMU_FUNC'    " Not released - (Step not needed)
-*         EXPORTING
-*           name                  = function_name
-**          AGGNAME               = ' '
-**          MTYPE                 = ' '
-*         IMPORTING
-*           EXIST                 = lv_is_callable
-*         EXCEPTIONS
-**          TR_INVALID_TYPE       = 1
-*           OTHERS                = 2.
-*       IF sy-subrc <> 0.
-*         throw( |Function { function_name }: { error_message( ) }| ).
-*       ENDIF.
-
-
-*      Read the function module interface
+*     Read the function module interface
       CALL FUNCTION 'FUNCTION_IMPORT_INTERFACE'
         EXPORTING
           funcname           = function_name  " Name of the function module
@@ -3717,16 +3754,18 @@
     METHOD call.
       create_parameters( ).
 *TODO: Map given list to parameters of function module
-*      First parameter: Name of function to call;
-*      second parameter: data to pass to interface
+
+*     First parameter: Name of function to call;
+*     second parameter: data to pass to interface
       CALL FUNCTION list->value
-        PARAMETER-TABLE parameters
+        PARAMETER-TABLE param_active
         EXCEPTION-TABLE exceptions.
 
       IF sy-subrc EQ c_error_message.
         throw( |Call { list->value }: { error_message( ) }| ).
       ENDIF.
-*    Map output parameters to new list
+
+*     Map output parameters to new list
       ro_elem = list.      "Function reference is updated with values after call
     ENDMETHOD.                    "call
 
@@ -3737,24 +3776,25 @@
     ENDMETHOD.
 
     METHOD get_function_parameter.
-*      Get function parameter by name
-*      IDENTIFIER -> Lisp element, string or symbol or index, to identify subcomponent of value
+*     Get function parameter by name
+*     IDENTIFIER -> Lisp element, string or symbol or index, to identify subcomponent of value
       IF identifier = nil OR
         ( identifier->type NE type_string AND identifier->type NE type_symbol ).
-        throw( `AB-GET: String or symbol required to access function parameter` ).
+        throw( `ab-get: String or symbol required to access function parameter` ).
       ENDIF.
 
       create_parameters( ).
 
       TRY.
-          rdata = parameters[ name = identifier->value ]-value.
+        rdata = VALUE #( param_active[ name = identifier->value ]-value
+                           DEFAULT parameters[ name = identifier->value ]-value ).
         CATCH cx_sy_itab_line_not_found.
-          throw( |AB-GET: No parameter { identifier->value } in function| ).
+          throw( |ab-get: No parameter { identifier->value } in function| ).
       ENDTRY.
     ENDMETHOD.                    "get_function_parameter
 
     METHOD create_table_params.
-*      Create structures in parameter - TABLES
+*     Create structures in parameter - TABLES
       LOOP AT it_table INTO DATA(ls_table).
         DATA(ls_par) = VALUE abap_func_parmbind( kind = abap_func_tables
                                                  name = ls_table-parameter ).
@@ -3763,7 +3803,8 @@
         CREATE DATA ls_par-value TYPE TABLE OF (lv_type).
         CREATE DATA ls_par-tables_wa TYPE (lv_type).
 
-        INSERT ls_par INTO TABLE parameters.
+        INSERT ls_par INTO TABLE: parameters,
+                                  param_active.
       ENDLOOP.
     ENDMETHOD.
 
@@ -3787,7 +3828,8 @@
         CREATE DATA ls_par-value TYPE (lv_type).
 
         ls_par-name = ls_params-parameter.
-        INSERT ls_par INTO TABLE parameters.
+        INSERT ls_par INTO TABLE: parameters,
+                                  param_active.
       ENDLOOP.
     ENDMETHOD.
 
@@ -3795,20 +3837,20 @@
       CHECK parameters_generated EQ abap_false.
 
       create_exceptions( ).
-*      Tables
+*     Tables
       create_table_params( interface-tbl ).         "    input TABLES parameter
       create_table_params( interface-enh_tbl ).
-*      Import
+*     Import
       create_params( it_table = interface-imp
                      iv_kind = abap_func_exporting ).
       create_params( it_table = interface-enh_imp
                      iv_kind = abap_func_exporting ).
-*      Export
+*     Export
       create_params( it_table = interface-exp
                      iv_kind = abap_func_importing ).
       create_params( it_table = interface-enh_exp
                      iv_kind = abap_func_importing ).
-*      Changing
+*     Changing
       create_params( it_table = interface-cha
                      iv_kind = abap_func_changing ).
       create_params( it_table = interface-enh_cha

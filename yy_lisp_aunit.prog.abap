@@ -420,6 +420,13 @@
        METHODS not_7 FOR TESTING.
        METHODS not_8 FOR TESTING.
 
+       METHODS is_boolean_1 FOR TESTING.
+       METHODS is_boolean_2 FOR TESTING.
+       METHODS is_boolean_3 FOR TESTING.
+
+       METHODS list_is_boolean_1 FOR TESTING.
+       METHODS list_is_boolean_2 FOR TESTING.
+
    ENDCLASS.                    "ltc_basic DEFINITION
 
 *----------------------------------------------------------------------*
@@ -727,6 +734,31 @@
      METHOD not_8.
        code_test( code = |(not (= 2 2))|
                   expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD is_boolean_1.
+       code_test( code = |(boolean? #f)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_boolean_2.
+       code_test( code = |(boolean? 0)|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD is_boolean_3.
+       code_test( code = |(boolean? '())|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD list_is_boolean_1.
+       code_test( code = |(boolean=? '())|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD list_is_boolean_2.
+       code_test( code = |(boolean=? '(#t #f))|
+                  expected = '#t' ).
      ENDMETHOD.
 
    ENDCLASS.                    "ltc_basic IMPLEMENTATION
