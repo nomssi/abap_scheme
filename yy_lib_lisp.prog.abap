@@ -579,6 +579,7 @@
     PUBLIC SECTION.
       TYPES tt_element TYPE STANDARD TABLE OF REF TO lcl_lisp WITH DEFAULT KEY.
       CONSTANTS:
+        c_lisp_dot    TYPE char1 VALUE '.',
         c_open_paren  TYPE char1 VALUE '(',
         c_close_paren TYPE char1 VALUE ')'.
 
@@ -592,7 +593,6 @@
         c_escape_char  TYPE char1 VALUE '\',
         c_text_quote   TYPE char1 VALUE '"',
         c_lisp_quote   TYPE char1 VALUE '''', "LISP single quote = QUOTE
-        c_lisp_dot     TYPE char1 VALUE '.',
         c_lisp_hash    TYPE char1 VALUE '#',
         c_lisp_comment TYPE char1 VALUE ';',
         c_peek_dummy   TYPE char1 VALUE 'Ü'.
@@ -3930,8 +3930,6 @@
       " they are 3 cases here
       CASE io_pars->type.
         WHEN lcl_lisp=>type_conscell.   "Do we have a proper list?
-          "1) list -> fixed number of parameters
-          "2) TO DO: dotted pair -> first part : fixed number of parameters, second part variable
 
           DATA(lo_par) = io_pars.                " Pointer to formal parameters
           DATA(lo_arg) = io_args.                " Pointer to arguments
@@ -3940,6 +3938,24 @@
             IF lo_arg = lcl_lisp=>nil.           " Premature end of arguments
               lcl_lisp=>throw( |Missing parameter(s) { lo_par->to_string( ) }| ).
             ENDIF.
+
+*
+            IF lo_par->car->value EQ lcl_parser=>c_lisp_dot.
+*             dotted pair after fixed number of parameters, to be boubnd to a variable number of arguments
+
+*             1) Skip the dot
+              lo_par = lo_par->cdr.
+              lo_arg = lo_arg->rest( ).
+
+*             2) Read the next parameter, bind to the (rest) list of arguments
+              set( symbol = lo_par->value
+                   element = lo_arg ).
+
+*             3) Exit
+              RETURN.
+            ENDIF.
+
+*           Part of the list with fixed number of parameters
 
             ADD 1 TO lv_count.
 

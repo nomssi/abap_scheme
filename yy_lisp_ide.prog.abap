@@ -144,8 +144,8 @@ CLASS lcl_ide IMPLEMENTATION.
 
     rv_input = iv_input.
     CHECK iv_input IS INITIAL.
-    lt_fields = VALUE #( ( tabname = 'ORA_JSEL_STMT'
-                           fieldname = 'STMTID'
+    lt_fields = VALUE #( ( tabname = 'ABDBG'     " Text: Input Line
+                           fieldname = 'LTEXT'
                            field_obl = 'X' ) ).
 
     CALL FUNCTION 'POPUP_GET_VALUES'
@@ -159,10 +159,11 @@ CLASS lcl_ide IMPLEMENTATION.
         fields       = lt_fields
       EXCEPTIONS
         OTHERS       = 2.
-    IF sy-subrc <> 0.
-      EXIT.
-    ENDIF.
-    CHECK sy-subrc EQ 0 AND lv_user_response NE 'A' AND line_exists( lt_fields[ 1 ] ).
+
+    CHECK sy-subrc EQ 0
+      AND lv_user_response NE 'A'
+      AND line_exists( lt_fields[ 1 ] ).
+
     rv_input = lt_fields[ 1 ]-value.
     mo_console->append_string( rv_input && |\n| ).
   ENDMETHOD.
