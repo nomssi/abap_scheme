@@ -426,6 +426,7 @@
 
        METHODS list_is_boolean_1 FOR TESTING.
        METHODS list_is_boolean_2 FOR TESTING.
+       METHODS list_is_boolean_3 FOR TESTING.
 
    ENDCLASS.                    "ltc_basic DEFINITION
 
@@ -758,6 +759,11 @@
 
      METHOD list_is_boolean_2.
        code_test( code = |(boolean=? '(#t #f))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD list_is_boolean_3.
+       code_test( code = |(boolean=? #t #f)|
                   expected = '#t' ).
      ENDMETHOD.
 
@@ -2009,6 +2015,9 @@
        METHODS setup.
        METHODS teardown.
 
+       METHODS lambda_dotted FOR TESTING.
+       METHODS lambda_variadic FOR TESTING.
+
        METHODS fold_right RETURNING VALUE(code) TYPE string.
 
        METHODS foldr FOR TESTING.
@@ -2049,6 +2058,16 @@
      METHOD teardown.
        FREE mo_int.
      ENDMETHOD.                    "teardown
+
+     METHOD lambda_dotted.
+       code_test( code = |((lambda (x y . z) z) 3 4 5 6)|
+                  expected = |( 5 6 )| ).
+     ENDMETHOD.
+
+     METHOD lambda_variadic.
+       code_test( code = |((lambda x x) 3 4 5 6)|
+                  expected = |( 3 4 5 6 )| ).
+     ENDMETHOD.
 
      METHOD fold_right.
        code = |(define (fold-right f init seq)| &
