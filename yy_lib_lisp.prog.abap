@@ -254,6 +254,7 @@
       CLASS-DATA nil       TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA false     TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA true      TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA quote     TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA new_line  TYPE REF TO  lcl_lisp READ-ONLY.
 
 *     Specifically for lambdas:
@@ -1197,26 +1198,9 @@
 *     Add primitive functions to environment
       env->define_value( symbol = 'define'   type = lcl_lisp=>type_primitive value   = 'define' ).
       env->define_value( symbol = 'lambda'   type = lcl_lisp=>type_primitive value   = 'lambda' ).
-      env->define_value( symbol = 'let'      type = lcl_lisp=>type_primitive value   = 'let' ).
-      env->define_value( symbol = 'letrec'   type = lcl_lisp=>type_primitive value   = 'letrec' ).
-      env->define_value( symbol = 'let*'     type = lcl_lisp=>type_primitive value   = 'let*' ).
-      env->define_value( symbol = 'letrec*'  type = lcl_lisp=>type_primitive value   = 'letrec*' ).
-      env->define_value( symbol = 'and'      type = lcl_lisp=>type_primitive value   = 'and' ).
-      env->define_value( symbol = 'or'       type = lcl_lisp=>type_primitive value   = 'or' ).
       env->define_value( symbol = 'if'       type = lcl_lisp=>type_primitive value   = 'if' ).
-      env->define_value( symbol = 'cond'     type = lcl_lisp=>type_primitive value   = 'cond' ).
       env->define_value( symbol = 'quote'    type = lcl_lisp=>type_primitive value   = 'quote' ).
       env->define_value( symbol = 'set!'     type = lcl_lisp=>type_primitive value   = 'if' ).
-      env->define_value( symbol = 'begin'    type = lcl_lisp=>type_primitive value   = 'cond' ).
-      env->define_value( symbol = 'when'     type = lcl_lisp=>type_primitive value   = 'when' ).
-      env->define_value( symbol = 'unless'   type = lcl_lisp=>type_primitive value   = 'unless' ).
-      env->define_value( symbol = 'apply'    type = lcl_lisp=>type_primitive value   = 'apply' ).
-      env->define_value( symbol = 'map'      type = lcl_lisp=>type_primitive value   = 'map' ).
-      env->define_value( symbol = 'for-each' type = lcl_lisp=>type_primitive value   = 'for-each' ).
-      env->define_value( symbol = 'newline'  type = lcl_lisp=>type_primitive value   = 'newline' ).
-      env->define_value( symbol = 'display'  type = lcl_lisp=>type_primitive value   = 'and' ).
-      env->define_value( symbol = 'write'    type = lcl_lisp=>type_primitive value   = 'or' ).
-      env->define_value( symbol = 'read'     type = lcl_lisp=>type_primitive value   = 'quote' ).
 
 *     Add native functions to environment
       env->define_value( symbol = '+'        type = lcl_lisp=>type_native value   = 'PROC_ADD' ).
@@ -2096,9 +2080,8 @@
 *     build internal table of list interators
       DATA(iter) = io_head->new_iterator( ).
       WHILE iter->has_next( ).
-        DATA(lo_next) = eval( element = iter->next( )
-                              environment = environment ).
-        APPEND lo_next TO rt_table.
+        APPEND eval( element = iter->next( )
+                     environment = environment ) TO rt_table.
       ENDWHILE.
     ENDMETHOD.
 
@@ -2114,13 +2097,19 @@
           result = nil.
           RETURN.
         ELSE.
-          lo_next = lo_next->cdr = lcl_lisp_new=>cons( io_car = <lo_list>->car ).
+          DATA(lo_prev) = <lo_list>->car.
+
+*         Parameters are already evaluated, use special form to avoid repeated evaluation
+          lo_prev = lcl_lisp_new=>cons( io_car = lcl_lisp=>quote
+                                        io_cdr = lcl_lisp_new=>cons( io_car = lo_prev ) ).
+
+          lo_next = lo_next->cdr = lcl_lisp_new=>cons( io_car = lo_prev ).
           <lo_list> = <lo_list>->cdr.
         ENDIF.
         CHECK <lo_list> EQ nil.
         ev_has_next = abap_false.
       ENDLOOP.
-      DATA(debug) = lo_head->to_string( ).
+
       result = eval( element = lo_head
                      environment = environment ).
     ENDMETHOD.
@@ -4113,6 +4102,7 @@
       nil = lcl_lisp_new=>null( ).
       false = lcl_lisp_new=>symbol( '#f' ).
       true = lcl_lisp_new=>symbol( '#t' ).
+      quote = lcl_lisp_new=>symbol( 'quote' ).
       new_line = lcl_lisp_new=>string( |\n| ).
     ENDMETHOD.                    "class_constructor
 
@@ -4359,7 +4349,7 @@
     ENDMETHOD.
 
     METHOD quote.
-      ro_elem = cons( io_car = symbol( 'quote' )
+      ro_elem = cons( io_car = lcl_lisp=>quote
                       io_cdr = cons( io_car = io_elem )  ).
       ro_elem->cdr->mutable = abap_false.
     ENDMETHOD.
