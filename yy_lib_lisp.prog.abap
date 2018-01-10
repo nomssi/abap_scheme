@@ -602,6 +602,8 @@
         c_lisp_quote   TYPE char1 VALUE '''', "LISP single quote = QUOTE
         c_lisp_hash    TYPE char1 VALUE '#',
         c_lisp_comment TYPE char1 VALUE ';',
+        c_open_bracket  TYPE char1 VALUE '[',
+        c_close_bracket TYPE char1 VALUE ']',
         c_peek_dummy   TYPE char1 VALUE 'Ü'.
       DATA code TYPE string.
       DATA length TYPE i.
@@ -610,7 +612,7 @@
 
       DATA mv_eol TYPE char1.
       DATA mv_whitespace TYPE char04.
-      DATA mv_delimiters TYPE char05.
+      DATA mv_delimiters TYPE char07.
 
       METHODS:
         next_char RAISING lcx_lisp_exception,
@@ -618,7 +620,8 @@
         skip_whitespace
           RETURNING VALUE(rv_has_next) TYPE flag
           RAISING   lcx_lisp_exception,
-        parse_list RETURNING VALUE(result) TYPE REF TO lcl_lisp
+        parse_list IMPORTING delim TYPE char01 DEFAULT c_open_paren
+                   RETURNING VALUE(result) TYPE REF TO lcl_lisp
                    RAISING   lcx_lisp_exception,
         parse_token RETURNING VALUE(element) TYPE REF TO lcl_lisp
                     RAISING   lcx_lisp_exception.
@@ -967,18 +970,20 @@
   CLASS lcl_parser IMPLEMENTATION.
 
     METHOD constructor.
-*      End of line value
+*     End of line value
       mv_eol = cl_abap_char_utilities=>newline.
-*      Whitespace values
+*     Whitespace values
       CLEAR mv_whitespace.
       mv_whitespace+0(1) = ' '.
       mv_whitespace+1(1) = cl_abap_char_utilities=>newline.
       mv_whitespace+2(1) = cl_abap_char_utilities=>cr_lf(1).
       mv_whitespace+3(1) = cl_abap_char_utilities=>horizontal_tab.
-*      Delimiters value
+*     Delimiters value
       mv_delimiters = mv_whitespace.
       mv_delimiters+3(1) = c_close_paren.
       mv_delimiters+4(1) = c_open_paren.
+      mv_delimiters+5(1) = c_close_bracket.
+      mv_delimiters+6(1) = c_open_bracket.
     ENDMETHOD.                    "constructor
 
     METHOD skip_whitespace.
@@ -1031,8 +1036,8 @@
       index = 0.
       char = code+index(1).           "Kick off things by reading first char
       WHILE skip_whitespace( ).
-        IF char = c_open_paren.
-          APPEND parse_list( ) TO elements.
+        IF char = c_open_paren OR char = c_open_bracket.
+          APPEND parse_list( char ) TO elements.
         ELSEIF index < length.
           APPEND parse_token( ) TO elements.
         ENDIF.
@@ -1046,20 +1051,28 @@
 
 *     Set pointer to start of list
       lo_cell = result = lcl_lisp_new=>cons( ).
+      DATA(lv_close_delim) = SWITCH #( delim WHEN c_open_bracket THEN c_close_bracket
+                                                                 ELSE c_close_paren ).
 
       next_char( ).                 " Skip past opening paren
       WHILE skip_whitespace( ).
-        IF char = c_close_paren.
-          IF lv_empty_list = abap_true.
-            result = lcl_lisp=>nil.           " Result = empty list
-          ELSEIF lv_proper_list EQ abap_true.
-            lo_cell->cdr = lcl_lisp=>nil.     " Terminate list
-          ELSE.
-             " pair, no termination with nil, nothing to do
-          ENDIF.
-          next_char( ).              " Skip past closing paren
-          RETURN.
-        ENDIF.
+        CASE char.
+          WHEN lv_close_delim.
+            IF lv_empty_list = abap_true.
+              result = lcl_lisp=>nil.           " Result = empty list
+            ELSEIF lv_proper_list EQ abap_true.
+              lo_cell->cdr = lcl_lisp=>nil.     " Terminate list
+            ELSE.
+               " pair, no termination with nil, nothing to do
+            ENDIF.
+            next_char( ).              " Skip past closing paren
+            RETURN.
+
+          WHEN c_close_paren OR c_close_bracket.
+            lcl_lisp=>throw( `Inconsistent input - not matching parens/bracket` ).
+
+          WHEN OTHERS.
+        ENDCASE.
 
         IF lv_proper_list EQ abap_false.
 *         inconsistent input
@@ -1124,8 +1137,8 @@
       skip_whitespace( ).
 *     create object cell.
       CASE char.
-        WHEN c_open_paren.
-          element = parse_list( ).
+        WHEN c_open_paren OR c_open_bracket.
+          element = parse_list( char ).
           RETURN.
 
         WHEN c_lisp_quote.
