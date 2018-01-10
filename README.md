@@ -9,10 +9,10 @@
 After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a>.
 
 So this is my learning project that started as a fork of https://github.com/mydoghasworms/abap-lisp, itself inspired by [Peter Norvig](http://norvig.com/lispy2.html). You can [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) too. My contributions:
-- more validations to make the code stable, a lot more Scheme features are accepted
-- regression tests in ABAP Unit, a good example of TDD: first create tests of a [Scheme](http://www.r7rs.org/) feature, then implement it
-- an editor, with console and environment screen make it fun to use
-- Scheme is the target language, but I won't call this LISP interpreter a _Scheme_ until issue #1 is resolved.
+- more validations for stability
+- _Scheme_ as the target language, but I won't call this LISP interpreter a _Scheme_ until issue #1 is resolved.
+- A large _ABAP Unit_ regression test suite following the [R7RS](http://www.r7rs.org/) specification
+- a Workbench with editor, console and environment screen to make it fun to use
 
 ### Requirements
 
