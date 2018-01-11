@@ -220,7 +220,8 @@
         type_native    TYPE tv_type VALUE 'P',
         type_primitive TYPE tv_type VALUE 'I',
         type_hash      TYPE tv_type VALUE 'H',
-        type_vector    TYPE tv_type VALUE 'V'.
+        type_vector    TYPE tv_type VALUE 'V',
+        type_promise   TYPE tv_type VALUE 'Y'.
 *      Types for ABAP integration:
       CONSTANTS:
         type_abap_data     TYPE tv_type VALUE 'D',
@@ -305,8 +306,6 @@
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
 
       CLASS-METHODS elem IMPORTING type           TYPE lcl_lisp=>tv_type
-                                   io_car         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
-                                   io_cdr         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                                    value          TYPE any OPTIONAL
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS data IMPORTING ref            TYPE REF TO data OPTIONAL
@@ -393,8 +392,6 @@
       METHODS constructor IMPORTING io_elem TYPE REF TO lcl_lisp
                           RAISING   lcx_lisp_exception.
   ENDCLASS.                    "lcl_lisp_iterator DEFINITION
-
-  TYPES tt_lisp_iterator TYPE STANDARD TABLE OF REF TO lcl_lisp_iterator WITH EMPTY KEY.
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp_hash DEFINITION
@@ -933,6 +930,7 @@
                             RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
                             RAISING   lcx_lisp_exception.
       METHODS init_named_let IMPORTING io_head       TYPE REF TO lcl_lisp
+                                       io_var        TYPE REF TO lcl_lisp
                                        io_env        TYPE REF TO lcl_lisp_environment
                              RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
                              RAISING   lcx_lisp_exception.
@@ -1606,6 +1604,23 @@
 *      lv_debug = |params { eo_pars->to_string( ) }\n arg { eo_args->to_string( ) }\n|.
     ENDMETHOD.                    "extract_arguments
 
+    METHOD evaluate_in_sequence.
+*     Before execution of the procedure or lambda, all parameters must be evaluated
+      validate: io_args, io_pars.
+      DATA(lo_args) = io_args->new_iterator( ).
+      DATA(lo_pars) = io_pars->new_iterator( ).
+
+      WHILE lo_args->has_next( ) AND lo_pars->has_next( ).
+        DATA(lo_par) = lo_pars->next( ).
+        CHECK lo_par NE nil.        " Nil would mean no parameters to map
+*       Assign argument to its corresponding symbol in the newly created environment
+*       NOTE: element of the argument list is evaluated before being defined in the environment
+        io_env->set( symbol = lo_par->value
+                     element = eval( element = lo_args->next( )
+                                     environment = io_env ) ).
+      ENDWHILE.
+    ENDMETHOD.
+
 * A letrec expression is equivalent to a let where the bindings are initialized with dummy values,
 * and then the initial values are computed and assigned into the bindings.
 * letrec lets us create an environment before evaluating the initial value expressions, so that the
@@ -1654,23 +1669,6 @@
                                      io_pars = lo_pars ).   " Pointer to formal parameters
     ENDMETHOD.
 
-    METHOD evaluate_in_sequence.
-*     Before execution of the procedure or lambda, all parameters must be evaluated
-      validate: io_args, io_pars.
-      DATA(lo_args) = io_args->new_iterator( ).
-      DATA(lo_pars) = io_pars->new_iterator( ).
-
-      WHILE lo_args->has_next( ) AND lo_pars->has_next( ).
-        DATA(lo_par) = lo_pars->next( ).
-        CHECK lo_par NE nil.        " Nil would mean no parameters to map
-*       Assign argument to its corresponding symbol in the newly created environment
-*       NOTE: element of the argument list is evaluated before being defined in the environment
-        io_env->set( symbol = lo_par->value
-                     element = eval( element = lo_args->next( )
-                                     environment = io_env ) ).
-      ENDWHILE.
-    ENDMETHOD.
-
 *Here's an example loop, which prints out the integers from 0 to 9:
 * (  let loop ((i 0))
 *     (display i)
@@ -1685,14 +1683,21 @@
 *     (loop 0)) ; start the recursion with 0 as arg i
     METHOD init_named_let.
       ro_env = lcl_lisp_environment=>new( io_env ).
-      extract_arguments( EXPORTING io_head = io_head
+      extract_arguments( EXPORTING io_head = io_head->car
                          IMPORTING eo_pars = DATA(lo_pars)
                                    eo_args = DATA(lo_args) ).
 
-      lo_args = evaluate_parameters( io_list = lo_args           " Pointer to arguments
-                                     environment = io_env ).
-      ro_env->parameters_to_symbols( io_args = lo_args
-                                     io_pars = lo_pars ).   " Pointer to formal parameters
+      DATA(lo_new_args) = evaluate_parameters( io_list = lo_args       " Pointer to arguments
+                                               environment = io_env ).
+      ro_env->parameters_to_symbols( io_args = lo_new_args
+                                     io_pars = lo_pars ).              " Pointer to formal parameters
+
+      CHECK io_var IS BOUND AND io_var NE nil.
+*     named let
+      ro_env->set( symbol = io_var->value
+                   element = lcl_lisp_new=>lambda( io_car = lo_pars                " List of parameters
+                                                   io_cdr = io_head->cdr           " Body
+                                                   io_env = ro_env ) ).
     ENDMETHOD.
 
     METHOD init_let_star.
@@ -1860,11 +1865,20 @@
                                   io_environment = environment ).
 
         WHEN 'let'.
-*          (let ((x 10) (y 5)) (+ x y)) is syntactic sugar for  ( (lambda (x y) (+ x y)) 10 5)
-          result = evaluate_list( io_head = lr_tail->cdr
-                                  io_environment = init_named_let( io_head = lr_tail->car
-                                                                   io_env = environment ) ).
+          CASE lr_tail->car->type.
+            WHEN lcl_lisp=>type_symbol.
+*             named let:  (let <variable> (bindings) <body>)
+              DATA(lo_var) = lr_tail->car.
+              lr_tail = lr_tail->cdr.
 
+            WHEN OTHERS. " lcl_lisp=>type_conscell.
+*            (let ((x 10) (y 5)) (+ x y)) is syntactic sugar for  ( (lambda (x y) (+ x y)) 10 5)
+              lo_var = nil.
+          ENDCASE.
+          result = evaluate_list( io_head = lr_tail->cdr
+                                  io_environment = init_named_let( io_head = lr_tail
+                                                                   io_var  = lo_var
+                                                                   io_env = environment ) ).
         WHEN 'letrec'.
 *          (letrec ((a 5) (b (+ a 3)) b)
           result = evaluate_list( io_head = lr_tail->cdr
@@ -1884,6 +1898,24 @@
           result = lcl_lisp_new=>lambda( io_car = lr_tail->car         " List of parameters
                                          io_cdr = lr_tail->cdr         " Body
                                          io_env = environment ).
+
+*        WHEN 'do'.
+* (do ( ( <variable1> <init1> <step1>)
+*        ... )
+*        ( <test> <expression> ... )
+*        <command> ... =
+*
+*   (do ((vec (make-vector 5) )
+*         (i 0 (+ i 1) ) )
+*         ((= i 5) vec)
+*       (vector-set! vec i i))  => #(0 1 2 3 4)
+*
+*  (let ((x '(1 3 5 7 9)))
+*   (do ((x x (cdr x))
+*        (sum 0  (+ sum (car x))))
+*      ((null? x) sum)))  => 25
+*
+*          result = nil??.
 
 *                 WHEN 'case'.
 * (case <key> <clause1> <clause2> <clause3> ... )
@@ -2080,8 +2112,10 @@
 *     build internal table of list interators
       DATA(iter) = io_head->new_iterator( ).
       WHILE iter->has_next( ).
-        APPEND eval( element = iter->next( )
-                     environment = environment ) TO rt_table.
+*       Evaluate next list entry
+        DATA(lo_next) = eval( element = iter->next( )
+                              environment = environment ).
+        APPEND lo_next TO rt_table.
       ENDWHILE.
     ENDMETHOD.
 
@@ -2097,11 +2131,9 @@
           result = nil.
           RETURN.
         ELSE.
-          DATA(lo_prev) = <lo_list>->car.
-
 *         Parameters are already evaluated, use special form to avoid repeated evaluation
-          lo_prev = lcl_lisp_new=>cons( io_car = lcl_lisp=>quote
-                                        io_cdr = lcl_lisp_new=>cons( io_car = lo_prev ) ).
+          DATA(lo_prev) = lcl_lisp_new=>cons( io_car = lcl_lisp=>quote
+                                              io_cdr = lcl_lisp_new=>cons( io_car = <lo_list>->car ) ).
 
           lo_next = lo_next->cdr = lcl_lisp_new=>cons( io_car = lo_prev ).
           <lo_list> = <lo_list>->cdr.
@@ -4014,9 +4046,9 @@
     ENDMETHOD.                    "define
 
     METHOD parameters_to_symbols.
-*      The lambda receives its own local environment in which to execute,
-*      where parameters become symbols that are mapped to the corresponding arguments
-*      Assign each argument to its corresponding symbol in the newly created environment
+*     The lambda receives its own local environment in which to execute,
+*     where parameters become symbols that are mapped to the corresponding arguments
+*     Assign each argument to its corresponding symbol in the newly created environment
       DATA lv_count TYPE i.
 
       " they are 3 cases here

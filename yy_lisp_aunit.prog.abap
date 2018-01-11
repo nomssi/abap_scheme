@@ -385,6 +385,10 @@
        METHODS let_2 FOR TESTING.
        METHODS let_3 FOR TESTING.
 
+       METHODS named_let_1 FOR TESTING.
+       METHODS named_let_2 FOR TESTING.
+       METHODS named_let_3 FOR TESTING.
+
        METHODS letrec_1 FOR TESTING.
        METHODS letrec_2 FOR TESTING.
 
@@ -513,6 +517,47 @@
        code_test( code = |(let ((x 2) (x 0))| &
                          |    (+ x 5))|
                   expected = '5' ).
+     ENDMETHOD.
+
+     METHOD named_let_1.
+       code_test( code = |(define (number->list n)| &
+                         |  (let loop ((n n)| &
+                         |             (acc '()))| &
+                         |    (if (< n 10)| &
+                         |        (cons n acc)| &
+                         |        (loop (quotient n 10)| &
+                         |              (cons (remainder n 10) acc))))|
+                  expected = 'number->list' ).
+       code_test( code = |(number->list 239056)|
+                  expected = '( 2 3 9 0 5 6 )' ).
+     ENDMETHOD.
+
+     METHOD named_let_2.
+       code_test( code = |(let loop ((numbers '(3 -2 1 6 -5))| &
+                         |             (nonneg '())| &
+                         |             (neg '()))| &
+                         |  (cond ((null? numbers) (list nonneg neg))| &
+                         |           ((>= (car numbers) 0)| &
+                         |            (loop (cdr numbers)| &
+                         |                   (cons (car numbers) nonneg)| &
+                         |                   neg))| &
+                         |           ((< (car numbers) 0)| &
+                         |             (loop (cdr numbers)| &
+                         |                    nonneg| &
+                         |                    (cons (car numbers) neg)))))|
+                  expected = '( ( 6 1 3 ) ( -5 -2 ) )' ).
+     ENDMETHOD.
+
+     METHOD named_let_3. " from Racket Guide
+       code_test( code =  |(define (duplicate pos lst)| &
+                          |  (let dup ([i 0]| &
+                          |            [lst lst])| &
+                          |   (cond| &
+                          |    [(= i pos) (cons (car lst) lst)]| &
+                          |    [else (cons (car lst) (dup (+ i 1) (cdr lst)))])))|
+                  expected = 'duplicate' ).
+       code_test( code = |(duplicate 1 (list "apple" "cheese burger!" "banana"))|
+                  expected = |( "apple" "cheese burger!" "cheese burger!" "banana" )| ).
      ENDMETHOD.
 
      METHOD letrec_1.
@@ -2198,11 +2243,11 @@
      ENDMETHOD.
 
      METHOD map_5.
-       code_test( code = |(let ((count 0))| &
-                         |  (map (lambda (ignored)| &
-                         |         (set! count (+ count 1))| &
-                         |          count)| &
-                         |'(a b)))|
+       code_test( code = |(let ([count 0])| &
+                         |  (map [lambda (ignored)| &
+                         |         (set! count [+ count 1])| &
+                         |          count]| &
+                         |       '(a b) ))|
                   expected = |( 1 2 )| ).  " or ( 2 1 )
      ENDMETHOD.
 
