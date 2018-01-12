@@ -220,8 +220,7 @@
         type_native    TYPE tv_type VALUE 'P',
         type_primitive TYPE tv_type VALUE 'I',
         type_hash      TYPE tv_type VALUE 'H',
-        type_vector    TYPE tv_type VALUE 'V',
-        type_promise   TYPE tv_type VALUE 'Y'.
+        type_vector    TYPE tv_type VALUE 'V'.
 *      Types for ABAP integration:
       CONSTANTS:
         type_abap_data     TYPE tv_type VALUE 'D',
@@ -235,6 +234,7 @@
       DATA value TYPE string.
       DATA number TYPE decfloat34.
       DATA data TYPE REF TO data.            " for ABAP integration
+      DATA promise TYPE flag VALUE abap_false.
   ENDCLASS.
 
   CLASS lcl_lisp_iterator DEFINITION DEFERRED.
@@ -1927,7 +1927,13 @@
 *  or
 *  (else => <expression>).
 
-*        WHEN 'unless'.
+        WHEN 'unless'.
+          "  validate lr_tail->car, lr_tail->cdr. "I do not have a test case yet where it fails here
+          IF eval( element = lr_tail->car
+                   environment = environment  ) EQ false.
+            result = evaluate_list( io_head        = lr_tail->cdr
+                                    io_environment = environment ).
+          ENDIF.
 
         WHEN 'when'.
           "  validate lr_tail->car, lr_tail->cdr. "I do not have a test case yet where it fails here
