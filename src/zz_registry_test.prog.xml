@@ -3,34 +3,23 @@
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
    <PROGDIR>
-    <NAME>YY_LISP_IDE</NAME>
+    <NAME>ZZ_REGISTRY_TEST</NAME>
     <STATE>A</STATE>
     <VARCL>X</VARCL>
-    <SUBC>I</SUBC>
+    <SUBC>1</SUBC>
     <APPL>*</APPL>
     <RSTAT>K</RSTAT>
-    <RLOAD>D</RLOAD>
+    <RLOAD>E</RLOAD>
+    <FIXPT>X</FIXPT>
     <UCCHECK>X</UCCHECK>
    </PROGDIR>
    <TPOOL>
     <item>
      <ID>R</ID>
-     <ENTRY>Include YY_LISP_IDE</ENTRY>
-     <LENGTH>19</LENGTH>
+     <ENTRY>Program ZZ_REGISTRY_TEST</ENTRY>
+     <LENGTH>24</LENGTH>
     </item>
    </TPOOL>
-   <I18N_TPOOL>
-    <item>
-     <LANGUAGE>D</LANGUAGE>
-     <TEXTPOOL>
-      <item>
-       <ID>R</ID>
-       <ENTRY>Include YY_LISP_IDE</ENTRY>
-       <LENGTH>19</LENGTH>
-      </item>
-     </TEXTPOOL>
-    </item>
-   </I18N_TPOOL>
   </asx:values>
  </asx:abap>
 </abapGit>

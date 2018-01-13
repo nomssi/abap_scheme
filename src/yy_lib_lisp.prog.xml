@@ -20,12 +20,11 @@
    </TPOOL>
    <I18N_TPOOL>
     <item>
-     <LANGUAGE>E</LANGUAGE>
+     <LANGUAGE>D</LANGUAGE>
      <TEXTPOOL>
       <item>
        <ID>R</ID>
-       <ENTRY>Include YY_LIB_LISP</ENTRY>
-       <LENGTH>19</LENGTH>
+       <LENGTH>18</LENGTH>
       </item>
      </TEXTPOOL>
     </item>

@@ -252,11 +252,12 @@
 
       CLASS-METHODS class_constructor.
 
-      CLASS-DATA nil       TYPE REF TO  lcl_lisp READ-ONLY.
-      CLASS-DATA false     TYPE REF TO  lcl_lisp READ-ONLY.
-      CLASS-DATA true      TYPE REF TO  lcl_lisp READ-ONLY.
-      CLASS-DATA quote     TYPE REF TO  lcl_lisp READ-ONLY.
-      CLASS-DATA new_line  TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA nil        TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA false      TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA true       TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA quote      TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA quasiquote TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA new_line   TYPE REF TO  lcl_lisp READ-ONLY.
 
 *     Specifically for lambdas:
       DATA environment TYPE REF TO lcl_lisp_environment.
@@ -332,6 +333,9 @@
       CLASS-METHODS hash IMPORTING io_list        TYPE REF TO lcl_lisp
                          RETURNING VALUE(ro_hash) TYPE REF TO lcl_lisp_hash
                          RAISING   lcx_lisp_exception.
+
+      CLASS-METHODS quasiquote IMPORTING io_elem        TYPE REF TO lcl_lisp
+                               RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
 
       CLASS-METHODS quote IMPORTING io_elem        TYPE REF TO lcl_lisp
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
@@ -595,14 +599,17 @@
               RAISING   lcx_lisp_exception.
     PRIVATE SECTION.
       CONSTANTS:
-        c_escape_char  TYPE char1 VALUE '\',
-        c_text_quote   TYPE char1 VALUE '"',
-        c_lisp_quote   TYPE char1 VALUE '''', "LISP single quote = QUOTE
-        c_lisp_hash    TYPE char1 VALUE '#',
-        c_lisp_comment TYPE char1 VALUE ';',
-        c_open_bracket  TYPE char1 VALUE '[',
-        c_close_bracket TYPE char1 VALUE ']',
-        c_peek_dummy   TYPE char1 VALUE 'Ü'.
+        c_escape_char    TYPE char1 VALUE '\',
+        c_text_quote     TYPE char1 VALUE '"',
+        c_lisp_quote     TYPE char1 VALUE '''', "LISP single quote = QUOTE
+        c_lisp_backquote TYPE char1 VALUE '`',  " backquote = quasiquote
+        c_lisp_unquote   TYPE char1 VALUE ',',
+        c_lisp_splicing  TYPE char1 VALUE '@',
+        c_lisp_hash      TYPE char1 VALUE '#',
+        c_lisp_comment   TYPE char1 VALUE ';',
+        c_open_bracket   TYPE char1 VALUE '[',
+        c_close_bracket  TYPE char1 VALUE ']',
+        c_peek_dummy     TYPE char1 VALUE 'Ü'.
       DATA code TYPE string.
       DATA length TYPE i.
       DATA index TYPE i.
@@ -1145,6 +1152,11 @@
 * so that when it is evaluated later, it returns the quote elements unmodified
           next_char( ).            " Skip past single quote
           element = lcl_lisp_new=>quote( parse_token( ) ).
+          RETURN.
+
+        WHEN c_lisp_backquote.     " Quasiquote, TO DO
+          next_char( ).            " Skip past single quote
+          element = lcl_lisp_new=>quasiquote( parse_token( ) ).
           RETURN.
 
         WHEN c_text_quote.
@@ -1791,6 +1803,12 @@
         WHEN 'quote'. " Return the argument to quote unevaluated
           IF lr_tail->cdr NE nil.
             throw( |QUOTE can only take a single argument| ).
+          ENDIF.
+          result = lr_tail->car.
+
+        WHEN 'quasiquote'. " Partial quote - TO DO
+          IF lr_tail->cdr NE nil.
+            throw( |QUASIQUOTE can only take a single argument| ).
           ENDIF.
           result = lr_tail->car.
 
@@ -4141,6 +4159,7 @@
       false = lcl_lisp_new=>symbol( '#f' ).
       true = lcl_lisp_new=>symbol( '#t' ).
       quote = lcl_lisp_new=>symbol( 'quote' ).
+      quasiquote = lcl_lisp_new=>symbol( 'quasiquote' ).
       new_line = lcl_lisp_new=>string( |\n| ).
     ENDMETHOD.                    "class_constructor
 
@@ -4388,6 +4407,12 @@
 
     METHOD quote.
       ro_elem = cons( io_car = lcl_lisp=>quote
+                      io_cdr = cons( io_car = io_elem )  ).
+      ro_elem->cdr->mutable = abap_false.
+    ENDMETHOD.
+
+    METHOD quasiquote.
+      ro_elem = cons( io_car = lcl_lisp=>quasiquote
                       io_cdr = cons( io_car = io_elem )  ).
       ro_elem->cdr->mutable = abap_false.
     ENDMETHOD.
