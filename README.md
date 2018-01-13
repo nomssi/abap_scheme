@@ -54,9 +54,9 @@ The result on the expression either `#t` or `#f`.
 #### Function Module Call
     (let (( profiles
       (let ( (f3 (ab-function "BAPI_USER_GET_DETAIL"))  )  
-        ( begin (ab-set f3 "USERNAME" (ab-get ab-sy "UNAME") )
-                  (f3)                             ; function module call
-                  (ab-get f3 "PROFILES")  ) )      ; return table PROFILES
+        ( begin (ab-set f3 "USERNAME" (ab-get ab-sy "UNAME") )  ; param USERNAME = sy-uname
+                  (f3)                                          ; function module call
+                  (ab-get f3 "PROFILES")  ) )                   ; return table PROFILES
         ) )
      (let ((profile (ab-get profiles 1)) )         ; read table PROFILES index 1 INTO profile 
                 (ab-get profile "BAPIPROF" )  )    ; read field profile-bapiprof
