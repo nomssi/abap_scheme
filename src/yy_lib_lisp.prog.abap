@@ -239,6 +239,8 @@
 
   CLASS lcl_lisp_iterator DEFINITION DEFERRED.
   CLASS lcl_lisp_new DEFINITION DEFERRED.
+  CLASS lcl_lisp_interpreter DEFINITION DEFERRED.
+
 * Single element that will capture cons cells, atoms etc.
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp DEFINITION
@@ -276,6 +278,12 @@
       METHODS append IMPORTING io_elem        TYPE REF TO lcl_lisp
                      RETURNING VALUE(ro_last) TYPE REF TO lcl_lisp
                      RAISING   lcx_lisp_exception.
+
+     METHODS is_equal IMPORTING io_elem       TYPE REF TO lcl_lisp
+                                comp          TYPE REF TO lcl_lisp DEFAULT nil
+                                interpreter   TYPE REF TO lcl_lisp_interpreter OPTIONAL
+                      RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                      RAISING   lcx_lisp_exception.
 
       METHODS error_not_a_list IMPORTING context TYPE string DEFAULT space
                                RAISING   lcx_lisp_exception.
@@ -469,6 +477,7 @@
       METHODS length RETURNING VALUE(ro_length) TYPE REF TO lcl_lisp.
 
       METHODS to_string REDEFINITION.
+      METHODS is_equal REDEFINITION.
 
     PROTECTED SECTION.
       DATA vector TYPE tt_lisp.
@@ -855,11 +864,7 @@
                                          b             TYPE REF TO lcl_lisp
                                RETURNING VALUE(result) TYPE REF TO lcl_lisp
                                RAISING   lcx_lisp_exception.
-      METHODS proc_compare IMPORTING a             TYPE REF TO lcl_lisp
-                                     b             TYPE REF TO lcl_lisp
-                                     comp          TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
-                           RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                           RAISING   lcx_lisp_exception.
+
       METHODS create_element_from_data
         IMPORTING ir_data       TYPE REF TO data
         RETURNING VALUE(result) TYPE REF TO lcl_lisp.
@@ -941,11 +946,6 @@
                                        io_env        TYPE REF TO lcl_lisp_environment
                              RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
                              RAISING   lcx_lisp_exception.
-
-      METHODS eval_element IMPORTING element       TYPE REF TO lcl_lisp
-                                     environment   TYPE REF TO lcl_lisp_environment
-                           RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                           RAISING   lcx_lisp_exception.
 
       METHODS apply IMPORTING element       TYPE REF TO lcl_lisp
                               environment   TYPE REF TO lcl_lisp_environment
@@ -1113,6 +1113,7 @@
 
     METHOD match_string.
       DATA pchar TYPE char1.
+*     " is included in a string as \"
 
       next_char( ).                 " Skip past opening quote
       WHILE index < length AND NOT ( char = c_text_quote AND pchar NE c_escape_char ).
@@ -1549,14 +1550,14 @@
     ENDMETHOD.                    "eval_function
 
     METHOD execute.
-*      Take the first item of the evaluated list and call it as function
-*      using the rest of the evaluated list as its arguments.
+*     Take the first item of the evaluated list and call it as function
+*     using the rest of the evaluated list as its arguments.
 
       CASE io_head->type.
 
         WHEN lcl_lisp=>type_native.
-*--        NATIVE FUNCTION
-*          Evaluate native function:
+*--       NATIVE FUNCTION
+*         Evaluate native function:
           CALL METHOD (io_head->value)
             EXPORTING
               list   = evaluate_parameters( io_list = io_args
@@ -1757,40 +1758,36 @@
       validate element.
 
       CASE element.
-*        Return predefined symbols as themselves to save having to look them up in the environment
         WHEN nil OR true OR false.
+*         Return predefined symbols as themselves to save having to look them up in the environment
           result = element.
 
         WHEN OTHERS.
-          result = eval_element( element = element
-                                 environment = environment ).
-      ENDCASE.
+*         Evaluate element
+          CASE element->type.
+            WHEN lcl_lisp=>type_symbol. "Symbol
+*             lookup the symbol in the environment and return the value or raise an error if no value is found
+              result = environment->get( element->value ).
 
-    ENDMETHOD.
+            WHEN lcl_lisp=>type_conscell. "Cons Cell = List
+*             list: return a new list that is the result of calling EVAL on each of the members of the list
+              result = apply( element = element
+                              environment = environment ).
 
-    METHOD eval_element.
-      CASE element->type.
-        WHEN lcl_lisp=>type_symbol. "Symbol
-*          lookup the symbol in the environment and return the value or raise an error if no value is found
-          result = environment->get( element->value ).
+            WHEN lcl_lisp=>type_hash. " TEST
+              result = lcl_lisp_new=>hash( eval( element = CAST lcl_lisp_hash( element )->get( element )
+                                                 environment = environment ) ).
 
-*        list: return a new list that is the result of calling EVAL on each of the members of the list
-        WHEN lcl_lisp=>type_conscell. "Cons Cell = List
-          result = apply( element = element
-                          environment = environment ).
+*            otherwise just return the original AST value
+            WHEN OTHERS.
+              result = element.  "Number or string evaluates to itself (also: vector constant)
 
-        WHEN lcl_lisp=>type_hash.
-*>>> TEST
-          result = lcl_lisp_new=>hash( eval( element = CAST lcl_lisp_hash( element )->get( element )
-                                             environment = environment ) ).
-*<<< TEST
-*        otherwise just return the original AST value
-        WHEN OTHERS.
-          result = element.  "Number or string evaluates to itself (also: vector constant)
+          ENDCASE.
+
+          assert_is_bound result c_error_eval.
 
       ENDCASE.
 
-      assert_is_bound result c_error_eval.
     ENDMETHOD.
 
     METHOD apply.
@@ -1878,6 +1875,8 @@
                            environment = environment ).
           ENDIF.
 
+* BEGIN candidate list of TAIL CALL replacement via list ------------ *
+* The last step is evaluate_list( )
         WHEN 'begin'.
           result = evaluate_list( io_head = lr_tail
                                   io_environment = environment ).
@@ -1911,7 +1910,7 @@
           result = evaluate_list( io_head = lr_tail->cdr
                                   io_environment = init_let_star( io_head = lr_tail->car
                                                                   io_env = environment ) ).
-
+* END candidate list of TAIL CALL replacement via list ------------ *
         WHEN 'lambda'.
           result = lcl_lisp_new=>lambda( io_car = lr_tail->car         " List of parameters
                                          io_cdr = lr_tail->cdr         " Body
@@ -2414,11 +2413,14 @@
       validate_number list->cdr->car 'list-tail'.
 
       result = list->car.
-      DO list->cdr->car->number TIMES.
+      DATA(index) = CONV i( list->cdr->car->number ).
+      DO index TIMES.
         IF result->cdr EQ nil.
-          throw( `Error list-tail - list too short` ).
+          throw( `list-tail: list too short` ).
         ENDIF.
         result = result->cdr.
+        CHECK result IS NOT BOUND.
+        throw( |list-tail: index { index } reaches a non-pair| ).
       ENDDO.
     ENDMETHOD.
 
@@ -2436,11 +2438,14 @@
       validate_number list->cdr->car 'list-ref'.
 
       result = list->car.
-      DO list->cdr->car->number TIMES.
+      DATA(index) = CONV i( list->cdr->car->number ).
+      DO index TIMES.
         IF result->cdr EQ nil.
-          throw( `Error list-ref - list too short` ).
+          throw( `list-ref: list too short` ).
         ENDIF.
         result = result->cdr.
+        CHECK result IS NOT BOUND.
+        throw( |list-ref: index { index } reaches a non-pair| ).
       ENDDO.
       result = result->car.
     ENDMETHOD.
@@ -2449,19 +2454,19 @@
       validate: list, list->cdr.
 
       DATA(lo_size) = list->car.
-      validate_integer lo_size `make-vector`.
+
+"      validate_integer lo_size `make-vector`.
+      TRY.
+          DATA(lv_length) = EXACT sytabix( lo_size->number ).
+        CATCH cx_sy_conversion_error.
+          throw( |make-vector: { lo_size->to_string( ) } is not an integer | ).
+      ENDTRY.
 
       IF list->cdr NE lcl_lisp=>nil.
         DATA(lo_fill) = list->cdr->car.
       ELSE.
         lo_fill = lcl_lisp=>nil.
       ENDIF.
-
-      TRY.
-          DATA(lv_length) = EXACT sytabix( lo_size->number ).
-        CATCH cx_sy_conversion_error.
-          throw( |make-vector: { lo_size->to_string( ) } is not integer | ).
-      ENDTRY.
 
       result = lcl_lisp_vector=>init( size = lv_length
                                       io_fill = lo_fill ).
@@ -2488,7 +2493,7 @@
 
       validate: list->cdr.
       DATA(lo_idx) = list->cdr->car.
-      validate_number lo_idx 'vector-ref'.
+"      validate_number lo_idx 'vector-ref'.
 
       TRY.
           DATA(lv_from) = EXACT sytabix( lo_idx->number ).
@@ -2547,7 +2552,7 @@
       validate: list->cdr.
       IF list->cdr NE nil.
         DATA(lo_start) = list->cdr->car.
-        validate_number lo_start 'vector->list start'.
+"        validate_number lo_start 'vector->list start'.
 
         TRY.
             lv_start = EXACT sytabix( lo_start->number ).
@@ -2558,7 +2563,7 @@
         validate list->cdr->cdr.
         IF list->cdr->cdr NE nil.
           DATA(lo_end) = list->cdr->cdr->car.
-          validate_number lo_end 'vector->list end'.
+ "         validate_number lo_end 'vector->list end'.
 
           TRY.
               DATA(lv_end) = EXACT sytabix( lo_end->number ).
@@ -2599,7 +2604,7 @@
 *        ((eq? item (car x)) x)
 *        (else (memq item (cdr x)))))
     METHOD proc_memq.
-      validate: list, list->cdr.
+      validate: list, list->car, list->cdr.
 
       result = false.
 
@@ -2634,7 +2639,7 @@
     ENDMETHOD.
 
     METHOD proc_memv.
-      validate: list, list->cdr.
+      validate: list, list->car, list->cdr.
 
       result = false.
 
@@ -2651,7 +2656,7 @@
     ENDMETHOD.
 
     METHOD proc_member.
-      validate: list, list->cdr.
+      validate: list, list->car, list->cdr.
 
       result = false.
 
@@ -2660,9 +2665,9 @@
       DATA(lo_item) = list->car.
 
       WHILE lo_sublist NE nil.
-        IF proc_compare( a = lo_sublist->car
-                         b = lo_item
-                         comp = lo_compare ) NE false.
+        IF lo_item->is_equal( io_elem = lo_sublist->car
+                              comp = lo_compare
+                              interpreter = me ) NE false.
           result = lo_sublist.
           RETURN.
         ENDIF.
@@ -2676,7 +2681,7 @@
 * Assq uses eq? to compare obj with the car fields of the pairs in alist, while
 * assv uses eqv? and assoc uses equal?
     METHOD proc_assq.
-      validate: list, list->cdr.
+      validate: list, list->car, list->cdr.
 
       result = false.
 
@@ -2713,7 +2718,7 @@
     ENDMETHOD.
 
     METHOD proc_assv.
-      validate: list, list->cdr.
+      validate: list, list->car, list->cdr.
 
       result = false.
 
@@ -2731,7 +2736,7 @@
     ENDMETHOD.
 
     METHOD proc_assoc.
-      validate: list, list->cdr.
+      validate: list, list->car, list->cdr.
 
       result = false.
 
@@ -2739,8 +2744,7 @@
       DATA(lo_key) = list->car.
       WHILE lo_sublist NE nil.
         DATA(lo_pair) = lo_sublist->car.
-        IF proc_compare( a = lo_pair->car
-                         b = lo_key ) NE false.
+        IF lo_key->is_equal( lo_pair->car ) NE false.
           result = lo_pair.
           RETURN.
         ENDIF.
@@ -2960,39 +2964,6 @@
       result = true.
     ENDMETHOD.
 
-    METHOD proc_compare.
-      validate: a, b.
-
-      IF comp NE nil.
-        DATA(lo_arg) = lcl_lisp_new=>cons( io_car = b ).
-        result = execute( io_head = comp
-                          io_args = lcl_lisp_new=>cons( io_car = a
-                                                        io_cdr = lo_arg  )
-                          environment = comp->environment ).
-        RETURN.
-      ENDIF.
-
-      result = false.
-      CHECK a->type EQ b->type.
-
-      CASE a->type.
-        WHEN lcl_lisp=>type_number.
-          CHECK a->number = b->number.
-
-        WHEN lcl_lisp=>type_symbol OR lcl_lisp=>type_string.
-          CHECK a->value = b->value.
-
-        WHEN lcl_lisp=>type_conscell OR lcl_lisp=>type_lambda.
-          CHECK proc_compare( a = a->car
-                              b = b->car ) NE false
-            AND proc_compare( a = a->cdr
-                              b = b->cdr ) NE false.
-        WHEN OTHERS.
-          CHECK a = b.
-      ENDCASE.
-      result = true.
-    ENDMETHOD.
-
     METHOD proc_equal.
       validate: list, list->car.
       result = false.
@@ -3000,11 +2971,11 @@
 
       WHILE lo_ptr->cdr NE nil.
         DATA(lo_next) = lo_ptr->cdr->car.
+        validate lo_next.
 
-        result = proc_compare( a = lo_next
-                               b = lo_ptr->car ).
+        result = lo_next->is_equal( lo_ptr->car ).
         IF result EQ false.
-          EXIT.
+          RETURN.
         ENDIF.
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
@@ -4180,6 +4151,40 @@
       ENDIF.
     ENDMETHOD.
 
+    METHOD is_equal.
+      validate: io_elem.
+
+      IF comp NE nil.
+        DATA(lo_arg) = lcl_lisp_new=>cons( io_car = me
+                                           io_cdr = lcl_lisp_new=>cons( io_car = io_elem ) ).
+        DATA(lo_head) = lcl_lisp_new=>cons( io_car = comp
+                                            io_cdr = lo_arg ).
+
+        result = interpreter->eval( element = lo_head
+                                    environment = comp->environment ).
+        RETURN.
+      ENDIF.
+
+      result = false.
+      CHECK type EQ io_elem->type.
+
+      CASE type.
+        WHEN lcl_lisp=>type_number.
+          CHECK number = io_elem->number.
+
+        WHEN lcl_lisp=>type_symbol OR lcl_lisp=>type_string.
+          CHECK value = io_elem->value.
+
+        WHEN lcl_lisp=>type_conscell OR lcl_lisp=>type_lambda.
+          CHECK car->is_equal( io_elem->car ) NE false
+            AND cdr->is_equal( io_elem->cdr ) NE false.
+
+        WHEN OTHERS.
+
+      ENDCASE.
+      result = true.
+    ENDMETHOD.
+
     METHOD append.
       IF type NE type_conscell.
         throw( `Cannot append` ).
@@ -4622,6 +4627,26 @@
 
     METHOD to_string.
       str = |#{ to_list( )->to_string( ) }|.
+    ENDMETHOD.
+
+    METHOD is_equal.
+      result = super->is_equal( io_elem ).
+
+      CHECK result EQ true.
+      result = false.
+
+      CHECK io_elem->type EQ type_vector.
+
+      DATA(vec) = CAST lcl_lisp_vector( io_elem ).
+      CHECK lines( vector ) = lines( vec->vector ).
+
+      LOOP AT vec->vector INTO DATA(lo_elem).
+        CHECK vector[ sy-tabix ]->is_equal( io_elem = lo_elem
+                                            comp = comp
+                                            interpreter = interpreter ) EQ false.
+        RETURN.
+      ENDLOOP.
+      result = true.
     ENDMETHOD.
 
   ENDCLASS.
