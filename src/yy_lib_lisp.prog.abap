@@ -285,11 +285,6 @@
       METHODS rest RETURNING VALUE(ro_cdr) TYPE REF TO lcl_lisp.
       METHODS new_iterator RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_iterator
                            RAISING   lcx_lisp_exception.
-      METHODS prepend IMPORTING io_elem         TYPE REF TO lcl_lisp
-                      RETURNING VALUE(ro_first) TYPE REF TO lcl_lisp.
-      METHODS append IMPORTING io_elem        TYPE REF TO lcl_lisp
-                     RETURNING VALUE(ro_last) TYPE REF TO lcl_lisp
-                     RAISING   lcx_lisp_exception.
 
       METHODS is_equal IMPORTING io_elem       TYPE REF TO lcl_lisp
                                  comp          TYPE REF TO lcl_lisp DEFAULT nil
@@ -1224,11 +1219,12 @@
       env->set( symbol = '#t' element = true ).
 
 *     Add primitive functions to environment
-      env->define_value( symbol = 'define'   type = lcl_lisp=>type_primitive value   = 'define' ).
-      env->define_value( symbol = 'lambda'   type = lcl_lisp=>type_primitive value   = 'lambda' ).
-      env->define_value( symbol = 'if'       type = lcl_lisp=>type_primitive value   = 'if' ).
-      env->define_value( symbol = 'quote'    type = lcl_lisp=>type_primitive value   = 'quote' ).
-      env->define_value( symbol = 'set!'     type = lcl_lisp=>type_primitive value   = 'if' ).
+      env->define_value( symbol = 'define'     type = lcl_lisp=>type_primitive value   = 'define' ).
+      env->define_value( symbol = 'lambda'     type = lcl_lisp=>type_primitive value   = 'lambda' ).
+      env->define_value( symbol = 'if'         type = lcl_lisp=>type_primitive value   = 'if' ).
+      env->define_value( symbol = 'quote'      type = lcl_lisp=>type_primitive value   = 'quote' ).
+      env->define_value( symbol = 'quasiquote' type = lcl_lisp=>type_primitive value   = 'quasiquote' ).
+      env->define_value( symbol = 'set!'       type = lcl_lisp=>type_primitive value   = 'if' ).
 
 *     Add native functions to environment
       env->define_value( symbol = '+'        type = lcl_lisp=>type_native value   = 'PROC_ADD' ).
@@ -1867,6 +1863,8 @@
                       throw( |QUASIQUOTE can only take a single argument| ).
                     ENDIF.
                     result = lr_tail->car.
+
+*                  WHEN 'unquote'. " Partial quote - TO DO
 
                   WHEN 'newline'.
                     result = write( lcl_lisp=>new_line ).
@@ -4295,15 +4293,6 @@
       ro_cdr = COND #( WHEN cdr IS BOUND THEN cdr ELSE nil ).
     ENDMETHOD.                    "rest
 
-    METHOD prepend.
-      IF me = nil.
-        ro_first = io_elem.
-      ELSE.
-        ro_first = lcl_lisp_new=>cons( io_car = io_elem
-                                       io_cdr = me ).
-      ENDIF.
-    ENDMETHOD.
-
     METHOD is_equal.
       validate: io_elem.
 
@@ -4336,13 +4325,6 @@
 
       ENDCASE.
       result = true.
-    ENDMETHOD.
-
-    METHOD append.
-      IF type NE type_conscell.
-        throw( `Cannot append` ).
-      ENDIF.
-      ro_last = cdr = lcl_lisp_new=>cons( io_car = io_elem ).
     ENDMETHOD.
 
     METHOD new_iterator.
