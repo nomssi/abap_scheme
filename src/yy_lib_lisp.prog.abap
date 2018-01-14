@@ -1,16 +1,17 @@
 *&---------------------------------------------------------------------*
 *&  Include           YY_LIB_LISP
+*& https://github.com/nomssi/abap_scheme
 *& https://github.com/mydoghasworms/abap-lisp
 *& Lisp interpreter written in ABAP
 *& Copy and paste this code into a type I (include) program
 *&---------------------------------------------------------------------*
-*& Martin Ceronio, martin.ceronio@infosize.co.za
-*& June 2015
 *& MIT License (see below)
-*& Updated by Jacques Nomssi Nzali, www.informatik-dv.com Sept. 2015
+*& Martin Ceronio, martin.ceronio@infosize.co.za June 2015
+*& Jacques Nomssi Nzali, www.informatik-dv.com Sept. 2015 to Jan. 2018
 *&---------------------------------------------------------------------*
 *  The MIT License (MIT)
 *
+*  Copyright (c) 2018 Jacques Nomssi Nzali
 *  Copyright (c) 2015 Martin Ceronio
 *
 *  Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -81,6 +82,17 @@
     ENDIF.
   END-OF-DEFINITION.
 
+  DEFINE error_no_list.
+    throw( |{ &2 }: { &1->to_string( ) } is not a proper list| ).
+  END-OF-DEFINITION.
+
+  DEFINE validate_tail.
+    IF &1 NE nil.
+*     if the last element in the list is not a cons cell, we cannot append
+      error_no_list &2 &3.
+    ENDIF.
+  END-OF-DEFINITION.
+
 * Macro that implements the logic for the comparison native
 * procedures, where only the comparison operator differs
   DEFINE _comparison.
@@ -128,7 +140,7 @@
 
   DEFINE _catch_arithmetic_error.
     CATCH cx_sy_arithmetic_error INTO DATA(lx_error).
-    throw( lx_error->get_text( ) ).
+      throw( lx_error->get_text( ) ).
   END-OF-DEFINITION.
 
 * Macro that implements the logic for call of ABAP math statements
@@ -1423,9 +1435,7 @@
 
       ENDWHILE.
 
-      IF elem NE nil.
-        lcl_lisp=>throw( |{ io_list->to_string( ) } is not a proper list| ).
-      ENDIF.
+      validate_tail elem io_list ``.
 
     ENDMETHOD.                    "evaluate_parameters
 
@@ -1539,23 +1549,20 @@
     ENDMETHOD.
 
     METHOD eval_list_tco.
-*     do not evaluate the last list element, use TCO for it
+*     Tail Call Optimization, use eval LOOP for the last evaluation step
       validate io_head.
       result = nil.
 
       eo_elem = io_head.
       WHILE eo_elem IS BOUND AND eo_elem->type EQ lcl_lisp=>type_conscell
-        AND eo_elem->cdr NE nil.
+        AND eo_elem->cdr NE nil.  " Do not evaluate the last list element
 
         result = eval_ast( element = eo_elem->car
                            environment = io_environment ).
         eo_elem = eo_elem->cdr.
       ENDWHILE.
 
-      IF eo_elem->cdr NE nil.
-*       if the last element in the list is not a cons cell, we cannot append
-        throw( |{ io_head->to_string( ) } is not a proper list| ).
-      ENDIF.
+      validate_tail eo_elem->cdr io_head  ``.
     ENDMETHOD.
 
     METHOD eval_list.
@@ -1570,10 +1577,7 @@
         elem = elem->cdr.
       ENDWHILE.
 
-      IF elem NE nil.
-*       if the last element in the list is not a cons cell, we cannot append
-        throw( |{ io_head->to_string( ) } is not a proper list| ).
-      ENDIF.
+      validate_tail elem io_head  ``.
     ENDMETHOD.
 
     METHOD eval_function.
@@ -2221,9 +2225,7 @@
 *     Append next list
       WHILE lo_iter->has_next( ).
 
-        IF lo_arg NE nil.
-          throw( |append: { first->to_string( ) } is not a proper list| ).
-        ENDIF.
+        validate_tail lo_arg first `append`.
 
         first = lo_arg = lo_iter->next( ).
         CHECK first NE nil.
@@ -2321,12 +2323,13 @@
           lo_last = lo_last->cdr.
         ENDWHILE.
 
+        "TO DO - replace with validate_tail lo_last (?) list->car.
         IF lo_last->type NE lcl_lisp=>type_conscell.
-*          If the last item is not a cons cell, return an error
-          throw( |{ list->car->to_string( ) } is not a proper list| ).
+*         If the last item is not a cons cell, return an error
+          error_no_list list->car  `append!`.
         ENDIF.
 
-*        Last item is a cons cell; tack on the new value
+*       Last item is a cons cell; tack on the new value
         lo_last->cdr = list->cdr->car.
         result = list->car.
       ENDIF.
@@ -2476,7 +2479,7 @@
     METHOD proc_length.
       validate: list, list->cdr.
       IF list->cdr NE nil.
-        throw( |LIST takes only one argument| ).
+        throw( |length takes only one argument| ).
       ENDIF.
 
       result = lcl_lisp_new=>number( 0 ).
@@ -2492,7 +2495,7 @@
       CHECK lo_elem->type NE lcl_lisp=>type_conscell
         AND list->car->type NE lcl_lisp=>type_conscell.
 *      If the last item is not a cons cell, return an error
-      throw( |{ list->car->to_string( ) } is not a proper list| ).
+      error_no_list list->car `length`.
     ENDMETHOD.                    "proc_length
 
     METHOD proc_list.
@@ -3125,7 +3128,7 @@
         result = proc_equivalence( a = lo_next
                                    b = lo_ptr->car ).
         IF result EQ false.
-          EXIT.
+          RETURN.
         ENDIF.
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
@@ -3560,12 +3563,30 @@
 
 **********************************************************************
     METHOD proc_abap_append_row.
+      validate: list, list->car.
+      DATA(lo_ref) = list->car.
+      IF lo_ref->type NE lcl_lisp=>type_abap_table.
+        throw( |ab-append-row requires ABAP table as parameter| ).
+      ENDIF.
+      throw( `ab-append-row not implemented yet` ).
     ENDMETHOD.                    "proc_abap_append_row
 
     METHOD proc_abap_delete_row.
+      validate: list, list->car.
+      DATA(lo_ref) = list->car.
+      IF lo_ref->type NE lcl_lisp=>type_abap_table.
+        throw( |ab-delete-row requires ABAP table as parameter| ).
+      ENDIF.
+      throw( `ab-delete-row not implemented yet` ).
     ENDMETHOD.                    "proc_abap_delete_row
 
     METHOD proc_abap_get_row.
+      validate: list, list->car.
+      DATA(lo_ref) = list->car.
+      IF lo_ref->type NE lcl_lisp=>type_abap_table.
+        throw( |ab-get-row requires ABAP table as parameter| ).
+      ENDIF.
+      throw( `ab-get-row not implemented yet` ).
     ENDMETHOD.                    "proc_abap_get_row
 
 **********************************************************************
