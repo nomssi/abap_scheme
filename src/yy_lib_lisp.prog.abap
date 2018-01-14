@@ -907,6 +907,12 @@
                         RETURNING VALUE(result)  TYPE REF TO lcl_lisp
                         RAISING   lcx_lisp_exception.
 
+      METHODS eval_list_tco IMPORTING VALUE(io_head) TYPE REF TO lcl_lisp
+                                      io_environment TYPE REF TO lcl_lisp_environment
+                            EXPORTING eo_elem        TYPE REF TO lcl_lisp
+                            RETURNING VALUE(result)  TYPE REF TO lcl_lisp
+                            RAISING   lcx_lisp_exception.
+
       METHODS eval_function IMPORTING io_head       TYPE REF TO lcl_lisp
                                       io_args       TYPE REF TO lcl_lisp
                                       environment   TYPE REF TO lcl_lisp_environment
@@ -1402,16 +1408,25 @@
       ro_head = nil.
       CHECK io_list NE nil AND io_list->car NE nil.
 
-      DATA(lo_iter) = io_list->new_iterator( ).
-      WHILE lo_iter->has_next( ).
-        IF lo_iter->first EQ abap_true.
-          lo_arg = ro_head = lcl_lisp_new=>cons( io_car = eval( element = lo_iter->next( )
-                                                                environment = environment ) ).
+      DATA(elem) = io_list.
+      WHILE elem IS BOUND AND elem->type EQ lcl_lisp=>type_conscell.
+
+        DATA(lo_next) = lcl_lisp_new=>cons( io_car = eval( element = elem->car
+                                                           environment = environment ) ).
+        elem = elem->cdr.
+
+        IF ro_head EQ nil.
+          lo_arg = ro_head = lo_next.
         ELSE.
-          lo_arg = lo_arg->cdr = lcl_lisp_new=>cons( io_car = eval( element = lo_iter->next( )
-                                                                    environment = environment ) ).
+          lo_arg = lo_arg->cdr = lo_next.
         ENDIF.
+
       ENDWHILE.
+
+      IF elem NE nil.
+        lcl_lisp=>throw( |{ io_list->to_string( ) } is not a proper list| ).
+      ENDIF.
+
     ENDMETHOD.                    "evaluate_parameters
 
     METHOD evaluate_apply.
@@ -1523,29 +1538,42 @@
       ENDWHILE.
     ENDMETHOD.
 
-    METHOD eval_list. " evaluate_list( )
+    METHOD eval_list_tco.
+*     do not evaluate the last list element, use TCO for it
+      validate io_head.
+      result = nil.
+
+      eo_elem = io_head.
+      WHILE eo_elem IS BOUND AND eo_elem->type EQ lcl_lisp=>type_conscell
+        AND eo_elem->cdr NE nil.
+
+        result = eval_ast( element = eo_elem->car
+                           environment = io_environment ).
+        eo_elem = eo_elem->cdr.
+      ENDWHILE.
+
+      IF eo_elem->cdr NE nil.
+*       if the last element in the list is not a cons cell, we cannot append
+        throw( |{ io_head->to_string( ) } is not a proper list| ).
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD eval_list.
       validate io_head.
       result = nil.
 
       DATA(elem) = io_head.
+      WHILE elem IS BOUND AND elem->type EQ lcl_lisp=>type_conscell.
 
-*     First
-      IF elem NE nil.
         result = eval_ast( element = elem->car
                            environment = io_environment ).
-      ENDIF.
-
-*     if the last element in the list is not a cons cell, we cannot append
-      WHILE elem NE nil AND elem->cdr IS BOUND AND elem->cdr NE nil.
-
-        IF elem->cdr->type NE lcl_lisp=>type_conscell.
-          throw( |{ elem->to_string( ) } is not a proper list| ).
-        ENDIF.
         elem = elem->cdr.
-
-        result = eval_ast( element = elem->car
-                           environment = io_environment ).
       ENDWHILE.
+
+      IF elem NE nil.
+*       if the last element in the list is not a cons cell, we cannot append
+        throw( |{ io_head->to_string( ) } is not a proper list| ).
+      ENDIF.
     ENDMETHOD.
 
     METHOD eval_function.
@@ -1851,8 +1879,8 @@
                     result = true.
                     DATA(lo_ptr) = lr_tail.
                     WHILE lo_ptr IS BOUND AND lo_ptr NE nil AND result NE false.
-                      result = eval( element = lo_ptr->car
-                                     environment = lo_env ).
+                      result = eval_ast( element = lo_ptr->car
+                                         environment = lo_env ).
                       lo_ptr = lo_ptr->cdr.
                     ENDWHILE.
 
@@ -1860,24 +1888,36 @@
                     result = false.
                     lo_ptr = lr_tail.
                     WHILE lo_ptr IS BOUND AND lo_ptr NE nil AND result EQ false.
-                      result = eval( element = lo_ptr->car
-                                     environment = lo_env ).
+                      result = eval_ast( element = lo_ptr->car
+                                         environment = lo_env ).
                       lo_ptr = lo_ptr->cdr.
                     ENDWHILE.
 
                   WHEN 'cond'.
                     lo_ptr = lr_tail.
+                    lo_elem = nil.
                     WHILE lo_ptr NE nil.
                       DATA(lo_clause) = lo_ptr->car.
                       IF lo_clause->car->value EQ 'else'
                         OR eval( element = lo_clause->car
                                  environment = lo_env ) NE false.
-                        result = eval_list( io_head = lo_clause->cdr
-                                            io_environment = lo_env ).
+                        lo_elem = lo_clause->cdr.
                         EXIT.
                       ENDIF.
                       lo_ptr = lo_ptr->cdr.
                     ENDWHILE.
+                    IF lo_elem NE nil.
+*                     result = eval_list( io_head = lo_clause->cdr
+*                                         io_environment = lo_env ).
+
+                      result = eval_list_tco( EXPORTING io_head = lo_elem
+                                                        io_environment = lo_env
+                                              IMPORTING eo_elem = lo_elem ).
+                      IF lo_elem NE nil.
+                        lo_elem = lo_elem->car.
+                        CONTINUE.
+                      ENDIF.
+                    ENDIF.
 
                   WHEN 'define'.
 *           call the set method of the current environment using the unevaluated first parameter
@@ -1913,45 +1953,85 @@
 
                   WHEN 'begin'.
                     lo_elem = lr_tail.
-                    result = eval_list( io_head = lo_elem
-                                        io_environment = lo_env ).
+*                    result = eval_list( io_head = lo_elem
+*                                        io_environment = lo_env ).
+                    result = eval_list_tco( EXPORTING io_head = lo_elem
+                                                      io_environment = lo_env
+                                            IMPORTING eo_elem = lo_elem ).
+                    IF lo_elem NE nil.
+                      lo_elem = lo_elem->car.
+                      CONTINUE.
+                    ENDIF.
 
                   WHEN 'let'.
                     lo_env = init_named_let( EXPORTING io_env = lo_env
                                              CHANGING co_head = lr_tail ).
                     lo_elem = lr_tail->cdr.
-                    result = eval_list( io_head = lo_elem
-                                        io_environment = lo_env ).
+                    result = eval_list_tco( EXPORTING io_head = lo_elem
+                                                      io_environment = lo_env
+                                            IMPORTING eo_elem = lo_elem ).
+                    IF lo_elem NE nil.
+                      lo_elem = lo_elem->car.
+                      CONTINUE.
+                    ENDIF.
 
                   WHEN 'let*'.
                     lo_env = init_let_star( io_head = lr_tail->car
                                             io_env = lo_env ).
                     lo_elem = lr_tail->cdr.
-                    result = eval_list( io_head = lo_elem
-                                        io_environment = lo_env ).
+*                    result = eval_list( io_head = lo_elem
+*                                        io_environment = lo_env ).
+                    result = eval_list_tco( EXPORTING io_head = lo_elem
+                                                      io_environment = lo_env
+                                            IMPORTING eo_elem = lo_elem ).
+                    IF lo_elem NE nil.
+                      lo_elem = lo_elem->car.
+                      CONTINUE.
+                    ENDIF.
 
                   WHEN 'letrec'.
 *                   (letrec ((a 5) (b (+ a 3)) b)
                     lo_env = init_letrec( io_head = lr_tail->car
                                           io_env = lo_env ).
                     lo_elem = lr_tail->cdr.
-                    result = eval_list( io_head = lo_elem
-                                        io_environment = lo_env ).
+*                    result = eval_list( io_head = lo_elem
+*                                        io_environment = lo_env ).
+                    result = eval_list_tco( EXPORTING io_head = lo_elem
+                                                      io_environment = lo_env
+                                            IMPORTING eo_elem = lo_elem ).
+                    IF lo_elem NE nil.
+                      lo_elem = lo_elem->car.
+                      CONTINUE.
+                    ENDIF.
 
                   WHEN 'letrec*'.
                     lo_env = init_letrec_star( io_head = lr_tail->car
                                                io_env = lo_env ).
                     lo_elem = lr_tail->cdr.
-                    result = eval_list( io_head = lo_elem
-                                        io_environment = lo_env ).
+*                    result = eval_list( io_head = lo_elem
+*                                        io_environment = lo_env ).
+                    result = eval_list_tco( EXPORTING io_head = lo_elem
+                                                      io_environment = lo_env
+                                            IMPORTING eo_elem = lo_elem ).
+                    IF lo_elem NE nil.
+                      lo_elem = lo_elem->car.
+                      CONTINUE.
+                    ENDIF.
 
                   WHEN 'unless'.
                     "  validate lr_tail->car, lr_tail->cdr. "I do not have a test case yet where it fails here
                     IF eval( element = lr_tail->car
                              environment = lo_env ) EQ false.
                       lo_elem = lr_tail->cdr.
-                      result = eval_list( io_head        = lo_elem
-                                          io_environment = lo_env ).
+*                      result = eval_list( io_head        = lo_elem
+*                                          io_environment = lo_env ).
+                      result = eval_list_tco( EXPORTING io_head = lo_elem
+                                                        io_environment = lo_env
+                                              IMPORTING eo_elem = lo_elem ).
+                      IF lo_elem NE nil.
+                        lo_elem = lo_elem->car.
+                        CONTINUE.
+                      ENDIF.
                     ENDIF.
 
                   WHEN 'when'.
@@ -1959,8 +2039,15 @@
                     IF eval( element = lr_tail->car
                              environment = lo_env  ) NE false.
                       lo_elem = lr_tail->cdr.
-                      result = eval_list( io_head = lo_elem
-                                          io_environment = lo_env ).
+*                      result = eval_list( io_head = lo_elem
+*                                          io_environment = lo_env ).
+                      result = eval_list_tco( EXPORTING io_head = lo_elem
+                                                        io_environment = lo_env
+                                              IMPORTING eo_elem = lo_elem ).
+                      IF lo_elem NE nil.
+                        lo_elem = lo_elem->car.
+                        CONTINUE.
+                      ENDIF.
                     ENDIF.
 
 * END candidate list of TAIL CALL replacement via list ------------ *
