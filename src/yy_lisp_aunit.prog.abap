@@ -377,6 +377,8 @@
        METHODS quote_symbol_a FOR TESTING.
        METHODS quote_list123 FOR TESTING.
 
+       METHODS begin_1 FOR TESTING.
+
        METHODS set_1 FOR TESTING.
        METHODS set_2 FOR TESTING.
        METHODS set_3 FOR TESTING.
@@ -473,6 +475,15 @@
        code_test( code = '''(list 1 2 3)'
                   expected = '( list 1 2 3 )' ).
      ENDMETHOD.                    "quote_list123
+
+     METHOD begin_1.
+       code_test( code = '(define x 0)'
+                  expected = 'x' ).
+       code_test( code = |(and (= x 0)| &
+                         |     (begin (set! x 5)| &
+                         |            (+ x 1)))|
+                  expected = '6' ).
+     ENDMETHOD.
 
      METHOD set_1.
        code_test( code = '(define x 3)'

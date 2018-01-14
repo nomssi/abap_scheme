@@ -228,18 +228,13 @@
      </RSMPE_TITT>
     </TIT>
    </CUA>
-   <I18N_TPOOL>
+   <TPOOL>
     <item>
-     <LANGUAGE>E</LANGUAGE>
-     <TEXTPOOL>
-      <item>
-       <ID>R</ID>
-       <ENTRY>Program ZZ_LISP_IDE</ENTRY>
-       <LENGTH>19</LENGTH>
-      </item>
-     </TEXTPOOL>
+     <ID>R</ID>
+     <ENTRY>Program ZZ_LISP_IDE</ENTRY>
+     <LENGTH>19</LENGTH>
     </item>
-   </I18N_TPOOL>
+   </TPOOL>
   </asx:values>
  </asx:abap>
 </abapGit>
