@@ -9,10 +9,9 @@
 After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a>.
 
 So this is my learning project that started as a fork of https://github.com/mydoghasworms/abap-lisp, itself inspired by [Peter Norvig](http://norvig.com/lispy2.html). You can [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) too. My contributions:
-- more validations for stability
-- _Scheme_ as the target language, but I won't call this LISP interpreter a _Scheme_ until issue #1 is resolved.
-- A large _ABAP Unit_ regression test suite following the [R7RS](http://www.r7rs.org/) specification
-- a Workbench with editor, console and environment screen to make it fun to use
+- _Scheme_ as the target language, I am implementing features from the [R7RS](http://www.r7rs.org/) specification
+- An _ABAP Unit_ regression test suite
+- a Workbench to make it fun to use
 
 ### Requirements
 
@@ -23,7 +22,7 @@ The current version was tested on ABAP Netweaver 7.50 and can be cloned with <a 
 - Report ZZ_LISP_IDE - Main report
 - Include YY_LIB_LISP - Custom version of ABAP LISP
 - Include YY_LISP_AUNIT - ABAP Unit tests
-- Include YY_LISP_IDE 
+- Include YY_LISP_IDE - Workbench
 
 ![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_lisp_workbench.png)
 The ABAP LISP Workbench has two commands:
