@@ -387,6 +387,9 @@
        METHODS let_2 FOR TESTING.
        METHODS let_3 FOR TESTING.
 
+       METHODS do_1 FOR TESTING.
+       METHODS do_2 FOR TESTING.
+
        METHODS named_let_1 FOR TESTING.
        METHODS named_let_2 FOR TESTING.
        METHODS named_let_3 FOR TESTING.
@@ -412,10 +415,44 @@
        METHODS is_number_true FOR TESTING.
        METHODS is_number_false FOR TESTING.
 
+       METHODS is_boolean_1 FOR TESTING.
+       METHODS is_boolean_2 FOR TESTING.
+       METHODS is_boolean_3 FOR TESTING.
+
+       METHODS list_is_boolean_1 FOR TESTING.
+       METHODS list_is_boolean_2 FOR TESTING.
+       METHODS list_is_boolean_3 FOR TESTING.
+
+   ENDCLASS.                    "ltc_basic DEFINITION
+
+   CLASS ltc_conditionals DEFINITION INHERITING FROM ltc_interpreter
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PRIVATE SECTION.
+
+       METHODS setup.
+       METHODS teardown.
+
+       METHODS if_1 FOR TESTING.
+       METHODS if_2 FOR TESTING.
+       METHODS if_3 FOR TESTING.
+
        METHODS and_1 FOR TESTING.
        METHODS and_2 FOR TESTING.
        METHODS and_3 FOR TESTING.
        METHODS and_4 FOR TESTING.
+
+       METHODS or_1 FOR TESTING.
+       METHODS or_2 FOR TESTING.
+       METHODS or_3 FOR TESTING.
+       METHODS or_4 FOR TESTING.
+
+       METHODS cond_1 FOR TESTING.
+       METHODS cond_2 FOR TESTING.
+       METHODS cond_3 FOR TESTING.
+
+       METHODS case_1 FOR TESTING.
+       METHODS case_2 FOR TESTING.
+       METHODS case_3 FOR TESTING.
 
        METHODS not_1 FOR TESTING.
        METHODS not_2 FOR TESTING.
@@ -426,15 +463,11 @@
        METHODS not_7 FOR TESTING.
        METHODS not_8 FOR TESTING.
 
-       METHODS is_boolean_1 FOR TESTING.
-       METHODS is_boolean_2 FOR TESTING.
-       METHODS is_boolean_3 FOR TESTING.
+       METHODS when_1 FOR TESTING.
 
-       METHODS list_is_boolean_1 FOR TESTING.
-       METHODS list_is_boolean_2 FOR TESTING.
-       METHODS list_is_boolean_3 FOR TESTING.
+       METHODS unless_1 FOR TESTING.
 
-   ENDCLASS.                    "ltc_basic DEFINITION
+   ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       CLASS ltc_basic IMPLEMENTATION
@@ -528,6 +561,22 @@
        code_test( code = |(let ((x 2) (x 0))| &
                          |    (+ x 5))|
                   expected = '5' ).
+     ENDMETHOD.
+
+     METHOD do_1.
+       code_test( code = |(do ((vec (make-vector 5) )| &
+                         |    (i 0 (+ i 1) ) )| &
+                         |    ((= i 5) vec)| &
+                         |   (vector-set! vec i i))|
+                  expected = '#( 0 1 2 3 4 )' ).
+     ENDMETHOD.
+
+     METHOD do_2.
+       code_test( code = |(let ((x '(1 3 5 7 9)))| &
+                         |  (do ((x x (cdr x))| &
+                         |    (sum 0  (+ sum (car x))))| &
+                         |((null? x) sum)))|
+                  expected = '25' ).
      ENDMETHOD.
 
      METHOD named_let_1.
@@ -733,6 +782,65 @@
                   expected = '#f' ).
      ENDMETHOD.
 
+     METHOD is_boolean_1.
+       code_test( code = |(boolean? #f)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_boolean_2.
+       code_test( code = |(boolean? 0)|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD is_boolean_3.
+       code_test( code = |(boolean? '())|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD list_is_boolean_1.
+       code_test( code = |(boolean=? '())|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD list_is_boolean_2.
+       code_test( code = |(boolean=? '(#t #f))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD list_is_boolean_3.
+       code_test( code = |(boolean=? #t #f)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+   ENDCLASS.                    "ltc_basic IMPLEMENTATION
+
+   CLASS ltc_conditionals IMPLEMENTATION.
+
+     METHOD setup.
+       CREATE OBJECT mo_int.
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
+
+     METHOD if_1.
+       code_test( code = |(if (> 3 2) 'yes 'no)|
+                  expected = 'yes' ).
+     ENDMETHOD.
+
+     METHOD if_2.
+       code_test( code = |(if (> 2 3) 'yes 'no)|
+                  expected = 'no' ).
+     ENDMETHOD.
+
+     METHOD if_3.
+       code_test( code = |(if (> 3 2)| &
+                         |    (- 3 2)| &
+                         |    (+ 3 2))|
+                  expected = '1' ).
+     ENDMETHOD.
+
      METHOD and_1.
        code_test( code = |(and (= 2 2) (> 2 1))|
                   expected = '#t' ).
@@ -751,6 +859,68 @@
      METHOD and_4.
        code_test( code = |(and)|
                   expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD or_1.
+       code_test( code = |(or (= 2 2) (> 2 1))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD or_2.
+       code_test( code = |(or (= 2 2) (< 2 1))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD or_3.
+       code_test( code = |(or #f #f #f)|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD or_4.
+       code_test( code = |(or (memq 'b '(a b c))| &
+                         |(/ 3 0))|
+                  expected = '( b c )' ).
+     ENDMETHOD.
+
+     METHOD cond_1.
+       code_test( code = |(cond ((> 3 2) 'greater)| &
+                         |      ((< 3 2) 'less))|
+                  expected = 'greater' ).
+     ENDMETHOD.
+
+     METHOD cond_2.
+       code_test( code = |(cond ((> 3 3) 'greater)| &
+                         |((< 3 3) 'less)| &
+                         |(else 'equal))|
+                  expected = 'equal' ).
+     ENDMETHOD.
+
+     METHOD cond_3.
+       code_test( code = |(cond ((assv 'b '((a 1) (b 2))) => cadr)| &
+                         |(else #f))|
+                  expected = '2' ).
+     ENDMETHOD.
+
+     METHOD case_1.
+       code_test( code = |(case (* 2 3)| &
+                         |      ((2 3 5 7) 'prime)| &
+                         |      ((1 4 6 8 9) 'composite))|
+                  expected = 'composite' ).
+     ENDMETHOD.
+
+     METHOD case_2.
+       code_test( code = |(case (car '(c d))| &
+                         |      ((a) 'a)| &
+                         |      ((b) 'b))|
+                  expected = 'nil' ).  " unspecified
+     ENDMETHOD.
+
+     METHOD case_3.
+       code_test( code = |(case (car '(c d))| &
+                         |      ((a e i o u) 'vowel)| &
+                         |      ((w y) 'semivowel)| &
+                         |      (else => (lambda (x) x)))|
+                  expected = 'c' ).
      ENDMETHOD.
 
      METHOD not_1.
@@ -793,37 +963,21 @@
                   expected = '#f' ).
      ENDMETHOD.
 
-     METHOD is_boolean_1.
-       code_test( code = |(boolean? #f)|
-                  expected = '#t' ).
+     METHOD when_1.
+       code_test( code = |(when (= 1 1.0)| &
+                         |(display "1")| &
+                         |(display "2"))|
+                  expected = '"2"' ).  " prints "12", returns "2"
      ENDMETHOD.
 
-     METHOD is_boolean_2.
-       code_test( code = |(boolean? 0)|
-                  expected = '#f' ).
+     METHOD unless_1.
+       code_test( code = |(unless (= 1 1.0)| &
+                         |(display "1")| &
+                         |(display "2"))|
+                  expected = 'nil' ).  " prints nothing
      ENDMETHOD.
 
-     METHOD is_boolean_3.
-       code_test( code = |(boolean? '())|
-                  expected = '#f' ).
-     ENDMETHOD.
-
-     METHOD list_is_boolean_1.
-       code_test( code = |(boolean=? '())|
-                  expected = '#f' ).
-     ENDMETHOD.
-
-     METHOD list_is_boolean_2.
-       code_test( code = |(boolean=? '(#t #f))|
-                  expected = '#f' ).
-     ENDMETHOD.
-
-     METHOD list_is_boolean_3.
-       code_test( code = |(boolean=? #t #f)|
-                  expected = '#t' ).
-     ENDMETHOD.
-
-   ENDCLASS.                    "ltc_basic IMPLEMENTATION
+   ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       CLASS ltc_functional_tests DEFINITION
@@ -1943,15 +2097,15 @@
        METHODS setup.
        METHODS teardown.
 
-     METHODS vector_0 FOR TESTING.
-     METHODS vector_1 FOR TESTING.
-     METHODS vector_ref_1 FOR TESTING.
-     METHODS vector_ref_2 FOR TESTING.
-     METHODS vector_set_1 FOR TESTING.
-     METHODS vector_set_2 FOR TESTING.
-     METHODS vector_to_list_1 FOR TESTING.
-     METHODS vector_to_list_2 FOR TESTING.
-     METHODS list_to_vector_1 FOR TESTING.
+       METHODS vector_0 FOR TESTING.
+       METHODS vector_1 FOR TESTING.
+       METHODS vector_ref_1 FOR TESTING.
+       METHODS vector_ref_2 FOR TESTING.
+       METHODS vector_set_1 FOR TESTING.
+       METHODS vector_set_2 FOR TESTING.
+       METHODS vector_to_list_1 FOR TESTING.
+       METHODS vector_to_list_2 FOR TESTING.
+       METHODS list_to_vector_1 FOR TESTING.
 
    ENDCLASS.
 

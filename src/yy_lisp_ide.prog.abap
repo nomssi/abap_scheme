@@ -4,6 +4,21 @@
 
 DATA g_ok_code TYPE syucomm.
 
+CLASS lcl_stack DEFINITION.
+  PUBLIC SECTION.
+    TYPES tv_data TYPE string.
+    METHODS push IMPORTING iv_key TYPE tv_data.
+    METHODS pop RETURNING VALUE(rv_data) TYPE tv_data.
+    METHODS empty RETURNING VALUE(rv_flag) TYPE xsdboolean.
+  PROTECTED SECTION.
+    TYPES: BEGIN OF ts_node,
+             data  TYPE tv_data,
+             next TYPE REF TO data,
+           END OF ts_node.
+
+    DATA mr_top TYPE REF TO ts_node.
+ENDCLASS.
+
 *----------------------------------------------------------------------*
 *       CLASS lcl_container DEFINITION
 *----------------------------------------------------------------------*
@@ -36,15 +51,38 @@ CLASS lcl_editor DEFINITION INHERITING FROM cl_gui_textedit.
                                   iv_toolbar   TYPE flag DEFAULT abap_false.
     METHODS append_source IMPORTING iv_text TYPE string.
     METHODS append_to IMPORTING io_editor TYPE REF TO lcl_editor.
+    METHODS push_text.
+    METHODS pop_text RETURNING VALUE(code) TYPE string.
     METHODS to_string RETURNING VALUE(rv_text) TYPE string.
     METHODS update_status IMPORTING iv_string TYPE string.
     METHODS append_string IMPORTING iv_text TYPE string.
   PRIVATE SECTION.
     DATA mv_counter TYPE i.
+    DATA mo_stack TYPE REF TO lcl_stack.
 
     METHODS format_input IMPORTING code           TYPE string
                          RETURNING VALUE(rv_text) TYPE string.
 ENDCLASS.                    "lcl_editor DEFINITION
+
+CLASS lcl_stack IMPLEMENTATION.
+
+  METHOD push.
+    mr_top = NEW ts_node( data = iv_key
+                          next = mr_top ).
+  ENDMETHOD.
+
+  METHOD pop.
+    CLEAR rv_data.
+    CHECK mr_top IS BOUND.
+    rv_data = mr_top->data.
+    mr_top ?= mr_top->next.
+  ENDMETHOD.
+
+  METHOD empty.
+    rv_flag = xsdbool( mr_top IS NOT BOUND ).
+  ENDMETHOD.
+
+ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       INTERFACE lif_unit_test IMPLEMENTATION
@@ -84,6 +122,7 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
       constructor,
       evaluate,
       refresh,
+      show_docu,
       free_controls,
       user_command IMPORTING iv_code        TYPE syucomm
                    RETURNING VALUE(rv_flag) TYPE flag.
@@ -94,6 +133,9 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
 
     METHODS writeln IMPORTING text TYPE string.
     METHODS add IMPORTING text TYPE string.
+
+    METHODS previous.
+    METHODS next.
 
 ENDCLASS.                    "lcl_ide DEFINITION
 
@@ -137,6 +179,15 @@ CLASS lcl_ide IMPLEMENTATION.
       EXPORTING
         ii_port = me.
   ENDMETHOD.                    "refresh
+
+  METHOD show_docu.
+    CONSTANTS c_url TYPE string VALUE `https://github.com/nomssi/abap_scheme/wiki`.
+    cl_abap_browser=>show_url( title = `ABAP Scheme Wiki`
+                               url = c_url
+                               modal = abap_false
+                                "size = ms_cfg-browser_size
+                               ).
+  ENDMETHOD.
 
   METHOD lif_port~read.
     DATA lt_fields TYPE STANDARD TABLE OF sval.
@@ -250,10 +301,9 @@ CLASS lcl_ide IMPLEMENTATION.
         DATA(response) = mo_int->eval_repl( code ).
 
         mo_output->append_source( code ).
-
         mo_console->append_source( response ).
 
-        mo_source->delete_text( ).
+        mo_source->push_text( ).
         mo_source->update_status( |[ { mo_int->runtime } µs ] { response }| ).
 
       CATCH cx_root INTO DATA(lx_root).
@@ -294,12 +344,26 @@ CLASS lcl_ide IMPLEMENTATION.
         evaluate( ).
       WHEN 'CLEAR'.
         refresh( ).
+      WHEN 'PREV'.
+        previous( ).
+      WHEN 'NEXT'.
+        next( ).
+      WHEN 'HELP'.
+        show_docu( ).
       WHEN OTHERS.
         RETURN.
     ENDCASE.
 
     rv_flag = abap_true.
   ENDMETHOD.                    "user_command
+
+  METHOD previous.
+    mo_source->pop_text( ).
+  ENDMETHOD.
+
+  METHOD next.
+    mo_source->push_text( ).
+  ENDMETHOD.
 
 ENDCLASS.                    "lcl_ide IMPLEMENTATION
 
@@ -403,6 +467,7 @@ CLASS lcl_editor IMPLEMENTATION.
     set_statusbar_mode( mode ).
 *   Work around to avoid NO DATA dump on first read
     delete_text( ).
+    mo_stack = NEW #( ).
   ENDMETHOD.                    "constructor
 
   METHOD append_string.
@@ -430,5 +495,19 @@ CLASS lcl_editor IMPLEMENTATION.
   METHOD update_status.
     set_status_text( CONV char72( iv_string ) ).
   ENDMETHOD.                    "update_status
+
+  METHOD push_text.
+    DATA(code) = to_string( ).
+    CHECK code NE space.
+    mo_stack->push( code ).
+    delete_text( ).
+  ENDMETHOD.
+
+  METHOD pop_text.
+    CHECK mo_stack->empty( ) EQ abap_false.
+    code = mo_stack->pop( ).
+    delete_text( ).
+    append_string( code ).
+  ENDMETHOD.
 
 ENDCLASS.                    "lcl_editor IMPLEMENTATION

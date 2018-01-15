@@ -147,7 +147,7 @@
   DEFINE _math.
     result = nil.
 
-    validate: list.
+    validate list.
     validate_number list->car &2.
     _is_last_param list.
     TRY.
@@ -164,7 +164,7 @@
     DATA carry TYPE f.
 
     result = nil.
-    validate: list.
+    validate list.
     validate_number list->car &2.
     _is_last_param list.
     TRY.
@@ -281,7 +281,6 @@
       METHODS write RETURNING VALUE(str) TYPE string
                     RAISING   lcx_lisp_exception.
 *     Utilities
-      METHODS first RETURNING VALUE(ro_car) TYPE REF TO lcl_lisp.
       METHODS rest RETURNING VALUE(ro_cdr) TYPE REF TO lcl_lisp.
       METHODS new_iterator RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_iterator
                            RAISING   lcx_lisp_exception.
@@ -303,6 +302,12 @@
       METHODS list_to_string RETURNING VALUE(str) TYPE string
                              RAISING   lcx_lisp_exception.
   ENDCLASS.                    "lcl_lisp DEFINITION
+
+  INTERFACE lif_native.
+    METHODS proc IMPORTING list          TYPE REF TO lcl_lisp
+                 RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                 RAISING   lcx_lisp_exception.
+  ENDINTERFACE.
 
   TYPES tt_lisp TYPE STANDARD TABLE OF REF TO lcl_lisp WITH EMPTY KEY.
   CLASS lcl_lisp_vector DEFINITION DEFERRED.
@@ -358,18 +363,6 @@
       CLASS-METHODS node IMPORTING type           TYPE lcl_lisp=>tv_type
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
   ENDCLASS.
-
-*  CLASS lcl_lisp_builder DEFINITION.
-*    PUBLIC SECTION.
-*      CLASS-METHODS new IMPORTING io_elem TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
-*                        RETURNING VALUE(ro_builder) TYPE REF TO lcl_lisp_builder.
-*      METHODS add IMPORTING io_elem TYPE REF TO lcl_lisp
-*                  RETURNING VALUE(ro_builder) TYPE REF TO lcl_lisp_builder.
-*      METHODS get RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
-*    PRIVATE SECTION.
-*      DATA mo_head TYPE REF TO lcl_lisp.
-*      DATA mo_last TYPE REF TO lcl_lisp.
-*  ENDCLASS.
 
   INTERFACE lif_port.
     METHODS write IMPORTING element         TYPE REF TO lcl_lisp
@@ -909,10 +902,10 @@
                                 RETURNING VALUE(result) TYPE REF TO lcl_lisp
                                 RAISING   lcx_lisp_exception.
 
-      METHODS eval_list IMPORTING io_head        TYPE REF TO lcl_lisp
-                                  io_environment TYPE REF TO lcl_lisp_environment
-                        RETURNING VALUE(result)  TYPE REF TO lcl_lisp
-                        RAISING   lcx_lisp_exception.
+      METHODS evaluate_do IMPORTING io_head       TYPE REF TO lcl_lisp
+                                    environment   TYPE REF TO lcl_lisp_environment
+                          RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                          RAISING   lcx_lisp_exception.
 
       METHODS eval_list_tco IMPORTING VALUE(io_head) TYPE REF TO lcl_lisp
                                       io_environment TYPE REF TO lcl_lisp_environment
@@ -920,21 +913,22 @@
                             RETURNING VALUE(result)  TYPE REF TO lcl_lisp
                             RAISING   lcx_lisp_exception.
 
-      METHODS eval_function IMPORTING io_head       TYPE REF TO lcl_lisp
-                                      io_args       TYPE REF TO lcl_lisp
-                                      environment   TYPE REF TO lcl_lisp_environment
-                            RETURNING VALUE(result) TYPE  REF TO lcl_lisp
-                            RAISING   lcx_lisp_exception.
-
-      METHODS execute IMPORTING io_head       TYPE REF TO lcl_lisp
-                                io_args       TYPE REF TO lcl_lisp
-                                environment   TYPE REF TO lcl_lisp_environment
-                      RETURNING VALUE(result) TYPE  REF TO lcl_lisp
-                      RAISING   lcx_lisp_exception.
+      METHODS lambda_environment IMPORTING io_head       TYPE REF TO lcl_lisp
+                                           io_args       TYPE REF TO lcl_lisp
+                                           environment   TYPE REF TO lcl_lisp_environment
+                                 RETURNING VALUE(ro_env) TYPE  REF TO lcl_lisp_environment
+                                 RAISING   lcx_lisp_exception.
 
       METHODS extract_arguments IMPORTING io_head TYPE REF TO lcl_lisp
                                 EXPORTING eo_pars TYPE REF TO lcl_lisp
                                           eo_args TYPE REF TO lcl_lisp
+                                RAISING   lcx_lisp_exception.
+
+      METHODS extract_do_params IMPORTING io_head TYPE REF TO lcl_lisp
+                                          io_env  TYPE REF TO lcl_lisp_environment
+                                EXPORTING eo_vars TYPE REF TO lcl_lisp
+                                          eo_init TYPE REF TO lcl_lisp
+                                          eo_step TYPE REF TO lcl_lisp
                                 RAISING   lcx_lisp_exception.
 
       METHODS eval_ast IMPORTING element       TYPE REF TO lcl_lisp
@@ -969,12 +963,11 @@
                              RETURNING VALUE(rt_table) TYPE tt_lisp
                              RAISING   lcx_lisp_exception.
 
-      METHODS map_apply_proc IMPORTING io_proc       TYPE REF TO lcl_lisp
-                                       environment   TYPE REF TO lcl_lisp_environment
-                             EXPORTING ev_has_next   TYPE flag
-                             CHANGING  ct_list       TYPE tt_lisp
-                             RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                             RAISING   lcx_lisp_exception.
+      METHODS map_next_expr IMPORTING io_proc       TYPE REF TO lcl_lisp
+                            EXPORTING ev_has_next   TYPE flag
+                            CHANGING  ct_list       TYPE tt_lisp
+                            RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                            RAISING   lcx_lisp_exception.
 
       METHODS reverse_list IMPORTING io_list       TYPE REF TO lcl_lisp
                            RETURNING VALUE(result) TYPE REF TO lcl_lisp
@@ -1224,7 +1217,7 @@
       env->define_value( symbol = 'if'         type = lcl_lisp=>type_primitive value   = 'if' ).
       env->define_value( symbol = 'quote'      type = lcl_lisp=>type_primitive value   = 'quote' ).
       env->define_value( symbol = 'quasiquote' type = lcl_lisp=>type_primitive value   = 'quasiquote' ).
-      env->define_value( symbol = 'set!'       type = lcl_lisp=>type_primitive value   = 'if' ).
+      env->define_value( symbol = 'set!'       type = lcl_lisp=>type_primitive value   = 'set!' ).
 
 *     Add native functions to environment
       env->define_value( symbol = '+'        type = lcl_lisp=>type_native value   = 'PROC_ADD' ).
@@ -1400,10 +1393,9 @@
       CASE result->type.
         WHEN lcl_lisp=>type_symbol.
 *         re-define symbol in the original environment, but evaluate parameters in the current environment
-          environment->find( result->value )->set(
-             symbol  = result->value
-             element = eval( element = element->cdr->car
-                             environment = environment ) ).
+          environment->find( result->value )->set( symbol  = result->value
+                                                   element = eval( element = element->cdr->car
+                                                                   environment = environment ) ).
         WHEN OTHERS.
           throw( |{ result->to_string( ) } must be a symbol| ).
       ENDCASE.
@@ -1419,8 +1411,8 @@
       DATA(elem) = io_list.
       WHILE elem IS BOUND AND elem->type EQ lcl_lisp=>type_conscell.
 
-        DATA(lo_next) = lcl_lisp_new=>cons( io_car = eval( element = elem->car
-                                                           environment = environment ) ).
+        DATA(lo_next) = lcl_lisp_new=>cons( io_car = eval_ast( element = elem->car
+                                                               environment = environment ) ).
         elem = elem->cdr.
 
         IF ro_head EQ nil.
@@ -1491,28 +1483,25 @@
       result = nil.
       DATA(lo_proc) = io_list->car.
 
-      DATA(lt_list) = table_of_lists( io_head = io_list->cdr
+      DATA(lt_list) = table_of_lists( io_head = io_list->cdr         " parameter evaluated lists
                                       environment = environment ).
-      CHECK lines( lt_list ) GT 0.  " parameter evaluated lists
 
-      DATA(lv_has_next) = abap_true. " map terminates when the shortest list runs out.
+      DATA(lv_has_next) = xsdbool( lines( lt_list ) GT 0 ). " map terminates when the shortest list runs out.
 
-      DATA(lv_first) = abap_true.
       WHILE lv_has_next EQ abap_true.
-        IF lv_first EQ abap_true.
-          lv_first = abap_false.
+
+        DATA(lo_head) = lcl_lisp_new=>cons( io_car = eval(
+                              element = map_next_expr( EXPORTING io_proc = lo_proc
+                                                       IMPORTING ev_has_next = lv_has_next
+                                                       CHANGING  ct_list = lt_list )
+                              environment = environment ) ).
+        IF result EQ nil.
           " create function call (proc list1-[1] list2-[1]... listn-[1])
           " evaluate, add result as 1st list element of new list
-          lo_map = result = lcl_lisp_new=>cons( io_car = map_apply_proc( EXPORTING io_proc = lo_proc
-                                                                                   environment = environment
-                                                                         IMPORTING ev_has_next = lv_has_next
-                                                                         CHANGING  ct_list = lt_list  ) ).
+          lo_map = result = lo_head.
         ELSE.
           " evaluate function call (proc list1[k] list2[k]... listn[k]); add result as k-th list element
-          lo_map = lo_map->cdr = lcl_lisp_new=>cons( io_car = map_apply_proc( EXPORTING io_proc = lo_proc
-                                                                                        environment = environment
-                                                                              IMPORTING ev_has_next = lv_has_next
-                                                                              CHANGING  ct_list = lt_list  ) ).
+          lo_map = lo_map->cdr = lo_head.
         ENDIF.
       ENDWHILE.
 
@@ -1532,20 +1521,91 @@
 
       DATA(lt_list) = table_of_lists( io_head = io_list->cdr
                                       environment = environment ).
-      CHECK lines( lt_list ) GT 0. " (parameter evaluated) lists
 
-      DATA(lv_has_next) = abap_true.  " for-each terminates when the shortest list runs out.
+      DATA(lv_has_next) = xsdbool( lines( lt_list ) GT 0 ).  " for-each terminates when the shortest list runs out.
       WHILE lv_has_next EQ abap_true.
         " evaluate function call (proc list1[k] list2[k]... listn[k])
-        result = map_apply_proc( EXPORTING io_proc = lo_proc
-                                           environment = environment
-                                 IMPORTING ev_has_next = lv_has_next
-                                 CHANGING  ct_list = lt_list  ).
+        DATA(lo_head) = map_next_expr( EXPORTING io_proc = lo_proc
+                                       IMPORTING ev_has_next = lv_has_next
+                                       CHANGING  ct_list = lt_list ).
+        result = eval( element = lo_head
+                       environment = environment ).
       ENDWHILE.
     ENDMETHOD.
 
-    METHOD eval_list_tco.
-*     Tail Call Optimization, use eval LOOP for the last evaluation step
+* (do ( ( <variable1> <init1> <step1>)
+*        ... )
+*        ( <test> <expression> ... )
+*        <command> ... =
+*   (do ((vec (make-vector 5) )
+*         (i 0 (+ i 1) ) )
+*         ((= i 5) vec)
+*       (vector-set! vec i i))  => #(0 1 2 3 4)
+*
+*  (let ((x '(1 3 5 7 9)))
+*   (do ((x x (cdr x))
+*        (sum 0  (+ sum (car x))))
+*      ((null? x) sum)))  => 25
+    METHOD evaluate_do.
+      result = nil.
+      DATA(lo_env) = lcl_lisp_environment=>new( environment ).
+
+      extract_do_params( EXPORTING io_head = io_head
+                                   io_env = lo_env
+                         IMPORTING eo_vars = DATA(lo_vars)
+                                   eo_step = DATA(lo_step) ).
+      DATA(lo_var) = lo_vars.
+*      DATA(lo_init) = lo_start.
+*      WHILE lo_var IS BOUND AND lo_var NE nil   " Nil means no parameters to map
+*        AND lo_init IS BOUND AND lo_init NE nil.  " Nil means no parameters to map
+*
+*        lo_env->set( symbol = lo_var->car->value
+*                     element = lo_init->car ).
+*        lo_var = lo_var->cdr.
+*        lo_init = lo_init->cdr.
+*      ENDWHILE.
+
+*      evaluate_in_sequence( io_args = lo_var      " Pointer to arguments e.g. (4, (+ x 4)
+*                            io_pars = lo_init     " Pointer to formal parameters (x y)
+*                            io_env = lo_env ).
+    ENDMETHOD.
+
+    METHOD extract_do_params.
+      eo_step = eo_vars = nil.
+
+      CHECK io_head IS BOUND AND io_head->car IS BOUND AND io_head->car NE nil.
+      DATA(lo_ptr) = io_head->car.
+
+      validate lo_ptr->car.
+      eo_vars = lcl_lisp_new=>cons( io_car = lo_ptr->car ).
+      IF lo_ptr->cdr IS BOUND AND lo_ptr->cdr NE nil.
+        DATA(lo_init) = lo_ptr->cdr->car.
+        io_env->set( symbol = eo_vars->value
+                     element = lo_init ).
+      ENDIF.
+      DATA(lo_par) = eo_vars.
+*      DATA(lo_arg) = eo_args.
+*      lo_ptr = io_head.
+*      WHILE lo_ptr->cdr IS BOUND AND lo_ptr->cdr NE nil.
+*        lo_ptr = lo_ptr->cdr.
+**        Rest of list, pick head
+*        DATA(lo_pair) = lo_ptr->car.
+*        IF lo_pair IS BOUND AND lo_pair->car NE nil.
+*          lo_par = lo_par->cdr = lcl_lisp_new=>cons( io_car = lo_pair->car ).
+*        ENDIF.
+*        IF lo_pair->cdr IS BOUND AND lo_pair->cdr NE nil.
+*          lo_arg = lo_arg->cdr = lcl_lisp_new=>cons( io_car = lo_pair->cdr->car ).
+*        ENDIF.
+*      ENDWHILE.
+*      lo_par->cdr = lo_arg->cdr = nil.
+
+*     Debug help: DATA lv_debug TYPE string.
+*      lv_debug = |params { eo_pars->to_string( ) }\n arg { eo_args->to_string( ) }\n|.
+    ENDMETHOD.
+
+    METHOD eval_list_tco. " Tail Call Optimization
+*     Evaluate all expressions except the last one to be evaluated as a tail call
+*     ( eval LOOP for the last evaluation step )
       validate io_head.
       result = nil.
 
@@ -1561,72 +1621,29 @@
       validate_tail eo_elem->cdr io_head  ``.
     ENDMETHOD.
 
-    METHOD eval_list.
-      validate io_head.
-      result = nil.
+*    METHOD eval_list.
+*      validate io_head.
+*      result = nil.
+*
+*      DATA(elem) = io_head.
+*      WHILE elem IS BOUND AND elem->type EQ lcl_lisp=>type_conscell.
+*        result = eval_ast( element = elem->car
+*                           environment = io_environment ).
+*        elem = elem->cdr.
+*      ENDWHILE.
+*
+*      validate_tail elem io_head space.
+*    ENDMETHOD.
 
-      DATA(elem) = io_head.
-      WHILE elem IS BOUND AND elem->type EQ lcl_lisp=>type_conscell.
-
-        result = eval_ast( element = elem->car
-                           environment = io_environment ).
-        elem = elem->cdr.
-      ENDWHILE.
-
-      validate_tail elem io_head  ``.
-    ENDMETHOD.
-
-    METHOD eval_function.
+    METHOD lambda_environment.
 *     The function (LAMBDA) receives its own local environment in which to execute,
 *     where parameters become symbols that are mapped to the corresponding arguments
       validate io_head.
-      DATA(lo_env) = lcl_lisp_environment=>new( io_head->environment ).
+      ro_env = lcl_lisp_environment=>new( io_head->environment ).
 
-      lo_env->parameters_to_symbols( io_args = evaluate_parameters( io_list = io_args           " Pointer to arguments
+      ro_env->parameters_to_symbols( io_args = evaluate_parameters( io_list = io_args           " Pointer to arguments
                                                                     environment = environment )
-                                     io_pars = io_head->first( ) ).   " Pointer to formal parameters
-
-      result = eval_list( io_head = io_head->rest( )
-                          io_environment = lo_env ).
-    ENDMETHOD.                    "eval_function
-
-    METHOD execute.
-*     Take the first item of the evaluated list and call it as function
-*     using the rest of the evaluated list as its arguments.
-
-      DATA(lo_proc) = eval_ast( element = io_head             " proc
-                                environment = environment ).
-      CASE lo_proc->type.
-
-        WHEN lcl_lisp=>type_native.
-*--       NATIVE FUNCTION
-*         Evaluate native function:
-          CALL METHOD (lo_proc->value)
-            EXPORTING
-              list   = evaluate_parameters( io_list = io_args
-                                            environment = environment )
-            RECEIVING
-              result = result.
-
-        WHEN lcl_lisp=>type_lambda.
-          result = eval_function( io_head = lo_proc
-                                  io_args = io_args
-                                  environment = environment ).
-
-        WHEN lcl_lisp=>type_abap_function.
-*>> TEST: Support evaluation of ABAP function directly
-*         Recompose as if calling a PROC (which we are). This is part of the test. If we make an ABAP function
-*         call first-class, then we would need to revisit evaluating the whole of ELEMENT in one shot
-          result = proc_abap_function_call( lcl_lisp_new=>cons( io_car = lo_proc
-                                                                io_cdr = io_args ) ).
-*<< TEST
-*        WHEN lcl_lisp=>type_abap_method.
-*>> TEST: Support evaluation of ABAP methods directly
-*<< TEST
-        WHEN OTHERS.
-          throw( |Cannot evaluate { lo_proc->to_string( ) } - not a procedure| ).
-
-      ENDCASE.
+                                     io_pars = io_head->car ).   " Pointer to formal parameters
     ENDMETHOD.
 
     METHOD extract_arguments.
@@ -1823,6 +1840,22 @@
 
     ENDMETHOD.
 
+    DEFINE tail_expression.
+      IF &1 NE nil.
+        lo_elem = &1->car.    " Tail context
+        CONTINUE.
+      ENDIF.
+    END-OF-DEFINITION.
+
+    DEFINE tail_sequence.
+*     result = eval_list( io_head = lo_elem
+*                         io_environment = lo_env ).
+      result = eval_list_tco( EXPORTING io_head = lo_elem
+                                        io_environment = lo_env
+                              IMPORTING eo_elem = lo_elem ).
+      tail_expression lo_elem.
+    END-OF-DEFINITION.
+
 **********************************************************************
 *------------------------------- EVAL( ) ----------------------------
 * eval takes an expression and an environment to a value
@@ -1878,22 +1911,30 @@
                                           environment = lo_env )  ).
 
                   WHEN 'and'.
+*                   (and <expression>* >tail expression>)
                     result = true.
                     DATA(lo_ptr) = lr_tail.
-                    WHILE lo_ptr IS BOUND AND lo_ptr NE nil AND result NE false.
+                    WHILE result NE false AND lo_ptr IS BOUND AND lo_ptr NE nil AND lo_ptr->cdr NE nil.
                       result = eval_ast( element = lo_ptr->car
                                          environment = lo_env ).
                       lo_ptr = lo_ptr->cdr.
                     ENDWHILE.
+                    IF result NE false.
+                      tail_expression lo_ptr.
+                    ENDIF.
 
                   WHEN 'or'.
+*                  (or <expression>* <tail expression>)
                     result = false.
                     lo_ptr = lr_tail.
-                    WHILE lo_ptr IS BOUND AND lo_ptr NE nil AND result EQ false.
+                    WHILE result EQ false AND lo_ptr IS BOUND AND lo_ptr NE nil AND lo_ptr->cdr NE nil.
                       result = eval_ast( element = lo_ptr->car
                                          environment = lo_env ).
                       lo_ptr = lo_ptr->cdr.
                     ENDWHILE.
+                    IF result EQ false.
+                      tail_expression lo_ptr.
+                    ENDIF.
 
                   WHEN 'cond'.
                     lo_ptr = lr_tail.
@@ -1901,24 +1942,15 @@
                     WHILE lo_ptr NE nil.
                       DATA(lo_clause) = lo_ptr->car.
                       IF lo_clause->car->value EQ 'else'
-                        OR eval( element = lo_clause->car
-                                 environment = lo_env ) NE false.
+                        OR eval_ast( element = lo_clause->car
+                                     environment = lo_env ) NE false.
                         lo_elem = lo_clause->cdr.
                         EXIT.
                       ENDIF.
                       lo_ptr = lo_ptr->cdr.
                     ENDWHILE.
                     IF lo_elem NE nil.
-*                     result = eval_list( io_head = lo_clause->cdr
-*                                         io_environment = lo_env ).
-
-                      result = eval_list_tco( EXPORTING io_head = lo_elem
-                                                        io_environment = lo_env
-                                              IMPORTING eo_elem = lo_elem ).
-                      IF lo_elem NE nil.
-                        lo_elem = lo_elem->car.
-                        CONTINUE.
-                      ENDIF.
+                      tail_sequence.
                     ENDIF.
 
                   WHEN 'define'.
@@ -1931,151 +1963,78 @@
                     result = re_assign_symbol( element     = lr_tail
                                                environment = lo_env ).
 
-* BEGIN candidate list of TAIL CALL replacement via list ------------ *
-* The last step is evaluate_list( )
-
                   WHEN 'if'.
                     " validate lr_tail->cdr. "I do not have a test case yet where it fails here
                     IF eval( element = lr_tail->car
                              environment = lo_env ) NE false.
 
-*                     Tail Call
-                      lo_elem = lr_tail->cdr->car.
+                      lo_elem = lr_tail->cdr->car. " Tail context
                       CONTINUE.
 
                     ELSEIF lr_tail->cdr->cdr = nil.
                       result = false.
                     ELSE.
                       " validate lr_tail->cdr->cdr. " missing test case, comment out
-*                     Tail Call
-                      lo_elem = lr_tail->cdr->cdr->car.
+                      lo_elem = lr_tail->cdr->cdr->car. " Tail context
                       CONTINUE.
 
                     ENDIF.
 
                   WHEN 'begin'.
                     lo_elem = lr_tail.
-*                    result = eval_list( io_head = lo_elem
-*                                        io_environment = lo_env ).
-                    result = eval_list_tco( EXPORTING io_head = lo_elem
-                                                      io_environment = lo_env
-                                            IMPORTING eo_elem = lo_elem ).
-                    IF lo_elem NE nil.
-                      lo_elem = lo_elem->car.
-                      CONTINUE.
-                    ENDIF.
+                    tail_sequence.
 
                   WHEN 'let'.
                     lo_env = init_named_let( EXPORTING io_env = lo_env
                                              CHANGING co_head = lr_tail ).
                     lo_elem = lr_tail->cdr.
-                    result = eval_list_tco( EXPORTING io_head = lo_elem
-                                                      io_environment = lo_env
-                                            IMPORTING eo_elem = lo_elem ).
-                    IF lo_elem NE nil.
-                      lo_elem = lo_elem->car.
-                      CONTINUE.
-                    ENDIF.
+                    tail_sequence.
 
                   WHEN 'let*'.
                     lo_env = init_let_star( io_head = lr_tail->car
                                             io_env = lo_env ).
                     lo_elem = lr_tail->cdr.
-*                    result = eval_list( io_head = lo_elem
-*                                        io_environment = lo_env ).
-                    result = eval_list_tco( EXPORTING io_head = lo_elem
-                                                      io_environment = lo_env
-                                            IMPORTING eo_elem = lo_elem ).
-                    IF lo_elem NE nil.
-                      lo_elem = lo_elem->car.
-                      CONTINUE.
-                    ENDIF.
+                    tail_sequence.
 
                   WHEN 'letrec'.
 *                   (letrec ((a 5) (b (+ a 3)) b)
                     lo_env = init_letrec( io_head = lr_tail->car
                                           io_env = lo_env ).
                     lo_elem = lr_tail->cdr.
-*                    result = eval_list( io_head = lo_elem
-*                                        io_environment = lo_env ).
-                    result = eval_list_tco( EXPORTING io_head = lo_elem
-                                                      io_environment = lo_env
-                                            IMPORTING eo_elem = lo_elem ).
-                    IF lo_elem NE nil.
-                      lo_elem = lo_elem->car.
-                      CONTINUE.
-                    ENDIF.
+                    tail_sequence.
 
                   WHEN 'letrec*'.
                     lo_env = init_letrec_star( io_head = lr_tail->car
                                                io_env = lo_env ).
                     lo_elem = lr_tail->cdr.
-*                    result = eval_list( io_head = lo_elem
-*                                        io_environment = lo_env ).
-                    result = eval_list_tco( EXPORTING io_head = lo_elem
-                                                      io_environment = lo_env
-                                            IMPORTING eo_elem = lo_elem ).
-                    IF lo_elem NE nil.
-                      lo_elem = lo_elem->car.
-                      CONTINUE.
-                    ENDIF.
+                    tail_sequence.
 
                   WHEN 'unless'.
-                    "  validate lr_tail->car, lr_tail->cdr. "I do not have a test case yet where it fails here
+                    result = nil.
                     IF eval( element = lr_tail->car
                              environment = lo_env ) EQ false.
+                      "  validate lr_tail->cdr. "I do not have a test case yet where it fails here
                       lo_elem = lr_tail->cdr.
-*                      result = eval_list( io_head        = lo_elem
-*                                          io_environment = lo_env ).
-                      result = eval_list_tco( EXPORTING io_head = lo_elem
-                                                        io_environment = lo_env
-                                              IMPORTING eo_elem = lo_elem ).
-                      IF lo_elem NE nil.
-                        lo_elem = lo_elem->car.
-                        CONTINUE.
-                      ENDIF.
+                      tail_sequence.
                     ENDIF.
 
                   WHEN 'when'.
-                    "  validate lr_tail->car, lr_tail->cdr. "I do not have a test case yet where it fails here
+                    result = nil.
                     IF eval( element = lr_tail->car
                              environment = lo_env  ) NE false.
+                      "  validate lr_tail->cdr. "I do not have a test case yet where it fails here
                       lo_elem = lr_tail->cdr.
-*                      result = eval_list( io_head = lo_elem
-*                                          io_environment = lo_env ).
-                      result = eval_list_tco( EXPORTING io_head = lo_elem
-                                                        io_environment = lo_env
-                                              IMPORTING eo_elem = lo_elem ).
-                      IF lo_elem NE nil.
-                        lo_elem = lo_elem->car.
-                        CONTINUE.
-                      ENDIF.
+                      tail_sequence.
                     ENDIF.
 
-* END candidate list of TAIL CALL replacement via list ------------ *
                   WHEN 'lambda'.
                     result = lcl_lisp_new=>lambda( io_car = lr_tail->car         " List of parameters
                                                    io_cdr = lr_tail->cdr         " Body
                                                    io_env = lo_env ).
 
-*        WHEN 'do'.
-* (do ( ( <variable1> <init1> <step1>)
-*        ... )
-*        ( <test> <expression> ... )
-*        <command> ... =
-*
-*   (do ((vec (make-vector 5) )
-*         (i 0 (+ i 1) ) )
-*         ((= i 5) vec)
-*       (vector-set! vec i i))  => #(0 1 2 3 4)
-*
-*  (let ((x '(1 3 5 7 9)))
-*   (do ((x x (cdr x))
-*        (sum 0  (+ sum (car x))))
-*      ((null? x) sum)))  => 25
-*
-*          result = nil??.
-*            RETURN.
+                  WHEN 'do'.
+                    result = evaluate_do( io_head = lr_tail
+                                          environment = lo_env ).
 
 *                 WHEN 'case'.
 * (case <key> <clause1> <clause2> <clause3> ... )
@@ -2091,11 +2050,6 @@
                   WHEN 'read'.
                     result = read( lr_tail ).
 
-                  WHEN 'apply'.  " (apply proc arg1 . . . rest-args)
-                    result = execute( io_head     = lr_tail->car                            " proc
-                                      io_args     = evaluate_apply( io_list = lr_tail->cdr  " handle arg1 . . . rest-args
-                                                                    environment = lo_env )
-                                      environment = lo_env ).
 
                   WHEN 'for-each'.
                     result = evaluate_for_each( io_list = lr_tail
@@ -2106,15 +2060,54 @@
                                            environment = lo_env ).
 
                   WHEN OTHERS.
+*                   special case for 'apply' to avoid repeating the code for tail call
+                    IF lr_head->value EQ 'apply'.  " (apply proc arg1 . . . rest-args)
+                      lr_head = lr_tail->car.                           " proc
+                      lr_tail = evaluate_apply( io_list = lr_tail->cdr  " handle arg1 . . . rest-args
+                                                environment = lo_env ).
+                    ENDIF.
+
+*                   EXECUTE PROCEDURE (native or lambda)
 *                   Take the first item of the evaluated list and call it as function
 *                   using the rest of the evaluated list as its arguments.
 
-*        ---        NATIVE PROCEDURES AND LAMBDAS
-*                   Other symbols at the start of the list must be evaluated first
-*                   The evaluated head must be either a native procedure or lambda
-                    result = execute( io_head     = lr_head
-                                      io_args     = lr_tail
-                                      environment = lo_env ).
+*                   The evaluated head must be a native procedure or a lambda or an ABAP function module
+                    DATA(lo_proc) = eval_ast( element = lr_head             " proc
+                                              environment = lo_env ).
+                    CASE lo_proc->type.
+
+                      WHEN lcl_lisp=>type_lambda.
+                        lo_env = lambda_environment( io_head = lo_proc
+                                                     io_args = lr_tail
+                                                     environment = lo_env ).
+                        lo_elem = lo_proc->cdr.
+                        tail_sequence.
+
+                      WHEN lcl_lisp=>type_native.
+*                       Evaluate native function:
+                        CALL METHOD (lo_proc->value)
+                          EXPORTING
+                            list   = evaluate_parameters( io_list = lr_tail
+                                                          environment = lo_env )
+                          RECEIVING
+                            result = result.
+
+
+                      WHEN lcl_lisp=>type_abap_function.
+*              >> TEST: Support evaluation of ABAP function directly
+*                       Recompose as if calling a PROC (which we are). This is part of the test. If we make an ABAP function
+*                       call first-class, then we would need to revisit evaluating the whole of ELEMENT in one shot
+                        result = proc_abap_function_call( lcl_lisp_new=>cons( io_car = lo_proc
+                                                                              io_cdr = lr_tail ) ).
+*              << TEST
+*                      WHEN lcl_lisp=>type_abap_method.
+*              >> TEST: Support evaluation of ABAP methods directly
+*              << TEST
+                      WHEN OTHERS.
+                        throw( |Cannot evaluate { lo_proc->to_string( ) } - not a procedure| ).
+
+                    ENDCASE.
+
                 ENDCASE.
 
               WHEN OTHERS.
@@ -2242,7 +2235,7 @@
     ENDMETHOD.
 
     METHOD reverse_list.
-      validate: io_list.
+      validate io_list.
 
       result = nil.
       DATA(iter) = io_list->new_iterator( ).
@@ -2253,7 +2246,7 @@
     ENDMETHOD.
 
     METHOD proc_reverse.
-      validate: list.
+      validate list.
 
       result = reverse_list( list->car ).
     ENDMETHOD.                    "proc_reverse
@@ -2274,12 +2267,12 @@
       ENDWHILE.
     ENDMETHOD.
 
-    METHOD map_apply_proc.
-*     evaluate function call (proc list1[k] list2[k]... listn[k])
+    METHOD map_next_expr.
+*     determine expression (proc list1[k] list2[k]... listn[k])
       ev_has_next = abap_true.
 
-      DATA(lo_head) = lcl_lisp_new=>cons( io_car = io_proc ).
-      DATA(lo_next) = lo_head.
+      DATA(lo_next) = lcl_lisp_new=>cons( io_car = io_proc ).
+      result = lo_next.
       LOOP AT ct_list ASSIGNING FIELD-SYMBOL(<lo_list>).
         IF <lo_list> EQ nil.
           ev_has_next = abap_false.
@@ -2296,9 +2289,6 @@
         CHECK <lo_list> EQ nil.
         ev_has_next = abap_false.
       ENDLOOP.
-
-      result = eval( element = lo_head
-                     environment = environment ).
     ENDMETHOD.
 
     METHOD proc_append_unsafe.  " append! (non functional)
@@ -2334,7 +2324,7 @@
     ENDMETHOD.                    "proc_append_unsafe
 
     METHOD proc_car.
-      validate: list.
+      validate list.
 
       DATA(lo_arg) = list->car.
       IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
@@ -2372,7 +2362,7 @@
     ENDMETHOD.
 
     METHOD proc_cdr.
-      validate: list.
+      validate list.
 
       DATA(lo_arg) = list->car.
       IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
@@ -2391,7 +2381,7 @@
 
     METHOD proc_not.
 *     Create new cell and prepend it to second parameter
-      validate: list.
+      validate list.
 
       IF list->car EQ false.
         result = true.
@@ -2401,7 +2391,7 @@
     ENDMETHOD.                    "proc_cons
 
     METHOD proc_caar.
-      validate: list.
+      validate list.
       DATA(lo_arg) = list->car.
       IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
         lo_arg->error_not_a_pair( `caar: ` ).
@@ -2416,7 +2406,7 @@
     ENDMETHOD.                    "proc_car
 
     METHOD proc_cadr.
-      validate: list.
+      validate list.
 
       DATA(lo_arg) = list->car.
       IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
@@ -2432,7 +2422,7 @@
     ENDMETHOD.                    "proc_cdr
 
     METHOD proc_cdar.
-      validate: list.
+      validate list.
       DATA(lo_arg) = list->car.
       IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
         lo_arg->error_not_a_pair( `cdar: ` ).
@@ -2447,7 +2437,7 @@
     ENDMETHOD.                    "proc_car
 
     METHOD proc_cddr.
-      validate: list.
+      validate list.
 
       DATA(lo_arg) = list->car.
       IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
@@ -2508,7 +2498,7 @@
 
     METHOD proc_make_list.
 *     returns a list of length n and every atom is an empty list ().
-      validate: list.
+      validate list.
       validate_number list->car 'make-list'.
 
       result = lcl_lisp=>nil.
@@ -2620,7 +2610,7 @@
     METHOD proc_vector_ref.
 *    (vector-ref vector k) procedure
 
-      validate: list.
+      validate list.
       validate_vector list->car 'vector-ref'.
       DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
 
@@ -2642,7 +2632,7 @@
     METHOD proc_vector_set.
 *    (vector-set! vector k obj) procedure
 
-      validate: list.
+      validate list.
       validate_vector list->car 'vector-set!'.
       DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
 
@@ -2676,7 +2666,7 @@
 * The vector->list procedure returns a newly allocated list of the objects contained
 * in the elements of vector between start and end. Order is preserved.
 
-      validate: list.
+      validate list.
       validate_vector list->car 'vector->list'.
       DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
 
@@ -2909,7 +2899,7 @@
       IF iter->has_next( ) EQ abap_false.
         result->number = 0 - result->number.
       ELSE.
-*        Subtract all consecutive numbers from the first
+*       Subtract all consecutive numbers from the first
         WHILE iter->has_next( ).
           cell = iter->next( ).
           validate_number cell '[-]'.
@@ -3134,30 +3124,30 @@
     ENDMETHOD.
 
 *--------------------------------------------------------------------*
-*    Hash-related functions
+*   Hash-related functions
     METHOD proc_make_hash.
       result = lcl_lisp_new=>hash( list ).
     ENDMETHOD.                    "proc_make_hash
 
-*    Get an element from a hash
+*   Get an element from a hash
     METHOD proc_hash_get.
       result = lcl_lisp_hash=>from_list( list = list
                                          msg = 'HASH-GET' )->get( list->cdr ).
     ENDMETHOD.                    "proc_hash_get
 
-*    Insert an element into a hash
+*   Insert an element into a hash
     METHOD proc_hash_insert.
       result = lcl_lisp_hash=>from_list( list = list
                                          msg = 'HASH-INSERT' )->insert( list->cdr ).
     ENDMETHOD.                    "proc_hash_insert
 
-*    Remove an element from a hash
+*   Remove an element from a hash
     METHOD proc_hash_remove.
       result = lcl_lisp_hash=>from_list( list = list
                                          msg = 'HASH-REMOVE' )->delete( list->cdr ).
     ENDMETHOD.                    "proc_hash_delete
 
-*    Return the keys of a hash
+*   Return the keys of a hash
     METHOD proc_hash_keys.
       result = lcl_lisp_hash=>from_list( list = list
                                          msg = 'HASH-KEYS' )->get_hash_keys( ).
@@ -3256,13 +3246,13 @@
       CHECK list IS BOUND        " paramater (car) must not be valid
         AND list->car IS BOUND.  " Body
       CASE list->car->type.
-        WHEN lcl_lisp=>type_lambda OR lcl_lisp=>type_native.
+        WHEN lcl_lisp=>type_lambda OR lcl_lisp=>type_native OR lcl_lisp=>type_abap_function.
           result = true.
       ENDCASE.
     ENDMETHOD.
 
     METHOD proc_is_alist. " not in standard?
-      validate: list.
+      validate list.
 
       result = false.
 
@@ -3336,7 +3326,7 @@
       DATA carry TYPE f.
 
       result = nil.
-      validate: list.
+      validate list.
       validate_number list->car '[acosh]'.
       _is_last_param list.
       TRY.
@@ -3350,7 +3340,7 @@
       DATA carry TYPE f.
 
       result = nil.
-      validate: list.
+      validate list.
       validate_number list->car '[atanh]'.
       _is_last_param list.
       TRY.
@@ -3398,7 +3388,7 @@
 
     METHOD proc_round.
       result = nil.
-      validate: list.
+      validate list.
       validate_number list->car '[round]'.
       _is_last_param list.
       TRY.
@@ -3437,7 +3427,7 @@
 
     METHOD proc_random.
       result = nil.
-      validate: list.
+      validate list.
       validate_integer: list->car '[random]'.
       _is_last_param list.
       TRY.
@@ -4147,20 +4137,21 @@
     ENDMETHOD.                    "new
 
     METHOD find.
-*      find the environment where the symbol is defined
-      IF line_exists( map[ symbol = symbol ] ).
-        env = me.            " found in current environment
-      ELSEIF outer IS BOUND.
-        env = outer->find( symbol ).
-      ELSE.
-        unbound_symbol( symbol ).
-      ENDIF.
-    ENDMETHOD.                    "find
+*     find the environment where the symbol is defined
+      env = me.
+      WHILE env IS BOUND.
+        IF line_exists( env->map[ symbol = symbol ] ).
+          RETURN.                      " found
+        ENDIF.
+        env = env->outer.
+      ENDWHILE.
+      unbound_symbol( symbol ).
+    ENDMETHOD.
 
     METHOD get.
-*      takes a symbol key and uses the find logic to locate the environment with the key,
-*      then returns the matching value. If no key is found up the outer chain,
-*      then throws/raises a "not found" error.
+*     takes a symbol key and uses the find logic to locate the environment with the key,
+*     then returns the matching value.
+*     raises an "unbound" error if no key is found up the environment chain
       TRY.
           cell = VALUE #( map[ symbol = symbol ]-value DEFAULT outer->get( symbol ) ).
         CATCH cx_root.
@@ -4284,10 +4275,6 @@
       quasiquote = lcl_lisp_new=>symbol( 'quasiquote' ).
       new_line = lcl_lisp_new=>string( |\n| ).
     ENDMETHOD.                    "class_constructor
-
-    METHOD first.
-      ro_car = COND #( WHEN car IS BOUND THEN car ELSE nil ).
-    ENDMETHOD.                    "first
 
     METHOD rest.
       ro_cdr = COND #( WHEN cdr IS BOUND THEN cdr ELSE nil ).
@@ -4568,35 +4555,6 @@
 
   ENDCLASS.
 
-*  CLASS lcl_lisp_builder IMPLEMENTATION.
-*
-*    METHOD new.
-*      ro_builder = NEW #( ).
-*      IF io_elem NE nil.
-*        ro_builder->mo_head = lcl_lisp_new=>cons( io_car = io_elem ).
-*      ELSE.
-*        ro_builder->mo_head = nil.
-*      ENDIF.
-*      ro_builder->mo_last = ro_builder->mo_head.
-*    ENDMETHOD.
-*
-*    METHOD add.
-*      IF mo_last NE nil.
-*        mo_last = mo_last->cdr = lcl_lisp_new=>cons( io_car = io_elem ).
-*        ro_builder->mo_head = lcl_lisp_new=>cons( io_car = io_elem ).
-*      ELSE.
-*        mo_last = mo_last->cdr = io_elem.
-*      ENDIF.
-*
-*      ro_builder = me.
-*    ENDMETHOD.
-*
-*    METHOD get.
-*      ro_head = mo_head.
-*    ENDMETHOD.
-*
-*  ENDCLASS.
-*
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp_hash IMPLEMENTATION
 *----------------------------------------------------------------------*
@@ -4613,7 +4571,7 @@
       WHILE lo_iter->has_next( ).
         DATA(lo_key) = lo_iter->next( ).
         IF lo_key->type NE type_symbol AND lo_key->type NE type_string.
-          throw( |MAKE-HASH: Use only symbol or string as a key| ).
+          throw( |make-hash: Use only symbol or string as a key| ).
         ENDIF.
         CHECK lo_iter->has_next( ).
         INSERT VALUE #( key = lo_key->value
@@ -4624,7 +4582,7 @@
     METHOD get.
       validate: list, list->car.
       IF list->car = nil.
-        throw( |HASH-GET requires a key to access an element| ).
+        throw( |hash-get requires a key to access an element| ).
       ENDIF.
 
 *      TODO: Additional check for key type
