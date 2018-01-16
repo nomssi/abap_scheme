@@ -1,4 +1,5 @@
 *&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
 *&  Include           YY_LIB_LISP
 *& https://github.com/nomssi/abap_scheme
 *& https://github.com/mydoghasworms/abap-lisp
@@ -902,11 +903,6 @@
                                 RETURNING VALUE(result) TYPE REF TO lcl_lisp
                                 RAISING   lcx_lisp_exception.
 
-      METHODS evaluate_do IMPORTING io_head       TYPE REF TO lcl_lisp
-                                    environment   TYPE REF TO lcl_lisp_environment
-                          RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                          RAISING   lcx_lisp_exception.
-
       METHODS eval_list_tco IMPORTING VALUE(io_head) TYPE REF TO lcl_lisp
                                       io_environment TYPE REF TO lcl_lisp_environment
                             EXPORTING eo_elem        TYPE REF TO lcl_lisp
@@ -924,12 +920,16 @@
                                           eo_args TYPE REF TO lcl_lisp
                                 RAISING   lcx_lisp_exception.
 
-      METHODS extract_do_params IMPORTING io_head TYPE REF TO lcl_lisp
-                                          io_env  TYPE REF TO lcl_lisp_environment
-                                EXPORTING eo_vars TYPE REF TO lcl_lisp
-                                          eo_init TYPE REF TO lcl_lisp
-                                          eo_step TYPE REF TO lcl_lisp
-                                RAISING   lcx_lisp_exception.
+      METHODS eval_do_step IMPORTING io_command TYPE REF TO lcl_lisp
+                                     io_steps   TYPE REF TO lcl_lisp
+                                     io_env     TYPE REF TO lcl_lisp_environment
+                           RAISING   lcx_lisp_exception.
+
+      METHODS eval_do_init IMPORTING io_head       TYPE REF TO lcl_lisp
+                                     VALUE(io_env) TYPE REF TO lcl_lisp_environment
+                           EXPORTING eo_step       TYPE REF TO lcl_lisp
+                                     eo_env        TYPE REF TO lcl_lisp_environment
+                           RAISING   lcx_lisp_exception.
 
       METHODS eval_ast IMPORTING element       TYPE REF TO lcl_lisp
                                  environment   TYPE REF TO lcl_lisp_environment
@@ -1533,74 +1533,104 @@
       ENDWHILE.
     ENDMETHOD.
 
-* (do ( ( <variable1> <init1> <step1>)
-*        ... )
-*        ( <test> <expression> ... )
-*        <command> ... =
-*   (do ((vec (make-vector 5) )
-*         (i 0 (+ i 1) ) )
-*         ((= i 5) vec)
-*       (vector-set! vec i i))  => #(0 1 2 3 4)
-*
-*  (let ((x '(1 3 5 7 9)))
-*   (do ((x x (cdr x))
-*        (sum 0  (+ sum (car x))))
-*      ((null? x) sum)))  => 25
-    METHOD evaluate_do.
-      result = nil.
-      DATA(lo_env) = lcl_lisp_environment=>new( environment ).
+    METHOD eval_do_init.
+*     <init> expressions are evaluated (in unspecified order), the <variable>s are bound to fresh locations,
+*     the results of the <init> expressions are stored in the bindings of the <variable>s.
+*     A <step> can be omitted, in which case the effect is the same as if (<variable> <init> <variable>)
+*     had been written instead of (<variable> <init>).
+      validate io_head.
+      DATA lt_symbols TYPE SORTED TABLE OF string WITH UNIQUE DEFAULT KEY. " to check for duplicate variables
 
-      extract_do_params( EXPORTING io_head = io_head
-                                   io_env = lo_env
-                         IMPORTING eo_vars = DATA(lo_vars)
-                                   eo_step = DATA(lo_step) ).
-      DATA(lo_var) = lo_vars.
-*      DATA(lo_init) = lo_start.
-*      WHILE lo_var IS BOUND AND lo_var NE nil   " Nil means no parameters to map
-*        AND lo_init IS BOUND AND lo_init NE nil.  " Nil means no parameters to map
-*
-*        lo_env->set( symbol = lo_var->car->value
-*                     element = lo_init->car ).
-*        lo_var = lo_var->cdr.
-*        lo_init = lo_init->cdr.
-*      ENDWHILE.
+      eo_env = lcl_lisp_environment=>new( io_env ).
+      DATA(local_env) = lcl_lisp_environment=>new( ).
+      eo_step = nil.
 
-*      evaluate_in_sequence( io_args = lo_var      " Pointer to arguments e.g. (4, (+ x 4)
-*                            io_pars = lo_init     " Pointer to formal parameters (x y)
-*                            io_env = lo_env ).
+
+      DATA(lo_loop) = io_head.
+      WHILE lo_loop NE nil.
+        DATA(lo_spec) = lo_loop->car.
+*       max. 3 entries
+*       <variable>
+        DATA(lo_var) = lo_spec->car.
+
+*       <init>
+
+        lo_spec = lo_spec->cdr.
+        IF lo_spec NE nil.
+          DATA(lo_init) = lo_spec->car.
+
+*         It is an error for a <variable> to appear more than once in the list of do variables.
+          IF line_exists( lt_symbols[ table_line = lo_var->value ] ).
+            throw( |do: variable { lo_var->value } appears more than once| ).
+          ENDIF.
+          INSERT lo_var->value INTO TABLE lt_symbols.
+
+
+          local_env->set( symbol = lo_var->value
+                          element = eval_ast( element = lo_init    " inits are evaluated in org. environment
+                                              environment = io_env ) ).
+          lo_spec = lo_spec->cdr.
+          IF lo_spec NE nil.
+*           <step>
+            DATA(lo_step) = lcl_lisp_new=>cons( io_car = lo_var
+                                                io_cdr = lo_spec->car ).
+            IF eo_step EQ nil.  " first
+              eo_step = lcl_lisp_new=>cons( io_car = lo_step ).
+              DATA(lo_ptr) = eo_step.
+            ELSE.
+              lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = lo_step ).
+            ENDIF.
+
+          ENDIF.
+        ENDIF.
+*       Next iteration control
+        lo_loop = lo_loop->cdr.
+      ENDWHILE.
+
+      LOOP AT lt_symbols INTO DATA(lv_symbol).
+        io_env->set( symbol = lv_symbol
+                     element = local_env->get( lv_symbol ) ).
+      ENDLOOP.
+
     ENDMETHOD.
 
-    METHOD extract_do_params.
-      eo_step = eo_vars = nil.
+    METHOD eval_do_step.
+*     <command> expressions are evaluated in order for effect
+      DATA(lo_command) = io_command.
 
-      CHECK io_head IS BOUND AND io_head->car IS BOUND AND io_head->car NE nil.
-      DATA(lo_ptr) = io_head->car.
+*     Evaluate in order
+      WHILE lo_command NE nil.
+        eval( element = lo_command->car
+              environment = io_env ).
+        lo_command = lo_command->cdr.
+      ENDWHILE.
 
-      validate lo_ptr->car.
-      eo_vars = lcl_lisp_new=>cons( io_car = lo_ptr->car ).
-      IF lo_ptr->cdr IS BOUND AND lo_ptr->cdr NE nil.
-        DATA(lo_init) = lo_ptr->cdr->car.
-        io_env->set( symbol = eo_vars->value
-                     element = lo_init ).
-      ENDIF.
-      DATA(lo_par) = eo_vars.
-*      DATA(lo_arg) = eo_args.
-*      lo_ptr = io_head.
-*      WHILE lo_ptr->cdr IS BOUND AND lo_ptr->cdr NE nil.
-*        lo_ptr = lo_ptr->cdr.
-**        Rest of list, pick head
-*        DATA(lo_pair) = lo_ptr->car.
-*        IF lo_pair IS BOUND AND lo_pair->car NE nil.
-*          lo_par = lo_par->cdr = lcl_lisp_new=>cons( io_car = lo_pair->car ).
-*        ENDIF.
-*        IF lo_pair->cdr IS BOUND AND lo_pair->cdr NE nil.
-*          lo_arg = lo_arg->cdr = lcl_lisp_new=>cons( io_car = lo_pair->cdr->car ).
-*        ENDIF.
-*      ENDWHILE.
-*      lo_par->cdr = lo_arg->cdr = nil.
+      DATA(lo_local_env) = lcl_lisp_environment=>new( ).
+*     the <step> expressions are evaluated in some unspecified order
+      DATA(lo_step) = io_steps.
+      WHILE lo_step NE nil.
+        DATA(lo_ptr) = lo_step->car.
 
-*     Debug help: DATA lv_debug TYPE string.
-*      lv_debug = |params { eo_pars->to_string( ) }\n arg { eo_args->to_string( ) }\n|.
+*       the <variable>s are first bound to fresh locations
+*       to avoid dependencies in the next step
+
+*       the results of the <step>s are stored in the bindings of the <variable>s
+        lo_local_env->set( symbol = lo_ptr->car->value
+                           element = eval_ast( element = lo_ptr->cdr
+                                                environment = io_env ) ).
+        lo_step = lo_step->cdr.
+      ENDWHILE.
+
+      lo_step = io_steps.
+      WHILE lo_step NE nil.
+        lo_ptr = lo_step->car.
+
+*       the results of the <step>s are stored in the bindings of the <variable>s
+        io_env->set( symbol = lo_ptr->car->value
+                     element = lo_local_env->get( lo_ptr->car->value ) ).
+        lo_step = lo_step->cdr.
+      ENDWHILE.
+
     ENDMETHOD.
 
     METHOD eval_list_tco. " Tail Call Optimization
@@ -2032,9 +2062,55 @@
                                                    io_cdr = lr_tail->cdr         " Body
                                                    io_env = lo_env ).
 
+*(do ((<variable1> <init1> <step1>) <-- iteration spec
+*       ... )
+*     (<test> <do result> ... )  <-- tail sequence
+*     <command> ... )
+*
+* A do expression is an iteration construct. It specifies a set of variables to be bound,
+* how they are to be initialized at the start, and how they are to be updated on each iteration.
+* When a termination condition is met, the loop exits after evaluating the <expression>s.
+* Example
+*   (do ((vec (make-vector 5) )
+*         (i 0 (+ i 1) ) )
+*         ((= i 5) vec)
+*       (vector-set! vec i i))  => #(0 1 2 3 4)
                   WHEN 'do'.
-                    result = evaluate_do( io_head = lr_tail
-                                          environment = lo_env ).
+                    DATA(lo_head) = lr_tail.
+                    validate: lo_head, lo_head->cdr, lo_head->cdr->cdr.
+
+*                   Initialization
+                    eval_do_init( EXPORTING io_head = lo_head->car
+                                            io_env = lo_env
+                                  IMPORTING eo_step = DATA(lo_steps)
+                                            eo_env = lo_env ).
+*                   Iteration
+                    DATA(lo_test) = lo_head->cdr->car.
+                    DATA(lo_command) = lo_head->cdr->cdr.
+
+                    DO.
+*                     evaluate <test>;
+                      CASE eval_ast( element = lo_test->car
+                                     environment = lo_env ).
+                        WHEN false.
+
+                          eval_do_step( io_command = lo_command
+                                        io_steps = lo_steps
+                                        io_env = lo_env ).
+*                         and the next iteration begins.
+
+                        WHEN OTHERS. " <test> evaluates to a true value
+* <expression>s are evaluated from left to right and the values of the last <expression> are returned.
+* If no <expression>s are present, then the value of the do expression is unspecified.
+
+                          lo_elem = lo_test->cdr.
+                          result = nil.
+                          EXIT.
+                      ENDCASE.
+
+                    ENDDO.
+
+                    tail_sequence.
 
 *                 WHEN 'case'.
 * (case <key> <clause1> <clause2> <clause3> ... )
