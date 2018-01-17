@@ -400,7 +400,12 @@
        METHODS letrec_star_0 FOR TESTING.
        METHODS values_0 FOR TESTING.
 
-       METHODS is_symbol_true FOR TESTING.
+       METHODS is_symbol_true_1 FOR TESTING.
+       METHODS is_symbol_true_2 FOR TESTING.
+       METHODS is_symbol_true_3 FOR TESTING.
+       METHODS is_symbol_true_4 FOR TESTING.
+       METHODS is_symbol_true_5 FOR TESTING.
+
        METHODS is_symbol_false FOR TESTING.
        METHODS is_hash_true FOR TESTING.
        METHODS is_hash_false FOR TESTING.
@@ -449,6 +454,8 @@
        METHODS cond_1 FOR TESTING.
        METHODS cond_2 FOR TESTING.
        METHODS cond_3 FOR TESTING.
+       METHODS cond_4 FOR TESTING.
+       METHODS cond_5 FOR TESTING.
 
        METHODS case_1 FOR TESTING.
        METHODS case_2 FOR TESTING.
@@ -694,16 +701,32 @@
 *                  expected = |8/3 2.28942848510666 36/19| ).
      ENDMETHOD.
 
-     METHOD is_symbol_true.
+     METHOD is_symbol_true_1.
        code_test( code = |(define x 5)|
                   expected = 'x' ).
        code_test( code = |(symbol? 'x)|
                   expected = '#t' ).
-       code_test( code = |(symbol? (car '(a b)))|
-                  expected = '#t' ).
        code_test( code = |(symbol? x)|
                   expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD is_symbol_true_2.
+       code_test( code = |(symbol? (car '(a b)))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_symbol_true_3.
+       code_test( code = |(symbol? x)|
+                  expected = 'Eval: Symbol x is unbound' ).
+     ENDMETHOD.
+
+     METHOD is_symbol_true_4.
        code_test( code = |(symbol? 'nil)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_symbol_true_5.
+       code_test( code = |(apply symbol? '(primitive-procedure-test))|
                   expected = '#t' ).
      ENDMETHOD.
 
@@ -890,15 +913,27 @@
 
      METHOD cond_2.
        code_test( code = |(cond ((> 3 3) 'greater)| &
-                         |((< 3 3) 'less)| &
-                         |(else 'equal))|
+                         |      ((< 3 3) 'less)| &
+                         |      (else 'equal))|
                   expected = 'equal' ).
      ENDMETHOD.
 
      METHOD cond_3.
        code_test( code = |(cond ((assv 'b '((a 1) (b 2))) => cadr)| &
-                         |(else #f))|
+                         |      (else #f))|
                   expected = '2' ).
+     ENDMETHOD.
+
+     METHOD cond_4.
+       code_test( code = |(cond ('(1 2 3) => cadr)| &
+                         |      (else #f))|
+                  expected = |2| ).
+     ENDMETHOD.
+
+     METHOD cond_5.
+       code_test( code = |(cond (#f 'false)| &
+                         |      ((cadr '(x y))))|
+                  expected = |y| ).
      ENDMETHOD.
 
      METHOD case_1.
@@ -2239,6 +2274,8 @@
        METHODS apply_2 FOR TESTING.
        METHODS apply_3 FOR TESTING.
        METHODS apply_4 FOR TESTING.
+       METHODS apply_5 FOR TESTING.
+       METHODS apply_6 FOR TESTING.
 
        METHODS map_1 FOR TESTING.
        METHODS map_2 FOR TESTING.
@@ -2384,6 +2421,16 @@
                   expected = |compose| ).
        code_test( code = |((compose sqrt *) 12 75)|
                   expected = '30' ).
+     ENDMETHOD.
+
+     METHOD apply_5.
+       code_test( code = |(apply apply (list list (list 'apply 'list)))|
+                  expected = '(apply list)' ).
+     ENDMETHOD.
+
+     METHOD apply_6.
+       code_test( code = |(apply (lambda (x y . z) (vector x y z)) '(1 2))|
+                  expected = |#( 1 2 nil )| ).
      ENDMETHOD.
 
      METHOD map_1.

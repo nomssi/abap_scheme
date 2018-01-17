@@ -1222,6 +1222,29 @@
       env->define_value( symbol = 'quote'      type = lcl_lisp=>type_primitive value   = 'quote' ).
       env->define_value( symbol = 'quasiquote' type = lcl_lisp=>type_primitive value   = 'quasiquote' ).
       env->define_value( symbol = 'set!'       type = lcl_lisp=>type_primitive value   = 'set!' ).
+      env->define_value( symbol = 'apply'      type = lcl_lisp=>type_primitive value   = 'apply' ).
+
+      env->define_value( symbol = 'and'      type = lcl_lisp=>type_primitive value   = 'and' ).
+      env->define_value( symbol = 'or'       type = lcl_lisp=>type_primitive value   = 'or' ).
+      env->define_value( symbol = 'cond'     type = lcl_lisp=>type_primitive value   = 'cond' ).
+      env->define_value( symbol = 'unless'   type = lcl_lisp=>type_primitive value   = 'unless' ).
+      env->define_value( symbol = 'when'     type = lcl_lisp=>type_primitive value   = 'when' ).
+      env->define_value( symbol = 'begin'    type = lcl_lisp=>type_primitive value   = 'begin' ).
+      env->define_value( symbol = 'let'      type = lcl_lisp=>type_primitive value   = 'let' ).
+      env->define_value( symbol = 'let*'     type = lcl_lisp=>type_primitive value   = 'let*' ).
+      env->define_value( symbol = 'letrec'   type = lcl_lisp=>type_primitive value   = 'letrec' ).
+      env->define_value( symbol = 'letrec*'  type = lcl_lisp=>type_primitive value   = 'letrec*' ).
+      env->define_value( symbol = 'do'       type = lcl_lisp=>type_primitive value   = 'do' ).
+      env->define_value( symbol = 'case'     type = lcl_lisp=>type_primitive value   = 'case' ).
+      env->define_value( symbol = 'for-each' type = lcl_lisp=>type_primitive value   = 'for-each' ).
+      env->define_value( symbol = 'map'      type = lcl_lisp=>type_primitive value   = 'map' ).
+
+      env->define_value( symbol = 'unquote'          type = lcl_lisp=>type_primitive value   = 'unquote' ).
+      env->define_value( symbol = 'unquote-splicing' type = lcl_lisp=>type_primitive value   = 'unquote-splicing' ).
+      env->define_value( symbol = 'newline'          type = lcl_lisp=>type_primitive value   = 'newline' ).
+      env->define_value( symbol = 'display'          type = lcl_lisp=>type_primitive value   = 'display' ).
+      env->define_value( symbol = 'write'            type = lcl_lisp=>type_primitive value   = 'write' ).
+      env->define_value( symbol = 'read'             type = lcl_lisp=>type_primitive value   = 'read' ).
 
 *     Add native functions to environment
       env->define_value( symbol = '+'        type = lcl_lisp=>type_native value   = 'PROC_ADD' ).
@@ -1652,7 +1675,7 @@
         eo_elem = eo_elem->cdr.
       ENDWHILE.
 
-      validate_tail eo_elem->cdr io_head  ``.
+      validate_tail eo_elem->cdr io_head space.
     ENDMETHOD.
 
 *    METHOD eval_list.
@@ -1931,7 +1954,13 @@
                     ENDIF.
                     result = lr_tail->car.
 
-*                  WHEN 'unquote'. " Partial quote - TO DO
+                  WHEN 'unquote'. " Partial quote - TO DO
+                    result = nil.
+                    throw( `not implemented yet` ).
+
+                  WHEN 'unquote-slicing'.
+                    result = nil.
+                    throw( `not implemented yet` ).
 
                   WHEN 'newline'.
                     result = write( lcl_lisp=>new_line ).
@@ -1987,15 +2016,17 @@
                       ENDIF.
                       lo_ptr = lo_ptr->cdr.
                     ENDWHILE.
-                    IF lo_elem NE nil.
-                      IF lo_elem->car->value = c_lisp_then.
-                        lo_elem = lcl_lisp_new=>cons( io_car = lo_elem->cdr->car
-                                                      io_cdr = lo_test ).
-                        CONTINUE.
-                        "tail_expression lo_elem.
-                      ELSE.
-                        tail_sequence.
-                      ENDIF.
+                    IF lo_elem EQ nil.
+                      result = lo_test.
+                    ELSEIF lo_elem->car->value = c_lisp_then.
+                      lo_elem = lcl_lisp_new=>cons(
+                        io_car = lo_elem->cdr->car
+                        io_cdr = lcl_lisp_new=>cons( " quote to avoid double eval
+                                    io_car = lcl_lisp_new=>quote( lo_test ) ) ).
+                      CONTINUE.
+                      "tail_expression lo_elem.
+                    ELSE.
+                      tail_sequence.
                     ENDIF.
 
                   WHEN 'define'.
@@ -2124,7 +2155,7 @@
 
                     tail_sequence.
 
-*                 WHEN 'case'.
+                  WHEN 'case'.
 * (case <key> <clause1> <clause2> <clause3> ... )
 * <key> can be any expression. Each <clause> has the form ((<datum1> ...) <expression1> <expression2> ...)
 * It is an error if any of the <datum> are the same anywhere in the expression
@@ -2133,7 +2164,64 @@
 *  (else <expression1> <expression2> ... )
 *  or
 *  (else => <expression>).
-*                   result = nil.
+                    validate lr_tail.
+                    result = nil.
+
+                    DATA(lo_key) = eval( element = lr_tail->car
+                                         environment = lo_env ).
+
+                    lr_tail = lr_tail->cdr.
+                    validate: lr_tail, lr_tail->car.
+
+                    lo_elem = nil.
+                    DATA(lv_match) = abap_false.
+                    WHILE lr_tail NE nil AND lv_match EQ abap_false.
+                      lo_clause = lr_tail->car.
+
+                      DATA(lo_datum) = lo_clause->car.
+                      validate lo_datum.
+
+                      WHILE lo_datum NE nil.
+
+                        IF lo_datum->value EQ c_lisp_else.
+                          IF lr_tail->cdr NE nil.
+                            throw( `case: else must be the last clause` ).
+                          ENDIF.
+                          lo_elem = lo_clause->cdr.
+                          lv_match = abap_true.
+                          EXIT.
+                        ENDIF.
+
+                        IF proc_equivalence( a = lo_key            " eqv? match
+                                             b = lo_datum->car ) NE false.
+                          lo_elem = lo_clause->cdr.
+                          lv_match = abap_true.
+                          EXIT.
+                        ENDIF.
+
+                        lo_datum = lo_datum->cdr.
+                      ENDWHILE.
+
+                      lr_tail = lr_tail->cdr.
+                    ENDWHILE.
+
+                    IF lo_elem EQ nil.
+                      result = nil.
+
+                    ELSEIF lo_elem->car->value = c_lisp_then.
+
+                      lo_elem = lcl_lisp_new=>cons(
+                        io_car = lo_elem->cdr->car
+                        io_cdr = lcl_lisp_new=>cons( " quote to avoid double eval
+                                    io_car = lcl_lisp_new=>quote( lo_key ) ) ).
+                      CONTINUE.
+                      "tail_expression lo_elem.
+
+                    ELSE.
+
+                      tail_sequence.
+
+                    ENDIF.
 
                   WHEN 'read'.
                     result = read( lr_tail ).
@@ -2180,6 +2268,10 @@
                           RECEIVING
                             result = result.
 
+                      WHEN lcl_lisp=>type_primitive.
+                        lo_elem = lcl_lisp_new=>cons( io_car = lo_proc
+                                                      io_cdr = lr_tail ).
+                        CONTINUE. "tail_expression lo_elem.
 
                       WHEN lcl_lisp=>type_abap_function.
 *              >> TEST: Support evaluation of ABAP function directly
@@ -4299,9 +4391,6 @@
           DATA(lo_arg) = io_args.                " Pointer to arguments
 
           WHILE lo_par NE lcl_lisp=>nil.         " Nil would mean no parameters to map
-            IF lo_arg = lcl_lisp=>nil.           " Premature end of arguments
-              lcl_lisp=>throw( |Missing parameter(s) { lo_par->to_string( ) }| ).
-            ENDIF.
 
             IF lo_par->type EQ lcl_lisp=>type_symbol.
 *             dotted pair after fixed number of parameters, to be bound to a variable number of arguments
@@ -4315,6 +4404,10 @@
             ENDIF.
 
 *           Part of the list with fixed number of parameters
+
+            IF lo_arg = lcl_lisp=>nil.           " Premature end of arguments
+              lcl_lisp=>throw( |Missing parameter(s) { lo_par->to_string( ) }| ).
+            ENDIF.
 
             ADD 1 TO lv_count.
 
