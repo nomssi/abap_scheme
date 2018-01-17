@@ -124,8 +124,8 @@
       <TEXT_NAME>ICON_SYSTEM_PLAY</TEXT_NAME>
       <ICON_ID>@I6@</ICON_ID>
       <FUN_TEXT>Run</FUN_TEXT>
-      <ICON_TEXT>Run</ICON_TEXT>
-      <INFO_TEXT>Evaluate</INFO_TEXT>
+      <ICON_TEXT>Evaluate</ICON_TEXT>
+      <INFO_TEXT>Run</INFO_TEXT>
       <PATH>R</PATH>
      </RSMPE_FUNT>
      <RSMPE_FUNT>
@@ -143,25 +143,29 @@
       <TEXT_NAME>ICON_INFORMATION</TEXT_NAME>
       <ICON_ID>@0S@</ICON_ID>
       <FUN_TEXT>Help</FUN_TEXT>
-      <ICON_TEXT>Wiki</ICON_TEXT>
-      <INFO_TEXT>Help on..</INFO_TEXT>
+      <ICON_TEXT>Help</ICON_TEXT>
+      <INFO_TEXT>Online manual</INFO_TEXT>
       <PATH>H</PATH>
      </RSMPE_FUNT>
      <RSMPE_FUNT>
       <CODE>NEXT</CODE>
       <TEXTNO>001</TEXTNO>
       <TEXT_TYPE>S</TEXT_TYPE>
-      <TEXT_NAME>ICON_NEXT_VALUE</TEXT_NAME>
-      <ICON_ID>@0I@</ICON_ID>
+      <TEXT_NAME>ICON_ARROW_RIGHT</TEXT_NAME>
+      <ICON_ID>@9T@</ICON_ID>
       <FUN_TEXT>Next</FUN_TEXT>
+      <ICON_TEXT>Next</ICON_TEXT>
+      <INFO_TEXT>Next expression</INFO_TEXT>
      </RSMPE_FUNT>
      <RSMPE_FUNT>
       <CODE>PREV</CODE>
       <TEXTNO>001</TEXTNO>
       <TEXT_TYPE>S</TEXT_TYPE>
-      <TEXT_NAME>ICON_PREVIOUS_VALUE</TEXT_NAME>
-      <ICON_ID>@0H@</ICON_ID>
+      <TEXT_NAME>ICON_ARROW_LEFT</TEXT_NAME>
+      <ICON_ID>@9S@</ICON_ID>
       <FUN_TEXT>Previous</FUN_TEXT>
+      <ICON_TEXT>Previous</ICON_TEXT>
+      <INFO_TEXT>Previous expression</INFO_TEXT>
      </RSMPE_FUNT>
      <RSMPE_FUNT>
       <CODE>TEST</CODE>
@@ -378,19 +382,19 @@
       <PFK_CODE>000001</PFK_CODE>
       <CODE>0001</CODE>
       <NO>02</NO>
-      <PFNO>14</PFNO>
-     </RSMPE_BUT>
-     <RSMPE_BUT>
-      <PFK_CODE>000001</PFK_CODE>
-      <CODE>0001</CODE>
-      <NO>03</NO>
       <PFNO>23</PFNO>
      </RSMPE_BUT>
      <RSMPE_BUT>
       <PFK_CODE>000001</PFK_CODE>
       <CODE>0001</CODE>
-      <NO>04</NO>
+      <NO>03</NO>
       <PFNO>24</PFNO>
+     </RSMPE_BUT>
+     <RSMPE_BUT>
+      <PFK_CODE>000001</PFK_CODE>
+      <CODE>0001</CODE>
+      <NO>04</NO>
+      <PFNO>14</PFNO>
      </RSMPE_BUT>
      <RSMPE_BUT>
       <PFK_CODE>000001</PFK_CODE>

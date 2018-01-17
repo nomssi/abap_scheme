@@ -40,6 +40,9 @@
   CONSTANTS:
     c_area_eval  TYPE string VALUE `Eval`,
     c_area_parse TYPE string VALUE `Parse`.
+  CONSTANTS:
+    c_lisp_else TYPE string VALUE 'else',
+    c_lisp_then TYPE c LENGTH 2 VALUE '=>'.
 
 * Macro to simplify the definition of a native procedure
   DEFINE _proc_meth.
@@ -1203,7 +1206,7 @@
 
       env = lcl_lisp_environment=>new( ).
 
-*      Create symbols for nil, true and false values
+*     Create symbols for nil, true and false values
       nil = lcl_lisp=>nil.
       true = lcl_lisp=>true.
       false = lcl_lisp=>false.
@@ -1265,7 +1268,7 @@
       env->define_value( symbol = 'cdar'     type = lcl_lisp=>type_native value   = 'PROC_CDAR' ).
       env->define_value( symbol = 'cddr'     type = lcl_lisp=>type_native value   = 'PROC_CDDR' ).
 
-*     Hash-related functions
+*     vector-related functions
       env->define_value( symbol = 'vector'        type = lcl_lisp=>type_native value   = 'PROC_VECTOR' ).
       env->define_value( symbol = 'vector-length' type = lcl_lisp=>type_native value   = 'PROC_VECTOR_LENGTH' ).
       env->define_value( symbol = 'vector-set!'   type = lcl_lisp=>type_native value   = 'PROC_VECTOR_SET' ).
@@ -1279,7 +1282,7 @@
       env->define_value( symbol = 'hash-insert' type = lcl_lisp=>type_native value   = 'PROC_HASH_INSERT' ).
       env->define_value( symbol = 'hash-remove' type = lcl_lisp=>type_native value   = 'PROC_HASH_REMOVE' ).
       env->define_value( symbol = 'hash-keys'   type = lcl_lisp=>type_native value   = 'PROC_HASH_KEYS' ).
-*      Functions for type:
+*     Functions for type:
       env->define_value( symbol = 'string?'     type = lcl_lisp=>type_native value = 'PROC_IS_STRING' ).
       env->define_value( symbol = 'hash?'       type = lcl_lisp=>type_native value = 'PROC_IS_HASH' ).
       env->define_value( symbol = 'number?'     type = lcl_lisp=>type_native value = 'PROC_IS_NUMBER' ).
@@ -1293,26 +1296,26 @@
       env->define_value( symbol = 'symbol?'     type = lcl_lisp=>type_native value = 'PROC_IS_SYMBOL' ).
       env->define_value( symbol = 'boolean=?'   type = lcl_lisp=>type_native value = 'PROC_LIST_IS_BOOLEAN' ).
 
-*      Format
+*     Format
       env->define_value( symbol = 'number->string' type = lcl_lisp=>type_native value = 'PROC_NUM_TO_STRING' ).
-*      Math
-      env->define_value( symbol = 'abs' type = lcl_lisp=>type_native value = 'PROC_ABS' ).
-      env->define_value( symbol = 'sin' type = lcl_lisp=>type_native value = 'PROC_SIN' ).
-      env->define_value( symbol = 'cos' type = lcl_lisp=>type_native value = 'PROC_COS' ).
-      env->define_value( symbol = 'tan' type = lcl_lisp=>type_native value = 'PROC_TAN' ).
-      env->define_value( symbol = 'asin' type = lcl_lisp=>type_native value = 'PROC_ASIN' ).
-      env->define_value( symbol = 'acos' type = lcl_lisp=>type_native value = 'PROC_ACOS' ).
-      env->define_value( symbol = 'atan' type = lcl_lisp=>type_native value = 'PROC_ATAN' ).
-      env->define_value( symbol = 'sinh' type = lcl_lisp=>type_native value = 'PROC_SINH' ).
-      env->define_value( symbol = 'cosh' type = lcl_lisp=>type_native value = 'PROC_COSH' ).
-      env->define_value( symbol = 'tanh' type = lcl_lisp=>type_native value = 'PROC_TANH' ).
+*     Math
+      env->define_value( symbol = 'abs'   type = lcl_lisp=>type_native value = 'PROC_ABS' ).
+      env->define_value( symbol = 'sin'   type = lcl_lisp=>type_native value = 'PROC_SIN' ).
+      env->define_value( symbol = 'cos'   type = lcl_lisp=>type_native value = 'PROC_COS' ).
+      env->define_value( symbol = 'tan'   type = lcl_lisp=>type_native value = 'PROC_TAN' ).
+      env->define_value( symbol = 'asin'  type = lcl_lisp=>type_native value = 'PROC_ASIN' ).
+      env->define_value( symbol = 'acos'  type = lcl_lisp=>type_native value = 'PROC_ACOS' ).
+      env->define_value( symbol = 'atan'  type = lcl_lisp=>type_native value = 'PROC_ATAN' ).
+      env->define_value( symbol = 'sinh'  type = lcl_lisp=>type_native value = 'PROC_SINH' ).
+      env->define_value( symbol = 'cosh'  type = lcl_lisp=>type_native value = 'PROC_COSH' ).
+      env->define_value( symbol = 'tanh'  type = lcl_lisp=>type_native value = 'PROC_TANH' ).
       env->define_value( symbol = 'asinh' type = lcl_lisp=>type_native value = 'PROC_ASINH' ).
       env->define_value( symbol = 'acosh' type = lcl_lisp=>type_native value = 'PROC_ACOSH' ).
       env->define_value( symbol = 'atanh' type = lcl_lisp=>type_native value = 'PROC_ATANH' ).
-      env->define_value( symbol = 'expt' type = lcl_lisp=>type_native value = 'PROC_EXPT' ).
-      env->define_value( symbol = 'exp' type = lcl_lisp=>type_native value = 'PROC_EXP' ).
-      env->define_value( symbol = 'log' type = lcl_lisp=>type_native value = 'PROC_LOG' ).
-      env->define_value( symbol = 'sqrt' type = lcl_lisp=>type_native value = 'PROC_SQRT' ).
+      env->define_value( symbol = 'expt'  type = lcl_lisp=>type_native value = 'PROC_EXPT' ).
+      env->define_value( symbol = 'exp'   type = lcl_lisp=>type_native value = 'PROC_EXP' ).
+      env->define_value( symbol = 'log'   type = lcl_lisp=>type_native value = 'PROC_LOG' ).
+      env->define_value( symbol = 'sqrt'  type = lcl_lisp=>type_native value = 'PROC_SQRT' ).
 
       env->define_value( symbol = 'floor'    type = lcl_lisp=>type_native value = 'PROC_FLOOR' ).
       env->define_value( symbol = 'ceiling'  type = lcl_lisp=>type_native value = 'PROC_CEILING' ).
@@ -1332,7 +1335,7 @@
       env->define_value( symbol = 'odd?'      type = lcl_lisp=>type_native value = 'PROC_IS_ODD' ).
       env->define_value( symbol = 'even?'     type = lcl_lisp=>type_native value = 'PROC_IS_EVEN' ).
 
-*      Native functions for ABAP integration
+*     Native functions for ABAP integration
       env->define_value( symbol = 'ab-data'       type = lcl_lisp=>type_native value   = 'PROC_ABAP_DATA' ).
       env->define_value( symbol = 'ab-function'   type = lcl_lisp=>type_native value   = 'PROC_ABAP_FUNCTION' ).
       env->define_value( symbol = 'ab-func-param' type = lcl_lisp=>type_native value   = 'PROC_ABAP_FUNCTION_PARAM' ).
@@ -1971,16 +1974,26 @@
                     lo_elem = nil.
                     WHILE lo_ptr NE nil.
                       DATA(lo_clause) = lo_ptr->car.
-                      IF lo_clause->car->value EQ 'else'
-                        OR eval_ast( element = lo_clause->car
-                                     environment = lo_env ) NE false.
+                      IF lo_clause->car->value EQ c_lisp_else.
+                        lo_elem = lo_clause->cdr.
+                        EXIT.
+                      ENDIF.
+                      DATA(lo_test) = eval_ast( element = lo_clause->car
+                                                environment = lo_env ).
+                      IF lo_test NE false.
                         lo_elem = lo_clause->cdr.
                         EXIT.
                       ENDIF.
                       lo_ptr = lo_ptr->cdr.
                     ENDWHILE.
                     IF lo_elem NE nil.
-                      tail_sequence.
+                      IF lo_elem->car->value = c_lisp_then.
+                        lo_elem = lcl_lisp_new=>cons( io_car = lo_elem->cdr
+                                                      io_cdr = lo_test ).
+                        tail_expression lo_elem.
+                      ELSE.
+                        tail_sequence.
+                      ENDIF.
                     ENDIF.
 
                   WHEN 'define'.
@@ -2062,19 +2075,17 @@
                                                    io_cdr = lr_tail->cdr         " Body
                                                    io_env = lo_env ).
 
-*(do ((<variable1> <init1> <step1>) <-- iteration spec
-*       ... )
-*     (<test> <do result> ... )  <-- tail sequence
+*(do ((<variable1> <init1> <step1>) ... ) <-- iteration spec
+*     (<test> <do result> ... )           <-- tail sequence
 *     <command> ... )
-*
-* A do expression is an iteration construct. It specifies a set of variables to be bound,
-* how they are to be initialized at the start, and how they are to be updated on each iteration.
-* When a termination condition is met, the loop exits after evaluating the <expression>s.
-* Example
+* Example:
 *   (do ((vec (make-vector 5) )
 *         (i 0 (+ i 1) ) )
 *         ((= i 5) vec)
 *       (vector-set! vec i i))  => #(0 1 2 3 4)
+* A do expression is an iteration construct. It specifies a set of variables to be bound,
+* how they are to be initialized at the start, and how they are to be updated on each iteration.
+* When a termination condition is met, the loop exits after evaluating the <expression>s.
                   WHEN 'do'.
                     DATA(lo_head) = lr_tail.
                     validate: lo_head, lo_head->cdr, lo_head->cdr->cdr.
@@ -2085,7 +2096,7 @@
                                   IMPORTING eo_step = DATA(lo_steps)
                                             eo_env = lo_env ).
 *                   Iteration
-                    DATA(lo_test) = lo_head->cdr->car.
+                    lo_test = lo_head->cdr->car.
                     DATA(lo_command) = lo_head->cdr->cdr.
 
                     DO.
@@ -2093,7 +2104,6 @@
                       CASE eval_ast( element = lo_test->car
                                      environment = lo_env ).
                         WHEN false.
-
                           eval_do_step( io_command = lo_command
                                         io_steps = lo_steps
                                         io_env = lo_env ).
@@ -2121,7 +2131,7 @@
 *  (else <expression1> <expression2> ... )
 *  or
 *  (else => <expression>).
-*            RETURN.
+*                   result = nil.
 
                   WHEN 'read'.
                     result = read( lr_tail ).
@@ -2468,6 +2478,10 @@
 
     METHOD proc_caar.
       validate list.
+      IF list EQ nil.
+        list->error_not_a_pair( `caar: ` ).
+      ENDIF.
+
       DATA(lo_arg) = list->car.
       IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
         lo_arg->error_not_a_pair( `caar: ` ).
@@ -2483,6 +2497,9 @@
 
     METHOD proc_cadr.
       validate list.
+      IF list EQ nil.
+        list->error_not_a_pair( `cadr: ` ).
+      ENDIF.
 
       DATA(lo_arg) = list->car.
       IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
@@ -2499,6 +2516,10 @@
 
     METHOD proc_cdar.
       validate list.
+      IF list EQ nil.
+        list->error_not_a_pair( `cdar: ` ).
+      ENDIF.
+
       DATA(lo_arg) = list->car.
       IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
         lo_arg->error_not_a_pair( `cdar: ` ).
@@ -2514,6 +2535,9 @@
 
     METHOD proc_cddr.
       validate list.
+      IF list EQ nil.
+        list->error_not_a_pair( `cddr: ` ).
+      ENDIF.
 
       DATA(lo_arg) = list->car.
       IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
@@ -3986,7 +4010,7 @@
 *      Read with key, which is a bit more effort
 *      FIELD-SYMBOLS <wa> TYPE any.
 *      FIELD-SYMBOLS <tab> TYPE table.
-      DATA line TYPE REF TO data.
+*      DATA line TYPE REF TO data.
 
       rdata = get_index_table_row( element = element
                                    identifier = identifier ).
@@ -4122,10 +4146,11 @@
       create_parameters( ).
 
       TRY.
-          rdata = VALUE #( param_active[ name = identifier->value ]-value
-                             DEFAULT parameters[ name = identifier->value ]-value ).
+          DATA(lv_parmname) = CONV abap_parmname( identifier->value ).
+          rdata = VALUE #( param_active[ name = lv_parmname ]-value
+                             DEFAULT parameters[ name = lv_parmname ]-value ).
         CATCH cx_sy_itab_line_not_found.
-          throw( |ab-get: No parameter { identifier->value } in function| ).
+          throw( |ab-get: No parameter { lv_parmname } in function| ).
       ENDTRY.
     ENDMETHOD.                    "get_function_parameter
 

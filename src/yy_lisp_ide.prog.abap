@@ -50,7 +50,7 @@ CLASS lcl_editor DEFINITION INHERITING FROM cl_gui_textedit.
                                   iv_read_only TYPE flag DEFAULT abap_true
                                   iv_toolbar   TYPE flag DEFAULT abap_false.
     METHODS append_source IMPORTING iv_text TYPE string.
-    METHODS append_to IMPORTING io_editor TYPE REF TO lcl_editor.
+
     METHODS push_text.
     METHODS pop_text RETURNING VALUE(code) TYPE string.
     METHODS to_string RETURNING VALUE(rv_text) TYPE string.
@@ -181,10 +181,11 @@ CLASS lcl_ide IMPLEMENTATION.
   ENDMETHOD.                    "refresh
 
   METHOD show_docu.
-    CONSTANTS c_url TYPE string VALUE `https://github.com/nomssi/abap_scheme/wiki`.
+    CONSTANTS c_url TYPE string VALUE `https://github.com/nomssi/abap_scheme/wiki`  ##NO_TEXT.
     cl_abap_browser=>show_url( title = `ABAP Scheme Wiki`
                                url = c_url
                                modal = abap_false
+                               buttons = abap_true
                                 "size = ms_cfg-browser_size
                                ).
   ENDMETHOD.
@@ -482,10 +483,6 @@ CLASS lcl_editor IMPLEMENTATION.
   METHOD append_source.
     append_string( format_input( iv_text ) ).
   ENDMETHOD.                    "append_string
-
-  METHOD append_to.
-    io_editor->append_string( to_string( ) ).
-  ENDMETHOD.                    "append_to
 
   METHOD to_string.
     get_textstream( IMPORTING text = rv_text ).

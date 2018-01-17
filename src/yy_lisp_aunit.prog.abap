@@ -2180,7 +2180,7 @@
        METHODS setup.
        METHODS teardown.
 
-       METHODS abs FOR TESTING.
+       METHODS abs_1 FOR TESTING.
    ENDCLASS.                    "ltc_library_function DEFINITION
 
 *----------------------------------------------------------------------*
@@ -2198,7 +2198,7 @@
        FREE mo_int.
      ENDMETHOD.                    "teardown
 
-     METHOD abs.
+     METHOD abs_1.
        code_test( code = |(define (abs n)| &
                          |  (if (< n 0)| &
                          |  (- n)| &
