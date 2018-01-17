@@ -75,7 +75,7 @@
   END-OF-DEFINITION.
 
   DEFINE validate_vector.
-    IF &1 IS NOT INSTANCE OF lcl_lisp_vector.
+    IF &1->type NE lcl_lisp=>type_vector.
       throw( |{ &1->to_string( ) } is not a vector | && &2 ).
     ENDIF.
   END-OF-DEFINITION.
@@ -3269,7 +3269,7 @@
       result = false.
       CHECK list IS BOUND AND list->car IS BOUND.
       CHECK list->car->type EQ lcl_lisp=>type_number
-        AND list->car->number EQ CONV int8( list->car->number ).
+        AND list->car->number EQ CONV i( list->car->number ).
       result = true.
     ENDMETHOD.                    "proc_is_integer
 
@@ -4835,9 +4835,10 @@
       CHECK lines( vector ) = lines( vec->vector ).
 
       LOOP AT vec->vector INTO DATA(lo_elem).
-        CHECK vector[ sy-tabix ]->is_equal( io_elem = lo_elem
-                                            comp = comp
-                                            interpreter = interpreter ) EQ false.
+        DATA(lo_vec) = vector[ sy-tabix ].
+        CHECK lo_vec->is_equal( io_elem = lo_elem
+                                comp = comp
+                                interpreter = interpreter ) EQ false.
         RETURN.
       ENDLOOP.
       result = true.
