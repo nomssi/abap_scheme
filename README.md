@@ -24,10 +24,11 @@ The current version was tested on ABAP Netweaver 7.50 and can be cloned with <a 
 - Include YY_LISP_AUNIT - ABAP Unit tests
 - Include YY_LISP_IDE - Workbench
 
-![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_lisp_workbench.png)
-The ABAP LISP Workbench has two commands:
+![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_scheme_workbench.png)
+The ABAP LISP Workbench has commands:
 - Evaluate (F8) executes the Scheme code 
 - Refresh (Shift-F2) will delete the source and console and reset the environment
+- Previous/Next expression
 
 ### ABAP Integration
 #### Interpreter
