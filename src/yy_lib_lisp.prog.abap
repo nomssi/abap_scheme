@@ -75,7 +75,8 @@
   END-OF-DEFINITION.
 
   DEFINE validate_vector.
-    IF &1 IS NOT INSTANCE OF lcl_lisp_vector.
+    validate &1.
+    IF &1->type NE lcl_lisp=>type_vector.
       throw( |{ &1->to_string( ) } is not a vector | && &2 ).
     ENDIF.
   END-OF-DEFINITION.
@@ -1988,9 +1989,10 @@
                     ENDWHILE.
                     IF lo_elem NE nil.
                       IF lo_elem->car->value = c_lisp_then.
-                        lo_elem = lcl_lisp_new=>cons( io_car = lo_elem->cdr
+                        lo_elem = lcl_lisp_new=>cons( io_car = lo_elem->cdr->car
                                                       io_cdr = lo_test ).
-                        tail_expression lo_elem.
+                        CONTINUE.
+                        "tail_expression lo_elem.
                       ELSE.
                         tail_sequence.
                       ENDIF.
@@ -4835,9 +4837,10 @@
       CHECK lines( vector ) = lines( vec->vector ).
 
       LOOP AT vec->vector INTO DATA(lo_elem).
-        CHECK vector[ sy-tabix ]->is_equal( io_elem = lo_elem
-                                            comp = comp
-                                            interpreter = interpreter ) EQ false.
+        DATA(lo_vec) = vector[ sy-tabix ].
+        CHECK lo_vec->is_equal( io_elem = lo_elem
+                                comp = comp
+                                interpreter = interpreter ) EQ false.
         RETURN.
       ENDLOOP.
       result = true.
