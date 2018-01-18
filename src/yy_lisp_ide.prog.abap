@@ -349,7 +349,7 @@ CLASS lcl_ide IMPLEMENTATION.
         previous( ).
       WHEN 'NEXT'.
         next( ).
-      WHEN 'HELP'.
+      WHEN 'WIKI'.
         show_docu( ).
       WHEN OTHERS.
         RETURN.

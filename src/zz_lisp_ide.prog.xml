@@ -168,11 +168,14 @@
       <INFO_TEXT>Previous expression</INFO_TEXT>
      </RSMPE_FUNT>
      <RSMPE_FUNT>
-      <CODE>TEST</CODE>
+      <CODE>WIKI</CODE>
       <TEXTNO>001</TEXTNO>
       <TEXT_TYPE>S</TEXT_TYPE>
-      <FUN_TEXT>Execute</FUN_TEXT>
-      <PATH>C</PATH>
+      <TEXT_NAME>ICON_INFORMATION</TEXT_NAME>
+      <ICON_ID>@0S@</ICON_ID>
+      <FUN_TEXT>Help</FUN_TEXT>
+      <ICON_TEXT>Help on..</ICON_TEXT>
+      <INFO_TEXT>Online manual</INFO_TEXT>
      </RSMPE_FUNT>
     </FUN>
     <MEN>
@@ -193,13 +196,6 @@
      <RSMPE_MEN>
       <CODE>000001</CODE>
       <NO>03</NO>
-      <REF_TYPE>F</REF_TYPE>
-      <REF_CODE>HELP</REF_CODE>
-      <REF_NO>001</REF_NO>
-     </RSMPE_MEN>
-     <RSMPE_MEN>
-      <CODE>000001</CODE>
-      <NO>04</NO>
       <REF_TYPE>F</REF_TYPE>
       <REF_CODE>EXIT</REF_CODE>
       <REF_NO>001</REF_NO>
@@ -262,6 +258,12 @@
     <PFK>
      <RSMPE_PFK>
       <CODE>000001</CODE>
+      <PFNO>01</PFNO>
+      <FUNCODE>HELP</FUNCODE>
+      <FUNNO>001</FUNNO>
+     </RSMPE_PFK>
+     <RSMPE_PFK>
+      <CODE>000001</CODE>
       <PFNO>03</PFNO>
       <FUNCODE>BACK</FUNCODE>
       <FUNNO>001</FUNNO>
@@ -281,7 +283,7 @@
      <RSMPE_PFK>
       <CODE>000001</CODE>
       <PFNO>13</PFNO>
-      <FUNCODE>HELP</FUNCODE>
+      <FUNCODE>WIKI</FUNCODE>
       <FUNNO>001</FUNNO>
      </RSMPE_PFK>
      <RSMPE_PFK>
@@ -346,6 +348,10 @@
       <STATUS>STATUS_100</STATUS>
       <FUNCTION>TEST</FUNCTION>
      </RSMPE_STAF>
+     <RSMPE_STAF>
+      <STATUS>STATUS_100</STATUS>
+      <FUNCTION>WIKI</FUNCTION>
+     </RSMPE_STAF>
     </SET>
     <DOC>
      <RSMPE_ATRT>
@@ -355,15 +361,15 @@
       <INT_NOTE>ABAP LISP Status</INT_NOTE>
      </RSMPE_ATRT>
      <RSMPE_ATRT>
-      <OBJ_TYPE>P</OBJ_TYPE>
+      <OBJ_TYPE>B</OBJ_TYPE>
       <OBJ_CODE>000001</OBJ_CODE>
+      <SUB_CODE>0001</SUB_CODE>
       <MODAL>D</MODAL>
       <INT_NOTE>ABAP LISP Status</INT_NOTE>
      </RSMPE_ATRT>
      <RSMPE_ATRT>
-      <OBJ_TYPE>B</OBJ_TYPE>
+      <OBJ_TYPE>P</OBJ_TYPE>
       <OBJ_CODE>000001</OBJ_CODE>
-      <SUB_CODE>0001</SUB_CODE>
       <MODAL>D</MODAL>
       <INT_NOTE>ABAP LISP Status</INT_NOTE>
      </RSMPE_ATRT>

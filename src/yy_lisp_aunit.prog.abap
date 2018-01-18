@@ -2132,15 +2132,33 @@
        METHODS setup.
        METHODS teardown.
 
+       METHODS make_vector_0 FOR TESTING.
+       METHODS make_vector_1 FOR TESTING.
+       METHODS make_vector_2 FOR TESTING.
+
        METHODS vector_0 FOR TESTING.
        METHODS vector_1 FOR TESTING.
+
+       METHODS vector_length_0 FOR TESTING.
+       METHODS vector_length_1 FOR TESTING.
+       METHODS vector_length_2 FOR TESTING.
+       METHODS vector_length_3 FOR TESTING.
+
        METHODS vector_ref_1 FOR TESTING.
        METHODS vector_ref_2 FOR TESTING.
+       METHODS vector_ref_3 FOR TESTING.
+
        METHODS vector_set_1 FOR TESTING.
        METHODS vector_set_2 FOR TESTING.
+
        METHODS vector_to_list_1 FOR TESTING.
        METHODS vector_to_list_2 FOR TESTING.
+       METHODS vector_to_list_3 FOR TESTING.
+       METHODS vector_to_list_4 FOR TESTING.
+       METHODS vector_to_list_5 FOR TESTING.
+
        METHODS list_to_vector_1 FOR TESTING.
+       METHODS list_to_vector_2 FOR TESTING.
 
    ENDCLASS.
 
@@ -2154,6 +2172,21 @@
        FREE mo_int.
      ENDMETHOD.                    "teardown
 
+     METHOD make_vector_0.
+       code_test( code = |(make-vector 0)|
+                  expected = '#()' ).
+     ENDMETHOD.
+
+     METHOD make_vector_1.
+       code_test( code = |(make-vector 0 '#(a))|
+                  expected = '#()' ).
+     ENDMETHOD.
+
+     METHOD make_vector_2.
+       code_test( code = |(make-vector 5 '#(a))|
+                  expected = '#( #( a ) #( a ) #( a ) #( a ) #( a ) )' ).
+     ENDMETHOD.
+
      METHOD vector_0.
        code_test( code = |(vector? '#())|
                   expected = '#t' ).
@@ -2162,6 +2195,26 @@
      METHOD vector_1.
        code_test( code = |(vector 0 '(2 3 4) "Anna")|
                   expected = |#( 0 ( 2 3 4 ) "Anna" )| ).
+     ENDMETHOD.
+
+     METHOD vector_length_0.
+       code_test( code = |(vector-length '#())|
+                  expected = '0' ).
+     ENDMETHOD.
+
+     METHOD vector_length_1.
+       code_test( code = |(vector-length '#(a b c))|
+                  expected = '3' ).
+     ENDMETHOD.
+
+     METHOD vector_length_2.
+       code_test( code = |(vector-length (vector 1 '(2) 3 '#(4 5)))|
+                  expected = '4' ).
+     ENDMETHOD.
+
+     METHOD vector_length_3.
+       code_test( code = |(vector-length (make-vector 300))|
+                  expected = '300' ).
      ENDMETHOD.
 
      METHOD vector_ref_1.
@@ -2173,6 +2226,13 @@
        code_test( code = |(vector-ref '#(1 1 2 3 5 8 13 21)| &
                          |    (round (* 2 (acos -1))) )|
                   expected = '13' ).
+     ENDMETHOD.
+
+     METHOD vector_ref_3.
+       code_test( code = |(define vec (vector 1 2 3 4 5))|
+                  expected = 'vec' ).
+       code_test( code = |(vector-ref vec 0)|
+                  expected = '1' ).
      ENDMETHOD.
 
      METHOD vector_set_1.
@@ -2197,9 +2257,32 @@
                   expected = '( dah )' ).
      ENDMETHOD.
 
+     METHOD vector_to_list_3.
+       code_test( code = |(vector->list (vector)) |
+                  expected = 'nil' ).
+     ENDMETHOD.
+
+     METHOD vector_to_list_4.
+       code_test( code = |(vector->list '#(a b c))|
+                  expected = '( a b c )' ).
+     ENDMETHOD.
+
+     METHOD vector_to_list_5.
+       code_test( code = |(let ((v '#(1 2 3 4 5)))| &
+                         |  (apply * (vector->list v)))|
+                  expected = '120' ).
+     ENDMETHOD.
+
      METHOD list_to_vector_1.
        code_test( code = |(list->vector '(dididit dah))|
                   expected = '#( dididit dah )' ).
+     ENDMETHOD.
+
+     METHOD list_to_vector_2.
+       code_test( code = |(let ([v '#(1 2 3 4 5)])| &
+                         |  (let ([ls (vector->list v)])| &
+                         |    (list->vector (map * ls ls))))|
+                  expected = '#( 1 4 9 16 25 )' ).
      ENDMETHOD.
 
    ENDCLASS.
@@ -2276,6 +2359,10 @@
        METHODS apply_4 FOR TESTING.
        METHODS apply_5 FOR TESTING.
        METHODS apply_6 FOR TESTING.
+       METHODS apply_7 FOR TESTING.
+       METHODS apply_8 FOR TESTING.
+       METHODS apply_9 FOR TESTING.
+       METHODS apply_10 FOR TESTING.
 
        METHODS map_1 FOR TESTING.
        METHODS map_2 FOR TESTING.
@@ -2431,6 +2518,36 @@
      METHOD apply_6.
        code_test( code = |(apply (lambda (x y . z) (vector x y z)) '(1 2))|
                   expected = |#( 1 2 nil )| ).
+     ENDMETHOD.
+
+     METHOD apply_7.
+       code_test( code = |(apply vector 'a 'b '(c d e))|
+                  expected = |#( a b c d e )| ).
+     ENDMETHOD.
+
+     METHOD apply_8.
+       code_test( code = |(define first| &
+                         |  (lambda (ls)| &
+                         |(apply (lambda (x . y) x) ls)))|
+                  expected = |first| ).
+       code_test( code = |(first '(a b c d))|
+                  expected = |a| ).
+     ENDMETHOD.
+
+     METHOD apply_9.
+       code_test( code = |(define rest| &
+                         |  (lambda (ls)| &
+                         |(apply (lambda (x . y) x) ls)))|
+                  expected = |rest| ).
+       code_test( code = |(rest '(a b c d))|
+                  expected = |(b c d)| ).
+     ENDMETHOD.
+
+     METHOD apply_10.
+       code_test( code = |(apply append| &
+                         |'(1 2 3)| &
+                         |'((a b) (c d e) (f)))|
+                  expected = |(1 2 3 a b c d e f)| ).
      ENDMETHOD.
 
      METHOD map_1.

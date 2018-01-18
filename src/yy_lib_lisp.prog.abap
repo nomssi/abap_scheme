@@ -1,5 +1,4 @@
 *&---------------------------------------------------------------------*
-*&---------------------------------------------------------------------*
 *&  Include           YY_LIB_LISP
 *& https://github.com/nomssi/abap_scheme
 *& https://github.com/mydoghasworms/abap-lisp
@@ -36,7 +35,7 @@
   CONSTANTS:
     c_error_incorect_input TYPE string VALUE 'Incorrect input',
     c_error_unexpected_end TYPE string VALUE 'Unexpected end',
-    c_error_eval           TYPE string VALUE `EVAL( ) came up empty-handed`.
+    c_error_eval           TYPE string VALUE 'EVAL( ) came up empty-handed'.
   CONSTANTS:
     c_area_eval  TYPE string VALUE `Eval`,
     c_area_parse TYPE string VALUE `Parse`.
@@ -159,10 +158,6 @@
           result = lcl_lisp_new=>number( &1( list->car->number ) ).
       _catch_arithmetic_error.
     ENDTRY.
-  END-OF-DEFINITION.
-
-  DEFINE _trigonometric.
-    _math &1 &2.
   END-OF-DEFINITION.
 
   DEFINE _trigonometric.
@@ -1077,8 +1072,8 @@
               result = lcl_lisp=>nil.           " Result = empty list
             ELSEIF lv_proper_list EQ abap_true.
               lo_cell->cdr = lcl_lisp=>nil.     " Terminate list
-            ELSE.
-              " pair, no termination with nil, nothing to do
+*            ELSE.
+*              " pair, no termination with nil, nothing to do
             ENDIF.
             next_char( ).              " Skip past closing paren
             RETURN.
@@ -1665,6 +1660,7 @@
 *     ( eval LOOP for the last evaluation step )
       validate io_head.
       result = nil.
+      CHECK io_head NE nil.
 
       eo_elem = io_head.
       WHILE eo_elem IS BOUND AND eo_elem->type EQ lcl_lisp=>type_conscell
@@ -1905,12 +1901,14 @@
     END-OF-DEFINITION.
 
     DEFINE tail_sequence.
-*     result = eval_list( io_head = lo_elem
-*                         io_environment = lo_env ).
-      result = eval_list_tco( EXPORTING io_head = lo_elem
-                                        io_environment = lo_env
-                              IMPORTING eo_elem = lo_elem ).
-      tail_expression lo_elem.
+      IF lo_elem NE nil.
+*       result = eval_list( io_head = lo_elem
+*                           io_environment = lo_env ).
+        result = eval_list_tco( EXPORTING io_head = lo_elem
+                                          io_environment = lo_env
+                                IMPORTING eo_elem = lo_elem ).
+        tail_expression lo_elem.
+      ENDIF.
     END-OF-DEFINITION.
 
 **********************************************************************
@@ -2897,7 +2895,7 @@
         ENDIF.
 
       ELSE.
-        result = lo_vec->get_list( ).
+        result = lo_vec->to_list( ).
       ENDIF.
     ENDMETHOD.
 
@@ -4224,7 +4222,7 @@
     ENDMETHOD.                    "call
 
     METHOD error_message.
-      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno     "#EC *
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
          WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
          INTO rv_message.
     ENDMETHOD.
@@ -4866,7 +4864,7 @@
     METHOD get.
       DATA(lv_start) = index + 1.
 
-      IF index BETWEEN 1 AND lines( vector ).
+      IF lv_start BETWEEN 1 AND lines( vector ).
         ro_elem = vector[ lv_start ].
       ELSE.
         throw( |vector-ref: out-of-bound position| ).
@@ -4915,7 +4913,12 @@
     ENDMETHOD.
 
     METHOD to_string.
-      str = |#{ to_list( )->to_string( ) }|.
+      DATA(lo_list) = to_list( ).
+      IF lo_list EQ nil.
+        str = |#()|.
+      ELSE.
+        str = |#{ lo_list->to_string( ) }|.
+      ENDIF.
     ENDMETHOD.
 
     METHOD is_equal.
