@@ -407,6 +407,8 @@
        METHODS is_symbol_true_5 FOR TESTING.
 
        METHODS is_symbol_false FOR TESTING.
+       METHODS is_symbol_false_1 FOR TESTING.
+
        METHODS is_hash_true FOR TESTING.
        METHODS is_hash_false FOR TESTING.
 
@@ -427,6 +429,7 @@
        METHODS list_is_boolean_1 FOR TESTING.
        METHODS list_is_boolean_2 FOR TESTING.
        METHODS list_is_boolean_3 FOR TESTING.
+       METHODS list_is_boolean_4 FOR TESTING.
 
    ENDCLASS.                    "ltc_basic DEFINITION
 
@@ -739,6 +742,11 @@
                   expected = '#f' ).
      ENDMETHOD.
 
+     METHOD is_symbol_false_1.
+       code_test( code = |(symbol? #f)|
+                  expected = '#f' ).
+     ENDMETHOD.
+
      METHOD is_hash_true.
        code_test( code = |(define h (make-hash '(dog 4 car 5))|
                   expected = 'h' ).
@@ -833,6 +841,11 @@
      METHOD list_is_boolean_3.
        code_test( code = |(boolean=? #t #f)|
                   expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD list_is_boolean_4.
+       code_test( code = |(boolean=? #t #f 1)|
+                  expected = '#f' ).
      ENDMETHOD.
 
    ENDCLASS.                    "ltc_basic IMPLEMENTATION
@@ -2512,7 +2525,7 @@
 
      METHOD apply_5.
        code_test( code = |(apply apply (list list (list 'apply 'list)))|
-                  expected = '(apply list)' ).
+                  expected = '( apply list )' ).
      ENDMETHOD.
 
      METHOD apply_6.
@@ -2537,17 +2550,17 @@
      METHOD apply_9.
        code_test( code = |(define rest| &
                          |  (lambda (ls)| &
-                         |(apply (lambda (x . y) x) ls)))|
+                         |(apply (lambda (x . y) y) ls)))|
                   expected = |rest| ).
        code_test( code = |(rest '(a b c d))|
-                  expected = |(b c d)| ).
+                  expected = |( b c d )| ).
      ENDMETHOD.
 
      METHOD apply_10.
        code_test( code = |(apply append| &
-                         |'(1 2 3)| &
-                         |'((a b) (c d e) (f)))|
-                  expected = |(1 2 3 a b c d e f)| ).
+                         |  '(1 2 3)| &
+                         |  '((a b) (c d e) (f)))|
+                  expected = |( 1 2 3 a b c d e f )| ).
      ENDMETHOD.
 
      METHOD map_1.

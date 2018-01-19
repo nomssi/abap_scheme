@@ -226,6 +226,7 @@
         type_number TYPE tv_type VALUE 'N',
         type_string TYPE tv_type VALUE '"'.
       CONSTANTS:
+        type_boolean   TYPE tv_type VALUE 'B',
         type_null      TYPE tv_type VALUE '0',
         type_conscell  TYPE tv_type VALUE 'C',
         type_lambda    TYPE tv_type VALUE 'λ',
@@ -261,6 +262,7 @@
     PUBLIC SECTION.
 *     Can this be replaced by a mesh? cf. DEMO_RND_PARSER_AST
       DATA mutable TYPE flag VALUE abap_true READ-ONLY.
+
       DATA car TYPE REF TO lcl_lisp.
       DATA cdr TYPE REF TO lcl_lisp.
 
@@ -269,8 +271,12 @@
       CLASS-DATA nil        TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA false      TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA true       TYPE REF TO  lcl_lisp READ-ONLY.
-      CLASS-DATA quote      TYPE REF TO  lcl_lisp READ-ONLY.
-      CLASS-DATA quasiquote TYPE REF TO  lcl_lisp READ-ONLY.
+
+      CLASS-DATA quote            TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA quasiquote       TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA unquote          TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA unquote_splicing TYPE REF TO  lcl_lisp READ-ONLY.
+
       CLASS-DATA new_line   TYPE REF TO  lcl_lisp READ-ONLY.
 
 *     Specifically for lambdas:
@@ -321,6 +327,8 @@
       CLASS-METHODS null RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS symbol IMPORTING value          TYPE any
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+      CLASS-METHODS boolean IMPORTING value          TYPE any
+                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS number IMPORTING value          TYPE any
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS string IMPORTING value          TYPE any
@@ -354,11 +362,21 @@
                          RETURNING VALUE(ro_hash) TYPE REF TO lcl_lisp_hash
                          RAISING   lcx_lisp_exception.
 
-      CLASS-METHODS quasiquote IMPORTING io_elem        TYPE REF TO lcl_lisp
-                               RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+      CLASS-METHODS box_quote IMPORTING io_elem        TYPE REF TO lcl_lisp
+                              RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
 
       CLASS-METHODS quote IMPORTING io_elem        TYPE REF TO lcl_lisp
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+
+      CLASS-METHODS quasiquote IMPORTING io_elem        TYPE REF TO lcl_lisp
+                               RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+
+      CLASS-METHODS unquote IMPORTING io_elem        TYPE REF TO lcl_lisp
+                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+
+      CLASS-METHODS splice_unquote IMPORTING io_elem        TYPE REF TO lcl_lisp
+                                   RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+
     PRIVATE SECTION.
       CLASS-METHODS node IMPORTING type           TYPE lcl_lisp=>tv_type
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
@@ -1164,6 +1182,19 @@
           element = lcl_lisp_new=>quasiquote( parse_token( ) ).
           RETURN.
 
+        WHEN c_lisp_unquote.
+          CASE peek_char( ).
+            WHEN c_lisp_splicing.  " unquote-splicing
+              next_char( ).        " Skip past ,@
+              next_char( ).
+              element = lcl_lisp_new=>splice_unquote( parse_list( ) ).
+
+            WHEN OTHERS.           " unquote,  TO DO
+              next_char( ).        " Skip past single quote
+              element = lcl_lisp_new=>unquote( parse_token( ) ).
+
+          ENDCASE.
+
         WHEN c_text_quote.
           match_string( CHANGING cv_val = sval ).
           element = lcl_lisp_new=>string( sval ).
@@ -1450,42 +1481,40 @@
     ENDMETHOD.                    "evaluate_parameters
 
     METHOD evaluate_apply.
+      validate io_list.
+      DATA(lo_proc) = io_list->car.     " proc
+      DATA(lo_arg) = io_list->cdr.      " handle arg1 . . . rest-args
+
+      validate lo_arg.
 *     (apply proc arg1 . . . argn rest)
 *     Parameter io_list is list arg1 ... argn rest
+
       result = io_list.
-      CHECK io_list NE nil.
+      CHECK lo_arg NE nil.
 
-*     Create copy of list, thereby keep reference of argn, rest
-      DATA(lo_argn) = nil.
-      DATA(lo_rest) = io_list.
-
-*     At least one entry (argn or rest)
-      DATA(lo_new) = lcl_lisp_new=>cons( io_car = lo_rest->car ).
+*     At least one argument = rest
+      DATA(lo_new) = lcl_lisp_new=>cons( io_car = lo_proc ).
       result = lo_new.
 
-      WHILE lo_rest->cdr NE nil.
-        lo_argn = lo_new.
-        lo_rest = lo_rest->cdr.
-        lo_new = lo_new->cdr = lcl_lisp_new=>cons( io_car = lo_rest->car ).
+*     Collect arg1 to argn
+      WHILE lo_arg->cdr->type EQ lcl_lisp=>type_conscell.
+*       At least two entries (argn and rest), build (list arg1 . . argn )
+
+        lo_new = lo_new->cdr = lcl_lisp_new=>cons( io_car = lo_arg->car ).
+        lo_arg = lo_arg->cdr.
       ENDWHILE.
 
-*     Now append:
-      IF lo_argn EQ nil.
-*       no additional arguments, return rest
-        result = eval( element = result->car
-                       environment = environment ).
-        IF result->type NE lcl_lisp=>type_conscell.
-          result->error_not_a_list( `apply: ` ).
-        ENDIF.
-      ELSE.
-        IF lo_rest->type NE lcl_lisp=>type_conscell.
-          lo_rest->error_not_a_list( `apply: ` ).
-        ENDIF.
+*     now (append (list arg1 . . argn ) rest )
+      DATA(lo_rest) = eval_ast( element = lo_arg->car
+                                environment = environment ).
 
-*       the reference to argn and rest are correct, now (append (list arg1 . . argn ) rest )
-        lo_argn->cdr = eval( element = lo_rest->car
-                             environment = environment ).
-      ENDIF.
+      WHILE lo_rest->type EQ lcl_lisp=>type_conscell.  " e.g. NE nil
+        lo_new = lo_new->cdr = lcl_lisp_new=>box_quote( lo_rest->car ).
+        lo_rest = lo_rest->cdr.
+      ENDWHILE.
+
+      lo_new->cdr = lo_rest.
+
     ENDMETHOD.
 
 *   (define (map f lst)
@@ -1940,21 +1969,24 @@
 
                 CASE lr_head->value.
 
+                  WHEN 'unquote'. " evaluate the argument to unquote
+                    IF lr_tail->cdr NE nil.
+                      throw( |unquote can only take a single argument| ).
+                    ENDIF.
+                    lo_elem = lr_tail->car.
+                    tail_expression lo_elem.
+
                   WHEN 'quote'. " Return the argument to quote unevaluated
                     IF lr_tail->cdr NE nil.
-                      throw( |QUOTE can only take a single argument| ).
+                      throw( |quote can only take a single argument| ).
                     ENDIF.
                     result = lr_tail->car.
 
                   WHEN 'quasiquote'. " Partial quote - TO DO
                     IF lr_tail->cdr NE nil.
-                      throw( |QUASIQUOTE can only take a single argument| ).
+                      throw( |quasiquote can only take a single argument| ).
                     ENDIF.
                     result = lr_tail->car.
-
-                  WHEN 'unquote'. " Partial quote - TO DO
-                    result = nil.
-                    throw( `not implemented yet` ).
 
                   WHEN 'unquote-slicing'.
                     result = nil.
@@ -2017,10 +2049,8 @@
                     IF lo_elem EQ nil.
                       result = lo_test.
                     ELSEIF lo_elem->car->value = c_lisp_then.
-                      lo_elem = lcl_lisp_new=>cons(
-                        io_car = lo_elem->cdr->car
-                        io_cdr = lcl_lisp_new=>cons( " quote to avoid double eval
-                                    io_car = lcl_lisp_new=>quote( lo_test ) ) ).
+                      lo_elem = lcl_lisp_new=>cons( io_car = lo_elem->cdr->car
+                                                    io_cdr = lcl_lisp_new=>box_quote( lo_test ) ).
                       CONTINUE.
                       "tail_expression lo_elem.
                     ELSE.
@@ -2210,8 +2240,7 @@
 
                       lo_elem = lcl_lisp_new=>cons(
                         io_car = lo_elem->cdr->car
-                        io_cdr = lcl_lisp_new=>cons( " quote to avoid double eval
-                                    io_car = lcl_lisp_new=>quote( lo_key ) ) ).
+                        io_cdr = lcl_lisp_new=>box_quote( lo_key ) ).
                       CONTINUE.
                       "tail_expression lo_elem.
 
@@ -2233,13 +2262,13 @@
                     result = evaluate_map( io_list = lr_tail
                                            environment = lo_env ).
 
+                  WHEN 'apply'.
+                    " (apply proc arg1 ... argn rest-args)
+                    lo_elem = lcl_lisp_new=>cons( io_car = evaluate_apply( io_list = lr_tail
+                                                                           environment = lo_env ) ).
+                    tail_expression lo_elem.
+
                   WHEN OTHERS.
-*                   special case for 'apply' to avoid repeating the code for tail call
-                    IF lr_head->value EQ 'apply'.  " (apply proc arg1 . . . rest-args)
-                      lr_head = lr_tail->car.                           " proc
-                      lr_tail = evaluate_apply( io_list = lr_tail->cdr  " handle arg1 . . . rest-args
-                                                environment = lo_env ).
-                    ENDIF.
 
 *                   EXECUTE PROCEDURE (native or lambda)
 *                   Take the first item of the evaluated list and call it as function
@@ -2281,6 +2310,7 @@
 *                      WHEN lcl_lisp=>type_abap_method.
 *              >> TEST: Support evaluation of ABAP methods directly
 *              << TEST
+
                       WHEN OTHERS.
                         throw( |Cannot evaluate { lo_proc->to_string( ) } - not a procedure| ).
 
@@ -3393,13 +3423,12 @@
     ENDMETHOD.                    "proc_is_list
 
     METHOD proc_is_boolean. " argument in list->car
-      validate: list, list->car.
+      validate list.
 
       result = false.
-      CHECK list NE nil.
 
-      DATA(lo_arg) = list->car.
-      CHECK lo_arg EQ true OR lo_arg = false.
+      validate list->car.
+      CHECK list->car->type EQ lcl_lisp=>type_boolean.
 
       result = true.
     ENDMETHOD.
@@ -3412,8 +3441,7 @@
       DATA(lo_arg) = list.
 
       WHILE lo_arg NE nil.
-        DATA(lo_next) = list->car.
-        IF lo_next NE true AND lo_next NE false.
+        IF lo_arg->car->type NE lcl_lisp=>type_boolean.
           RETURN.
         ENDIF.
         lo_arg = lo_arg->cdr.
@@ -4463,12 +4491,15 @@
 
     METHOD class_constructor.
       nil = lcl_lisp_new=>null( ).
-      false = lcl_lisp_new=>symbol( '#f' ).
-      true = lcl_lisp_new=>symbol( '#t' ).
+      false = lcl_lisp_new=>boolean( '#f' ).
+      true = lcl_lisp_new=>boolean( '#t' ).
       quote = lcl_lisp_new=>symbol( 'quote' ).
       quasiquote = lcl_lisp_new=>symbol( 'quasiquote' ).
+      unquote = lcl_lisp_new=>symbol( 'unquote' ).
+      unquote_splicing = lcl_lisp_new=>symbol( 'unquote-splicing' ).
+
       new_line = lcl_lisp_new=>string( |\n| ).
-    ENDMETHOD.                    "class_constructor
+    ENDMETHOD.
 
     METHOD rest.
       ro_cdr = COND #( WHEN cdr IS BOUND THEN cdr ELSE nil ).
@@ -4532,6 +4563,8 @@
         WHEN type_null.
           str = 'nil'.
         WHEN type_symbol.
+          str = value.
+        WHEN type_boolean.
           str = value.
         WHEN type_string.
           str = value.
@@ -4649,6 +4682,11 @@
       ro_elem->value = value.
     ENDMETHOD.                    "new_symbol
 
+    METHOD boolean.
+      ro_elem = node( lcl_lisp=>type_boolean ).
+      ro_elem->value = value.
+    ENDMETHOD.                    "new_symbol
+
     METHOD null.
       ro_elem = node( lcl_lisp=>type_null ).
       ro_elem->value = 'nil'.
@@ -4730,6 +4768,23 @@
       ro_elem = cons( io_car = lcl_lisp=>quote
                       io_cdr = cons( io_car = io_elem )  ).
       ro_elem->cdr->mutable = abap_false.
+    ENDMETHOD.
+
+    METHOD unquote.
+      ro_elem = cons( io_car = lcl_lisp=>unquote
+                      io_cdr = cons( io_car = io_elem )  ).
+      ro_elem->cdr->mutable = abap_false.
+    ENDMETHOD.
+
+    METHOD splice_unquote.
+      ro_elem = cons( io_car = lcl_lisp=>unquote_splicing
+                      io_cdr = cons( io_car = io_elem )  ).
+      ro_elem->cdr->mutable = abap_false.
+    ENDMETHOD.
+
+    METHOD box_quote.
+*     quote to avoid double eval
+      ro_elem = cons( io_car = quote( io_elem ) ).
     ENDMETHOD.
 
     METHOD quasiquote.
