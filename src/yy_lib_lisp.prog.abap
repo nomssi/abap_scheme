@@ -33,6 +33,7 @@
 *  THE SOFTWARE.
 
   CONSTANTS:
+    c_error_message        TYPE string VALUE 'Error in processing',
     c_error_incorect_input TYPE string VALUE 'Incorrect input',
     c_error_unexpected_end TYPE string VALUE 'Unexpected end',
     c_error_eval           TYPE string VALUE 'EVAL( ) came up empty-handed'.
@@ -168,8 +169,8 @@
     validate_number list->car &2.
     _is_last_param list.
     TRY.
-    carry = list->car->number.
-    result = lcl_lisp_new=>number( &1( carry ) ).
+        carry = list->car->number.
+        result = lcl_lisp_new=>number( &1( carry ) ).
     _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -200,7 +201,7 @@
     METHOD constructor.
       super->constructor( ).
       IF message IS INITIAL.
-        mv_message = |Error in processing|.
+        mv_message = c_error_message.
       ELSE.
         mv_message = message.
       ENDIF.
@@ -238,16 +239,15 @@
       CONSTANTS:
         type_abap_data     TYPE tv_type VALUE 'D',
         type_abap_table    TYPE tv_type VALUE 'T',
-        type_abap_function TYPE tv_type VALUE 'F',
-        type_abap_class    TYPE tv_type VALUE 'c',
-        type_abap_method   TYPE tv_type VALUE 'm'.
+        type_abap_function TYPE tv_type VALUE 'F'.
+*        type_abap_class    TYPE tv_type VALUE 'c',
+*        type_abap_method   TYPE tv_type VALUE 'm'.
 
       DATA type TYPE char1.
 
       DATA value TYPE string.
       DATA number TYPE decfloat34.
       DATA data TYPE REF TO data.            " for ABAP integration
-      DATA promise TYPE flag VALUE abap_false.
   ENDCLASS.
 
   CLASS lcl_lisp_iterator DEFINITION DEFERRED.
@@ -568,9 +568,6 @@
   CLASS lcl_lisp_environment DEFINITION CREATE PRIVATE.
     PUBLIC SECTION.
 
-*      Reference to outer (parent) environment:
-      DATA outer TYPE REF TO lcl_lisp_environment.
-
       CLASS-METHODS
         new IMPORTING io_outer      TYPE REF TO lcl_lisp_environment OPTIONAL
             RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment.
@@ -595,6 +592,8 @@
                                     RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
                                     RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
+*     Reference to outer (parent) environment:
+      DATA outer TYPE REF TO lcl_lisp_environment.
 
       TYPES: BEGIN OF ts_map,
                symbol TYPE string,
@@ -877,7 +876,6 @@
       METHODS throw IMPORTING message TYPE string
                     RAISING   lcx_lisp_exception.
 
-
       METHODS proc_equivalence IMPORTING a             TYPE REF TO lcl_lisp
                                          b             TYPE REF TO lcl_lisp
                                RETURNING VALUE(result) TYPE REF TO lcl_lisp
@@ -990,6 +988,11 @@
                            RETURNING VALUE(result) TYPE REF TO lcl_lisp
                            RAISING   lcx_lisp_exception.
 
+      METHODS list_tail IMPORTING list       TYPE REF TO lcl_lisp
+                                  k          TYPE sytabix
+                                  area       TYPE string
+                        RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                        RAISING   lcx_lisp_exception.
   ENDCLASS.                    "lcl_lisp_interpreter DEFINITION
 
 *----------------------------------------------------------------------*
@@ -1406,10 +1409,7 @@
     ENDMETHOD.                    "constructor
 
     METHOD throw.
-      RAISE EXCEPTION TYPE lcx_lisp_exception
-        EXPORTING
-          message = message
-          area    = c_area_eval.
+      lcl_lisp=>throw( message ).
     ENDMETHOD.                    "throw
 
     METHOD assign_symbol.
@@ -2740,32 +2740,33 @@
       ENDDO.
     ENDMETHOD.
 
-*(define list-tail
-*  (lambda (x k)
-*    (if (zero? k)
-*        x
-*        (list-tail (cdr x) (- k 1)))))
     METHOD proc_list_tail.
-*     (list-tail list k) procedure
-*     List should be a list of size at least k.  The list-tail procedure returns
-*     the subchain of list obtained by omitting the first k elements
-*     (list-tail '(a b c d) 2)  => (c d)
-**Implementation responsibilities:
-*     The implementation must check that list is a chain of pairs whose length is at least k.
-*     It should not check that it is a list of pairs beyond this length.
-
       validate: list, list->cdr.
       validate_number list->cdr->car 'list-tail'.
 
-      result = list->car.
-      DATA(index) = CONV i( list->cdr->car->number ).
-      DO index TIMES.
+      result = list_tail( list = list->car
+                          k    = CONV i( list->cdr->car->number )
+                          area = 'list-tail' ).
+    ENDMETHOD.
+
+    METHOD list_tail.
+*     (list-tail list k) procedure
+*     List should be a list of size at least k.  The list-tail procedure returns the subchain
+*     of list obtained by omitting the first k elements:  (list-tail '(a b c d) 2)  => (c d)
+*
+*     we must check that list is a chain of pairs whose length is at least k.
+*     we should not check that it is a list of pairs beyond this length.
+
+      validate: list, list->cdr.
+
+      result = list.
+      DO k TIMES.
         IF result->cdr EQ nil.
-          throw( `list-tail: list too short` ).
+          throw( area && `: list too short` ).
         ENDIF.
         result = result->cdr.
         CHECK result IS NOT BOUND.
-        throw( |list-tail: index { index } reaches a non-pair| ).
+        throw( area && |: an entry before index { k } is not a pair| ).
       ENDDO.
     ENDMETHOD.
 
@@ -2775,23 +2776,15 @@
 *    List must be a list whose length is at least k + 1.  The list-ref procedure returns the kth element of list.
 *    (list-ref '(a b c d) 2) => c
 *
-* Implementation responsibilities:
 *    The implementation must check that list is a chain of pairs whose length is at least k + 1.
 *    It should not check that it is a list of pairs beyond this length.
 
       validate: list, list->cdr.
       validate_number list->cdr->car 'list-ref'.
 
-      result = list->car.
-      DATA(index) = CONV i( list->cdr->car->number ).
-      DO index TIMES.
-        IF result->cdr EQ nil.
-          throw( `list-ref: list too short` ).
-        ENDIF.
-        result = result->cdr.
-        CHECK result IS NOT BOUND.
-        throw( |list-ref: index { index } reaches a non-pair| ).
-      ENDDO.
+      result = list_tail( list = list->car
+                          k    = CONV i( list->cdr->car->number )
+                          area = 'list-ref' ).
       result = result->car.
     ENDMETHOD.
 
@@ -2800,7 +2793,7 @@
 
       DATA(lo_size) = list->car.
 
-      "      validate_integer lo_size `make-vector`.
+*     validate_integer lo_size `make-vector`.
       TRY.
           DATA(lv_length) = EXACT sytabix( lo_size->number ).
         CATCH cx_sy_conversion_error.
@@ -4404,12 +4397,11 @@
     ENDMETHOD.                    "define
 
     METHOD parameters_to_symbols.
-*     The lambda receives its own local environment in which to execute,
-*     where parameters become symbols that are mapped to the corresponding arguments
+*     The lambda receives its own local environment in which to execute, where parameters
+*     become symbols that are mapped to the corresponding arguments
 *     Assign each argument to its corresponding symbol in the newly created environment
       DATA lv_count TYPE i.
 
-      " they are 3 cases here
       CASE io_pars->type.
         WHEN lcl_lisp=>type_conscell.   "Do we have a proper list?
 
@@ -4450,7 +4442,7 @@
           ENDIF.
 
         WHEN lcl_lisp=>type_symbol.
-          "3) args is a symbol to be bound to a variable number of parameters
+*         args is a symbol to be bound to a variable number of parameters
           set( symbol = io_pars->value
                element = io_args ).
 
@@ -4582,11 +4574,11 @@
 *        Additions for ABAP Types:
         WHEN type_abap_function.
           str = |<ABAP function module { value }>|.
-        WHEN type_abap_class.
-          str = |<ABAP class { value }>|.
-        WHEN type_abap_method.
 *          TODO
-*           str = |<ABAP method { car->value }->{ cdr->value }( ) >|.
+*        WHEN type_abap_class.
+*          str = |<ABAP class { value }>|.
+*        WHEN type_abap_method.
+*          str = |<ABAP method { car->value }->{ cdr->value }( ) >|.
         WHEN type_abap_data.
           str = |<ABAP Data>|.
         WHEN type_abap_table.
@@ -4761,7 +4753,6 @@
       ro_hash = NEW lcl_lisp_hash( ).
       ro_hash->type = lcl_lisp=>type_hash.
       ro_hash->fill( io_list->car ).
-
     ENDMETHOD.
 
     METHOD quote.
@@ -4773,7 +4764,7 @@
     METHOD unquote.
       ro_elem = cons( io_car = lcl_lisp=>unquote
                       io_cdr = cons( io_car = io_elem )  ).
-      ro_elem->cdr->mutable = abap_false.
+      ro_elem->cdr->mutable = abap_true.
     ENDMETHOD.
 
     METHOD splice_unquote.
@@ -4785,6 +4776,7 @@
     METHOD box_quote.
 *     quote to avoid double eval
       ro_elem = cons( io_car = quote( io_elem ) ).
+      ro_elem->cdr->mutable = abap_false.
     ENDMETHOD.
 
     METHOD quasiquote.
@@ -4810,7 +4802,7 @@
   CLASS lcl_lisp_hash IMPLEMENTATION.
 
     METHOD fill.
-      validate: list.
+      validate list.
 
       DATA(lo_head) = list.
       CHECK lo_head->type = type_conscell.
@@ -4916,16 +4908,6 @@
       ENDLOOP.
     ENDMETHOD.
 
-    METHOD get.
-      DATA(lv_start) = index + 1.
-
-      IF lv_start BETWEEN 1 AND lines( vector ).
-        ro_elem = vector[ lv_start ].
-      ELSE.
-        throw( |vector-ref: out-of-bound position| ).
-      ENDIF.
-    ENDMETHOD.
-
     METHOD get_list.
       DATA lv_end TYPE sytabix.
 
@@ -4938,12 +4920,11 @@
       ENDIF.
 
       IF lv_end LT 1 OR lv_start GT lv_end.
-        throw( |vector-ref: out-of-bound position| ).
+        throw( |vector-ref: out-of-bound range| ).
       ENDIF.
 
       ro_elem = nil.
       CHECK lv_start BETWEEN 1 AND lv_end.
-
 
       ro_elem = lcl_lisp_new=>cons( io_car = vector[ lv_start ] ).
 
@@ -4953,14 +4934,26 @@
       ENDLOOP.
     ENDMETHOD.
 
+    METHOD get.
+      DATA(lv_start) = index + 1.
+
+      IF lv_start BETWEEN 1 AND lines( vector ).
+        ro_elem = vector[ lv_start ].
+      ELSE.
+        throw( |vector-ref: out-of-bound position { index }| ).
+      ENDIF.
+    ENDMETHOD.
+
     METHOD set.
       validate_mutable me `vector`.
 
-      IF index GE lines( vector ) OR index LT 0.
+      DATA(lv_start) = index + 1.
+
+      IF lv_start BETWEEN 1 AND lines( vector ).
+        vector[ lv_start ] = io_elem.
+      ELSE.
         throw( |vector-set!: out-of-bound position { index }| ).
       ENDIF.
-
-      vector[ index + 1 ] = io_elem.
     ENDMETHOD.
 
     METHOD length.
