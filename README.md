@@ -7,7 +7,7 @@
 ## Overview 
 
 After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a>.
-So I started my [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) project based on https://github.com/mydoghasworms/abap-lisp, itself inspired by [Peter Norvig](http://norvig.com/lispy2.html). My contributions:
+So I started my [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) project based on [https://github.com/mydoghasworms/abap-lisp](https://github.com/mydoghasworms/abap-lisp), itself inspired by [Peter Norvig](http://norvig.com/lispy2.html). My contributions:
 - _Scheme_ is now the target language, I am using the [R7RS](http://www.r7rs.org/) specification
 - An _ABAP Unit_ regression test suite
 - a Workbench to make it fun to use
@@ -20,7 +20,7 @@ The ABAP LISP Workbench has commands:
 
 ### Requirements
 
-The current version was tested on ABAP Netweaver 7.50 and can be cloned with <a href="http://docs.abapgit.org/">ABAP GIT</a>. For an older version, check the <a href="https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP">SCN Code Gallery</a>.
+The current version was tested on ABAP Netweaver 7.50 and can be cloned with [ABAP GIT](http://docs.abapgit.org/). For an older version, check the [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP).
 
 ### Architecture
 
