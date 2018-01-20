@@ -121,6 +121,7 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
     METHODS:
       constructor,
       evaluate,
+      trace,
       refresh,
       show_docu,
       free_controls,
@@ -242,7 +243,7 @@ CLASS lcl_ide IMPLEMENTATION.
             lcl_lisp=>throw( lx_error->get_text( ) ).
         ENDTRY.
 
-      WHEN lcl_lisp=>type_conscell.
+      WHEN lcl_lisp=>type_pair.
         writeln( `(` ).
         lo_elem = element.
         DO.
@@ -307,12 +308,40 @@ CLASS lcl_ide IMPLEMENTATION.
         mo_source->push_text( ).
         mo_source->update_status( |[ { mo_int->runtime } µs ] { response }| ).
 
+
       CATCH cx_root INTO DATA(lx_root).
         response = lx_root->get_text( ).
         mo_source->update_status( |{ response }| ).
     ENDTRY.
+
     mo_log->append_string( |{ code }\n=> { response }\n| ).
   ENDMETHOD.                    "evaluate
+
+  METHOD trace.
+    TYPES: BEGIN OF ts_header,
+             user TYPE syuname,
+             time TYPE syuzeit,
+           END OF ts_header.
+    DATA(header) = VALUE ts_header( user = sy-uname
+                                    time = sy-uzeit ).
+    gv_lisp_trace = abap_true.
+    cl_demo_output=>begin_section( `ABAP LISP Workbench` ).
+    cl_demo_output=>write( header ).
+   " cl_demo_output=>set_mode( cl_demo_output=>text_mode  ).
+
+    cl_demo_output=>begin_section( `Scheme Code` ).
+    cl_demo_output=>write( mo_source->to_string( ) ).
+
+    cl_demo_output=>begin_section( `Trace Output` ).
+
+*   Run
+    evaluate( ).
+
+    gv_lisp_trace = abap_false.
+
+    cl_demo_output=>display( ).
+
+  ENDMETHOD.
 
   METHOD free.
     go_ide->free_controls( ).
@@ -343,6 +372,8 @@ CLASS lcl_ide IMPLEMENTATION.
     CASE iv_code.
       WHEN 'EXECUTE'.
         evaluate( ).
+      WHEN 'TRACE'.
+        trace( ).
       WHEN 'CLEAR'.
         refresh( ).
       WHEN 'PREV'.

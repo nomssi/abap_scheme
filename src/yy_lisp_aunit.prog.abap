@@ -80,7 +80,7 @@
        CHECK element IS BOUND.
 
        CASE element->type.
-         WHEN lcl_lisp=>type_conscell.
+         WHEN lcl_lisp=>type_pair.
            writeln( `(` ).
            lo_elem = element.
            DO.
@@ -476,6 +476,27 @@
        METHODS when_1 FOR TESTING.
 
        METHODS unless_1 FOR TESTING.
+
+   ENDCLASS.
+
+   CLASS ltc_quote DEFINITION INHERITING FROM ltc_interpreter
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PRIVATE SECTION.
+
+       METHODS setup.
+       METHODS teardown.
+
+       METHODS quasiquote_1 FOR TESTING.
+       METHODS quasiquote_2 FOR TESTING.
+       METHODS quasiquote_3 FOR TESTING.
+       METHODS quasiquote_4 FOR TESTING.
+       METHODS quasiquote_5 FOR TESTING.
+       METHODS quasiquote_6 FOR TESTING.
+
+       METHODS quasiquote_7 FOR TESTING.
+       METHODS quasiquote_8 FOR TESTING.
+       METHODS quasiquote_9 FOR TESTING.
+       METHODS quasiquote_10 FOR TESTING.
 
    ENDCLASS.
 
@@ -3144,3 +3165,68 @@
      ENDMETHOD.                    "fm_user_details
 
    ENDCLASS.                    "ltc_abap_function_module IMPLEMENTATION
+
+   CLASS ltc_quote IMPLEMENTATION.
+
+     METHOD setup.
+       CREATE OBJECT mo_int.
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
+
+     METHOD quasiquote_1.
+       code_test( code = '`(list ,(+ 1 2) 4)'
+                  expected = '(list 3 4)' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_2.
+       code_test( code = |(let ((name ’a)) `(list ,name ',name))|
+                  expected = '(list a (quote a))' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_3.
+       code_test( code = |`(a ,(+ 1 2) ,@(map abs '(4 -5 6)) b)|
+                  expected = '(a 3 4 5 6 b)' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_4.
+       code_test( code = |`(( foo ,(- 10 3)) ,@(cdr '(c)) . ,(car '(cons)))|
+                  expected = '((foo 7) . cons)' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_5.
+       code_test( code = |`#(10 5 ,(sqrt 4) ,@(map sqrt '(16 9)) 8)|
+                  expected = '#(10 5 2 4 3 8)' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_6.
+       code_test( code = |(let ((foo '(foo bar)) (@baz 'baz))| &
+                         |`(list ,@foo , @baz))|
+                  expected = '(list foo bar baz)' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_7.
+       code_test( code = '`(a `(b ,(+ 1 2) ,(foo ,(+ 1 3) d) e) f)'
+                  expected = '(a `(b ,(+ 1 2) ,(foo 4 d) e) f)' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_8.
+       code_test( code = |(let ((name1 'x)| &
+                         |      (name2 'y))| &
+                         |  `(a `(b ,,name1 ,’,name2 d) e))|
+                  expected = |(a `(b ,x ,’y d) e)|  ).
+     ENDMETHOD.
+
+     METHOD quasiquote_9.
+       code_test( code = '(quasiquote (list (unquote (+ 1 2)) 4))'
+                  expected = '(list 3 4)' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_10.
+       code_test( code = |'(quasiquote (list (unquote (+ 1 2)) 4))|
+                  expected = '`(list ,(+ 1 2) 4)' ).
+     ENDMETHOD.
+
+   ENDCLASS.

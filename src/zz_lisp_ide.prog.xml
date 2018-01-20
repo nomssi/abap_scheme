@@ -123,7 +123,7 @@
       <TEXT_TYPE>S</TEXT_TYPE>
       <TEXT_NAME>ICON_SYSTEM_PLAY</TEXT_NAME>
       <ICON_ID>@I6@</ICON_ID>
-      <FUN_TEXT>Run</FUN_TEXT>
+      <FUN_TEXT>Evaluate</FUN_TEXT>
       <ICON_TEXT>Evaluate</ICON_TEXT>
       <INFO_TEXT>Run</INFO_TEXT>
       <PATH>R</PATH>
@@ -168,6 +168,12 @@
       <INFO_TEXT>Previous expression</INFO_TEXT>
      </RSMPE_FUNT>
      <RSMPE_FUNT>
+      <CODE>TRACE</CODE>
+      <TEXTNO>001</TEXTNO>
+      <TEXT_TYPE>S</TEXT_TYPE>
+      <FUN_TEXT>Eval with Trace</FUN_TEXT>
+     </RSMPE_FUNT>
+     <RSMPE_FUNT>
       <CODE>WIKI</CODE>
       <TEXTNO>001</TEXTNO>
       <TEXT_TYPE>S</TEXT_TYPE>
@@ -190,12 +196,19 @@
       <CODE>000001</CODE>
       <NO>02</NO>
       <REF_TYPE>F</REF_TYPE>
-      <REF_CODE>CLEAR</REF_CODE>
+      <REF_CODE>TRACE</REF_CODE>
       <REF_NO>001</REF_NO>
      </RSMPE_MEN>
      <RSMPE_MEN>
       <CODE>000001</CODE>
       <NO>03</NO>
+      <REF_TYPE>F</REF_TYPE>
+      <REF_CODE>CLEAR</REF_CODE>
+      <REF_NO>001</REF_NO>
+     </RSMPE_MEN>
+     <RSMPE_MEN>
+      <CODE>000001</CODE>
+      <NO>04</NO>
       <REF_TYPE>F</REF_TYPE>
       <REF_CODE>EXIT</REF_CODE>
       <REF_NO>001</REF_NO>
@@ -347,6 +360,10 @@
      <RSMPE_STAF>
       <STATUS>STATUS_100</STATUS>
       <FUNCTION>TEST</FUNCTION>
+     </RSMPE_STAF>
+     <RSMPE_STAF>
+      <STATUS>STATUS_100</STATUS>
+      <FUNCTION>TRACE</FUNCTION>
      </RSMPE_STAF>
      <RSMPE_STAF>
       <STATUS>STATUS_100</STATUS>

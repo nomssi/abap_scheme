@@ -32,6 +32,8 @@
 *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 *  THE SOFTWARE.
 
+  DATA gv_lisp_trace TYPE flag VALUE abap_false.
+
   CONSTANTS:
     c_error_message        TYPE string VALUE 'Error in processing',
     c_error_incorect_input TYPE string VALUE 'Incorrect input',
@@ -43,6 +45,21 @@
   CONSTANTS:
     c_lisp_else TYPE string VALUE 'else',
     c_lisp_then TYPE c LENGTH 2 VALUE '=>'.
+
+  TYPES tv_int TYPE i.   " integer data type, use int8 if available
+
+  DEFINE trace_call.
+    IF gv_lisp_trace EQ abap_true.
+      cl_demo_output=>write( |call { &1->value } { &1->to_string( ) } |
+                          && |param { &2->to_string( ) }| ).
+    ENDIF.
+  END-OF-DEFINITION.
+
+  DEFINE trace_result.
+    IF gv_lisp_trace EQ abap_true.
+      cl_demo_output=>write( |=> { &1->to_string( ) }| ).
+    ENDIF.
+  END-OF-DEFINITION.
 
 * Macro to simplify the definition of a native procedure
   DEFINE _proc_meth.
@@ -169,8 +186,8 @@
     validate_number list->car &2.
     _is_last_param list.
     TRY.
-        carry = list->car->number.
-        result = lcl_lisp_new=>number( &1( carry ) ).
+    carry = list->car->number.
+    result = lcl_lisp_new=>number( &1( carry ) ).
     _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -229,7 +246,7 @@
       CONSTANTS:
         type_boolean   TYPE tv_type VALUE 'B',
         type_null      TYPE tv_type VALUE '0',
-        type_conscell  TYPE tv_type VALUE 'C',
+        type_pair      TYPE tv_type VALUE 'C',
         type_lambda    TYPE tv_type VALUE 'λ',
         type_native    TYPE tv_type VALUE 'P',
         type_primitive TYPE tv_type VALUE 'I',
@@ -988,9 +1005,13 @@
                            RETURNING VALUE(result) TYPE REF TO lcl_lisp
                            RAISING   lcx_lisp_exception.
 
-      METHODS list_tail IMPORTING list       TYPE REF TO lcl_lisp
-                                  k          TYPE sytabix
-                                  area       TYPE string
+      METHODS quasi_quote IMPORTING list          TYPE REF TO lcl_lisp
+                          RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                          RAISING   lcx_lisp_exception.
+
+      METHODS list_tail IMPORTING list          TYPE REF TO lcl_lisp
+                                  k             TYPE sytabix
+                                  area          TYPE string
                         RETURNING VALUE(result) TYPE REF TO lcl_lisp
                         RAISING   lcx_lisp_exception.
   ENDCLASS.                    "lcl_lisp_interpreter DEFINITION
@@ -1197,6 +1218,7 @@
               element = lcl_lisp_new=>unquote( parse_token( ) ).
 
           ENDCASE.
+          RETURN.
 
         WHEN c_text_quote.
           match_string( CHANGING cv_val = sval ).
@@ -1425,7 +1447,7 @@
           result = lcl_lisp_new=>symbol( lo_head->value ).
 
 *       Function shorthand (define (id arg ... ) body ...+)
-        WHEN lcl_lisp=>type_conscell.
+        WHEN lcl_lisp=>type_pair.
 *         define's function shorthand allows us to define a function by specifying a list as the
 *         first argument where the first element is a symbol and consecutive elements are arguments
           result = lcl_lisp_new=>lambda( io_car = lo_head->cdr  "List of params following function symbol
@@ -1462,7 +1484,7 @@
       CHECK io_list NE nil AND io_list->car NE nil.
 
       DATA(elem) = io_list.
-      WHILE elem IS BOUND AND elem->type EQ lcl_lisp=>type_conscell.
+      WHILE elem IS BOUND AND elem->type EQ lcl_lisp=>type_pair.
 
         DATA(lo_next) = lcl_lisp_new=>cons( io_car = eval_ast( element = elem->car
                                                                environment = environment ) ).
@@ -1476,7 +1498,7 @@
 
       ENDWHILE.
 
-      validate_tail elem io_list ``.
+      validate_tail elem io_list space.
 
     ENDMETHOD.                    "evaluate_parameters
 
@@ -1497,7 +1519,7 @@
       result = lo_new.
 
 *     Collect arg1 to argn
-      WHILE lo_arg->cdr->type EQ lcl_lisp=>type_conscell.
+      WHILE lo_arg->cdr->type EQ lcl_lisp=>type_pair.
 *       At least two entries (argn and rest), build (list arg1 . . argn )
 
         lo_new = lo_new->cdr = lcl_lisp_new=>cons( io_car = lo_arg->car ).
@@ -1508,7 +1530,7 @@
       DATA(lo_rest) = eval_ast( element = lo_arg->car
                                 environment = environment ).
 
-      WHILE lo_rest->type EQ lcl_lisp=>type_conscell.  " e.g. NE nil
+      WHILE lo_rest->type EQ lcl_lisp=>type_pair.  " e.g. NE nil
         lo_new = lo_new->cdr = lcl_lisp_new=>box_quote( lo_rest->car ).
         lo_rest = lo_rest->cdr.
       ENDWHILE.
@@ -1692,7 +1714,7 @@
       CHECK io_head NE nil.
 
       eo_elem = io_head.
-      WHILE eo_elem IS BOUND AND eo_elem->type EQ lcl_lisp=>type_conscell
+      WHILE eo_elem IS BOUND AND eo_elem->type EQ lcl_lisp=>type_pair
         AND eo_elem->cdr NE nil.  " Do not evaluate the last list element
 
         result = eval_ast( element = eo_elem->car
@@ -1708,7 +1730,7 @@
 *      result = nil.
 *
 *      DATA(elem) = io_head.
-*      WHILE elem IS BOUND AND elem->type EQ lcl_lisp=>type_conscell.
+*      WHILE elem IS BOUND AND elem->type EQ lcl_lisp=>type_pair.
 *        result = eval_ast( element = elem->car
 *                           environment = io_environment ).
 *        elem = elem->cdr.
@@ -1801,7 +1823,7 @@
 *     ...
 *     (helper ...)  ; call to recursive local procedure
 *     ...))
-    METHOD  init_letrec.
+    METHOD init_letrec.
       ro_env = lcl_lisp_environment=>new( io_env ).
 
       extract_arguments( EXPORTING io_head = io_head
@@ -1824,6 +1846,28 @@
                                      io_pars = lo_pars ).   " Pointer to formal parameters
     ENDMETHOD.
 
+    METHOD init_letrec_star.
+      ro_env = lcl_lisp_environment=>new( io_env ).
+
+      extract_arguments( EXPORTING io_head = io_head
+                         IMPORTING eo_pars = DATA(lo_pars)
+                                   eo_args = DATA(lo_args) ).
+      DATA(lo_par) = lo_pars.
+      DATA(lo_arg) = lo_args.
+      WHILE lo_par IS BOUND AND lo_par NE nil   " Nil means no parameters to map
+        AND lo_arg IS BOUND AND lo_arg NE nil.  " Nil means no parameters to map
+
+        ro_env->set( symbol = lo_par->car->value
+                     element = lo_arg->car ).
+        lo_par = lo_par->cdr.
+        lo_arg = lo_arg->cdr.
+      ENDWHILE.
+
+      evaluate_in_sequence( io_args = lo_args      " Pointer to arguments e.g. (4, (+ x 4)
+                            io_pars = lo_pars      " Pointer to formal parameters (x y)
+                            io_env = ro_env ).
+    ENDMETHOD.
+
 *Here's an example loop, which prints out the integers from 0 to 9:
 * (  let loop ((i 0))
 *     (display i)
@@ -1843,7 +1887,7 @@
           DATA(lo_var) = co_head->car.
           co_head = co_head->cdr.
 
-        WHEN OTHERS. " lcl_lisp=>type_conscell.
+        WHEN OTHERS. " lcl_lisp=>type_pair.
 *(let ((x 10) (y 5)) (+ x y)) is syntactic sugar for  ( (lambda (x y) (+ x y)) 10 5)
           lo_var = nil.
       ENDCASE.
@@ -1876,28 +1920,6 @@
                             io_env = ro_env ).
     ENDMETHOD.
 
-    METHOD  init_letrec_star.
-      ro_env = lcl_lisp_environment=>new( io_env ).
-
-      extract_arguments( EXPORTING io_head = io_head
-                         IMPORTING eo_pars = DATA(lo_pars)
-                                   eo_args = DATA(lo_args) ).
-      DATA(lo_par) = lo_pars.
-      DATA(lo_arg) = lo_args.
-      WHILE lo_par IS BOUND AND lo_par NE nil   " Nil means no parameters to map
-        AND lo_arg IS BOUND AND lo_arg NE nil.  " Nil means no parameters to map
-
-        ro_env->set( symbol = lo_par->car->value
-                     element = lo_arg->car ).
-        lo_par = lo_par->cdr.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      evaluate_in_sequence( io_args = lo_args      " Pointer to arguments e.g. (4, (+ x 4)
-                            io_pars = lo_pars      " Pointer to formal parameters (x y)
-                            io_env = ro_env ).
-    ENDMETHOD.
-
     METHOD eval_ast.
 *     Evaluate element, Element is not a list
       CASE element->type.
@@ -1909,7 +1931,7 @@
           result = lcl_lisp_new=>hash( eval( element = CAST lcl_lisp_hash( element )->get( element )
                                              environment = environment ) ).
 
-        WHEN lcl_lisp=>type_conscell. " List
+        WHEN lcl_lisp=>type_pair. " List
           result = eval( element = element
                          environment = environment ).
 
@@ -1940,6 +1962,26 @@
       ENDIF.
     END-OF-DEFINITION.
 
+    METHOD quasi_quote.
+      result = list.
+      IF list->type NE lcl_lisp=>type_pair.
+        result = lcl_lisp_new=>quote( list ).
+      ELSE.
+        DATA(lo_next) = list->cdr.
+        CASE list->car->value.
+          WHEN 'unquote'.
+            result = lo_next.
+          WHEN 'splice-unquote'.
+            result = lcl_lisp_new=>cons( io_car = lo_next->car
+                                         io_cdr = quasi_quote( lo_next->cdr ) ).
+          WHEN OTHERS.
+            result = lcl_lisp_new=>cons( io_car = quasi_quote( lo_next->car )
+                                         io_cdr = quasi_quote( lo_next->cdr ) ).
+
+        ENDCASE.
+      ENDIF.
+    ENDMETHOD.
+
 **********************************************************************
 *------------------------------- EVAL( ) ----------------------------
 * eval takes an expression and an environment to a value
@@ -1959,7 +2001,7 @@
           WHEN OTHERS.
 *           Evaluate element
             CASE lo_elem->type.
-              WHEN lcl_lisp=>type_conscell. " List
+              WHEN lcl_lisp=>type_pair. " List
 *               return a new list that is the result of calling EVAL on each of the members of the list
 
 *               To evaluate list, we must first evaluate head value
@@ -1969,13 +2011,6 @@
 
                 CASE lr_head->value.
 
-                  WHEN 'unquote'. " evaluate the argument to unquote
-                    IF lr_tail->cdr NE nil.
-                      throw( |unquote can only take a single argument| ).
-                    ENDIF.
-                    lo_elem = lr_tail->car.
-                    tail_expression lo_elem.
-
                   WHEN 'quote'. " Return the argument to quote unevaluated
                     IF lr_tail->cdr NE nil.
                       throw( |quote can only take a single argument| ).
@@ -1983,12 +2018,22 @@
                     result = lr_tail->car.
 
                   WHEN 'quasiquote'. " Partial quote - TO DO
-                    IF lr_tail->cdr NE nil.
+                    IF lr_tail EQ nil.
+                      result = lr_tail.
+                    ELSEIF lr_tail->cdr NE nil.
                       throw( |quasiquote can only take a single argument| ).
+                    ELSE.
+                      lo_elem = lr_tail->car.
+                      IF lo_elem->type NE lcl_lisp=>type_pair.
+                        result = lo_elem.
+                      ELSE.
+                        lo_elem = quasi_quote( lo_elem->car ).
+                        lo_elem = lo_elem->cdr.
+                        tail_expression lo_elem.
+                      ENDIF.
                     ENDIF.
-                    result = lr_tail->car.
 
-                  WHEN 'unquote-slicing'.
+                  WHEN 'unquote-splicing'.
                     result = nil.
                     throw( `not implemented yet` ).
 
@@ -2277,6 +2322,8 @@
 *                   The evaluated head must be a native procedure or a lambda or an ABAP function module
                     DATA(lo_proc) = eval_ast( element = lr_head             " proc
                                               environment = lo_env ).
+                    trace_call lo_proc lr_tail.
+
                     CASE lo_proc->type.
 
                       WHEN lcl_lisp=>type_lambda.
@@ -2325,6 +2372,7 @@
             ENDCASE.
 
         ENDCASE.
+        trace_result result.
         RETURN.
 
       ENDDO.
@@ -2399,12 +2447,12 @@
         DATA(first) = lo_iter->next( ).
         CHECK first NE nil.
 
-        IF first->type = lcl_lisp=>type_conscell.
+        IF first->type = lcl_lisp=>type_pair.
           result = lcl_lisp_new=>cons( io_car = first->car ).
 
           DATA(lo_last) = result.
           DATA(lo_arg) = first->cdr.
-          WHILE lo_arg NE nil AND lo_arg->type = lcl_lisp=>type_conscell.
+          WHILE lo_arg NE nil AND lo_arg->type = lcl_lisp=>type_pair.
             lo_last = lo_last->cdr = lcl_lisp_new=>cons( io_car = lo_arg->car ).
             lo_arg = lo_arg->cdr.
           ENDWHILE.
@@ -2430,7 +2478,7 @@
         CHECK first NE nil.
 
 *       Append lo_arg to result, from last element on
-        WHILE lo_arg NE nil AND lo_arg->type = lcl_lisp=>type_conscell.
+        WHILE lo_arg NE nil AND lo_arg->type = lcl_lisp=>type_pair.
           lo_last = lo_last->cdr = lcl_lisp_new=>cons( io_car = lo_arg->car ).
           lo_arg = lo_arg->cdr.
         ENDWHILE.
@@ -2511,7 +2559,7 @@
       ELSE.
 *       Get to last element in list - this can make APPEND expensive, like LENGTH
         DATA(lo_last) = list->car.
-        IF lo_last->type NE lcl_lisp=>type_conscell.
+        IF lo_last->type NE lcl_lisp=>type_pair.
           lo_last->error_not_a_list( ).
         ENDIF.
 
@@ -2520,7 +2568,7 @@
         ENDWHILE.
 
         "TO DO - replace with validate_tail lo_last (?) list->car.
-        IF lo_last->type NE lcl_lisp=>type_conscell.
+        IF lo_last->type NE lcl_lisp=>type_pair.
 *         If the last item is not a cons cell, return an error
           error_no_list list->car  `append!`.
         ENDIF.
@@ -2535,7 +2583,7 @@
       validate list.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+      IF lo_arg->type NE lcl_lisp=>type_pair.
         lo_arg->error_not_a_pair( `car: ` ).
       ENDIF.
       result = lo_arg->car.
@@ -2547,7 +2595,7 @@
       DATA(lo_arg) = list->car.
       validate_mutable: lo_arg  `list`.
 
-      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+      IF lo_arg->type NE lcl_lisp=>type_pair.
         lo_arg->error_not_a_pair( `set-car!: ` ).
       ENDIF.
 
@@ -2561,7 +2609,7 @@
       DATA(lo_arg) = list->car.
       validate_mutable: lo_arg `list`.
 
-      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+      IF lo_arg->type NE lcl_lisp=>type_pair.
         lo_arg->error_not_a_pair( `set-cdr!: ` ).
       ENDIF.
 
@@ -2573,7 +2621,7 @@
       validate list.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+      IF lo_arg->type NE lcl_lisp=>type_pair.
         lo_arg->error_not_a_pair( `cdr: ` ).
       ENDIF.
       result = lo_arg->cdr.
@@ -2605,12 +2653,12 @@
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+      IF lo_arg->type NE lcl_lisp=>type_pair.
         lo_arg->error_not_a_pair( `caar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+      IF lo_arg->type NE lcl_lisp=>type_pair.
         lo_arg->error_not_a_pair( `caar: ` ).
       ENDIF.
 
@@ -2624,12 +2672,12 @@
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+      IF lo_arg->type NE lcl_lisp=>type_pair.
         lo_arg->error_not_a_pair( `cadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+      IF lo_arg->type NE lcl_lisp=>type_pair.
         lo_arg->error_not_a_pair( `cadr: ` ).
       ENDIF.
 
@@ -2643,12 +2691,12 @@
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+      IF lo_arg->type NE lcl_lisp=>type_pair.
         lo_arg->error_not_a_pair( `cdar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+      IF lo_arg->type NE lcl_lisp=>type_pair.
         lo_arg->error_not_a_pair( `cdar: ` ).
       ENDIF.
 
@@ -2662,12 +2710,12 @@
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+      IF lo_arg->type NE lcl_lisp=>type_pair.
         lo_arg->error_not_a_pair( `cddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg EQ nil OR lo_arg->type NE lcl_lisp=>type_conscell.
+      IF lo_arg->type NE lcl_lisp=>type_pair.
         lo_arg->error_not_a_pair( `cddr: ` ).
       ENDIF.
 
@@ -2695,15 +2743,15 @@
       result = lcl_lisp_new=>number( 0 ).
       CHECK list NE nil AND ( list->car NE nil OR list->cdr NE nil ).
 
-*      Iterate over list to count the number of items
+*     Iterate over list to count the number of items
       result->number = 1.
       DATA(lo_elem) = list->car.
       WHILE lo_elem->cdr IS BOUND AND lo_elem->cdr NE nil.
         lo_elem = lo_elem->cdr.
         ADD 1 TO result->number.
       ENDWHILE.
-      CHECK lo_elem->type NE lcl_lisp=>type_conscell
-        AND list->car->type NE lcl_lisp=>type_conscell.
+      CHECK lo_elem->type NE lcl_lisp=>type_pair
+        AND list->car->type NE lcl_lisp=>type_pair.
 *      If the last item is not a cons cell, return an error
       error_no_list list->car `length`.
     ENDMETHOD.                    "proc_length
@@ -3249,6 +3297,7 @@
               result = false.
               EXIT.
             ENDIF.
+
           WHEN OTHERS.
             IF lo_ref = lo_ptr->cdr->car.
               result = true.
@@ -3289,7 +3338,7 @@
 * obj1 and obj2 are both characters and are the same character according to the char=? procedure (section 6.6).
           CHECK a->value = b->value.
 
-        WHEN lcl_lisp=>type_conscell OR lcl_lisp=>type_lambda.
+        WHEN lcl_lisp=>type_pair OR lcl_lisp=>type_lambda.
 * obj1 and obj2 are procedures whose location tags are equal (section 4.1.4).
 
           CHECK a->car EQ b->car AND a->cdr EQ b->cdr.
@@ -3384,7 +3433,7 @@
       result = false.
       CHECK list IS BOUND AND list->car IS BOUND.
       CHECK list->car->type EQ lcl_lisp=>type_number
-        AND list->car->number EQ CONV int8( list->car->number ).
+        AND list->car->number EQ CONV tv_int( list->car->number ).
       result = true.
     ENDMETHOD.                    "proc_is_integer
 
@@ -3398,7 +3447,7 @@
       result = false.
 
       DATA(lo_ptr) = list->car.
-      WHILE lo_ptr NE nil AND lo_ptr->type = lcl_lisp=>type_conscell.
+      WHILE lo_ptr->type = lcl_lisp=>type_pair.
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
 
@@ -3411,7 +3460,7 @@
 
       result = false.
       DATA(lo_arg) = list->car.
-      CHECK lo_arg NE nil AND lo_arg->type = lcl_lisp=>type_conscell.
+      CHECK lo_arg->type = lcl_lisp=>type_pair.
       result = true.
     ENDMETHOD.                    "proc_is_list
 
@@ -3470,8 +3519,8 @@
       result = false.
 
       DATA(lo_arg) = list->car.
-      WHILE lo_arg NE nil AND lo_arg->type = lcl_lisp=>type_conscell.
-        IF lo_arg->car->type = lcl_lisp=>type_conscell.
+      WHILE lo_arg->type = lcl_lisp=>type_pair.
+        IF lo_arg->car->type = lcl_lisp=>type_pair.
           RETURN.
         ENDIF.
         lo_arg = lo_arg->cdr.
@@ -4022,7 +4071,7 @@
 *       Table type
         WHEN cl_abap_typedescr=>kind_table.
 *         For this mapping to happen, the element must be a cons cell
-          IF element->type NE lcl_lisp=>type_conscell.
+          IF element->type NE lcl_lisp=>type_pair.
             throw( |Mapping failed: Non-cell to table| ).
           ENDIF.
 *         Provide reference to table and line
@@ -4054,7 +4103,7 @@
 
         WHEN cl_abap_typedescr=>kind_struct.
 *         Structure
-          IF element->type NE lcl_lisp=>type_conscell.
+          IF element->type NE lcl_lisp=>type_pair.
             throw( |Mapping failed: Non-cell to structure| ).
           ENDIF.
 
@@ -4403,7 +4452,7 @@
       DATA lv_count TYPE i.
 
       CASE io_pars->type.
-        WHEN lcl_lisp=>type_conscell.   "Do we have a proper list?
+        WHEN lcl_lisp=>type_pair.   "Do we have a proper list?
 
           DATA(lo_par) = io_pars.                " Pointer to formal parameters
           DATA(lo_arg) = io_args.                " Pointer to arguments
@@ -4521,7 +4570,7 @@
         WHEN lcl_lisp=>type_symbol OR lcl_lisp=>type_string.
           CHECK value = io_elem->value.
 
-        WHEN lcl_lisp=>type_conscell OR lcl_lisp=>type_lambda.
+        WHEN lcl_lisp=>type_pair OR lcl_lisp=>type_lambda.
           CHECK car->is_equal( io_elem->car ) NE false
             AND cdr->is_equal( io_elem->cdr ) NE false.
 
@@ -4539,7 +4588,7 @@
       str = lcl_parser=>c_open_paren.
       DATA(lo_elem) = me.
       WHILE lo_elem IS BOUND AND lo_elem NE nil.
-        str = str && COND string( WHEN lo_elem->type NE type_conscell     " If item is not a cons cell
+        str = str && COND string( WHEN lo_elem->type NE type_pair     " If item is not a cons cell
                                      THEN | . { lo_elem->write( ) }|      " indicate with dot notation:
                                      ELSE | { lo_elem->car->write( ) }| ).
         lo_elem = lo_elem->cdr.
@@ -4564,7 +4613,7 @@
           str = number.
         WHEN type_native.
           str = '<native>'.
-        WHEN type_conscell.
+        WHEN type_pair.
           str = list_to_string( ).
         WHEN type_hash.
           str = '<hash>'.
@@ -4634,7 +4683,7 @@
       IF first EQ abap_true.
         first = abap_false.
       ELSE.
-        IF elem->cdr->type NE lcl_lisp=>type_conscell.
+        IF elem->cdr->type NE lcl_lisp=>type_pair.
           lcl_lisp=>throw( |{ elem->to_string( ) } is not a proper list| ).
         ENDIF.
         elem = elem->cdr.
@@ -4721,7 +4770,7 @@
     ENDMETHOD.                    "new_table
 
     METHOD cons.
-      ro_cons = node( lcl_lisp=>type_conscell ).
+      ro_cons = node( lcl_lisp=>type_pair ).
       ro_cons->car = io_car.
       ro_cons->cdr = io_cdr.
     ENDMETHOD.                    "new_cons
@@ -4805,7 +4854,7 @@
       validate list.
 
       DATA(lo_head) = list.
-      CHECK lo_head->type = type_conscell.
+      CHECK lo_head->type = type_pair.
 
 *     Can accept a parameter which should be a list of alternating symbols/strings and elements
       DATA(lo_iter) = lo_head->new_iterator( ).
