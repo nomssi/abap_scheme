@@ -7,11 +7,16 @@
 ## Overview 
 
 After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a>.
-
 So I started my [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) project based on https://github.com/mydoghasworms/abap-lisp, itself inspired by [Peter Norvig](http://norvig.com/lispy2.html). My contributions:
 - _Scheme_ is now the target language, I am using the [R7RS](http://www.r7rs.org/) specification
 - An _ABAP Unit_ regression test suite
 - a Workbench to make it fun to use
+
+![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_scheme_workbench.png)
+The ABAP LISP Workbench has commands:
+- Evaluate (F8) executes the Scheme code 
+- Refresh (Shift-F2) will delete the source and console and reset the environment
+- Previous/Next expression
 
 ### Requirements
 
@@ -23,12 +28,6 @@ The current version was tested on ABAP Netweaver 7.50 and can be cloned with <a 
 - Include YY_LIB_LISP - Custom version of ABAP LISP
 - Include YY_LISP_AUNIT - ABAP Unit tests
 - Include YY_LISP_IDE - Workbench
-
-![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_scheme_workbench.png)
-The ABAP LISP Workbench has commands:
-- Evaluate (F8) executes the Scheme code 
-- Refresh (Shift-F2) will delete the source and console and reset the environment
-- Previous/Next expression
 
 ### ABAP Integration
 #### Interpreter
