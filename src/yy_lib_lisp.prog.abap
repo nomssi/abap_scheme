@@ -382,6 +382,10 @@
       CLASS-METHODS box_quote IMPORTING io_elem        TYPE REF TO lcl_lisp
                               RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
 
+      CLASS-METHODS box IMPORTING io_proc        TYPE REF TO lcl_lisp
+                                  io_elem        TYPE REF TO lcl_lisp
+                        RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+
       CLASS-METHODS quote IMPORTING io_elem        TYPE REF TO lcl_lisp
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
 
@@ -590,6 +594,7 @@
             RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment.
 
       METHODS:
+        copy_from IMPORTING io_env TYPE REF TO lcl_lisp_environment,
         find IMPORTING symbol     TYPE any
              RETURNING VALUE(env) TYPE REF TO lcl_lisp_environment
              RAISING   lcx_lisp_exception,
@@ -598,6 +603,9 @@
             RAISING   lcx_lisp_exception,
         set IMPORTING symbol  TYPE string
                       element TYPE REF TO lcl_lisp,
+        set_once IMPORTING symbol  TYPE string
+                           element TYPE REF TO lcl_lisp
+                 RAISING   lcx_lisp_exception,
 *       Convenience method to add a value and create the cell
         define_value IMPORTING symbol         TYPE string
                                type           TYPE lcl_lisp=>tv_type
@@ -634,13 +642,6 @@
         c_lisp_dot    TYPE char1 VALUE '.',
         c_open_paren  TYPE char1 VALUE '(',
         c_close_paren TYPE char1 VALUE ')'.
-
-      METHODS:
-        constructor,
-        parse IMPORTING code            TYPE clike
-              RETURNING VALUE(elements) TYPE tt_element
-              RAISING   lcx_lisp_exception.
-    PRIVATE SECTION.
       CONSTANTS:
         c_escape_char    TYPE char1 VALUE '\',
         c_text_quote     TYPE char1 VALUE '"',
@@ -650,9 +651,17 @@
         c_lisp_splicing  TYPE char1 VALUE '@',
         c_lisp_hash      TYPE char1 VALUE '#',
         c_lisp_comment   TYPE char1 VALUE ';',
+        c_block_comment  TYPE char1 VALUE '|', " start #|, end |#
         c_open_bracket   TYPE char1 VALUE '[',
         c_close_bracket  TYPE char1 VALUE ']',
-        c_peek_dummy     TYPE char1 VALUE 'Ü'.
+        c_peek_dummy     TYPE char1 VALUE 'Ü'. " we do not expect this in source code
+
+      METHODS:
+        constructor,
+        parse IMPORTING code            TYPE clike
+              RETURNING VALUE(elements) TYPE tt_element
+              RAISING   lcx_lisp_exception.
+    PRIVATE SECTION.
       DATA code TYPE string.
       DATA length TYPE i.
       DATA index TYPE i.
@@ -1006,6 +1015,7 @@
                            RAISING   lcx_lisp_exception.
 
       METHODS quasi_quote IMPORTING list          TYPE REF TO lcl_lisp
+                                    environment   TYPE REF TO lcl_lisp_environment
                           RETURNING VALUE(result) TYPE REF TO lcl_lisp
                           RAISING   lcx_lisp_exception.
 
@@ -1043,12 +1053,32 @@
         next_char( ).
       ENDWHILE.
       rv_has_next = xsdbool( index LT length ).
-      CHECK char EQ c_lisp_comment AND rv_has_next EQ abap_true.
-*      skip until end of line
-      WHILE char CN mv_eol AND index LT length.
+
+      IF char EQ c_lisp_comment AND rv_has_next EQ abap_true.
+*       skip until end of line
+        WHILE char CN mv_eol AND index LT length.
+          next_char( ).
+        ENDWHILE.
+        rv_has_next = skip_whitespace( ).
+      ENDIF.
+
+      IF char EQ c_lisp_hash AND rv_has_next EQ abap_true AND peek_char( ) EQ c_block_comment.
+        next_char( ).   " skip |
+*       match |#
         next_char( ).
-      ENDWHILE.
-      rv_has_next = skip_whitespace( ).
+*       skip block comment, from #| to |#
+        WHILE index LT length AND NOT ( char EQ c_block_comment AND peek_char( ) EQ c_lisp_hash ).
+          next_char( ).
+        ENDWHILE.
+
+        IF char EQ c_block_comment AND peek_char( ) EQ c_lisp_hash.
+          next_char( ).
+          next_char( ).
+        ENDIF.
+
+        rv_has_next = skip_whitespace( ).
+      ENDIF.
+
     ENDMETHOD.                    "skip_whitespace
 
     METHOD next_char.
@@ -1270,8 +1300,8 @@
       env->define_value( symbol = 'define'     type = lcl_lisp=>type_primitive value   = 'define' ).
       env->define_value( symbol = 'lambda'     type = lcl_lisp=>type_primitive value   = 'lambda' ).
       env->define_value( symbol = 'if'         type = lcl_lisp=>type_primitive value   = 'if' ).
-      env->define_value( symbol = 'quote'      type = lcl_lisp=>type_primitive value   = 'quote' ).
-      env->define_value( symbol = 'quasiquote' type = lcl_lisp=>type_primitive value   = 'quasiquote' ).
+      env->define_value( symbol = 'quote'      type = lcl_lisp=>type_primitive value   = `'` ).
+      env->define_value( symbol = 'quasiquote' type = lcl_lisp=>type_primitive value   = '`' ).
       env->define_value( symbol = 'set!'       type = lcl_lisp=>type_primitive value   = 'set!' ).
       env->define_value( symbol = 'apply'      type = lcl_lisp=>type_primitive value   = 'apply' ).
 
@@ -1290,8 +1320,8 @@
       env->define_value( symbol = 'for-each' type = lcl_lisp=>type_primitive value   = 'for-each' ).
       env->define_value( symbol = 'map'      type = lcl_lisp=>type_primitive value   = 'map' ).
 
-      env->define_value( symbol = 'unquote'          type = lcl_lisp=>type_primitive value   = 'unquote' ).
-      env->define_value( symbol = 'unquote-splicing' type = lcl_lisp=>type_primitive value   = 'unquote-splicing' ).
+      env->define_value( symbol = 'unquote'          type = lcl_lisp=>type_primitive value   = ',' ).
+      env->define_value( symbol = 'unquote-splicing' type = lcl_lisp=>type_primitive value   = ',@' ).
       env->define_value( symbol = 'newline'          type = lcl_lisp=>type_primitive value   = 'newline' ).
       env->define_value( symbol = 'display'          type = lcl_lisp=>type_primitive value   = 'display' ).
       env->define_value( symbol = 'write'            type = lcl_lisp=>type_primitive value   = 'write' ).
@@ -1448,6 +1478,9 @@
 
 *       Function shorthand (define (id arg ... ) body ...+)
         WHEN lcl_lisp=>type_pair.
+          IF element->cdr EQ nil.
+            throw( |{ lo_head->to_string( ) } no expression in body| ).
+          ENDIF.
 *         define's function shorthand allows us to define a function by specifying a list as the
 *         first argument where the first element is a symbol and consecutive elements are arguments
           result = lcl_lisp_new=>lambda( io_car = lo_head->cdr  "List of params following function symbol
@@ -1568,12 +1601,10 @@
                                                        IMPORTING ev_has_next = lv_has_next
                                                        CHANGING  ct_list = lt_list )
                               environment = environment ) ).
-        IF result EQ nil.
-          " create function call (proc list1-[1] list2-[1]... listn-[1])
-          " evaluate, add result as 1st list element of new list
+*       create function call (proc list1[k] list2[k]... listn[k]); add result as k-th list element
+        IF result EQ nil. " 1st element of new list
           lo_map = result = lo_head.
         ELSE.
-          " evaluate function call (proc list1[k] list2[k]... listn[k]); add result as k-th list element
           lo_map = lo_map->cdr = lo_head.
         ENDIF.
       ENDWHILE.
@@ -1597,7 +1628,7 @@
 
       DATA(lv_has_next) = xsdbool( lines( lt_list ) GT 0 ).  " for-each terminates when the shortest list runs out.
       WHILE lv_has_next EQ abap_true.
-        " evaluate function call (proc list1[k] list2[k]... listn[k])
+*       evaluate function call (proc list1[k] list2[k]... listn[k])
         DATA(lo_head) = map_next_expr( EXPORTING io_proc = lo_proc
                                        IMPORTING ev_has_next = lv_has_next
                                        CHANGING  ct_list = lt_list ).
@@ -1612,12 +1643,9 @@
 *     A <step> can be omitted, in which case the effect is the same as if (<variable> <init> <variable>)
 *     had been written instead of (<variable> <init>).
       validate io_head.
-      DATA lt_symbols TYPE SORTED TABLE OF string WITH UNIQUE DEFAULT KEY. " to check for duplicate variables
 
       eo_env = lcl_lisp_environment=>new( io_env ).
-      DATA(local_env) = lcl_lisp_environment=>new( ).
       eo_step = nil.
-
 
       DATA(lo_loop) = io_head.
       WHILE lo_loop NE nil.
@@ -1632,26 +1660,19 @@
         IF lo_spec NE nil.
           DATA(lo_init) = lo_spec->car.
 
-*         It is an error for a <variable> to appear more than once in the list of do variables.
-          IF line_exists( lt_symbols[ table_line = lo_var->value ] ).
-            throw( |do: variable { lo_var->value } appears more than once| ).
-          ENDIF.
-          INSERT lo_var->value INTO TABLE lt_symbols.
-
-
-          local_env->set( symbol = lo_var->value
-                          element = eval_ast( element = lo_init    " inits are evaluated in org. environment
-                                              environment = io_env ) ).
+          eo_env->set_once( symbol = lo_var->value
+                            element = eval_ast( element = lo_init    " inits are evaluated in org. environment
+                                               environment = io_env ) ).
           lo_spec = lo_spec->cdr.
           IF lo_spec NE nil.
 *           <step>
-            DATA(lo_step) = lcl_lisp_new=>cons( io_car = lo_var
-                                                io_cdr = lo_spec->car ).
+            DATA(lo_next) = lcl_lisp_new=>cons( io_car = lcl_lisp_new=>cons( io_car = lo_var
+                                                                             io_cdr = lo_spec->car ) ).
             IF eo_step EQ nil.  " first
-              eo_step = lcl_lisp_new=>cons( io_car = lo_step ).
+              eo_step = lo_next.
               DATA(lo_ptr) = eo_step.
             ELSE.
-              lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = lo_step ).
+              lo_ptr = lo_ptr->cdr = lo_next.
             ENDIF.
 
           ENDIF.
@@ -1659,11 +1680,6 @@
 *       Next iteration control
         lo_loop = lo_loop->cdr.
       ENDWHILE.
-
-      LOOP AT lt_symbols INTO DATA(lv_symbol).
-        io_env->set( symbol = lv_symbol
-                     element = local_env->get( lv_symbol ) ).
-      ENDLOOP.
 
     ENDMETHOD.
 
@@ -1684,10 +1700,7 @@
       WHILE lo_step NE nil.
         DATA(lo_ptr) = lo_step->car.
 
-*       the <variable>s are first bound to fresh locations
-*       to avoid dependencies in the next step
-
-*       the results of the <step>s are stored in the bindings of the <variable>s
+*       <variable>s are bound to fresh locations to avoid dependencies in the next step
         lo_local_env->set( symbol = lo_ptr->car->value
                            element = eval_ast( element = lo_ptr->cdr
                                                 environment = io_env ) ).
@@ -1696,11 +1709,11 @@
 
       lo_step = io_steps.
       WHILE lo_step NE nil.
-        lo_ptr = lo_step->car.
+        DATA(lv_symbol) = lo_step->car->car->value.
 
 *       the results of the <step>s are stored in the bindings of the <variable>s
-        io_env->set( symbol = lo_ptr->car->value
-                     element = lo_local_env->get( lo_ptr->car->value ) ).
+        io_env->set( symbol = lv_symbol
+                     element = lo_local_env->get( lv_symbol ) ).
         lo_step = lo_step->cdr.
       ENDWHILE.
 
@@ -1751,9 +1764,10 @@
     ENDMETHOD.
 
     METHOD extract_arguments.
+      validate io_head.
       eo_args = eo_pars = nil.                "list of parameters
 
-      CHECK io_head IS BOUND AND io_head->car IS BOUND AND io_head->car NE nil.
+      CHECK io_head->car IS BOUND AND io_head->car NE nil.
       DATA(lo_ptr) = io_head->car.
 
       validate lo_ptr->car.
@@ -1761,19 +1775,23 @@
       IF lo_ptr->cdr IS BOUND AND lo_ptr->cdr NE nil.
         eo_args = lcl_lisp_new=>cons( io_car = lo_ptr->cdr->car ).
       ENDIF.
+
       DATA(lo_par) = eo_pars.
       DATA(lo_arg) = eo_args.
       lo_ptr = io_head.
       WHILE lo_ptr->cdr IS BOUND AND lo_ptr->cdr NE nil.
         lo_ptr = lo_ptr->cdr.
-*        Rest of list, pick head
+
+*       Rest of list, pick head
         DATA(lo_pair) = lo_ptr->car.
         IF lo_pair IS BOUND AND lo_pair->car NE nil.
           lo_par = lo_par->cdr = lcl_lisp_new=>cons( io_car = lo_pair->car ).
         ENDIF.
+
         IF lo_pair->cdr IS BOUND AND lo_pair->cdr NE nil.
           lo_arg = lo_arg->cdr = lcl_lisp_new=>cons( io_car = lo_pair->cdr->car ).
         ENDIF.
+
       ENDWHILE.
       lo_par->cdr = lo_arg->cdr = nil.
 
@@ -1834,8 +1852,8 @@
       WHILE lo_par IS BOUND AND lo_par NE nil   " Nil means no parameters to map
         AND lo_arg IS BOUND AND lo_arg NE nil.  " Nil means no parameters to map
 
-        ro_env->set( symbol = lo_par->car->value
-                     element = lo_arg->car ).
+        ro_env->set_once( symbol = lo_par->car->value
+                          element = lo_arg->car ).
         lo_par = lo_par->cdr.
         lo_arg = lo_arg->cdr.
       ENDWHILE.
@@ -1857,8 +1875,8 @@
       WHILE lo_par IS BOUND AND lo_par NE nil   " Nil means no parameters to map
         AND lo_arg IS BOUND AND lo_arg NE nil.  " Nil means no parameters to map
 
-        ro_env->set( symbol = lo_par->car->value
-                     element = lo_arg->car ).
+        ro_env->set_once( symbol = lo_par->car->value
+                          element = lo_arg->car ).
         lo_par = lo_par->cdr.
         lo_arg = lo_arg->cdr.
       ENDWHILE.
@@ -1963,23 +1981,54 @@
     END-OF-DEFINITION.
 
     METHOD quasi_quote.
-      result = list.
-      IF list->type NE lcl_lisp=>type_pair.
-        result = lcl_lisp_new=>quote( list ).
-      ELSE.
-        DATA(lo_next) = list->cdr.
-        CASE list->car->value.
+      validate list.
+      "lo_elem = lcl_lisp_new=>cons( io_car = quasi_quote( list ) ).
+      result = nil.
+      DATA(lo_ptr) = list.
+      DATA(lo_head) = result.
+
+      WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+
+        CASE lo_ptr->car->value.
           WHEN 'unquote'.
-            result = lo_next.
+            DATA(lo_new) = lcl_lisp_new=>cons( io_car = eval( element = lo_ptr->cdr->car
+                                                              environment = environment ) ).
+            IF result = nil.
+              result = lo_head = lo_new.
+            ELSE.
+              lo_head = lo_head->cdr = lo_new.
+            ENDIF.
+            " lo_next->cdr should be nil
           WHEN 'splice-unquote'.
-            result = lcl_lisp_new=>cons( io_car = lo_next->car
-                                         io_cdr = quasi_quote( lo_next->cdr ) ).
+            lo_new = eval( element = lo_ptr->cdr->car
+                           environment = environment ).
+            IF result = nil.
+              result = lo_head = lo_new.
+            ELSE.
+              lo_head = lo_head->cdr = lo_new.
+            ENDIF.
+*           Move head to end of list
+            WHILE lo_head->type EQ lcl_lisp=>type_pair AND lo_head->cdr->type EQ lcl_lisp=>type_pair.
+              lo_head = lo_head->cdr.
+            ENDWHILE.
+
           WHEN OTHERS.
-            result = lcl_lisp_new=>cons( io_car = quasi_quote( lo_next->car )
-                                         io_cdr = quasi_quote( lo_next->cdr ) ).
+            lo_new = lcl_lisp_new=>cons( io_car = lo_ptr->car ).
+            IF result = nil.
+              result = lo_head = lo_new.
+            ELSE.
+              lo_head = lo_head->cdr = lo_new.
+            ENDIF.
 
         ENDCASE.
+
+        lo_ptr = lo_ptr->cdr.
+      ENDWHILE.
+
+      IF lo_ptr NE nil.
+        result = list.
       ENDIF.
+
     ENDMETHOD.
 
 **********************************************************************
@@ -2018,20 +2067,12 @@
                     result = lr_tail->car.
 
                   WHEN 'quasiquote'. " Partial quote - TO DO
-                    IF lr_tail EQ nil.
-                      result = lr_tail.
-                    ELSEIF lr_tail->cdr NE nil.
+                    IF lr_tail->cdr NE nil.
                       throw( |quasiquote can only take a single argument| ).
-                    ELSE.
-                      lo_elem = lr_tail->car.
-                      IF lo_elem->type NE lcl_lisp=>type_pair.
-                        result = lo_elem.
-                      ELSE.
-                        lo_elem = quasi_quote( lo_elem->car ).
-                        lo_elem = lo_elem->cdr.
-                        tail_expression lo_elem.
-                      ENDIF.
                     ENDIF.
+                    result = quasi_quote( list = lr_tail->car
+                                          environment = lo_env ).
+                    "tail_expression lo_elem.
 
                   WHEN 'unquote-splicing'.
                     result = nil.
@@ -4310,7 +4351,7 @@
       TRY.
           DATA(lv_parmname) = CONV abap_parmname( identifier->value ).
           rdata = VALUE #( param_active[ name = lv_parmname ]-value
-                             DEFAULT parameters[ name = lv_parmname ]-value ).
+                             DEFAULT parameters[ name = lv_parmname ]-value ). "#EC CI_SORTSEQ
         CATCH cx_sy_itab_line_not_found.
           throw( |ab-get: No parameter { lv_parmname } in function| ).
       ENDTRY.
@@ -4437,13 +4478,30 @@
     ENDMETHOD.                    "define_cell
 
     METHOD set.
-*      Add a value to the (local) environment
+*     Add a value to the (local) environment
       DATA(ls_map) = VALUE ts_map( symbol = symbol
                                    value = element ).
       INSERT ls_map INTO TABLE map.
       CHECK sy-subrc = 4.                " To comply with Scheme define,
       MODIFY TABLE map FROM ls_map.      " overwrite existing defined values
     ENDMETHOD.                    "define
+
+    METHOD set_once.
+*     Add a value to the (local) environment. The value must not exist yet
+      DATA(ls_map) = VALUE ts_map( symbol = symbol
+                                   value = element ).
+      INSERT ls_map INTO TABLE map.
+      CHECK sy-subrc = 4.
+*     It is an error for a <variable> to appear more than once in the list of variables.
+      lcl_lisp=>throw( |variable { symbol } appears more than once| ).
+    ENDMETHOD.                    "define
+
+    METHOD copy_from.
+      LOOP AT io_env->map INTO DATA(ls_map).
+        set( symbol = ls_map-symbol
+             element = ls_map-value ).
+      ENDLOOP.
+    ENDMETHOD.
 
     METHOD parameters_to_symbols.
 *     The lambda receives its own local environment in which to execute, where parameters
@@ -4537,7 +4595,7 @@
       quote = lcl_lisp_new=>symbol( 'quote' ).
       quasiquote = lcl_lisp_new=>symbol( 'quasiquote' ).
       unquote = lcl_lisp_new=>symbol( 'unquote' ).
-      unquote_splicing = lcl_lisp_new=>symbol( 'unquote-splicing' ).
+      unquote_splicing = lcl_lisp_new=>symbol( 'unquote-slicing' ).
 
       new_line = lcl_lisp_new=>string( |\n| ).
     ENDMETHOD.
@@ -4585,16 +4643,40 @@
     ENDMETHOD.
 
     METHOD list_to_string.
-      str = lcl_parser=>c_open_paren.
+      DATA lv_str TYPE string.
+      DATA lv_first TYPE flag VALUE abap_true.
+
       DATA(lo_elem) = me.
+
+      DATA(lv_parens) = abap_true.
       WHILE lo_elem IS BOUND AND lo_elem NE nil.
-        str = str && COND string( WHEN lo_elem->type NE type_pair     " If item is not a cons cell
-                                     THEN | . { lo_elem->write( ) }|      " indicate with dot notation:
-                                     ELSE | { lo_elem->car->write( ) }| ).
+
+*       Quasiquoting output
+        IF lv_first EQ abap_true AND lo_elem->type EQ type_pair.
+          lv_first = abap_false.
+          IF lo_elem->car->type EQ type_symbol.
+            CASE lo_elem->car->value.
+              WHEN 'quote'
+                OR 'quasiquote'
+                OR 'unquote'
+                OR 'unquote-slicing'.
+                lv_parens = abap_false.
+            ENDCASE.
+          ENDIF.
+        ENDIF.
+
+        lv_str = lv_str && COND string( WHEN lo_elem->type NE type_pair     " If item is not a cons cell
+                                        THEN | . { lo_elem->write( ) }|      " indicate with dot notation:
+                                        ELSE | { lo_elem->car->write( ) }| ).
         lo_elem = lo_elem->cdr.
       ENDWHILE.
 
-      str = |{ str } { lcl_parser=>c_close_paren }|.
+      IF lv_parens EQ abap_true.
+        str = |{ lcl_parser=>c_open_paren }{ lv_str } { lcl_parser=>c_close_paren }|.
+      ELSE.
+*       Quasiquoting output
+        str = lv_str.
+      ENDIF.
     ENDMETHOD.                    "list_to_string
 
     METHOD to_string.
@@ -4603,8 +4685,21 @@
           str = |<lambda> { car->list_to_string( ) }|.
         WHEN type_null.
           str = 'nil'.
-        WHEN type_symbol.
+        WHEN type_primitive.
           str = value.
+        WHEN type_symbol.
+          CASE value.
+            WHEN 'quote'.
+              str = `'`.
+            WHEN 'quasiquote'.
+              str = '`'.
+            WHEN 'unquote'.
+              str = ','.
+            WHEN 'unquote-slicing'.
+              str = ',@'.
+            WHEN OTHERS.
+              str = value.
+          ENDCASE.
         WHEN type_boolean.
           str = value.
         WHEN type_string.
@@ -4612,7 +4707,7 @@
         WHEN type_number.
           str = number.
         WHEN type_native.
-          str = '<native>'.
+          str = |<native> { to_lower( value ) }|.
         WHEN type_pair.
           str = list_to_string( ).
         WHEN type_hash.
@@ -4649,6 +4744,7 @@
 *         give back the string as a quoted string
           str = |"{ escape( val = value
                     format = cl_abap_format=>e_html_js ) }"|.
+
         WHEN OTHERS.
           str = to_string( ).
       ENDCASE.
@@ -4804,33 +4900,39 @@
       ro_hash->fill( io_list->car ).
     ENDMETHOD.
 
+    METHOD box.
+      ro_elem = cons( io_car = io_proc
+                      io_cdr = cons( io_car = io_elem )  ).
+    ENDMETHOD.
+
     METHOD quote.
-      ro_elem = cons( io_car = lcl_lisp=>quote
-                      io_cdr = cons( io_car = io_elem )  ).
-      ro_elem->cdr->mutable = abap_false.
-    ENDMETHOD.
-
-    METHOD unquote.
-      ro_elem = cons( io_car = lcl_lisp=>unquote
-                      io_cdr = cons( io_car = io_elem )  ).
-      ro_elem->cdr->mutable = abap_true.
-    ENDMETHOD.
-
-    METHOD splice_unquote.
-      ro_elem = cons( io_car = lcl_lisp=>unquote_splicing
-                      io_cdr = cons( io_car = io_elem )  ).
+      ro_elem = box( io_proc = lcl_lisp=>quote
+                     io_elem = io_elem ).
       ro_elem->cdr->mutable = abap_false.
     ENDMETHOD.
 
     METHOD box_quote.
 *     quote to avoid double eval
-      ro_elem = cons( io_car = quote( io_elem ) ).
+      ro_elem = cons( io_car = cons( io_car = lcl_lisp=>quote
+                                     io_cdr = cons( io_car = io_elem ) ) ).
+      ro_elem->cdr->mutable = abap_false.
+    ENDMETHOD.
+
+    METHOD unquote.
+      ro_elem = box( io_proc = lcl_lisp=>unquote
+                     io_elem = io_elem ).
+      ro_elem->cdr->mutable = abap_true.
+    ENDMETHOD.
+
+    METHOD splice_unquote.
+      ro_elem = box( io_proc = lcl_lisp=>unquote_splicing
+                     io_elem = io_elem ).
       ro_elem->cdr->mutable = abap_false.
     ENDMETHOD.
 
     METHOD quasiquote.
-      ro_elem = cons( io_car = lcl_lisp=>quasiquote
-                      io_cdr = cons( io_car = io_elem )  ).
+      ro_elem = box( io_proc = lcl_lisp=>quasiquote
+                     io_elem = io_elem ).
       ro_elem->cdr->mutable = abap_false.
     ENDMETHOD.
 

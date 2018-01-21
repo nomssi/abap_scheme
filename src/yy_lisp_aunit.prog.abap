@@ -387,6 +387,8 @@
        METHODS let_2 FOR TESTING.
        METHODS let_3 FOR TESTING.
 
+       METHODS let_star_1 FOR TESTING.
+
        METHODS do_1 FOR TESTING.
        METHODS do_2 FOR TESTING.
 
@@ -591,7 +593,15 @@
 *      not allowed if we strictly follow the Scheme standard
        code_test( code = |(let ((x 2) (x 0))| &
                          |    (+ x 5))|
-                  expected = '5' ).
+                  expected = 'Error' ).
+     ENDMETHOD.
+
+     METHOD let_star_1.
+       code_test( code = |(let ((x 2) (y 3))| &
+                         |  (let* ((x 7)| &
+                         |        (z (+ x y)))| &
+                         |  (* z x)))|
+                  expected = '70' ).
      ENDMETHOD.
 
      METHOD do_1.
@@ -3178,55 +3188,55 @@
 
      METHOD quasiquote_1.
        code_test( code = '`(list ,(+ 1 2) 4)'
-                  expected = '(list 3 4)' ).
+                  expected = '( list 3 4 )' ).
      ENDMETHOD.
 
      METHOD quasiquote_2.
-       code_test( code = |(let ((name ’a)) `(list ,name ',name))|
-                  expected = '(list a (quote a))' ).
+       code_test( code = |(let ((name 'a)) `(list ,name ',name))|
+                  expected = '( list a ( quote a ) )' ).
      ENDMETHOD.
 
      METHOD quasiquote_3.
        code_test( code = |`(a ,(+ 1 2) ,@(map abs '(4 -5 6)) b)|
-                  expected = '(a 3 4 5 6 b)' ).
+                  expected = '( a 3 4 5 6 b )' ).
      ENDMETHOD.
 
      METHOD quasiquote_4.
        code_test( code = |`(( foo ,(- 10 3)) ,@(cdr '(c)) . ,(car '(cons)))|
-                  expected = '((foo 7) . cons)' ).
+                  expected = '( ( foo 7 ) . cons )' ).
      ENDMETHOD.
 
      METHOD quasiquote_5.
        code_test( code = |`#(10 5 ,(sqrt 4) ,@(map sqrt '(16 9)) 8)|
-                  expected = '#(10 5 2 4 3 8)' ).
+                  expected = '#( 10 5 2 4 3 8 )' ).
      ENDMETHOD.
 
      METHOD quasiquote_6.
        code_test( code = |(let ((foo '(foo bar)) (@baz 'baz))| &
                          |`(list ,@foo , @baz))|
-                  expected = '(list foo bar baz)' ).
+                  expected = '( list foo bar baz )' ).
      ENDMETHOD.
 
      METHOD quasiquote_7.
        code_test( code = '`(a `(b ,(+ 1 2) ,(foo ,(+ 1 3) d) e) f)'
-                  expected = '(a `(b ,(+ 1 2) ,(foo 4 d) e) f)' ).
+                  expected = '( a `( b ,( + 1 2 ) ,( foo 4 d ) e ) f )' ).
      ENDMETHOD.
 
      METHOD quasiquote_8.
        code_test( code = |(let ((name1 'x)| &
                          |      (name2 'y))| &
-                         |  `(a `(b ,,name1 ,’,name2 d) e))|
-                  expected = |(a `(b ,x ,’y d) e)|  ).
+                         |  `(a `(b ,,name1 ,',name2 d) e))|
+                  expected = |( a `( b ,x ,'y d ) e )|  ).
      ENDMETHOD.
 
      METHOD quasiquote_9.
        code_test( code = '(quasiquote (list (unquote (+ 1 2)) 4))'
-                  expected = '(list 3 4)' ).
+                  expected = '( list 3 4 )' ).
      ENDMETHOD.
 
      METHOD quasiquote_10.
        code_test( code = |'(quasiquote (list (unquote (+ 1 2)) 4))|
-                  expected = '`(list ,(+ 1 2) 4)' ).
+                  expected = '`( list ,( + 1 2 ) 4 )' ).
      ENDMETHOD.
 
    ENDCLASS.

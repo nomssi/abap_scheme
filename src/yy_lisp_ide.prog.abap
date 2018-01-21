@@ -2,6 +2,10 @@
 *&  Include           YY_LISP_IDE
 *&---------------------------------------------------------------------*
 
+CONSTANTS:
+  c_lisp_input TYPE string VALUE 'ABAP Lisp Input',
+  c_lisp_untitled TYPE string VALUE 'Untitled'.
+
 DATA g_ok_code TYPE syucomm.
 
 CLASS lcl_stack DEFINITION.
@@ -95,6 +99,8 @@ ENDINTERFACE.                    "lif_unit_test IMPLEMENTATION
 *----------------------------------------------------------------------*
 CLASS lcl_ide DEFINITION CREATE PRIVATE.
   PUBLIC SECTION.
+    DATA mv_title TYPE string VALUE c_lisp_untitled READ-ONLY.
+
     CLASS-METHODS: main,
       free,
       pbo,
@@ -105,6 +111,7 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
     INTERFACES lif_port.
   PRIVATE SECTION.
     CLASS-DATA go_ide TYPE REF TO lcl_ide.
+
     DATA mv_first TYPE flag VALUE abap_true.
     DATA mo_cont TYPE REF TO lcl_container.
     DATA mo_int TYPE REF TO lcl_lisp_profiler. "The Lisp interpreter
@@ -187,6 +194,7 @@ CLASS lcl_ide IMPLEMENTATION.
                                url = c_url
                                modal = abap_false
                                buttons = abap_true
+                               context_menu = abap_true
                                 "size = ms_cfg-browser_size
                                ).
   ENDMETHOD.
@@ -203,7 +211,7 @@ CLASS lcl_ide IMPLEMENTATION.
 
     CALL FUNCTION 'POPUP_GET_VALUES'
       EXPORTING
-        popup_title  = 'ABAP Lisp Input'
+        popup_title  = c_lisp_input
         start_column = '45'
         start_row    = '11'
       IMPORTING
@@ -358,7 +366,7 @@ CLASS lcl_ide IMPLEMENTATION.
 
   METHOD pbo.
     SET PF-STATUS 'STATUS_100'.
-    SET TITLEBAR  'TITLE_100'.
+    SET TITLEBAR  'TITLE_100' WITH go_ide->mv_title.
     go_ide->first_output( ).
   ENDMETHOD.                    "pbo
 

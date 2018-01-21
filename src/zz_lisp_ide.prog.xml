@@ -126,7 +126,7 @@
       <FUN_TEXT>Evaluate</FUN_TEXT>
       <ICON_TEXT>Evaluate</ICON_TEXT>
       <INFO_TEXT>Run</INFO_TEXT>
-      <PATH>R</PATH>
+      <PATH>V</PATH>
      </RSMPE_FUNT>
      <RSMPE_FUNT>
       <CODE>EXIT</CODE>
@@ -172,6 +172,7 @@
       <TEXTNO>001</TEXTNO>
       <TEXT_TYPE>S</TEXT_TYPE>
       <FUN_TEXT>Eval with Trace</FUN_TEXT>
+      <PATH>A</PATH>
      </RSMPE_FUNT>
      <RSMPE_FUNT>
       <CODE>WIKI</CODE>
@@ -394,7 +395,7 @@
     <TIT>
      <RSMPE_TITT>
       <CODE>TITLE_100</CODE>
-      <TEXT>ABAP LISP Workbench</TEXT>
+      <TEXT>ABAP LISP Workbench - &amp;</TEXT>
      </RSMPE_TITT>
     </TIT>
    </CUA>
