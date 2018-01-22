@@ -20,14 +20,17 @@ The ABAP LISP Workbench has commands:
 
 ### Requirements
 
-The current version was tested on ABAP Netweaver 7.50 and can be cloned with [ABAP GIT](http://docs.abapgit.org/). For an older version, check the [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP).
+- The current version should work on ABAP Netweaver 7.4 SP10, it developed on a 7.5
+- For an older version, check the [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP).
 
 ### Architecture
 
-- Report ZZ_LISP_IDE - Main report
-- Include YY_LIB_LISP - Custom version of ABAP LISP
+The code can be cloned with [ABAP GIT](http://docs.abapgit.org/) 
+
+- Report ZZ_LISP_IDE - Main report for the workbench
+- Include YY_LIB_LISP - Complete ABAP LISP library
 - Include YY_LISP_AUNIT - ABAP Unit tests
-- Include YY_LISP_IDE - Workbench
+- Include YY_LISP_IDE - Editor/Tools
 
 ### ABAP Integration
 #### Interpreter
