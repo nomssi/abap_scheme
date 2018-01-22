@@ -1262,6 +1262,14 @@
               element = lcl_lisp_vector=>from_list( io_list = parse_list( )
                                                     iv_mutable = abap_false ).
               RETURN.
+
+            WHEN c_escape_char.  " Character constant  #\a
+              next_char( ).
+              next_char( ).
+              element = lcl_lisp_new=>string( char ).
+              next_char( ).
+              RETURN.
+
             WHEN OTHERS.
               " Others
           ENDCASE.
@@ -1595,12 +1603,11 @@
       DATA(lv_has_next) = xsdbool( lines( lt_list ) GT 0 ). " map terminates when the shortest list runs out.
 
       WHILE lv_has_next EQ abap_true.
-
-        DATA(lo_head) = lcl_lisp_new=>cons( io_car = eval(
-                              element = map_next_expr( EXPORTING io_proc = lo_proc
+        DATA(lo_next) = eval( element = map_next_expr( EXPORTING io_proc = lo_proc
                                                        IMPORTING ev_has_next = lv_has_next
                                                        CHANGING  ct_list = lt_list )
-                              environment = environment ) ).
+                              environment = environment ).
+        DATA(lo_head) = lcl_lisp_new=>cons( io_car = lo_next ).
 *       create function call (proc list1[k] list2[k]... listn[k]); add result as k-th list element
         IF result EQ nil. " 1st element of new list
           lo_map = result = lo_head.
@@ -1991,8 +1998,12 @@
 
         CASE lo_ptr->car->value.
           WHEN 'unquote'.
+            DATA(debug0) = lo_ptr->cdr->car->to_string( ).
             DATA(lo_new) = lcl_lisp_new=>cons( io_car = eval( element = lo_ptr->cdr->car
                                                               environment = environment ) ).
+
+            DATA(debug1) = lo_new->to_string( ).
+
             IF result = nil.
               result = lo_head = lo_new.
             ELSE.
@@ -2026,7 +2037,7 @@
       ENDWHILE.
 
       IF lo_ptr NE nil.
-        result = list.
+        result = lo_ptr.
       ENDIF.
 
     ENDMETHOD.
@@ -2560,6 +2571,10 @@
 *       Evaluate next list entry
         DATA(lo_next) = eval( element = iter->next( )
                               environment = environment ).
+        IF lo_next = nil.  " if any list is empty, the table is empty
+          CLEAR rt_table.
+          RETURN.
+        ENDIF.
         APPEND lo_next TO rt_table.
       ENDWHILE.
     ENDMETHOD.

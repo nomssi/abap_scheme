@@ -435,6 +435,18 @@
 
    ENDCLASS.                    "ltc_basic DEFINITION
 
+   CLASS ltc_string DEFINITION INHERITING FROM ltc_interpreter
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PRIVATE SECTION.
+
+       METHODS setup.
+       METHODS teardown.
+
+       METHODS char_1 FOR TESTING.
+       METHODS char_2 FOR TESTING.
+       METHODS char_3 FOR TESTING.
+   ENDCLASS.
+
    CLASS ltc_conditionals DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
@@ -880,6 +892,33 @@
      ENDMETHOD.
 
    ENDCLASS.                    "ltc_basic IMPLEMENTATION
+
+   CLASS ltc_string IMPLEMENTATION.
+
+     METHOD setup.
+       CREATE OBJECT mo_int.
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
+
+     METHOD char_1.
+       code_test( code = `'(#\A #\a)`
+                  expected = '( "A" "a" )' ).
+     ENDMETHOD.
+
+     METHOD char_2.
+       code_test( code = '#\A'
+                  expected = '"A"' ).
+     ENDMETHOD.
+
+     METHOD char_3.
+       code_test( code = '#\aA'
+                  expected = 'Eval: Symbol A is unbound' ).
+     ENDMETHOD.
+
+   ENDCLASS.
 
    CLASS ltc_conditionals IMPLEMENTATION.
 
@@ -2414,6 +2453,7 @@
        METHODS map_4 FOR TESTING.
        METHODS map_5 FOR TESTING.
        METHODS map_6 FOR TESTING.
+       METHODS map_7 FOR TESTING.
 
        METHODS for_each_1 FOR TESTING.
        METHODS for_each_2 FOR TESTING.
@@ -2630,6 +2670,11 @@
                   expected = |( 4 5 6 7 8 )| ).
      ENDMETHOD.
 
+     METHOD map_7.
+       code_test( code = |(map car '())|
+                  expected = |nil| ).
+     ENDMETHOD.
+
      METHOD for_each_1.
        code_test( code = |(for-each + (list 3 4))|
                   expected = '4' ).  " unspecified
@@ -2687,6 +2732,19 @@
        METHODS compa_eq_1 FOR TESTING.
        METHODS compa_eq_2 FOR TESTING.
        METHODS compa_eq_3 FOR TESTING.
+
+       METHODS compa_is_eq_1 FOR TESTING.
+       METHODS compa_is_eq_2 FOR TESTING.
+       METHODS compa_is_eq_3 FOR TESTING.
+       METHODS compa_is_eq_4 FOR TESTING.
+       METHODS compa_is_eq_5 FOR TESTING.
+       METHODS compa_is_eq_6 FOR TESTING.
+       METHODS compa_is_eq_7 FOR TESTING.
+       METHODS compa_is_eq_8 FOR TESTING.
+       METHODS compa_is_eq_9 FOR TESTING.
+       METHODS compa_is_eq_10 FOR TESTING.
+       METHODS compa_is_eq_11 FOR TESTING.
+       METHODS compa_is_eq_12 FOR TESTING.
 
        METHODS compa_nil_1 FOR TESTING.
        METHODS compa_nil_2 FOR TESTING.
@@ -2815,6 +2873,70 @@
        code_test( code = '(= (+ 3 4) 7 (+ 2 5))'
                   expected = '#t' ).
      ENDMETHOD.                    "compa_eq_2
+
+     METHOD compa_is_eq_1.
+       code_test( code = |(eq? 'a 'a)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_is_eq_2.
+       code_test( code = |(eq? '(a) '(a))|
+                  expected = '#f' ).   " unspecified
+     ENDMETHOD.
+
+     METHOD compa_is_eq_3.
+       code_test( code = |(eq? (list 'a) (list 'a))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD compa_is_eq_4.
+       code_test( code = |(eq? "a" "a")|
+                  expected = '#t' ).    " unspecified
+     ENDMETHOD.
+
+     METHOD compa_is_eq_5.
+       code_test( code = '(eq? "" "")'
+                  expected = '#t' ).   " unspecified
+     ENDMETHOD.
+
+     METHOD compa_is_eq_6.
+       code_test( code = |(eq? '() '())|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_is_eq_7.
+       code_test( code = |(eq? 2 2)|
+                  expected = '#t' ).    " unspecified
+     ENDMETHOD.
+
+     METHOD compa_is_eq_8.
+       code_test( code = '(eq? #\A #\A)'
+                  expected = '#t' ).   " unspecified
+     ENDMETHOD.
+
+     METHOD compa_is_eq_9.
+       code_test( code = |(eq? car car)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_is_eq_10.
+       code_test( code = |(let ((n (+ 2 3)))| &
+                         |  (let ((x '(a))) | &
+                         | (eq? x x))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_is_eq_11.
+       code_test( code = |(let ((x '#()))| &
+                         |  (eq? x x))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_is_eq_12.
+       code_test( code = |(let ((p (lambda (x) x)))| &
+                         |  (eq? p p))|
+                  expected = '#t' ).
+     ENDMETHOD.
 
      METHOD compa_nil_1.
 *      Test nil?
