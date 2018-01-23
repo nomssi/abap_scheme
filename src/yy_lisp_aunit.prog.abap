@@ -3315,7 +3315,7 @@
 
      METHOD quasiquote_2.
        code_test( code = |(let ((name 'a)) `(list ,name ',name))|
-                  expected = '( list a ( quote a ) )' ).
+                  expected = |( list a ' a )| ).
      ENDMETHOD.
 
      METHOD quasiquote_3.
@@ -3341,7 +3341,7 @@
 
      METHOD quasiquote_7.
        code_test( code = '`(a `(b ,(+ 1 2) ,(foo ,(+ 1 3) d) e) f)'
-                  expected = '( a `( b ,( + 1 2 ) ,( foo 4 d ) e ) f )' ).
+                  expected = '( a ` ( b , ( + 1 2 ) , ( foo 4 d ) e ) f )' ).
      ENDMETHOD.
 
      METHOD quasiquote_8.
@@ -3358,7 +3358,7 @@
 
      METHOD quasiquote_10.
        code_test( code = |'(quasiquote (list (unquote (+ 1 2)) 4))|
-                  expected = '`( list ,( + 1 2 ) 4 )' ).
+                  expected = '` ( list , ( + 1 2 ) 4 )' ).
      ENDMETHOD.
 
    ENDCLASS.
