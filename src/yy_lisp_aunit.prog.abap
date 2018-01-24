@@ -511,6 +511,7 @@
        METHODS quasiquote_8 FOR TESTING.
        METHODS quasiquote_9 FOR TESTING.
        METHODS quasiquote_10 FOR TESTING.
+       METHODS quasiquote_11 FOR TESTING.
 
    ENDCLASS.
 
@@ -3357,6 +3358,11 @@
      ENDMETHOD.
 
      METHOD quasiquote_10.
+       code_test( code = |,4|
+                  expected = 'Error' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_11.
        code_test( code = |'(quasiquote (list (unquote (+ 1 2)) 4))|
                   expected = '` ( list , ( + 1 2 ) 4 )' ).
      ENDMETHOD.
