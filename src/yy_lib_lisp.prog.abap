@@ -32,7 +32,7 @@
 *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 *  THE SOFTWARE.
 
-  DATA gv_lisp_trace TYPE flag VALUE abap_false.
+  DATA gv_lisp_trace TYPE flag VALUE abap_false ##NEEDED.
 
   CONSTANTS:
     c_error_message        TYPE string VALUE 'Error in processing',
@@ -46,7 +46,7 @@
     c_lisp_else TYPE string VALUE 'else',
     c_lisp_then TYPE c LENGTH 2 VALUE '=>'.
   CONSTANTS:
-    c_eval_cons             TYPE string VALUE 'cons',
+    c_eval_quasicons        TYPE string VALUE 'quasicons',
     c_eval_append           TYPE string VALUE 'append',
 
     c_eval_quote            TYPE string VALUE 'quote',
@@ -304,7 +304,7 @@
       CLASS-DATA unquote          TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA unquote_splicing TYPE REF TO  lcl_lisp READ-ONLY.
 
-      CLASS-DATA cons             TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA quasicons        TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA concat           TYPE REF TO  lcl_lisp READ-ONLY.
 
       CLASS-DATA new_line   TYPE REF TO  lcl_lisp READ-ONLY.
@@ -374,6 +374,11 @@
       CLASS-METHODS cons IMPORTING io_car         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                                    io_cdr         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                          RETURNING VALUE(ro_cons) TYPE REF TO lcl_lisp.
+
+      CLASS-METHODS quasicons IMPORTING io_car         TYPE REF TO lcl_lisp
+                                        io_cdr         TYPE REF TO lcl_lisp
+                                        io_cddr        TYPE REF TO lcl_lisp
+                              RETURNING VALUE(ro_cons) TYPE REF TO lcl_lisp.
 
       CLASS-METHODS vector IMPORTING it_vector     TYPE tt_lisp
                                      iv_mutable    TYPE flag
@@ -616,7 +621,6 @@
             RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment.
 
       METHODS:
-        copy_from IMPORTING io_env TYPE REF TO lcl_lisp_environment,
         find IMPORTING symbol     TYPE any
              RETURNING VALUE(env) TYPE REF TO lcl_lisp_environment
              RAISING   lcx_lisp_exception,
@@ -748,6 +752,8 @@
       proc_car,             ##called
       proc_cdr,             ##called
       proc_cons,            ##called
+
+      proc_quasicons,       ##called
 
       proc_caar,             ##called
       proc_cadr,             ##called
@@ -951,20 +957,20 @@
                                   RETURNING VALUE(ro_head) TYPE REF TO lcl_lisp
                                   RAISING   lcx_lisp_exception.
 
-      METHODS evaluate_apply IMPORTING io_list       TYPE REF TO lcl_lisp
-                                       environment   TYPE REF TO lcl_lisp_environment
-                             RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                             RAISING   lcx_lisp_exception.
-
-      METHODS evaluate_map IMPORTING io_list       TYPE REF TO lcl_lisp
+      METHODS expand_apply IMPORTING io_list       TYPE REF TO lcl_lisp
                                      environment   TYPE REF TO lcl_lisp_environment
                            RETURNING VALUE(result) TYPE REF TO lcl_lisp
                            RAISING   lcx_lisp_exception.
 
-      METHODS evaluate_for_each IMPORTING io_list       TYPE REF TO lcl_lisp
-                                          environment   TYPE REF TO lcl_lisp_environment
-                                RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                                RAISING   lcx_lisp_exception.
+      METHODS expand_map IMPORTING io_list       TYPE REF TO lcl_lisp
+                                   environment   TYPE REF TO lcl_lisp_environment
+                         RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                         RAISING   lcx_lisp_exception.
+
+      METHODS expand_for_each IMPORTING io_list       TYPE REF TO lcl_lisp
+                                        environment   TYPE REF TO lcl_lisp_environment
+                              RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                              RAISING   lcx_lisp_exception.
 
       METHODS eval_list_tco IMPORTING VALUE(io_head) TYPE REF TO lcl_lisp
                                       io_environment TYPE REF TO lcl_lisp_environment
@@ -1003,23 +1009,23 @@
                                              io_args TYPE REF TO lcl_lisp
                                              io_env  TYPE REF TO lcl_lisp_environment
                                    RAISING   lcx_lisp_exception.
-      METHODS init_letrec IMPORTING io_head       TYPE REF TO lcl_lisp
-                                    io_env        TYPE REF TO lcl_lisp_environment
-                          RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
-                          RAISING   lcx_lisp_exception.
-      METHODS init_letrec_star IMPORTING io_head       TYPE REF TO lcl_lisp
-                                         io_env        TYPE REF TO lcl_lisp_environment
-                               RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
-                               RAISING   lcx_lisp_exception.
+      METHODS environment_letrec IMPORTING io_head       TYPE REF TO lcl_lisp
+                                           io_env        TYPE REF TO lcl_lisp_environment
+                                 RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
+                                 RAISING   lcx_lisp_exception.
+      METHODS environment_letrec_star IMPORTING io_head       TYPE REF TO lcl_lisp
+                                                io_env        TYPE REF TO lcl_lisp_environment
+                                      RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
+                                      RAISING   lcx_lisp_exception.
 
-      METHODS init_let_star IMPORTING io_head       TYPE REF TO lcl_lisp
-                                      io_env        TYPE REF TO lcl_lisp_environment
-                            RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
-                            RAISING   lcx_lisp_exception.
-      METHODS init_named_let IMPORTING io_env        TYPE REF TO lcl_lisp_environment
-                             CHANGING  co_head       TYPE REF TO lcl_lisp
-                             RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
-                             RAISING   lcx_lisp_exception.
+      METHODS environment_let_star IMPORTING io_head       TYPE REF TO lcl_lisp
+                                             io_env        TYPE REF TO lcl_lisp_environment
+                                   RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
+                                   RAISING   lcx_lisp_exception.
+      METHODS environment_named_let IMPORTING io_env        TYPE REF TO lcl_lisp_environment
+                                    CHANGING  co_head       TYPE REF TO lcl_lisp
+                                    RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
+                                    RAISING   lcx_lisp_exception.
 
       METHODS table_of_lists IMPORTING io_head         TYPE REF TO lcl_lisp
                                        environment     TYPE REF TO lcl_lisp_environment
@@ -1032,14 +1038,15 @@
                             RETURNING VALUE(result) TYPE REF TO lcl_lisp
                             RAISING   lcx_lisp_exception.
 
-      METHODS reverse_list IMPORTING io_list       TYPE REF TO lcl_lisp
-                           RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                           RAISING   lcx_lisp_exception.
 
       METHODS quasi_quote IMPORTING list          TYPE REF TO lcl_lisp
                                     level         TYPE sytabix
                           RETURNING VALUE(result) TYPE REF TO lcl_lisp
                           RAISING   lcx_lisp_exception.
+
+      METHODS list_reverse IMPORTING io_list       TYPE REF TO lcl_lisp
+                           RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                           RAISING   lcx_lisp_exception.
 
       METHODS list_tail IMPORTING list          TYPE REF TO lcl_lisp
                                   k             TYPE sytabix
@@ -1379,6 +1386,8 @@
       env->define_value( symbol = 'list-ref'     type = lcl_lisp=>type_native value   = 'PROC_LIST_REF' ).
       env->define_value( symbol = 'list->vector' type = lcl_lisp=>type_native value   = 'PROC_LIST_TO_VECTOR' ).
 
+      env->define_value( symbol = 'quasicons' type = lcl_lisp=>type_native value   = 'PROC_QUASICONS' ).
+
       env->define_value( symbol = 'memq'    type = lcl_lisp=>type_native value   = 'PROC_MEMQ' ).
       env->define_value( symbol = 'memv'    type = lcl_lisp=>type_native value   = 'PROC_MEMV' ).
       env->define_value( symbol = 'member'  type = lcl_lisp=>type_native value   = 'PROC_MEMBER' ).
@@ -1570,7 +1579,7 @@
 
     ENDMETHOD.                    "evaluate_parameters
 
-    METHOD evaluate_apply.
+    METHOD expand_apply.
       validate io_list.
       DATA(lo_proc) = io_list->car.     " proc
       DATA(lo_arg) = io_list->cdr.      " handle arg1 . . . rest-args
@@ -1611,7 +1620,7 @@
 *     (if (null? lst)
 *       '()
 *       (cons (f (car lst)) (map f (cdr lst)))))
-    METHOD evaluate_map.
+    METHOD expand_map.
 *     (map proc list1 list2 ... ) The lists should all have the same length.
 *     Proc should accept as many arguments as there are lists and return a single value.
 *     Proc should not mutate any of the lists.
@@ -1645,7 +1654,7 @@
 
     ENDMETHOD.
 
-    METHOD evaluate_for_each.
+    METHOD expand_for_each.
 *     (for-each proc list1 list2 ... ) The lists should all have the same length.
 *     Proc should accept as many arguments as there are lists and return a single value.
 *     Proc should not mutate any of the lists.
@@ -1696,7 +1705,7 @@
 
           eo_env->set_once( symbol = lo_var->value
                             element = eval_ast( element = lo_init    " inits are evaluated in org. environment
-                                               environment = io_env ) ).
+                                                environment = io_env ) ).
           lo_spec = lo_spec->cdr.
           IF lo_spec NE nil.
 *           <step>
@@ -1805,17 +1814,17 @@
       DATA(lo_ptr) = io_head->car.
 
       validate lo_ptr->car.
-      eo_pars = lcl_lisp_new=>cons( io_car = lo_ptr->car ).
+      DATA(lo_par) = lcl_lisp_new=>cons( io_car = lo_ptr->car ).
+
       IF lo_ptr->cdr IS BOUND AND lo_ptr->cdr NE nil.
-        eo_args = lcl_lisp_new=>cons( io_car = lo_ptr->cdr->car ).
+        DATA(lo_arg) = lcl_lisp_new=>cons( io_car = lo_ptr->cdr->car ).
       ENDIF.
 
-      DATA(lo_par) = eo_pars.
-      DATA(lo_arg) = eo_args.
-      lo_ptr = io_head.
-      WHILE lo_ptr->cdr IS BOUND AND lo_ptr->cdr NE nil.
-        lo_ptr = lo_ptr->cdr.
+      eo_pars = lo_par.
+      eo_args = lo_arg.
 
+      lo_ptr = io_head->cdr.
+      WHILE lo_ptr IS BOUND AND lo_ptr NE nil.
 *       Rest of list, pick head
         DATA(lo_pair) = lo_ptr->car.
         IF lo_pair IS BOUND AND lo_pair->car NE nil.
@@ -1826,6 +1835,7 @@
           lo_arg = lo_arg->cdr = lcl_lisp_new=>cons( io_car = lo_pair->cdr->car ).
         ENDIF.
 
+        lo_ptr = lo_ptr->cdr.
       ENDWHILE.
       lo_par->cdr = lo_arg->cdr = nil.
 
@@ -1852,35 +1862,13 @@
 
 * A letrec expression is equivalent to a let where the bindings are initialized with dummy values,
 * and then the initial values are computed and assigned into the bindings.
-* letrec lets us create an environment before evaluating the initial value expressions, so that the
-* initial value computions execute inside the new environment.
-*
-*(define (some-procedure...)
-*   (letrec ((helper (lambda (x)
-*                       ...
-*                       (if some-test?
-*                           (helper ...))))) ; recursive call
-*     ...
-*     (helper ...)  ; call to recursive local procedure
-*     ...))
-* Note the procedure helper can "see its own name," since the lambda expression is evaluated in the
-* environment where helper is bound. The above example is equivalent to:
-*
-*(define (some-procedure ...)
-*   (let ((helper '*dummy-value*))
-*      (set! helper (lambda (x)
-*                      ...
-*                      (if some-test?
-*                          (helper ...))))) ; recursive call
-*     ...
-*     (helper ...)  ; call to recursive local procedure
-*     ...))
-    METHOD init_letrec.
-      ro_env = lcl_lisp_environment=>new( io_env ).
-
+    METHOD environment_letrec.
       extract_arguments( EXPORTING io_head = io_head
                          IMPORTING eo_pars = DATA(lo_pars)
                                    eo_args = DATA(lo_args) ).
+
+      ro_env = lcl_lisp_environment=>new( io_env ).
+*     setup the environment before evaluating the initial value expressions
       DATA(lo_par) = lo_pars.
       DATA(lo_arg) = lo_args.
       WHILE lo_par IS BOUND AND lo_par NE nil   " Nil means no parameters to map
@@ -1892,18 +1880,21 @@
         lo_arg = lo_arg->cdr.
       ENDWHILE.
 
+*     the initial value computions execute inside the new environment
       DATA(lo_new_args) = evaluate_parameters( io_list = lo_args           " Pointer to arguments
                                                environment = ro_env ).
+
       ro_env->parameters_to_symbols( io_args = lo_new_args
                                      io_pars = lo_pars ).   " Pointer to formal parameters
     ENDMETHOD.
 
-    METHOD init_letrec_star.
-      ro_env = lcl_lisp_environment=>new( io_env ).
-
+    METHOD environment_letrec_star.
       extract_arguments( EXPORTING io_head = io_head
                          IMPORTING eo_pars = DATA(lo_pars)
                                    eo_args = DATA(lo_args) ).
+
+      ro_env = lcl_lisp_environment=>new( io_env ).
+
       DATA(lo_par) = lo_pars.
       DATA(lo_arg) = lo_args.
       WHILE lo_par IS BOUND AND lo_par NE nil   " Nil means no parameters to map
@@ -1932,7 +1923,7 @@
 *                    (if (< i 10)  ; is the loop body
 *                        (loop (+ i 1))))))
 *     (loop 0)) ; start the recursion with 0 as arg i
-    METHOD init_named_let.
+    METHOD environment_named_let.
       CASE co_head->car->type.
         WHEN lcl_lisp=>type_symbol.
 *named let:  (let <variable> (bindings) <body>)
@@ -1944,10 +1935,10 @@
           lo_var = nil.
       ENDCASE.
 
-      ro_env = lcl_lisp_environment=>new( io_env ).
       extract_arguments( EXPORTING io_head = co_head->car
                          IMPORTING eo_pars = DATA(lo_pars)
                                    eo_args = DATA(lo_args) ).
+      ro_env = lcl_lisp_environment=>new( io_env ).
 
       DATA(lo_new_args) = evaluate_parameters( io_list = lo_args       " Pointer to arguments
                                                environment = io_env ).
@@ -1962,11 +1953,12 @@
                                                    io_env = ro_env ) ).
     ENDMETHOD.
 
-    METHOD init_let_star.
-      ro_env = lcl_lisp_environment=>new( io_env ).
+    METHOD environment_let_star.
       extract_arguments( EXPORTING io_head = io_head
                          IMPORTING eo_pars = DATA(lo_pars)
                                    eo_args = DATA(lo_args) ).
+      ro_env = lcl_lisp_environment=>new( io_env ).
+
       evaluate_in_sequence( io_args = lo_args      " Pointer to arguments e.g. (4, (+ x 4)
                             io_pars = lo_pars      " Pointer to formal parameters (x y)
                             io_env = ro_env ).
@@ -2015,6 +2007,14 @@
                                           io_environment = lo_env
                                 IMPORTING eo_elem = lo_elem ).
         tail_expression lo_elem.
+      ELSE.
+        throw( `no expression in body` ).
+      ENDIF.
+    END-OF-DEFINITION.
+
+    DEFINE validate_quote.
+      IF NOT ( &1->cdr->type = lcl_lisp=>type_pair AND &1->cdr->cdr = nil ).
+        throw( |invalid form { &1->car->to_string( ) } in { &2 }| ).
       ENDIF.
     END-OF-DEFINITION.
 
@@ -2029,80 +2029,105 @@
 
       CASE lo_ptr->type.
         WHEN lcl_lisp=>type_pair.
-          validate lo_ptr->cdr.
 
           DATA(lo_first) = lo_ptr->car.
+          DATA(lo_next) = lo_ptr->cdr.
+          validate lo_next.
 
-          IF lo_first->type EQ lcl_lisp=>type_symbol AND lo_first->value EQ c_eval_unquote.
+          IF lo_first = lcl_lisp=>quasiquote.
+            validate_quote lo_ptr `quasiquote`.
+
+            result = lcl_lisp_new=>quasicons( io_car = lcl_lisp=>quasiquote
+                                              io_cdr = lo_next
+                                              io_cddr = lcl_lisp_new=>number( level + 1 )  ).
+*           TCO
+            DATA(debug1) = result->to_string( ).
+
+          ELSEIF lo_first->type EQ lcl_lisp=>type_symbol AND lo_first->value EQ c_eval_unquote.
+            validate_quote lo_ptr `unquote`.
 
             DATA(debug0) = list->to_string( ).
 
             IF level = 0.
-              result = lo_ptr->cdr->car.
+              result = lo_next->car.
             ELSE.
-              result = lcl_lisp_new=>cons( io_car = lo_first
-                                           io_cdr = quasi_quote( list = lo_ptr->cdr->car
-                                                                 level = level - 1 ) ).
+              result = lcl_lisp_new=>quasicons( io_car = lcl_lisp=>unquote
+                                                io_cdr = lo_next
+                                                io_cddr = lcl_lisp_new=>number( level - 1 ) ).
+*             TCO
             ENDIF.
 
-          ELSEIF lo_first->type EQ lcl_lisp=>type_pair AND lo_first->car->value EQ c_eval_unquote_splicing.
+          ELSEIF lo_first->type EQ lcl_lisp=>type_symbol AND lo_first->value EQ c_eval_unquote_splicing.
+            validate_quote lo_ptr `unquote-splicing`.
 
-            DATA(lo_next) = lo_first->cdr.
+            IF level = 0.
+              throw( |unquote-splicing: invalid context for { lo_next->car->to_string( ) }| ).
+            ELSE.
+              result = lcl_lisp_new=>quasicons( io_car = lcl_lisp=>unquote_splicing
+                                                io_cdr = lo_next
+                                                io_cddr = lcl_lisp_new=>number( level - 1 ) ).
+*             TCO
+            ENDIF.
+
+          ELSEIF level = 0 AND lo_first->type EQ lcl_lisp=>type_pair AND lo_first->car->value EQ c_eval_unquote_splicing.
+
+            lo_next = lo_first->cdr.
             validate lo_next.
 
+            validate_quote lo_first `unquote-splicing`.
+
             DATA(debug2) = lo_next->to_string( ).
-            IF lo_next = nil.
+            DATA(lo_last) = quasi_quote( list = lo_ptr->cdr
+                                        level = level ).
+            DATA(debug3) = lo_last->to_string( ).
 
-              result = quasi_quote( list = lo_ptr->cdr
-                                    level = level ).
+            IF lo_last = nil.
 
+              result = lo_next.  " last
             ELSE.
 *             verify that lo_next is a list ?
 
 *             return (append lo_next quasiquote( lo_ptr->cdr ) )
               result = lcl_lisp_new=>cons( io_car = lcl_lisp=>concat
                                            io_cdr = lo_next ).
-              result->cdr->cdr = lcl_lisp_new=>cons( io_car = quasi_quote( list = lo_ptr->cdr
-                                                                           level = level ) ).
+              result->cdr->cdr = lcl_lisp_new=>cons( io_car = lo_last ).
             ENDIF.
 
-            DATA(debug3) = result->to_string( ).
-
-          ELSEIF lo_first = lcl_lisp=>quasiquote.
-
-            result = lcl_lisp_new=>box( io_proc = lcl_lisp=>quasiquote
-                                        io_elem = lo_ptr->cdr ).
-            result->cdr->cdr = lcl_lisp_new=>cons( io_car = lcl_lisp_new=>number( level + 1 ) ).
-
-            DATA(debug1) = result->to_string( ).
+            DATA(debug4) = result->to_string( ).
 
           ELSE.
-*           return (cons quasiquote( lo_first ) quasiquote( lo_ptr->cdr ) )
+*           return (cons ( quasiquote lo_first ) ( quasiquote lo_next ) )
 
-            result = lcl_lisp_new=>box( io_proc = lcl_lisp=>cons
-                                        io_elem = quasi_quote( list = lo_first
-                                                               level = level ) ).
-            result->cdr->cdr = lcl_lisp_new=>cons( io_car = quasi_quote( list = lo_ptr->cdr
-                                                                         level = level ) ).
+            result = lcl_lisp_new=>quasicons( io_car = lcl_lisp=>quasicons
+                                              io_cdr = quasi_quote( list = lo_first
+                                                                    level = level )
+                                              io_cddr = quasi_quote( list = lo_next
+                                                                     level = level ) ).
 
-            DATA(debug4) = result->to_string( ).
+*            result = lcl_lisp_new=>quasicons( io_car = quasi_quote( list = lo_first
+*                                                                    level = level )
+*                                              io_cdr = quasi_quote( list = lo_next
+*                                                                         level = level ) ).
+
+            DATA(debug5) = result->to_string( ).
           ENDIF.
 
         WHEN lcl_lisp=>type_vector.
-          DATA(debug5) = list->to_string( ).
-*          result = lcl_lisp_vector=>from_list( io_list = quasi_quote( CAST lcl_lisp_vector( list )->to_list( ) )
-*                                               iv_mutable = abap_false ).
-          result = lcl_lisp_vector=>from_list(
-              io_list = lcl_lisp_new=>quasiquote( CAST lcl_lisp_vector( list )->to_list( ) )
-              iv_mutable = abap_false ).
+          DATA(debug6) = list->to_string( ).
+          result = lcl_lisp_new=>box( io_proc = lcl_lisp_new=>symbol( 'list->vector' )
+                                      io_elem = quasi_quote( list = CAST lcl_lisp_vector( list )->to_list( )
+                                                             level = 0 ) ).
 
-          DATA(debug6) = result->to_string( ).
+          DATA(debug7) = result->to_string( ).
+
+        WHEN lcl_lisp=>type_null.
+          result = nil.
 
         WHEN OTHERS.
 
           result = lcl_lisp_new=>quote( lo_ptr ).
 
-          DATA(debug7) = result->to_string( ).
+          DATA(debug8) = result->to_string( ).
       ENDCASE.
 
     ENDMETHOD.
@@ -2252,27 +2277,27 @@
                     tail_sequence.
 
                   WHEN 'let'.
-                    lo_env = init_named_let( EXPORTING io_env = lo_env
-                                             CHANGING co_head = lr_tail ).
+                    lo_env = environment_named_let( EXPORTING io_env = lo_env
+                                                    CHANGING co_head = lr_tail ).
                     lo_elem = lr_tail->cdr.
                     tail_sequence.
 
                   WHEN 'let*'.
-                    lo_env = init_let_star( io_head = lr_tail->car
-                                            io_env = lo_env ).
+                    lo_env = environment_let_star( io_head = lr_tail->car
+                                                   io_env = lo_env ).
                     lo_elem = lr_tail->cdr.
                     tail_sequence.
 
                   WHEN 'letrec'.
 *                   (letrec ((a 5) (b (+ a 3)) b)
-                    lo_env = init_letrec( io_head = lr_tail->car
-                                          io_env = lo_env ).
+                    lo_env = environment_letrec( io_head = lr_tail->car
+                                                 io_env = lo_env ).
                     lo_elem = lr_tail->cdr.
                     tail_sequence.
 
                   WHEN 'letrec*'.
-                    lo_env = init_letrec_star( io_head = lr_tail->car
-                                               io_env = lo_env ).
+                    lo_env = environment_letrec_star( io_head = lr_tail->car
+                                                      io_env = lo_env ).
                     lo_elem = lr_tail->cdr.
                     tail_sequence.
 
@@ -2418,24 +2443,24 @@
 
 
                   WHEN 'for-each'.
-                    result = evaluate_for_each( io_list = lr_tail
-                                                environment = lo_env ).
+                    result = expand_for_each( io_list = lr_tail
+                                              environment = lo_env ).
 
                   WHEN 'map'.
-                    result = evaluate_map( io_list = lr_tail
-                                           environment = lo_env ).
+                    result = expand_map( io_list = lr_tail
+                                         environment = lo_env ).
 
                   WHEN 'apply'.
                     " (apply proc arg1 ... argn rest-args)
-                    lo_elem = lcl_lisp_new=>cons( io_car = evaluate_apply( io_list = lr_tail
-                                                                           environment = lo_env ) ).
+                    lo_elem = lcl_lisp_new=>cons( io_car = expand_apply( io_list = lr_tail
+                                                                         environment = lo_env ) ).
                     tail_expression lo_elem.
 
                   WHEN c_eval_unquote.
-                    throw( |Cannot evaluate { c_eval_unquote } in this context| ).
+                    throw( |{ c_eval_unquote } not valid outside of quasiquote| ).
 
                   WHEN c_eval_unquote_splicing.
-                    throw( |Cannot evaluate { c_eval_unquote_splicing } in this context| ).
+                    throw( |{ c_eval_unquote_splicing }  not valid outside of quasiquote| ).
 
                   WHEN OTHERS.
 
@@ -2620,21 +2645,23 @@
 
     ENDMETHOD.
 
-    METHOD reverse_list.
+    METHOD list_reverse.
       validate io_list.
 
       result = nil.
-      DATA(iter) = io_list->new_iterator( ).
-      WHILE iter->has_next( ).
-        result = lcl_lisp_new=>cons( io_car = iter->next( )
+      DATA(lo_ptr) = io_list.
+
+      WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+        result = lcl_lisp_new=>cons( io_car = lo_ptr->car
                                      io_cdr = result ).
+        lo_ptr = lo_ptr->cdr.
       ENDWHILE.
     ENDMETHOD.
 
     METHOD proc_reverse.
       validate list.
 
-      result = reverse_list( list->car ).
+      result = list_reverse( list->car ).
     ENDMETHOD.                    "proc_reverse
 
     METHOD table_of_lists.
@@ -2772,6 +2799,43 @@
       result = lcl_lisp_new=>cons( io_car = list->car
                                    io_cdr = list->cdr->car ).
     ENDMETHOD.                    "proc_cons
+
+    METHOD proc_quasicons.
+*     Create new cell and prepend it to second parameter
+      validate: list, list->car, list->cdr.
+      IF list->cdr->cdr NE nil.
+        throw( `quasicons: only 2 arguments allowed` ).
+      ENDIF.
+
+      DATA(lo_first) = list->car.
+      DATA(lo_rest) = list->cdr->car.
+
+      IF lo_rest->type = lcl_lisp=>type_pair.
+        IF lo_rest->car = lcl_lisp=>quote.
+          IF lo_first->type EQ lcl_lisp=>type_pair AND lo_first->car = lcl_lisp=>quote.
+            result = lcl_lisp_new=>cons( io_car = lo_first->cdr->car    " cadr lo_first
+                                         io_cdr = lo_rest->cdr->car ).  " cadr lo_rest
+          ELSEIF lo_rest->cdr->car EQ nil.
+            result = lcl_lisp_new=>cons( io_car = lo_first ).  " ?? eval lo_first?
+          ELSE.
+            result = lcl_lisp_new=>cons( io_car = lo_first
+                                         io_cdr = lo_rest ).
+          ENDIF.
+        ELSE.
+          IF lo_rest->car = lcl_lisp=>quasicons. " OR lo_rest->car->value = 'list'.
+            result = lcl_lisp_new=>quasicons( io_car = lo_rest->car
+                                              io_cdr = lo_first
+                                              io_cddr = lo_rest->cdr ).
+          ELSE.
+            result = lcl_lisp_new=>cons( io_car = lo_first
+                                         io_cdr = lo_rest ).
+          ENDIF.
+        ENDIF.
+      ELSE.
+        result = lcl_lisp_new=>cons( io_car = lo_first
+                                     io_cdr = lo_rest ).
+      ENDIF.
+    ENDMETHOD.
 
     METHOD proc_not.
 *     Create new cell and prepend it to second parameter
@@ -4596,13 +4660,6 @@
       lcl_lisp=>throw( |variable { symbol } appears more than once| ).
     ENDMETHOD.                    "define
 
-    METHOD copy_from.
-      LOOP AT io_env->map INTO DATA(ls_map).
-        set( symbol = ls_map-symbol
-             element = ls_map-value ).
-      ENDLOOP.
-    ENDMETHOD.
-
     METHOD parameters_to_symbols.
 *     The lambda receives its own local environment in which to execute, where parameters
 *     become symbols that are mapped to the corresponding arguments
@@ -4612,18 +4669,21 @@
       CASE io_pars->type.
         WHEN lcl_lisp=>type_pair.   "Do we have a proper list?
 
-          DATA(lo_par) = io_pars.                " Pointer to formal parameters
+          DATA(lo_var) = io_pars.                " Pointer to formal parameters
           DATA(lo_arg) = io_args.                " Pointer to arguments
+*         local environment used to detect duplicate variable usage (invalid)
+          DATA(local) = lcl_lisp_environment=>new( me ).
 
-          WHILE lo_par NE lcl_lisp=>nil.         " Nil would mean no parameters to map
+          WHILE lo_var NE lcl_lisp=>nil.         " Nil would mean no parameters to map
 
-            IF lo_par->type EQ lcl_lisp=>type_symbol.
+            IF lo_var->type EQ lcl_lisp=>type_symbol.
 *             dotted pair after fixed number of parameters, to be bound to a variable number of arguments
 
 *             1) Read the next parameter, bind to the (rest) list of arguments
-              set( symbol = lo_par->value
+              local->set_once( symbol = lo_var->value
+                               element = lcl_lisp=>nil ).
+              set( symbol = lo_var->value
                    element = lo_arg ).
-
 *             2) Exit
               RETURN.
             ENDIF.
@@ -4631,16 +4691,18 @@
 *           Part of the list with fixed number of parameters
 
             IF lo_arg = lcl_lisp=>nil.           " Premature end of arguments
-              lcl_lisp=>throw( |Missing parameter(s) { lo_par->to_string( ) }| ).
+              lcl_lisp=>throw( |Missing parameter(s) { lo_var->to_string( ) }| ).
             ENDIF.
 
             ADD 1 TO lv_count.
 
 *           NOTE: Each element of the argument list is evaluated before being defined in the environment
-            set( symbol = lo_par->car->value
+            local->set_once( symbol = lo_var->car->value
+                             element = lcl_lisp=>nil ).
+            set( symbol = lo_var->car->value
                  element = lo_arg->car ).
 
-            lo_par = lo_par->cdr.
+            lo_var = lo_var->cdr.
             lo_arg = lo_arg->rest( ).
           ENDWHILE.
 
@@ -4696,7 +4758,7 @@
       quasiquote = lcl_lisp_new=>symbol( c_eval_quasiquote ).
       unquote = lcl_lisp_new=>symbol( c_eval_unquote ).
       unquote_splicing = lcl_lisp_new=>symbol( c_eval_unquote_splicing ).
-      cons = lcl_lisp_new=>symbol( c_eval_cons ).
+      quasicons = lcl_lisp_new=>symbol( c_eval_quasicons ).
       concat = lcl_lisp_new=>symbol( c_eval_append ).
 
       new_line = lcl_lisp_new=>string( |\n| ).
@@ -4975,6 +5037,13 @@
       ro_cons = node( lcl_lisp=>type_pair ).
       ro_cons->car = io_car.
       ro_cons->cdr = io_cdr.
+    ENDMETHOD.                    "new_cons
+
+    METHOD quasicons.
+*     Copy of box( )
+      ro_cons = cons( io_car = io_car
+                      io_cdr = cons( io_car = io_cdr
+                                     io_cdr = cons( io_car = io_cddr ) ) ).
     ENDMETHOD.                    "new_cons
 
     METHOD vector.
@@ -5262,8 +5331,8 @@
       DATA lt_vector TYPE tt_lisp.
 
       LOOP AT vector INTO DATA(list).
-         APPEND interpreter->eval( element = list
-                                   environment = environment ) TO lt_vector.
+        APPEND interpreter->eval( element = list
+                                  environment = environment ) TO lt_vector.
       ENDLOOP.
       result = lcl_lisp_new=>vector( it_vector = lt_vector
                                      iv_mutable = abap_true ).

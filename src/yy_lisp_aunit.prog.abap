@@ -396,6 +396,8 @@
        METHODS named_let_2 FOR TESTING.
        METHODS named_let_3 FOR TESTING.
 
+       METHODS let_no_body FOR TESTING.
+
        METHODS letrec_1 FOR TESTING.
        METHODS letrec_2 FOR TESTING.
 
@@ -603,10 +605,9 @@
      ENDMETHOD.
 
      METHOD let_3.
-*      not allowed if we strictly follow the Scheme standard
        code_test( code = |(let ((x 2) (x 0))| &
                          |    (+ x 5))|
-                  expected = 'Error' ).
+                  expected = 'Eval: variable x appears more than once' ).
      ENDMETHOD.
 
      METHOD let_star_1.
@@ -672,6 +673,12 @@
                   expected = 'duplicate' ).
        code_test( code = |(duplicate 1 (list "apple" "cheese burger!" "banana"))|
                   expected = |( "apple" "cheese burger!" "cheese burger!" "banana" )| ).
+     ENDMETHOD.
+
+     METHOD let_no_body.
+       code_test( code = |(let ((var 10))| &
+                         |     )|
+                  expected = 'Eval: no expression in body' ).
      ENDMETHOD.
 
      METHOD letrec_1.
@@ -3359,7 +3366,7 @@
 
      METHOD quasiquote_10.
        code_test( code = |,4|
-                  expected = 'Error' ).
+                  expected = 'Eval: unquote not valid outside of quasiquote' ).
      ENDMETHOD.
 
      METHOD quasiquote_11.
