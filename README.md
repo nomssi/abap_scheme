@@ -10,13 +10,11 @@ After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> 
 So I started my [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) project based on [https://github.com/mydoghasworms/abap-lisp](https://github.com/mydoghasworms/abap-lisp). My contributions:
 - the _Revised revised revised revised revised revised revised Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) is now the target language
 - from the specificationI have created a large _ABAP Unit_ regression test suite
-- a Workbench to make it fun to use
+- the ABAP LISP Workbench to make it fun to use
 
 ![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_scheme_workbench.png)
-The ABAP LISP Workbench has commands:
-- Evaluate (F8) executes the Scheme code 
-- Refresh (Shift-F2) will delete the source and console and reset the environment
-- Previous/Next expression
+
+Check the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) for documentation.
 
 ### Requirements
 
