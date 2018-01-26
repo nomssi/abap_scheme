@@ -321,6 +321,10 @@
       METHODS new_iterator RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_iterator
                            RAISING   lcx_lisp_exception.
 
+      METHODS is_equivalent IMPORTING io_elem TYPE REF TO lcl_lisp
+                            RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                            RAISING lcx_lisp_exception.
+
       METHODS is_equal IMPORTING io_elem       TYPE REF TO lcl_lisp
                                  comp          TYPE REF TO lcl_lisp DEFAULT nil
                                  interpreter   TYPE REF TO lcl_lisp_interpreter OPTIONAL
@@ -929,11 +933,6 @@
     PRIVATE SECTION.
       METHODS throw IMPORTING message TYPE string
                     RAISING   lcx_lisp_exception.
-
-      METHODS proc_equivalence IMPORTING a             TYPE REF TO lcl_lisp
-                                         b             TYPE REF TO lcl_lisp
-                               RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                               RAISING   lcx_lisp_exception.
 
       METHODS create_element_from_data
         IMPORTING ir_data       TYPE REF TO data
@@ -2019,6 +2018,15 @@
     END-OF-DEFINITION.
 
     METHOD quasi_quote.
+      CONSTANTS:
+        c_debug TYPE flag VALUE abap_false.
+
+      DEFINE debug.
+        IF c_debug EQ abap_true.
+          DATA(&1) = &2->to_string( ).
+        ENDIF.
+      END-OF-DEFINITION.
+
 *    - list is empty or not a list    -> (quote list)
 *    - (unquote FOO)                  -> FOO
 *    - ((unquote-splicing FOO) BAR..) -> (concat FOO quasiquote(BAR...))
@@ -2041,12 +2049,12 @@
                                               io_cdr = lo_next
                                               io_cddr = lcl_lisp_new=>number( level + 1 )  ).
 *           TCO
-            DATA(debug1) = result->to_string( ).
+            debug debug1 result.
 
           ELSEIF lo_first->type EQ lcl_lisp=>type_symbol AND lo_first->value EQ c_eval_unquote.
             validate_quote lo_ptr `unquote`.
 
-            DATA(debug0) = list->to_string( ).
+            debug debug2 list.
 
             IF level = 0.
               result = lo_next->car.
@@ -2076,10 +2084,11 @@
 
             validate_quote lo_first `unquote-splicing`.
 
-            DATA(debug2) = lo_next->to_string( ).
+            debug debug3 lo_next.
+
             DATA(lo_last) = quasi_quote( list = lo_ptr->cdr
                                         level = level ).
-            DATA(debug3) = lo_last->to_string( ).
+            debug debug4 lo_last.
 
             IF lo_last = nil.
 
@@ -2093,7 +2102,7 @@
               result->cdr->cdr = lcl_lisp_new=>cons( io_car = lo_last ).
             ENDIF.
 
-            DATA(debug4) = result->to_string( ).
+            debug debug5 result.
 
           ELSE.
 *           return (cons ( quasiquote lo_first ) ( quasiquote lo_next ) )
@@ -2109,16 +2118,18 @@
 *                                              io_cdr = quasi_quote( list = lo_next
 *                                                                         level = level ) ).
 
-            DATA(debug5) = result->to_string( ).
+            debug debug6 result.
           ENDIF.
 
         WHEN lcl_lisp=>type_vector.
-          DATA(debug6) = list->to_string( ).
+
+          debug debug7 list.
+
           result = lcl_lisp_new=>box( io_proc = lcl_lisp_new=>symbol( 'list->vector' )
                                       io_elem = quasi_quote( list = CAST lcl_lisp_vector( list )->to_list( )
                                                              level = 0 ) ).
 
-          DATA(debug7) = result->to_string( ).
+          debug debug9 result.
 
         WHEN lcl_lisp=>type_null.
           result = nil.
@@ -2127,7 +2138,7 @@
 
           result = lcl_lisp_new=>quote( lo_ptr ).
 
-          DATA(debug8) = result->to_string( ).
+          debug debug10 result.
       ENDCASE.
 
     ENDMETHOD.
@@ -2387,7 +2398,7 @@
                                          environment = lo_env ).
 
                     lr_tail = lr_tail->cdr.
-                    validate: lr_tail, lr_tail->car.
+                    validate: lr_tail, lr_tail->car, lo_key.
 
                     lo_elem = nil.
                     DATA(lv_match) = abap_false.
@@ -2408,8 +2419,8 @@
                           EXIT.
                         ENDIF.
 
-                        IF proc_equivalence( a = lo_key            " eqv? match
-                                             b = lo_datum->car ) NE false.
+                        " eqv? match
+                        IF lo_key->is_equivalent( lo_datum->car ) NE false.
                           lo_elem = lo_clause->cdr.
                           lv_match = abap_true.
                           EXIT.
@@ -3236,14 +3247,15 @@
 
       DATA(lo_sublist) = list->cdr->car.
       DATA(lo_item) = list->car.
-      WHILE lo_sublist NE nil.
-        IF proc_equivalence( a = lo_sublist->car
-                             b = lo_item ) NE false.
+      WHILE lo_sublist->type EQ lcl_lisp=>type_pair.
+        IF lo_sublist->car->is_equivalent( lo_item ) NE false.
           result = lo_sublist.
           RETURN.
         ENDIF.
         lo_sublist = lo_sublist->cdr.
       ENDWHILE.
+*      CHECK lo_sublist NE nil.
+*      list->error_not_a_list( ).
     ENDMETHOD.
 
     METHOD proc_member.
@@ -3255,7 +3267,7 @@
       DATA(lo_compare) = list->cdr->cdr.
       DATA(lo_item) = list->car.
 
-      WHILE lo_sublist NE nil.
+      WHILE lo_sublist->type EQ lcl_lisp=>type_pair.
         IF lo_item->is_equal( io_elem = lo_sublist->car
                               comp = lo_compare
                               interpreter = me ) NE false.
@@ -3264,6 +3276,8 @@
         ENDIF.
         lo_sublist = lo_sublist->cdr.
       ENDWHILE.
+*      CHECK lo_sublist NE nil.
+*      list->error_not_a_list( ).
     ENDMETHOD.
 
 * ( assq obj alist) - alist (for association list") must be a list of pairs.
@@ -3280,7 +3294,7 @@
 
       DATA(lo_sublist) = list->cdr->car.
       DATA(lo_key) = list->car.
-      WHILE lo_sublist NE nil.
+      WHILE lo_sublist->type EQ lcl_lisp=>type_pair.
         DATA(lo_pair) = lo_sublist->car.
         CHECK lo_pair->car->type EQ lo_key->type.
 
@@ -3315,10 +3329,11 @@
 
       DATA(lo_sublist) = list->cdr->car.
       DATA(lo_key) = list->car.
-      WHILE lo_sublist NE nil.
+
+      WHILE lo_sublist->type EQ lcl_lisp=>type_pair.
         DATA(lo_pair) = lo_sublist->car.
-        IF proc_equivalence( a = lo_pair->car
-                             b = lo_key ) NE false.
+        validate lo_pair->car.
+        IF lo_pair->car->is_equivalent( lo_key ) NE false.
           result = lo_pair.
           RETURN.
         ENDIF.
@@ -3332,10 +3347,15 @@
       result = false.
 
       DATA(lo_sublist) = list->cdr->car.
+      DATA(lo_compare) = list->cdr->cdr.
+
       DATA(lo_key) = list->car.
-      WHILE lo_sublist NE nil.
+
+      WHILE lo_sublist->type EQ lcl_lisp=>type_pair.
         DATA(lo_pair) = lo_sublist->car.
-        IF lo_key->is_equal( lo_pair->car ) NE false.
+        IF lo_key->is_equal( io_elem = lo_pair->car
+                             comp = lo_compare
+                             interpreter = me ) NE false.
           result = lo_pair.
           RETURN.
         ENDIF.
@@ -3516,47 +3536,24 @@
       ENDWHILE.
     ENDMETHOD.                    "proc_eq
 
-    METHOD proc_equivalence.
-      validate: a, b.
-
-      result = false.
-
-*     Object a and Object b are both #t or both #f or both the empty list.
-      IF ( a EQ true AND b EQ true ) OR ( a EQ false AND b EQ false ) OR ( a EQ nil AND b EQ nil ).
-        result = true.
-        RETURN.
-      ENDIF.
-
-      CHECK a->type EQ b->type.
-
-      CASE a->type.
-        WHEN lcl_lisp=>type_number.
-* obj1 and obj2 are both exact numbers and are numerically equal (in the sense of =).
-*obj1 and obj2 are both inexact numbers such that they are numerically equal (in the sense of =)
-*and they yield the same results (in the sense of eqv?) when passed as arguments to any other
-*procedure that can be defined as a finite composition of Scheme’s standard arithmetic procedures,
-*provided it does not result in a NaN value.
-          CHECK a->number = b->number.
-
-        WHEN lcl_lisp=>type_symbol OR lcl_lisp=>type_string.
-* obj1 and obj2 are both symbols and are the same symbol according to the symbol=? procedure (section 6.5).
-* obj1 and obj2 are both characters and are the same character according to the char=? procedure (section 6.6).
-          CHECK a->value = b->value.
-
-        WHEN lcl_lisp=>type_pair OR lcl_lisp=>type_lambda.
-* obj1 and obj2 are procedures whose location tags are equal (section 4.1.4).
-
-          CHECK a->car EQ b->car AND a->cdr EQ b->cdr.
-
-        WHEN OTHERS.
-* obj1 and obj2 are pairs, vectors, bytevectors, records, or strings that denote the same location  in the store (section 3.4).
-
-          CHECK a = b.
-      ENDCASE.
-      result = true.
-    ENDMETHOD.
+*(equal? 'a 'a) =) #t
+*(equal? '(a) '(a)) =) #t
+*(equal? '(a (b) c)
+*'(a (b) c)) =) #t
+*(equal? "abc" "abc") =) #t
+*(equal? 2 2) =) #t
+*(equal? (make-vector 5 'a)
+*(make-vector 5 'a)) =) #t
+*(equal? '#1=(a b . #1#)
+*'#2=(a b a b . #2#))=) #t
+*(equal? (lambda (x) x)
+*(lambda (y) y)) =) unspecied
 
     METHOD proc_equal.
+* equal? returns the same as eqv? when applied to booleans, symbols, numbers, characters, ports,
+* procedures, and the empty list. If two objects are eqv?, they must be equal? as well.
+* In all other cases, equal? may return either #t or #f.
+* Even if its arguments are circular data structures, equal? must always terminate.
       validate: list, list->car.
       result = false.
       DATA(lo_ptr) = list.
@@ -3574,16 +3571,15 @@
 
     ENDMETHOD.                    "proc_equal
 
-    METHOD proc_eqv.
+    METHOD proc_eqv. " eqv?
       validate: list, list->car.
       result = false.
 
       DATA(lo_ptr) = list.
       WHILE lo_ptr->cdr NE nil.
         DATA(lo_next) = lo_ptr->cdr->car.
-
-        result = proc_equivalence( a = lo_next
-                                   b = lo_ptr->car ).
+        validate lo_next.
+        result = lo_next->is_equivalent( lo_ptr->car ).
         IF result EQ false.
           RETURN.
         ENDIF.
@@ -3647,16 +3643,30 @@
     ENDMETHOD.
 
     METHOD proc_is_list.  " argument in list->car
-      validate: list, list->car.
+      validate: list, list->car, list->cdr.
+      IF list->cdr NE nil.
+        throw( |list? takes only one argument| ).
+      ENDIF.
 
       result = false.
 
       DATA(lo_ptr) = list->car.
-      WHILE lo_ptr->type = lcl_lisp=>type_pair.
+      DATA(lo_slow) = lo_ptr.
+*     Iterate over list
+      WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
         lo_ptr = lo_ptr->cdr.
+        lo_slow = lo_slow->cdr.
+        CHECK lo_ptr->type EQ lcl_lisp=>type_pair.
+*       fast pointer takes 2 steps while slow pointer takes one
+        lo_ptr = lo_ptr->cdr.
+        CHECK lo_ptr = lo_slow.
+*       If fast pointer eventually equals slow pointer, then we must be stuck in a circular list.
+        result = true.
+        RETURN.
       ENDWHILE.
 
       CHECK lo_ptr EQ nil.
+*     the last element of a list must be nil
       result = true.
     ENDMETHOD.                    "proc_is_list
 
@@ -4768,14 +4778,60 @@
       ro_cdr = COND #( WHEN cdr IS BOUND THEN cdr ELSE nil ).
     ENDMETHOD.                    "rest
 
-    METHOD is_equal.
+    METHOD is_equivalent. "eqv?
+      validate io_elem.
+
+      result = false.
+
+      DATA(b) = io_elem.
+*     Object a and Object b are both #t or both #f or both the empty list.
+      IF ( me EQ true AND b EQ true )
+        OR ( me EQ false AND b EQ false )
+        OR ( me EQ nil AND b EQ nil ).
+        result = true.
+        RETURN.
+      ENDIF.
+
+      CHECK type EQ b->type.
+
+      CASE type.
+        WHEN lcl_lisp=>type_number.
+* obj1 and obj2 are both exact numbers and are numerically equal (in the sense of =).
+*obj1 and obj2 are both inexact numbers such that they are numerically equal (in the sense of =)
+*and they yield the same results (in the sense of eqv?) when passed as arguments to any other
+*procedure that can be defined as a finite composition of Scheme’s standard arithmetic procedures,
+*provided it does not result in a NaN value.
+          CHECK number = b->number.
+
+        WHEN lcl_lisp=>type_symbol OR lcl_lisp=>type_string.
+* obj1 and obj2 are both symbols and are the same symbol according to the symbol=? procedure (section 6.5).
+* obj1 and obj2 are both characters and are the same character according to the char=? procedure (section 6.6).
+          CHECK value = b->value.
+
+        WHEN lcl_lisp=>type_pair OR lcl_lisp=>type_lambda.
+* obj1 and obj2 are procedures whose location tags are equal (section 4.1.4).
+
+          CHECK car EQ b->car AND cdr EQ b->cdr.
+
+        WHEN OTHERS.
+* obj1 and obj2 are pairs, vectors, bytevectors, records, or strings that denote the same location  in the store (section 3.4).
+
+          CHECK me = b.
+      ENDCASE.
+      result = true.
+    ENDMETHOD.
+
+    METHOD is_equal. "equal?
+* equal? returns the same as eqv? when applied to booleans, symbols, numbers, characters, ports,
+* procedures, and the empty list. If two objects are eqv?, they must be equal? as well.
+* In all other cases, equal? may return either #t or #f.
+* Even if its arguments are circular data structures, equal? must always terminate.
       validate: io_elem.
 
       IF comp NE nil.
-        DATA(lo_arg) = lcl_lisp_new=>cons( io_car = me
-                                           io_cdr = lcl_lisp_new=>cons( io_car = io_elem ) ).
-        DATA(lo_head) = lcl_lisp_new=>cons( io_car = comp
-                                            io_cdr = lo_arg ).
+        DATA(lo_head) = lcl_lisp_new=>quasicons( io_car = comp->car
+                                                 io_cdr = me
+                                                 io_cddr = io_elem ).
 
         result = interpreter->eval( element = lo_head
                                     environment = comp->environment ).
@@ -4783,23 +4839,26 @@
       ENDIF.
 
       result = false.
+
       CHECK type EQ io_elem->type.
 
       CASE type.
-        WHEN lcl_lisp=>type_number.
-          CHECK number = io_elem->number.
 
-        WHEN lcl_lisp=>type_symbol OR lcl_lisp=>type_string.
-          CHECK value = io_elem->value.
+        WHEN lcl_lisp=>type_lambda.
+          CHECK io_elem->car EQ io_elem->cdr.
+          result = true.
 
-        WHEN lcl_lisp=>type_pair OR lcl_lisp=>type_lambda.
+        WHEN lcl_lisp=>type_pair.
+*         circular list
           CHECK car->is_equal( io_elem->car ) NE false
             AND cdr->is_equal( io_elem->cdr ) NE false.
+          result = true.
 
         WHEN OTHERS.
+          result = is_equivalent( io_elem ).
 
       ENDCASE.
-      result = true.
+
     ENDMETHOD.
 
     METHOD new_iterator.
@@ -5307,9 +5366,6 @@
     ENDMETHOD.
 
     METHOD is_equal.
-      result = super->is_equal( io_elem ).
-
-      CHECK result EQ true.
       result = false.
 
       CHECK io_elem->type EQ type_vector.

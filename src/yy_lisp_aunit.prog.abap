@@ -397,6 +397,7 @@
        METHODS named_let_3 FOR TESTING.
 
        METHODS let_no_body FOR TESTING.
+       METHODS define_no_body FOR TESTING.
 
        METHODS letrec_1 FOR TESTING.
        METHODS letrec_2 FOR TESTING.
@@ -679,6 +680,11 @@
        code_test( code = |(let ((var 10))| &
                          |     )|
                   expected = 'Eval: no expression in body' ).
+     ENDMETHOD.
+
+     METHOD define_no_body.
+       code_test( code = |(define (comp? (a b) (eq? a b)))|
+                  expected = 'Eval: ( comp? ( a b ) ( eq? a b ) ) no expression in body' ).
      ENDMETHOD.
 
      METHOD letrec_1.
@@ -1592,7 +1598,12 @@
        METHODS list_memq_3 FOR TESTING.
        METHODS list_memq_4 FOR TESTING.  " unspecified
 
-       METHODS list_member FOR TESTING.
+       METHODS list_member_1 FOR TESTING.
+       METHODS list_member_2 FOR TESTING.
+       METHODS list_member_3 FOR TESTING.
+       METHODS list_member_4 FOR TESTING.
+       METHODS list_member_5 FOR TESTING.
+
        METHODS list_memv FOR TESTING.
 
        METHODS list_assq_0 FOR TESTING.
@@ -1874,10 +1885,32 @@
                   expected = '#f' ).
      ENDMETHOD.
 
-     METHOD list_member.
+     METHOD list_member_1.
        code_test( code = |(member (list 'a)| &
                          |        '(b (a) c))|
                   expected = '( ( a ) c )' ).
+     ENDMETHOD.
+
+     METHOD list_member_2.
+       code_test( code = |(define (comp? a b) (eq? a b))|
+                  expected = 'comp?' ).
+       code_test( code = |(member 2 (list 1 2 3 4) comp?)|
+                  expected = '( 2 3 4 )' ).
+     ENDMETHOD.
+
+     METHOD list_member_3.
+       code_test( code = |(member 7 '((1 3) (2 5) (3 7) (4 8)) (lambda (x y) (= x (cadr y))))|
+                  expected = '( ( 3 7 ) ( 4 8 ) )' ).
+     ENDMETHOD.
+
+     METHOD list_member_4.
+       code_test( code = |(member 7 '(1 2 3 4 5 6) (lambda (y z) (> z 3)) )|
+                  expected = '( 4 5 6 )' ).
+     ENDMETHOD.
+
+     METHOD list_member_5.
+       code_test( code = |(member 2 (list 1 2 3 4) (lambda (x y) (= x y)) )|
+                  expected = '( 2 3 4 )' ).
      ENDMETHOD.
 
      METHOD list_memq_4.

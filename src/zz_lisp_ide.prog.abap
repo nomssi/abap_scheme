@@ -4,5 +4,8 @@ INCLUDE yy_lib_lisp.
 INCLUDE yy_lisp_aunit.
 INCLUDE yy_lisp_ide.
 
+INITIALIZATION.
+  lcl_ide=>init( ).
+
 START-OF-SELECTION.
   lcl_ide=>main( ).

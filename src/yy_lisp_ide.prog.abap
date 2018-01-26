@@ -3,8 +3,10 @@
 *&---------------------------------------------------------------------*
 
 CONSTANTS:
-  c_lisp_input TYPE string VALUE 'ABAP Lisp Input',
+  c_lisp_input    TYPE string VALUE 'ABAP Lisp Input',
   c_lisp_untitled TYPE string VALUE 'Untitled'.
+CONSTANTS:
+  c_lisp_ast_view TYPE cl_abap_browser=>title VALUE 'ABAP Lisp S-Expression Viewer'.
 
 DATA g_ok_code TYPE syucomm.
 
@@ -16,7 +18,7 @@ CLASS lcl_stack DEFINITION.
     METHODS empty RETURNING VALUE(rv_flag) TYPE xsdboolean.
   PROTECTED SECTION.
     TYPES: BEGIN OF ts_node,
-             data  TYPE tv_data,
+             data TYPE tv_data,
              next TYPE REF TO data,
            END OF ts_node.
 
@@ -88,11 +90,167 @@ CLASS lcl_stack IMPLEMENTATION.
 
 ENDCLASS.
 
+TYPES tv_scale TYPE perct.
+CONSTANTS c_default_scale TYPE tv_scale VALUE '0.9'.
+TYPES: BEGIN OF ts_diagram_config,
+         local_path     TYPE string,
+         java_jar       TYPE string,
+         java_appl      TYPE string,
+         server_url     TYPE string,
+         output_mode    TYPE char01,
+         skip_dialog    TYPE flag,
+         scale          TYPE tv_scale,
+         display_source TYPE flag,
+       END OF ts_diagram_config.
+
+CLASS lcl_file_name DEFINITION.
+  PUBLIC SECTION.
+    CLASS-METHODS new IMPORTING iv_mode        TYPE char01
+                      RETURNING VALUE(ro_file) TYPE REF TO lcl_file_name.
+    METHODS constructor IMPORTING iv_mode TYPE char01.
+    METHODS dialog RETURNING VALUE(rv_user_action) TYPE i.
+    METHODS get_prefix RETURNING VALUE(rv_name) TYPE string
+                       RAISING   cx_dynamic_check.
+    METHODS get_fullpath RETURNING VALUE(rv_name) TYPE string.
+  PROTECTED SECTION.
+    TYPES: BEGIN OF ts_fullpath,
+             title  TYPE string,
+             name   TYPE string,
+             ext    TYPE string,
+             path   TYPE string,
+             filter TYPE string,
+           END OF ts_fullpath.
+    DATA ms_file TYPE ts_fullpath.
+ENDCLASS.
+
+*----------------------------------------------------------------------*
+*       CLASS lcl_plant_uml DEFINITION
+*----------------------------------------------------------------------*
+CLASS lcl_plant_uml DEFINITION.
+  PUBLIC SECTION.
+    CONSTANTS c_plantuml_server TYPE string
+      VALUE 'http://www.plantuml.com/plantuml/img/'  ##NO_TEXT.
+
+    METHODS constructor IMPORTING iv_diagram TYPE string.
+    METHODS to_url IMPORTING iv_base_url   TYPE string DEFAULT c_plantuml_server
+                   RETURNING VALUE(rv_url) TYPE string
+                   RAISING   cx_dynamic_check.
+    METHODS output IMPORTING is_cfg TYPE ts_diagram_config RAISING cx_dynamic_check.
+  PROTECTED SECTION.
+    TYPES tv_base64 TYPE c LENGTH 65.
+    CONSTANTS:
+      c_standard TYPE tv_base64 VALUE 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='  ##NO_TEXT,
+      c_plantuml TYPE tv_base64 VALUE '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_0' ##NO_TEXT.
+    DATA mv_diagram TYPE string.
+
+    METHODS to_xstring IMPORTING iv_string         TYPE string
+                       RETURNING VALUE(rv_xstring) TYPE xstring
+                       RAISING   cx_dynamic_check.
+    METHODS source IMPORTING iv_display_source TYPE flag
+                   RETURNING VALUE(rv_source)  TYPE string.
+
+    METHODS png_file_name IMPORTING io_name        TYPE REF TO lcl_file_name
+                                    is_cfg         TYPE ts_diagram_config
+                          RETURNING VALUE(rv_name) TYPE string.
+
+    METHODS parameter_string IMPORTING io_name         TYPE REF TO lcl_file_name
+                                       is_cfg          TYPE ts_diagram_config
+                             RETURNING VALUE(rv_param) TYPE string.
+    METHODS show_html IMPORTING iv_html TYPE string
+                                iv_size TYPE string DEFAULT cl_abap_browser=>xlarge
+                      RAISING   cx_dynamic_check.
+    METHODS to_png IMPORTING io_name        TYPE REF TO lcl_file_name
+                             is_cfg         TYPE ts_diagram_config
+                   RETURNING VALUE(rv_name) TYPE string.
+
+ENDCLASS.                    "lcl_plant_uml DEFINITION
+
+CLASS lcl_file DEFINITION CREATE PRIVATE.
+  PUBLIC SECTION.
+    CONSTANTS:
+      c_mode_txt TYPE char01 VALUE space,
+      c_mode_png TYPE char01 VALUE 'P'.
+
+    CLASS-METHODS download
+      IMPORTING iv_data         TYPE xstring
+                io_name         TYPE REF TO lcl_file_name
+      RETURNING VALUE(rv_subrc) TYPE sysubrc.
+ENDCLASS.                    "lcl_file DEFINITION
+
+CLASS lcl_file_name_dummy DEFINITION INHERITING FROM lcl_file_name.
+  PUBLIC SECTION.
+    METHODS dialog REDEFINITION.
+ENDCLASS.
+
+CLASS lcl_configuration DEFINITION CREATE PRIVATE.
+  PUBLIC SECTION.
+    CONSTANTS:
+      c_mode_aut TYPE char01 VALUE 'T',  " for ABAP Unit Test
+      c_mode_url TYPE char01 VALUE 'U',
+      c_mode_txt TYPE char01 VALUE space,
+      c_mode_xmi TYPE char01 VALUE 'X',
+      c_mode_exe TYPE char01 VALUE 'E'.
+
+    CLASS-METHODS:
+      get RETURNING VALUE(rs_cfg) TYPE ts_diagram_config,
+      query,
+      class_constructor.
+  PRIVATE SECTION.
+    CONSTANTS c_registry_java_base_key TYPE string VALUE 'SOFTWARE\JavaSoft\Java Runtime Environment'  ##NO_TEXT.
+    TYPES: BEGIN OF ts_param,
+             local_path     TYPE localfile,
+             java_jar       TYPE localfile,
+             java_appl      TYPE localfile,
+             server_url     TYPE localfile,
+             output_mode    TYPE char01,
+             skip_dialog    TYPE flag,
+             scale          TYPE perct,
+             display_source TYPE flag,
+           END OF ts_param.
+    METHODS get_attributes RETURNING VALUE(rt_attr) TYPE sci_atttab.
+    METHODS to_radiobutton.
+    METHODS from_radiobutton.
+    CLASS-DATA gs_cfg TYPE ts_param.
+    DATA: mv_mode_url TYPE flag VALUE 'X',
+          mv_mode_exe TYPE flag,
+          mv_mode_txt TYPE flag.
+    METHODS dialog.
+    CLASS-METHODS get_java_path RETURNING VALUE(rv_fullpath) TYPE string.
+    CLASS-METHODS get_registry_value IMPORTING iv_key          TYPE string
+                                               iv_value        TYPE string
+                                     EXPORTING ev_subrc        TYPE sysubrc
+                                     RETURNING VALUE(rv_value) TYPE string.
+ENDCLASS.
+
 *----------------------------------------------------------------------*
 *       INTERFACE lif_unit_test IMPLEMENTATION
 *----------------------------------------------------------------------*
 INTERFACE lif_unit_test.
 ENDINTERFACE.                    "lif_unit_test IMPLEMENTATION
+
+CLASS lcl_dot_diagram DEFINITION.
+  PUBLIC SECTION.
+    CLASS-METHODS new IMPORTING is_config     TYPE ts_diagram_config
+                      RETURNING VALUE(ro_dot) TYPE REF TO lcl_dot_diagram.
+
+    METHODS generate IMPORTING it_elem           TYPE lcl_parser=>tt_element
+                     RETURNING VALUE(rv_diagram) TYPE string.
+  PRIVATE SECTION.
+    CONSTANTS c_start TYPE flag VALUE abap_true.
+
+    DATA mv_diagram TYPE string.
+    METHODS header IMPORTING is_cfg TYPE ts_diagram_config.
+    METHODS footer.
+    METHODS node IMPORTING elem      TYPE REF TO lcl_lisp.
+    METHODS add IMPORTING iv_code TYPE string.
+    METHODS get RETURNING VALUE(rv_dot) TYPE string.
+    METHODS get_object_id IMPORTING io_ref        TYPE REF TO object
+                          RETURNING VALUE(rv_oid) TYPE i.
+    METHODS print IMPORTING io_elem        TYPE REF TO lcl_lisp
+                  RETURNING VALUE(rv_node) TYPE string.
+    METHODS detach.
+
+ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_ide DEFINITION
@@ -101,7 +259,9 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
   PUBLIC SECTION.
     DATA mv_title TYPE string VALUE c_lisp_untitled READ-ONLY.
 
-    CLASS-METHODS: main,
+    CLASS-METHODS:
+      init,
+      main,
       free,
       pbo,
       pai IMPORTING iv_code        TYPE syucomm
@@ -131,6 +291,8 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
       trace,
       refresh,
       show_docu,
+      graphics,
+      graph_config,
       free_controls,
       user_command IMPORTING iv_code        TYPE syucomm
                    RETURNING VALUE(rv_flag) TYPE flag.
@@ -174,6 +336,10 @@ CLASS lcl_ide IMPLEMENTATION.
     refresh( ).
   ENDMETHOD.                    "constructor
 
+  METHOD init.
+    RETURN.
+  ENDMETHOD.
+
   METHOD main.
     CREATE OBJECT go_ide.
     CALL SCREEN 100.
@@ -197,6 +363,25 @@ CLASS lcl_ide IMPLEMENTATION.
                                context_menu = abap_true
                                 "size = ms_cfg-browser_size
                                ).
+  ENDMETHOD.
+
+  METHOD graphics.
+    TRY.
+        DATA(ls_cfg) = lcl_configuration=>get( ).
+
+        DATA(code) = mo_source->to_string( ).
+        CHECK code IS NOT INITIAL.
+
+        DATA(lt_elem) = mo_int->parse( code ).
+
+        NEW lcl_plant_uml( lcl_dot_diagram=>new( is_config = ls_cfg
+                              )->generate( it_elem = lt_elem ) )->output( ls_cfg ).
+      CATCH cx_dynamic_check.                           "#EC NO_HANDLER
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD graph_config.
+    lcl_configuration=>query( ).
   ENDMETHOD.
 
   METHOD lif_port~read.
@@ -270,8 +455,8 @@ CLASS lcl_ide IMPLEMENTATION.
         TRY.
             add( element->write( ) ).
             mo_console->append_string( flush( ) ).
-        CATCH cx_root INTO lx_error.
-          mo_console->append_string( lx_error->get_text( ) ).
+          CATCH cx_root INTO lx_error.
+            mo_console->append_string( lx_error->get_text( ) ).
         ENDTRY.
     ENDCASE.
   ENDMETHOD.                    "lif_console~write
@@ -335,7 +520,7 @@ CLASS lcl_ide IMPLEMENTATION.
     gv_lisp_trace = abap_true.
     cl_demo_output=>begin_section( `ABAP LISP Workbench` ).
     cl_demo_output=>write( header ).
-   " cl_demo_output=>set_mode( cl_demo_output=>text_mode  ).
+    " cl_demo_output=>set_mode( cl_demo_output=>text_mode  ).
 
     cl_demo_output=>begin_section( `Scheme Code` ).
     cl_demo_output=>write( mo_source->to_string( ) ).
@@ -390,6 +575,10 @@ CLASS lcl_ide IMPLEMENTATION.
         next( ).
       WHEN 'WIKI'.
         show_docu( ).
+      WHEN 'GRAPH'.
+        graphics( ).
+      WHEN 'GRPHCFG'.
+        graph_config( ).
       WHEN OTHERS.
         RETURN.
     ENDCASE.
@@ -547,3 +736,361 @@ CLASS lcl_editor IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.                    "lcl_editor IMPLEMENTATION
+
+CLASS lcl_plant_uml IMPLEMENTATION.
+
+  METHOD constructor.
+    mv_diagram = iv_diagram.
+  ENDMETHOD.                    "constructor
+
+  METHOD source.
+    CLEAR rv_source.
+    CHECK iv_display_source EQ abap_true.
+    rv_source = |<p>{ mv_diagram }</p>|.
+  ENDMETHOD.
+
+  METHOD show_html.
+    cl_abap_browser=>show_html( title = c_lisp_ast_view
+                                html_string = iv_html
+                                size = iv_size
+                                context_menu = abap_true ).
+  ENDMETHOD.
+
+  METHOD output.
+    CASE is_cfg-output_mode.
+      WHEN lcl_configuration=>c_mode_url.
+        show_html( |<img src="{ to_url( ) }"/>\n{ source( is_cfg-display_source ) }| ).
+
+      WHEN lcl_configuration=>c_mode_exe.
+        DATA(lo_name) = lcl_file_name=>new( lcl_file=>c_mode_txt ).
+        IF lcl_file=>download( iv_data = to_xstring( mv_diagram )
+                               io_name = lo_name ) IS INITIAL.
+          show_html( |<img src="{ to_png( io_name = lo_name
+                                          is_cfg = is_cfg ) }"/>\n{ source( is_cfg-display_source ) }| ).
+        ENDIF.
+
+      WHEN OTHERS.
+*       export data as PlantUML source
+        lcl_file=>download( io_name = lcl_file_name=>new( is_cfg-output_mode )
+                            iv_data = to_xstring( mv_diagram ) ).
+    ENDCASE.
+  ENDMETHOD.                    "output
+
+  METHOD to_url.
+    DATA lv_bin TYPE xstring.
+*   for PlantUML Server: Convert to UTF-8, then deflate, then encode (base64 variant)
+    cl_abap_gzip=>compress_binary(
+      EXPORTING
+        raw_in         = to_xstring( mv_diagram )   " UTF-8
+        compress_level = 9
+      IMPORTING
+        gzip_out       = lv_bin ).
+
+    rv_url = iv_base_url &&
+             translate( val = cl_http_utility=>encode_x_base64( lv_bin )
+                        from = c_standard
+                        to =   c_plantuml ).
+  ENDMETHOD.                    "to_url
+
+  METHOD to_xstring.
+    cl_abap_conv_out_ce=>create( encoding = 'UTF-8' )->convert( EXPORTING data = iv_string
+                                                                IMPORTING buffer = rv_xstring ).
+  ENDMETHOD.                    "to_xstring
+
+  METHOD parameter_string.
+    rv_param = |-jar { is_cfg-java_jar } -o { is_cfg-local_path } "{ io_name->get_fullpath( ) }"|.
+  ENDMETHOD.
+
+  METHOD png_file_name.
+    TRY.
+        rv_name = |{ is_cfg-local_path }{ io_name->get_prefix( ) }.png|.
+      CATCH cx_dynamic_check.
+        CLEAR rv_name.
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD to_png.
+    CLEAR rv_name.
+    cl_gui_frontend_services=>execute(
+      EXPORTING application = is_cfg-java_appl
+                parameter = parameter_string( io_name = io_name
+                                              is_cfg = is_cfg )
+                synchronous = 'X'
+      EXCEPTIONS OTHERS = 1 ).
+    CHECK sy-subrc EQ 0.
+    rv_name = png_file_name( io_name = io_name
+                             is_cfg = is_cfg ).
+  ENDMETHOD.
+
+ENDCLASS.
+
+CLASS lcl_configuration IMPLEMENTATION.
+
+  METHOD class_constructor.
+    gs_cfg = VALUE #( java_appl = get_java_path( )
+                      local_path = `C:\Temp\Dokumente\UML\`                           " PlantUML jar file and output path
+                      java_jar = `C:\Temp\Dokumente\UML\plantuml.jar`
+                      server_url = `http://www.plantuml.com/plantuml/img/` ##NO_TEXT  " PlantUML server URL
+                      output_mode = c_mode_url
+                      skip_dialog = space
+                      scale = c_default_scale
+                      display_source = abap_false ).
+  ENDMETHOD.
+
+  METHOD get_registry_value.
+    cl_gui_frontend_services=>registry_get_value(
+      EXPORTING
+        root  = cl_gui_frontend_services=>hkey_local_machine
+        key   = iv_key
+        value = iv_value
+      IMPORTING
+        reg_value = rv_value
+      EXCEPTIONS
+        OTHERS               = 5 ).
+    ev_subrc = sy-subrc.
+  ENDMETHOD.
+
+  METHOD get_java_path.
+*   Windows: Local Java installation
+    DATA lv_subrc TYPE sysubrc.
+
+    rv_fullpath = `C:\Windows\System32\java`.   " Default
+    DATA(lv_path) = get_registry_value( EXPORTING iv_key = c_registry_java_base_key
+                                                  iv_value = 'CurrentVersion'
+                                        IMPORTING ev_subrc = lv_subrc ).
+    CHECK lv_subrc EQ 0.
+    lv_path = get_registry_value( EXPORTING iv_key = |{ c_registry_java_base_key }\\{ lv_path }|
+                                            iv_value = 'JavaHome'
+                                  IMPORTING ev_subrc = lv_subrc ).
+    CHECK lv_subrc EQ 0.
+    rv_fullpath = |{ lv_path }\\bin\\java|.
+  ENDMETHOD.
+
+  METHOD get_attributes.
+* Table Type has type 'T' - patterns SCI_PATTERN
+*                     ' ' - ?? private attributes?
+*                     'I' - ?? Integer?
+    rt_attr = VALUE #(
+     ( ref = REF #( gs_cfg-skip_dialog )    text = 'Remember my settings'(c00)    kind = 'C' )
+     ( ref = REF #( sy-index )              text = 'PlantUML Execution Mode'(c10) kind = 'G' ) " Group
+     ( ref = REF #( mv_mode_url )           text = 'PlantUML web service'(c11)    kind = 'R' button_group = 'MOD' )
+     ( ref = REF #( mv_mode_txt )           text = 'Save text file'(c12)          kind = 'R' button_group = 'MOD' )
+     ( ref = REF #( mv_mode_exe )           text = 'Local PlantUML '(c13)         kind = 'R' button_group = 'MOD' )
+     ( ref = REF #( '' )                    text = 'PlantUML Settings'(c20)       kind = 'G' )
+     ( ref = REF #( gs_cfg-scale )          text = 'Scale '(c21)                  kind = 'S' )
+     ( ref = REF #( gs_cfg-server_url )     text = 'PlantUML Server'(c25)         kind = 'S' )
+     ( ref = REF #( gs_cfg-local_path )     text = 'Local PlantUML path'(c26)     kind = 'S' )
+     ( ref = REF #( gs_cfg-java_jar )       text = 'Local PlantUML jar file'(c27) kind = ' ' )
+     ( ref = REF #( gs_cfg-java_appl )      text = 'Local Java path'(c28)         kind = 'S' ) " Select-Options
+     ( ref = REF #( gs_cfg-display_source ) text = 'Display source '(c32)         kind = 'C' )    ).
+  ENDMETHOD.
+
+  METHOD to_radiobutton.
+    mv_mode_url = xsdbool( gs_cfg-output_mode EQ c_mode_url ).
+    mv_mode_exe = xsdbool( gs_cfg-output_mode EQ c_mode_exe ).
+    mv_mode_txt = xsdbool( gs_cfg-output_mode EQ c_mode_txt ).
+  ENDMETHOD.
+
+  METHOD from_radiobutton.
+    IF mv_mode_url EQ abap_true.
+      gs_cfg-output_mode = c_mode_url.
+    ELSEIF mv_mode_exe EQ abap_true.
+      gs_cfg-output_mode = c_mode_exe.
+    ELSEIF mv_mode_txt EQ abap_true.
+      gs_cfg-output_mode = c_mode_txt.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD get.
+    rs_cfg = CORRESPONDING #( gs_cfg ).
+  ENDMETHOD.
+
+  METHOD query.
+    NEW lcl_configuration( )->dialog( ).
+  ENDMETHOD.
+
+  METHOD dialog.
+    to_radiobutton( ).
+    "CHECK gs_cfg-skip_dialog EQ abap_false.
+    CHECK cl_ci_query_attributes=>generic(
+        p_name       = CONV #( sy-repid )                    " unique screen ID
+        p_title      = 'Class Diagram Parameters'            " Screen title
+        p_attributes = get_attributes( )                     " Screen fields
+        p_display    = abap_false                            " Edit / Display only
+       ) EQ abap_false.   " Do not cancel
+    from_radiobutton( ).
+  ENDMETHOD.
+
+ENDCLASS.
+
+*----------------------------------------------------------------------*
+*       CLASS lcl_file IMPLEMENTATION
+*----------------------------------------------------------------------*
+CLASS lcl_file IMPLEMENTATION.
+
+  METHOD download.
+    rv_subrc = 1.
+    CHECK io_name->dialog( ) NE cl_gui_frontend_services=>action_cancel.
+
+    rv_subrc = cl_uml_utilities=>save_xml_local( xml = iv_data
+                                                 filename = io_name->get_fullpath( ) ).
+  ENDMETHOD.
+
+ENDCLASS.                    "lcl_file IMPLEMENTATION
+
+CLASS lcl_file_name IMPLEMENTATION.
+
+  METHOD new.
+    CASE iv_mode.
+      WHEN lcl_configuration=>c_mode_aut.
+        ro_file = NEW lcl_file_name_dummy( iv_mode ).
+      WHEN OTHERS.
+        ro_file = NEW lcl_file_name( iv_mode ).
+    ENDCASE.
+  ENDMETHOD.
+
+  METHOD constructor.
+    CASE iv_mode.
+      WHEN lcl_configuration=>c_mode_txt.
+        ms_file = VALUE #( title = |Save UML text source|
+                           ext = |.txt| ).
+      WHEN OTHERS.
+        ms_file = VALUE #( title = |Save As...|
+                           ext = |.txt| ).
+    ENDCASE.
+  ENDMETHOD.
+
+  METHOD get_prefix.
+    rv_name = shift_right( val = ms_file-name
+                           places = strlen( ms_file-ext ) ).
+  ENDMETHOD.
+
+  METHOD get_fullpath.
+    rv_name = ms_file-path.
+  ENDMETHOD.
+
+  METHOD dialog.
+    DATA lv_path TYPE string ##needed.
+
+    CLEAR rv_user_action.
+
+    cl_gui_frontend_services=>file_save_dialog(
+      EXPORTING
+        window_title      = ms_file-title           " Window Title
+        default_extension = ms_file-ext             " Default Extension
+        file_filter       = ms_file-filter
+      CHANGING
+        filename = ms_file-name          " File Name to Save
+        path = lv_path                   " Path to File
+        fullpath = ms_file-path          " Path + File Name
+        user_action = rv_user_action
+" User Action (C Class Const ACTION_OK, ACTION_OVERWRITE etc)
+*   file_encoding =
+      EXCEPTIONS
+        OTHERS = 0 ).
+  ENDMETHOD.
+
+ENDCLASS.
+
+CLASS lcl_file_name_dummy IMPLEMENTATION.
+
+  METHOD dialog.
+    ms_file-path = |test.txt|.
+    rv_user_action = cl_gui_frontend_services=>action_cancel.
+  ENDMETHOD.
+
+ENDCLASS.
+
+CLASS lcl_dot_diagram IMPLEMENTATION.
+
+  METHOD generate.
+    LOOP AT it_elem INTO DATA(lo_elem).
+      node( elem = lo_elem ).
+    ENDLOOP.
+    rv_diagram = get( ).
+  ENDMETHOD.
+
+  METHOD add.
+    mv_diagram = mv_diagram && iv_code.
+  ENDMETHOD.
+
+  METHOD header.
+    add( |@startuml\n| ).
+    add( |scale { is_cfg-scale }\n| ).
+    CHECK c_start EQ abap_true.
+    add( |start\n| ).
+  ENDMETHOD.                    " header
+
+  METHOD print.
+    CASE io_elem->type.
+      WHEN lcl_lisp=>type_pair.
+        rv_node = get_object_id( io_elem ).
+      WHEN lcl_lisp=>type_null.
+        rv_node = space.
+      WHEN lcl_lisp=>type_number.
+        rv_node = |{ io_elem->number }|.
+      WHEN OTHERS.
+        rv_node = io_elem->value.
+    ENDCASE.
+  ENDMETHOD.
+
+  METHOD detach.
+    CHECK c_start EQ abap_true.
+    add( |detach\n| ).
+  ENDMETHOD.
+
+  METHOD node.
+    CASE elem->type.
+      WHEN lcl_lisp=>type_pair.
+
+        IF elem->cdr NE lcl_lisp=>nil.
+          add( |if ({ print( elem ) }) then ({ get_object_id( elem->car ) })\n| ).
+          node( elem->car ).
+          detach( ).
+
+          add( |else ({ get_object_id( elem->cdr ) })\n| ).
+          node( elem->cdr ).
+          add( |endif\n| ).
+
+          detach( ).
+        ELSE.
+          add( |  :{ print( elem ) };\n| ).
+          node( elem->car ).
+          detach( ).
+        ENDIF.
+
+      WHEN lcl_lisp=>type_null.
+*      do nothing
+
+      WHEN lcl_lisp=>type_symbol.
+        add( |  :{ print( elem ) }; \n| ).
+
+      WHEN OTHERS.
+        add( |  :{ print( elem ) }] \n| ).
+
+    ENDCASE.
+  ENDMETHOD.                    " footer
+
+  METHOD footer.
+    "    add( |stop\n| ).
+    add( |@enduml\n| ).
+  ENDMETHOD.                    " footer
+
+  METHOD new.
+    ro_dot = NEW #( ).
+    ro_dot->header( is_config ).
+  ENDMETHOD.                    " new
+
+  METHOD get.
+    footer( ).
+    rv_dot = mv_diagram.
+  ENDMETHOD.
+
+  METHOD get_object_id.
+*   Get object ID - internal call
+    CALL 'OBJMGR_GET_INFO' ID 'OPNAME' FIELD 'GET_OBJID'
+                           ID 'OBJID'  FIELD rv_oid
+                           ID 'OBJ'    FIELD io_ref.
+  ENDMETHOD.
+
+ENDCLASS.

@@ -137,6 +137,24 @@
       <PATH>X</PATH>
      </RSMPE_FUNT>
      <RSMPE_FUNT>
+      <CODE>GRAPH</CODE>
+      <TEXTNO>001</TEXTNO>
+      <TEXT_TYPE>S</TEXT_TYPE>
+      <TEXT_NAME>ICON_TREE</TEXT_NAME>
+      <ICON_ID>@3M@</ICON_ID>
+      <FUN_TEXT>S-Expression</FUN_TEXT>
+      <ICON_TEXT>S-Expression</ICON_TEXT>
+      <INFO_TEXT>View nested list data</INFO_TEXT>
+      <PATH>I</PATH>
+     </RSMPE_FUNT>
+     <RSMPE_FUNT>
+      <CODE>GRPHCFG</CODE>
+      <TEXTNO>001</TEXTNO>
+      <TEXT_TYPE>S</TEXT_TYPE>
+      <FUN_TEXT>Graph Config...</FUN_TEXT>
+      <PATH>G</PATH>
+     </RSMPE_FUNT>
+     <RSMPE_FUNT>
       <CODE>HELP</CODE>
       <TEXTNO>001</TEXTNO>
       <TEXT_TYPE>S</TEXT_TYPE>
@@ -203,13 +221,37 @@
      <RSMPE_MEN>
       <CODE>000001</CODE>
       <NO>03</NO>
+      <REF_TYPE>S</REF_TYPE>
+     </RSMPE_MEN>
+     <RSMPE_MEN>
+      <CODE>000001</CODE>
+      <NO>04</NO>
+      <REF_TYPE>F</REF_TYPE>
+      <REF_CODE>GRAPH</REF_CODE>
+      <REF_NO>001</REF_NO>
+     </RSMPE_MEN>
+     <RSMPE_MEN>
+      <CODE>000001</CODE>
+      <NO>05</NO>
+      <REF_TYPE>F</REF_TYPE>
+      <REF_CODE>GRPHCFG</REF_CODE>
+      <REF_NO>001</REF_NO>
+     </RSMPE_MEN>
+     <RSMPE_MEN>
+      <CODE>000001</CODE>
+      <NO>06</NO>
+      <REF_TYPE>S</REF_TYPE>
+     </RSMPE_MEN>
+     <RSMPE_MEN>
+      <CODE>000001</CODE>
+      <NO>07</NO>
       <REF_TYPE>F</REF_TYPE>
       <REF_CODE>CLEAR</REF_CODE>
       <REF_NO>001</REF_NO>
      </RSMPE_MEN>
      <RSMPE_MEN>
       <CODE>000001</CODE>
-      <NO>04</NO>
+      <NO>08</NO>
       <REF_TYPE>F</REF_TYPE>
       <REF_CODE>EXIT</REF_CODE>
       <REF_NO>001</REF_NO>
@@ -242,30 +284,36 @@
       <PFK_CODE>000001</PFK_CODE>
       <CODE>0001</CODE>
       <NO>02</NO>
-      <PFNO>23</PFNO>
+      <PFNO>02</PFNO>
      </RSMPE_BUT>
      <RSMPE_BUT>
       <PFK_CODE>000001</PFK_CODE>
       <CODE>0001</CODE>
       <NO>03</NO>
-      <PFNO>24</PFNO>
+      <PFNO>23</PFNO>
      </RSMPE_BUT>
      <RSMPE_BUT>
       <PFK_CODE>000001</PFK_CODE>
       <CODE>0001</CODE>
       <NO>04</NO>
-      <PFNO>14</PFNO>
+      <PFNO>24</PFNO>
      </RSMPE_BUT>
      <RSMPE_BUT>
       <PFK_CODE>000001</PFK_CODE>
       <CODE>0001</CODE>
       <NO>05</NO>
-      <PFNO>S</PFNO>
+      <PFNO>14</PFNO>
      </RSMPE_BUT>
      <RSMPE_BUT>
       <PFK_CODE>000001</PFK_CODE>
       <CODE>0001</CODE>
       <NO>06</NO>
+      <PFNO>S</PFNO>
+     </RSMPE_BUT>
+     <RSMPE_BUT>
+      <PFK_CODE>000001</PFK_CODE>
+      <CODE>0001</CODE>
+      <NO>07</NO>
       <PFNO>13</PFNO>
      </RSMPE_BUT>
     </BUT>
@@ -274,6 +322,12 @@
       <CODE>000001</CODE>
       <PFNO>01</PFNO>
       <FUNCODE>HELP</FUNCODE>
+      <FUNNO>001</FUNNO>
+     </RSMPE_PFK>
+     <RSMPE_PFK>
+      <CODE>000001</CODE>
+      <PFNO>02</PFNO>
+      <FUNCODE>GRAPH</FUNCODE>
       <FUNNO>001</FUNNO>
      </RSMPE_PFK>
      <RSMPE_PFK>
@@ -345,6 +399,14 @@
      <RSMPE_STAF>
       <STATUS>STATUS_100</STATUS>
       <FUNCTION>EXIT</FUNCTION>
+     </RSMPE_STAF>
+     <RSMPE_STAF>
+      <STATUS>STATUS_100</STATUS>
+      <FUNCTION>GRAPH</FUNCTION>
+     </RSMPE_STAF>
+     <RSMPE_STAF>
+      <STATUS>STATUS_100</STATUS>
+      <FUNCTION>GRPHCFG</FUNCTION>
      </RSMPE_STAF>
      <RSMPE_STAF>
       <STATUS>STATUS_100</STATUS>
