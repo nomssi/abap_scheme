@@ -13,6 +13,8 @@ So I started my [Make your own Lisp](https://github.com/kanaka/mal/blob/master/p
 - the ABAP LISP Workbench to make it fun to use
 
 ![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_scheme_workbench.png)
+![abap_trace](https://github.com/nomssi/abap_scheme/blob/master/img/abap_lisp_trace.png)
+![abap_expression](https://github.com/nomssi/abap_scheme/blob/master/img/SExpressionViewer.png)
 
 Check the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) for documentation.
 
