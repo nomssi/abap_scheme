@@ -714,6 +714,9 @@
                     RAISING   lcx_lisp_exception.
       METHODS match_string CHANGING cv_val TYPE string.
       METHODS match_atom CHANGING cv_val TYPE string.
+
+      METHODS throw IMPORTING message TYPE string
+                    RAISING   lcx_lisp_exception.
   ENDCLASS.                    "lcl_parser DEFINITION
 
 *----------------------------------------------------------------------*
@@ -1121,12 +1124,16 @@
       ELSEIF index = length.
         char = space.
       ELSEIF index > length.
-        RAISE EXCEPTION TYPE lcx_lisp_exception
-          EXPORTING
-            message = c_error_unexpected_end
-            area    = c_area_parse.
+        throw( c_error_unexpected_end ).
       ENDIF.
     ENDMETHOD.                    "next_char
+
+    METHOD throw.
+      RAISE EXCEPTION TYPE lcx_lisp_exception
+        EXPORTING
+          message = message
+          area    = c_area_parse.
+    ENDMETHOD.
 
     METHOD peek_char.
       DATA(lv_idx) = index + 1.
@@ -1184,14 +1191,14 @@
             RETURN.
 
           WHEN c_close_paren OR c_close_bracket.
-            lcl_lisp=>throw( `parse error - no matching closing parens/bracket` ).
+            throw( |a { char } found with no matching { delim }| ).
 
           WHEN OTHERS.
         ENDCASE.
 
         IF lv_proper_list EQ abap_false.
 *         inconsistent input
-          lcl_lisp=>throw( `parse error - dotted pair` ).
+          throw( `dotted pair` ).
         ENDIF.
 
         IF lv_empty_list = abap_true. " First
@@ -1207,7 +1214,7 @@
           IF lo_peek->type = lcl_lisp=>type_symbol AND lo_peek->value = c_lisp_dot.
             " dotted Pair
             lo_cell->cdr = parse_token( ).
-            "           match closing parens
+            " match closing parens
             lv_proper_list = abap_false.
           ELSE.
 
@@ -1218,6 +1225,7 @@
         ENDIF.
 
       ENDWHILE.
+      throw( |missing a { lv_close_delim } to close expression| ).
     ENDMETHOD.                    "parse_list
 
     METHOD match_string.

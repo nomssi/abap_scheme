@@ -366,6 +366,7 @@ CLASS lcl_ide IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD graphics.
+    DATA lx_root TYPE REF TO cx_root.
     TRY.
         DATA(ls_cfg) = lcl_configuration=>get( ).
 
@@ -376,7 +377,8 @@ CLASS lcl_ide IMPLEMENTATION.
 
         NEW lcl_plant_uml( lcl_dot_diagram=>new( is_config = ls_cfg
                               )->generate( it_elem = lt_elem ) )->output( ls_cfg ).
-      CATCH cx_dynamic_check.                           "#EC NO_HANDLER
+      CATCH cx_root INTO lx_root.
+        mo_source->update_status( lx_root->get_text( ) ).
     ENDTRY.
   ENDMETHOD.
 

@@ -138,6 +138,8 @@
        METHODS setup.
        METHODS teardown.
 
+       METHODS closing FOR TESTING.
+
 *   Stability tests - No Dump should occur
        METHODS stability_1 FOR TESTING.
        METHODS stability_2 FOR TESTING.
@@ -205,6 +207,11 @@
                expected = expected
                title = 'CODE' ).
      ENDMETHOD.                    "code_test_f
+
+     METHOD closing.
+       code_test( code = '( + 1'
+                  expected = |Parse: missing a ) to close expression| ).
+     ENDMETHOD.                    "lambda
 
      METHOD stability_1.
        code_test( code = 'a'
@@ -642,7 +649,7 @@
                          |    (if (< n 10)| &
                          |        (cons n acc)| &
                          |        (loop (quotient n 10)| &
-                         |              (cons (remainder n 10) acc))))|
+                         |              (cons (remainder n 10) acc)))))|
                   expected = 'number->list' ).
        code_test( code = |(number->list 239056)|
                   expected = '( 2 3 9 0 5 6 )' ).
@@ -724,7 +731,7 @@
           |                (+ (sum g (car ton))| &
           |                   (sum g (cdr ton)))))))| &
           |      (n (sum (lambda (x) 1) ton)))| &
-          |   (mean / /)|
+          |   (mean / /)))|
                   expected = 'means' ).
 
 *      evaluating (means '(3 (1 4))) returns 36/19.
@@ -805,7 +812,7 @@
      ENDMETHOD.
 
      METHOD is_hash_true.
-       code_test( code = |(define h (make-hash '(dog 4 car 5))|
+       code_test( code = |(define h (make-hash '(dog 4 car 5)))|
                   expected = 'h' ).
        code_test( code = |(hash? h)|
                   expected = '#t' ).
@@ -1851,7 +1858,7 @@
      ENDMETHOD.                    "list_length_2
 
      METHOD list_length_3.
-       code_test( code = |(length '()|
+       code_test( code = |(length '())|
                   expected = '0' ).
      ENDMETHOD.                    "list_length_0
 
@@ -2963,7 +2970,7 @@
      METHOD compa_is_eq_10.
        code_test( code = |(let ((n (+ 2 3)))| &
                          |  (let ((x '(a))) | &
-                         | (eq? x x))|
+                         | (eq? x x)))|
                   expected = '#t' ).
      ENDMETHOD.
 
