@@ -18,19 +18,20 @@ So I started my [Make your own Lisp](https://github.com/kanaka/mal/blob/master/p
 
 Check the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) for documentation.
 
-### Requirements
-
-- The current version should work on ABAP Netweaver 7.4 SP10, it developed on a 7.5
-- For an older version, check the [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP).
-
 ### Architecture
-
-The code can be cloned with [ABAP GIT](http://docs.abapgit.org/) 
 
 - Report ZZ_LISP_IDE - Main report for the workbench
 - Include YY_LIB_LISP - Complete ABAP LISP library
 - Include YY_LISP_AUNIT - ABAP Unit tests
 - Include YY_LISP_IDE - Editor/Tools
+
+The code can be cloned with [ABAP GIT](http://docs.abapgit.org/) 
+
+- The main version is developed on Netweaver 7.5 and should work on ABAP Netweaver 7.4
+- Milestones are downported to ABAP Netweaver 7.02 - use the 7.02 branch 
+      Note the Eval. with Trace is not supported in this version
+- A version is available that should work on older releases, but is not maintained anymore
+      Note: check the [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP).
 
 ### ABAP Integration
 #### Interpreter
