@@ -1487,19 +1487,26 @@
      ENDMETHOD.                    "math_modulo
 
      METHOD math_random.
+       DATA lx_rnd TYPE REF TO cx_abap_random.
+       DATA lx_conv TYPE REF TO cx_sy_conversion_overflow.
+
        code_test( code =  '(random 0)'
                   expected = '0' ).
        code_test( code =  '(begin (define a (random 1)) (or (= a 0) (= a 1)) )'
                   expected = '#t' ).
        code_test( code =  '(random -5 4)'
                   expected = 'Eval: ( -5 4 ) Parameter mismatch' ).
+       CREATE OBJECT lx_rnd
+         EXPORTING textid = '68D40B4034D28D24E10000000A114BF5'.
        code_test( code =  '(random -4)'
-                  expected = |Eval: { NEW cx_abap_random( textid = '68D40B4034D28D24E10000000A114BF5' )->get_text( ) }| ). " Invalid interval boundaries
+                  expected = |Eval: { lx_rnd->get_text( ) }| ). " Invalid interval boundaries
        code_test( code =  '(< (random 10) 11)'
                   expected = '#t' ).
+       CREATE OBJECT lx_conv
+         EXPORTING textid = '5E429A39EE412B43E10000000A11447B'
+                   value = '100000000000000'.
        code_test( code =  '(random 100000000000000)'
-                  expected = |Eval: { NEW cx_sy_conversion_overflow( textid = '5E429A39EE412B43E10000000A11447B'
-                                                                     value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
+                  expected = |Eval: { lx_conv->get_text( ) }| ). "Overflow converting from &
      ENDMETHOD.                    "math_modulo
 
      METHOD math_min_0.
