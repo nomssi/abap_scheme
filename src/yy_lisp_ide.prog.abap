@@ -1063,6 +1063,7 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
 
       WHEN lcl_lisp=>type_null.
 *      do nothing
+        add( |  :; \n| ).
 
       WHEN lcl_lisp=>type_symbol.
         add( |  :{ print( elem ) }; \n| ).
@@ -1090,7 +1091,7 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
 
   METHOD get_object_id.
 *   Get object ID - internal call
-    CALL 'OBJMGR_GET_INFO' ID 'OPNAME' FIELD 'GET_OBJID'
+    CALL 'OBJMGR_GET_INFO' ID 'OPNAME' FIELD 'GET_OBJID' "#EC CI_CCALL
                            ID 'OBJID'  FIELD rv_oid
                            ID 'OBJ'    FIELD io_ref.
   ENDMETHOD.

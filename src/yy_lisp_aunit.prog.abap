@@ -398,6 +398,7 @@
 
        METHODS do_1 FOR TESTING.
        METHODS do_2 FOR TESTING.
+       METHODS do_3 FOR TESTING.
 
        METHODS named_let_1 FOR TESTING.
        METHODS named_let_2 FOR TESTING.
@@ -640,6 +641,14 @@
                          |    (sum 0  (+ sum (car x))))| &
                          |((null? x) sum)))|
                   expected = '25' ).
+     ENDMETHOD.
+
+     METHOD do_3.
+       code_test( code = |(let ((x '(1 3)))| &
+                         |  (do ((x x (cdr x))| &
+                         |    (sum 0  (+ sum (car x))))| &
+                         |((null? x) )))|              " Do without a body
+                  expected = 'nil' ).                  " unspecified
      ENDMETHOD.
 
      METHOD named_let_1.

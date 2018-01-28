@@ -1561,6 +1561,7 @@
     ENDMETHOD.                    "re_assign_symbol
 
     METHOD evaluate_parameters.
+*     This routine is called very, very often!
       DATA lo_arg TYPE REF TO lcl_lisp.
 *     Before execution of the procedure or lambda, all parameters must be evaluated
       validate io_list.
@@ -1568,18 +1569,16 @@
       CHECK io_list NE nil AND io_list->car NE nil.
 
       DATA(elem) = io_list.
-      WHILE elem IS BOUND AND elem->type EQ lcl_lisp=>type_pair.
-
-        DATA(lo_next) = lcl_lisp_new=>cons( io_car = eval_ast( element = elem->car
-                                                               environment = environment ) ).
+      IF elem->type EQ lcl_lisp=>type_pair.
+        lo_arg = ro_head = lcl_lisp_new=>cons( io_car = eval_ast( element = elem->car
+                                                                  environment = environment ) ).
         elem = elem->cdr.
+      ENDIF.
 
-        IF ro_head EQ nil.
-          lo_arg = ro_head = lo_next.
-        ELSE.
-          lo_arg = lo_arg->cdr = lo_next.
-        ENDIF.
-
+      WHILE elem->type EQ lcl_lisp=>type_pair.
+        lo_arg = lo_arg->cdr = lcl_lisp_new=>cons( io_car = eval_ast( element = elem->car
+                                                                      environment = environment ) ).
+        elem = elem->cdr.
       ENDWHILE.
 
       validate_tail elem io_list space.
@@ -2388,7 +2387,11 @@
 
                     ENDDO.
 
-                    tail_sequence.
+                    IF lo_elem EQ nil.
+                      result = nil.
+                    ELSE.
+                      tail_sequence.
+                    ENDIF.
 
                   WHEN 'case'.
 * (case <key> <clause1> <clause2> <clause3> ... )
@@ -2407,6 +2410,10 @@
 
                     lr_tail = lr_tail->cdr.
                     validate: lr_tail, lr_tail->car, lo_key.
+
+                    IF lr_tail EQ nil.
+                      throw( `case: no clause` ).
+                    ENDIF.
 
                     lo_elem = nil.
                     DATA(lv_match) = abap_false.
@@ -2480,6 +2487,8 @@
 
                   WHEN c_eval_unquote_splicing.
                     throw( |{ c_eval_unquote_splicing }  not valid outside of quasiquote| ).
+
+*                  WHEN 'error'.
 
                   WHEN OTHERS.
 
@@ -4635,17 +4644,40 @@
     ENDMETHOD.
 
     METHOD get.
+      DATA ls_map TYPE ts_map.
+      DATA lo_env TYPE REF TO lcl_lisp_environment.
 *     takes a symbol key and uses the find logic to locate the environment with the key,
 *     then returns the matching value.
-*     raises an "unbound" error if no key is found up the environment chain
-      TRY.
-          cell = VALUE #( map[ symbol = symbol ]-value DEFAULT outer->get( symbol ) ).
-        CATCH cx_root.
-          unbound_symbol( symbol ).
-      ENDTRY.
-    ENDMETHOD.                    "find
+      READ TABLE map INTO ls_map WITH KEY symbol = symbol.
+      IF sy-subrc EQ 0.
+        cell = ls_map-value.
+        RETURN.
+      ENDIF.
+
+      lo_env = outer.
+      WHILE lo_env IS BOUND.
+        READ TABLE lo_env->map INTO ls_map WITH KEY symbol = symbol.
+        IF sy-subrc EQ 0.
+          cell = ls_map-value.
+          RETURN.
+        ENDIF.
+        lo_env = lo_env->outer.
+      ENDWHILE.
+*     raises an "unbound" error if key is not found
+      unbound_symbol( symbol ).
+    ENDMETHOD.
+
+*    METHOD get.
+**     Clever but the TRY / CATCH is probably expensive. This logic is use very, very often
+*      TRY.
+*          cell = VALUE #( map[ symbol = symbol ]-value DEFAULT outer->get( symbol ) ).
+*        CATCH cx_root.
+*          unbound_symbol( symbol ).
+*      ENDTRY.
+*    ENDMETHOD.
 
     METHOD unbound_symbol.
+*     symbol not found in the environment chain
       RAISE EXCEPTION TYPE lcx_lisp_exception
         EXPORTING
           message = |Symbol { symbol } is unbound|
