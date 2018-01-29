@@ -4,7 +4,12 @@
 
 CONSTANTS:
   c_lisp_input    TYPE string VALUE 'ABAP Lisp Input',
-  c_lisp_untitled TYPE string VALUE 'Untitled'.
+  c_lisp_untitled TYPE programm VALUE 'Untitled',
+* Experimental
+* enable if you uploaded LISP config files or also change c_source_type to 'ABAP'
+  c_new_abap_editor TYPE flag VALUE abap_false,
+  c_source_type TYPE string VALUE 'LISP'.
+
 CONSTANTS:
   c_lisp_ast_view TYPE cl_abap_browser=>title VALUE 'ABAP Lisp S-Expression Viewer'.
 
@@ -45,6 +50,27 @@ CLASS lcl_container DEFINITION.
     DATA mo_right TYPE REF TO cl_gui_container.
 ENDCLASS.                    "lcl_container DEFINITION
 
+INTERFACE lif_source_editor.
+  METHODS clear.
+  METHODS push_text.
+  METHODS pop_text RETURNING VALUE(code) TYPE string.
+  METHODS to_string RETURNING VALUE(rv_text) TYPE string.
+  METHODS update_status IMPORTING iv_string TYPE string.
+
+  METHODS set_focus.
+  METHODS free.
+ENDINTERFACE.
+
+CLASS lcl_source DEFINITION INHERITING FROM cl_gui_sourceedit.
+  PUBLIC SECTION.
+    METHODS constructor IMPORTING io_container TYPE REF TO cl_gui_container
+                                  iv_read_only TYPE flag DEFAULT abap_false
+                                  iv_toolbar   TYPE flag DEFAULT abap_false.
+    INTERFACES lif_source_editor.
+  PRIVATE SECTION.
+    DATA mo_stack TYPE REF TO lcl_stack.
+ENDCLASS.
+
 *----------------------------------------------------------------------*
 *       CLASS lcl_editor DEFINITION
 *----------------------------------------------------------------------*
@@ -57,10 +83,8 @@ CLASS lcl_editor DEFINITION INHERITING FROM cl_gui_textedit.
                                   iv_toolbar   TYPE flag DEFAULT abap_false.
     METHODS append_source IMPORTING iv_text TYPE string.
 
-    METHODS push_text.
-    METHODS pop_text RETURNING VALUE(code) TYPE string.
-    METHODS to_string RETURNING VALUE(rv_text) TYPE string.
-    METHODS update_status IMPORTING iv_string TYPE string.
+    INTERFACES lif_source_editor.
+
     METHODS append_string IMPORTING iv_text TYPE string.
   PRIVATE SECTION.
     DATA mv_counter TYPE i.
@@ -276,7 +300,7 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
     DATA mo_cont TYPE REF TO lcl_container.
     DATA mo_int TYPE REF TO lcl_lisp_profiler. "The Lisp interpreter
 
-    DATA mo_source TYPE REF TO lcl_editor.
+    DATA mi_source TYPE REF TO lif_source_editor.
     DATA mo_output TYPE REF TO lcl_editor.
     DATA mo_log TYPE REF TO lcl_editor.
     DATA mo_console TYPE REF TO lcl_editor.
@@ -299,6 +323,8 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
     METHODS welcome RETURNING VALUE(text) TYPE string.
     METHODS console_header RETURNING VALUE(text) TYPE string.
 
+    METHODS new_source_editor IMPORTING io_cont          TYPE REF TO cl_gui_container
+                              RETURNING VALUE(ri_source) TYPE REF TO lif_source_editor.
     METHODS flush RETURNING VALUE(rv_text) TYPE string.
 
     METHODS writeln IMPORTING text TYPE string.
@@ -318,11 +344,6 @@ CLASS lcl_ide IMPLEMENTATION.
     CREATE OBJECT:
       mo_cont,
 
-      mo_source
-        EXPORTING
-          io_container = mo_cont->mo_input
-          iv_read_only = abap_false
-          iv_toolbar = abap_true,
       mo_output
         EXPORTING
           io_container = mo_cont->mo_output
@@ -333,8 +354,42 @@ CLASS lcl_ide IMPLEMENTATION.
       mo_console
         EXPORTING
           io_container = mo_cont->mo_console.
+
+    mi_source = new_source_editor( mo_cont->mo_input ).
     refresh( ).
   ENDMETHOD.                    "constructor
+
+  METHOD new_source_editor.
+    DATA gui_support TYPE boolean.
+*   Check for frontend support for the new ABAP Editor
+    cl_gui_frontend_services=>check_gui_support(
+      EXPORTING
+        component            = 'abapeditor'                 "#EC NOTEXT
+        feature_name         = 'ab4'                        "#EC NOTEXT
+      RECEIVING
+        result               = gui_support
+      EXCEPTIONS
+        cntl_error           = 1
+        error_no_gui         = 2
+        wrong_parameter      = 3
+        not_supported_by_gui = 4
+        unknown_error        = 5
+        OTHERS               = 6 ).
+    IF sy-subrc NE 0 OR gui_support NE abap_true OR c_new_abap_editor NE abap_true.
+      CREATE OBJECT ri_source TYPE lcl_editor
+        EXPORTING
+          io_container = io_cont
+          iv_read_only = abap_false
+          iv_toolbar   = abap_true.
+
+    ELSE.
+      CREATE OBJECT ri_source TYPE lcl_source
+        EXPORTING
+          io_container = io_cont
+          iv_read_only = abap_false
+          iv_toolbar   = abap_true.
+    ENDIF.
+  ENDMETHOD.
 
   METHOD init.
     RETURN.
@@ -346,7 +401,7 @@ CLASS lcl_ide IMPLEMENTATION.
   ENDMETHOD.                    "main
 
   METHOD refresh.
-    mo_source->delete_text( ).
+    mi_source->clear( ).
     mo_output->delete_text( ).
     mo_log->delete_text( ).
     CREATE OBJECT mo_int   " LISP Interpreter
@@ -370,7 +425,7 @@ CLASS lcl_ide IMPLEMENTATION.
     TRY.
         DATA(ls_cfg) = lcl_configuration=>get( ).
 
-        DATA(code) = mo_source->to_string( ).
+        DATA(code) = mi_source->to_string( ).
         CHECK code IS NOT INITIAL.
 
         DATA(lt_elem) = mo_int->parse( code ).
@@ -378,7 +433,7 @@ CLASS lcl_ide IMPLEMENTATION.
         NEW lcl_plant_uml( lcl_dot_diagram=>new( is_config = ls_cfg
                               )->generate( it_elem = lt_elem ) )->output( ls_cfg ).
       CATCH cx_root INTO lx_root.
-        mo_source->update_status( lx_root->get_text( ) ).
+        mi_source->update_status( lx_root->get_text( ) ).
     ENDTRY.
   ENDMETHOD.
 
@@ -487,26 +542,25 @@ CLASS lcl_ide IMPLEMENTATION.
   METHOD first_output.
     CHECK mv_first EQ abap_true.
     CLEAR mv_first.
-    cl_gui_textedit=>set_focus( mo_source ).
+    mi_source->set_focus( ).
     mo_log->append_string( |{ welcome( ) }\n| ).
     mo_console->append_string( console_header( ) ).
   ENDMETHOD.                    "first_output
 
   METHOD evaluate.
     TRY.
-        DATA(code) = mo_source->to_string( ).
+        DATA(code) = mi_source->to_string( ).
         DATA(response) = mo_int->eval_repl( code ).
 
         mo_output->append_source( code ).
         mo_console->append_source( response ).
 
-        mo_source->push_text( ).
-        mo_source->update_status( |[ { mo_int->runtime } µs ] { response }| ).
-
+        mi_source->push_text( ).
+        mi_source->update_status( |[ { mo_int->runtime } µs ] { response }| ).
 
       CATCH cx_root INTO DATA(lx_root).
         response = lx_root->get_text( ).
-        mo_source->update_status( |{ response }| ).
+        mi_source->update_status( response ).
     ENDTRY.
 
     mo_log->append_string( |{ code }\n=> { response }\n| ).
@@ -525,7 +579,7 @@ CLASS lcl_ide IMPLEMENTATION.
     " cl_demo_output=>set_mode( cl_demo_output=>text_mode  ).
 
     cl_demo_output=>begin_section( `Scheme Code` ).
-    cl_demo_output=>write( mo_source->to_string( ) ).
+    cl_demo_output=>write( mi_source->to_string( ) ).
 
     cl_demo_output=>begin_section( `Trace Output` ).
 
@@ -547,7 +601,7 @@ CLASS lcl_ide IMPLEMENTATION.
     mo_console->free( ).
     mo_log->free( ).
     mo_output->free( ).
-    mo_source->free( ).
+    mi_source->free( ).
     mo_cont->free_controls( ).
   ENDMETHOD.                    "free_controls
 
@@ -589,11 +643,11 @@ CLASS lcl_ide IMPLEMENTATION.
   ENDMETHOD.                    "user_command
 
   METHOD previous.
-    mo_source->pop_text( ).
+    mi_source->pop_text( ).
   ENDMETHOD.
 
   METHOD next.
-    mo_source->push_text( ).
+    mi_source->push_text( ).
   ENDMETHOD.
 
 ENDCLASS.                    "lcl_ide IMPLEMENTATION
@@ -697,13 +751,17 @@ CLASS lcl_editor IMPLEMENTATION.
     ENDIF.
     set_statusbar_mode( mode ).
 *   Work around to avoid NO DATA dump on first read
-    delete_text( ).
+    lif_source_editor~clear( ).
     mo_stack = NEW #( ).
   ENDMETHOD.                    "constructor
 
-  METHOD append_string.
-    set_textstream( |{ to_string( ) }{ iv_text }| ).
+  METHOD lif_source_editor~clear.
+    delete_text( ).
   ENDMETHOD.                    "append_string
+
+  METHOD append_string.
+    set_textstream( |{ lif_source_editor~to_string( ) }{ iv_text }| ).
+  ENDMETHOD.
 
   METHOD format_input.
     ADD 1 TO mv_counter.
@@ -714,30 +772,153 @@ CLASS lcl_editor IMPLEMENTATION.
     append_string( format_input( iv_text ) ).
   ENDMETHOD.                    "append_string
 
-  METHOD to_string.
-    get_textstream( IMPORTING text = rv_text ).
+  METHOD lif_source_editor~to_string.
+    get_textstream( IMPORTING text = rv_text
+                    EXCEPTIONS OTHERS = 1 ).
+    CHECK sy-subrc EQ 0.
     cl_gui_cfw=>flush( ).
   ENDMETHOD.                    "to_string
 
-  METHOD update_status.
+  METHOD lif_source_editor~update_status.
     set_status_text( CONV char72( iv_string ) ).
   ENDMETHOD.                    "update_status
 
-  METHOD push_text.
-    DATA(code) = to_string( ).
+  METHOD lif_source_editor~push_text.
+    DATA(code) = lif_source_editor~to_string( ).
     CHECK code NE space.
     mo_stack->push( code ).
-    delete_text( ).
+    lif_source_editor~clear( ).
   ENDMETHOD.
 
-  METHOD pop_text.
+  METHOD lif_source_editor~pop_text.
     CHECK mo_stack->empty( ) EQ abap_false.
     code = mo_stack->pop( ).
-    delete_text( ).
+    lif_source_editor~clear( ).
     append_string( code ).
   ENDMETHOD.
 
+  METHOD lif_source_editor~set_focus.
+    set_focus( EXPORTING control = me
+               EXCEPTIONS OTHERS = 1 ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~free.
+    free( ).
+  ENDMETHOD.
+
 ENDCLASS.                    "lcl_editor IMPLEMENTATION
+
+CLASS lcl_source IMPLEMENTATION.
+
+  METHOD constructor.
+    DATA mode TYPE i.
+    DATA exception_name TYPE string.
+
+    io_container->set_visible( abap_true ).
+    super->constructor(
+      EXPORTING
+        parent = io_container
+        max_number_chars = '255'
+      EXCEPTIONS
+        error_cntl_create      = 1
+        error_dp_create        = 2
+        gui_type_not_supported = 3
+        error_cntl_init        = 4 ).
+
+    IF sy-subrc NE 0.
+      CASE sy-subrc.
+        WHEN 1.
+          exception_name = 'ERROR_CNTL_CREATE'.
+        WHEN 2.
+          exception_name = 'ERROR_DP_CREATE'.
+        WHEN 3.
+          exception_name = 'GUI_TYPE_NOT_SUPPORTED'.
+        WHEN 4.
+          exception_name = 'ERROR_CNTL_INIT'.
+      ENDCASE.
+      RAISE EXCEPTION TYPE cx_coverage_editor_problem
+        EXPORTING
+          exception_name = exception_name.
+    ENDIF.
+
+    set_source_type( c_source_type ).
+    set_toolbar_mode( SWITCH #( iv_toolbar WHEN abap_true THEN 1 ELSE 0 ) ).
+    cl_gui_cfw=>flush( ).
+
+    IF iv_read_only EQ abap_true.
+      set_readonly_mode( cl_gui_textedit=>true ).
+      mode = 0.
+    ELSE.
+      mode = 1.
+    ENDIF.
+    set_statusbar_mode( mode ).
+    set_actual_name( c_lisp_untitled ).
+    upload_properties( EXCEPTIONS OTHERS = 1 ).
+    IF sy-subrc <> 0.
+*      MESSAGE e215(ed).
+    ENDIF.
+    create_document( ).
+
+*    register_event_context_menu( register      = 1
+*                                 local_entries = 1 ).
+
+*    SET HANDLER on_context_menu FOR me.
+*    SET HANDLER on_context_menu_selected FOR me.
+
+*   Work around to avoid NO DATA dump on first read
+    lif_source_editor~clear( ).
+
+    mo_stack = NEW #( ).
+  ENDMETHOD.                    "constructor
+
+  METHOD lif_source_editor~set_focus.
+    set_focus( EXPORTING control = me
+               EXCEPTIONS OTHERS = 1 ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~free.
+    free( ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~to_string.
+    DATA lt_text TYPE STANDARD TABLE OF string.
+
+    get_text( IMPORTING table = lt_text
+              EXCEPTIONS OTHERS = 1 ).
+    cl_gui_cfw=>flush( ).
+    rv_text = concat_lines_of( table = lt_text ).
+  ENDMETHOD.                    "to_string
+
+  METHOD lif_source_editor~update_status.
+    MESSAGE iv_string TYPE 'S'.
+  ENDMETHOD.                    "update_status
+
+  METHOD lif_source_editor~clear.
+    DATA lt_text TYPE STANDARD TABLE OF string.
+
+    set_text( EXPORTING table = lt_text
+              EXCEPTIONS OTHERS = 1  ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~push_text.
+    DATA(code) = lif_source_editor~to_string( ).
+    CHECK code NE space.
+    mo_stack->push( code ).
+    lif_source_editor~clear( ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~pop_text.
+    DATA lt_text TYPE STANDARD TABLE OF string.
+
+    CHECK mo_stack->empty( ) EQ abap_false.
+    code = mo_stack->pop( ).
+*    clear( ).
+    APPEND code TO lt_text.
+    set_text( EXPORTING table = lt_text
+              EXCEPTIONS OTHERS = 1 ).
+  ENDMETHOD.
+
+ENDCLASS.
 
 CLASS lcl_plant_uml IMPLEMENTATION.
 
@@ -1091,7 +1272,7 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
 
   METHOD get_object_id.
 *   Get object ID - internal call
-    CALL 'OBJMGR_GET_INFO' ID 'OPNAME' FIELD 'GET_OBJID' "#EC CI_CCALL
+    CALL 'OBJMGR_GET_INFO' ID 'OPNAME' FIELD 'GET_OBJID'  "#EC CI_CCALL
                            ID 'OBJID'  FIELD rv_oid
                            ID 'OBJ'    FIELD io_ref.
   ENDMETHOD.

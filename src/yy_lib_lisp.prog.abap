@@ -157,8 +157,9 @@
   END-OF-DEFINITION.
 
   DEFINE _is_type. " argument in list->car
+    validate list.
     result = false.
-    CHECK list IS BOUND AND list->car IS BOUND.
+    CHECK list->car IS BOUND.
     IF list->car->type EQ lcl_lisp=>type_&1.
       result = true.
     ENDIF.
@@ -1191,7 +1192,7 @@
             RETURN.
 
           WHEN c_close_paren OR c_close_bracket.
-            throw( |a { char } found with no matching { delim }| ).
+            throw( |a { char } found while { lv_close_delim } expected| ).
 
           WHEN OTHERS.
         ENDCASE.
@@ -3659,6 +3660,21 @@
       _is_type symbol.
     ENDMETHOD.
 
+    METHOD proc_is_pair. " argument in list->car
+      validate list.
+      _is_type pair.
+    ENDMETHOD.                    "proc_is_list
+
+    METHOD proc_is_boolean. " argument in list->car
+      validate list.
+      _is_type boolean.
+    ENDMETHOD.
+
+    METHOD proc_is_vector.  " argument in list->car
+      validate: list, list->car.
+      _is_type vector.
+    ENDMETHOD.
+
     METHOD proc_is_list.  " argument in list->car
       validate: list, list->car, list->cdr.
       IF list->cdr NE nil.
@@ -3687,26 +3703,6 @@
       result = true.
     ENDMETHOD.                    "proc_is_list
 
-    METHOD proc_is_pair. " argument in list->car
-      validate list.
-
-      result = false.
-      DATA(lo_arg) = list->car.
-      CHECK lo_arg->type = lcl_lisp=>type_pair.
-      result = true.
-    ENDMETHOD.                    "proc_is_list
-
-    METHOD proc_is_boolean. " argument in list->car
-      validate list.
-
-      result = false.
-
-      validate list->car.
-      CHECK list->car->type EQ lcl_lisp=>type_boolean.
-
-      result = true.
-    ENDMETHOD.
-
     METHOD proc_list_is_boolean.
       validate list.
 
@@ -3724,16 +3720,6 @@
       CHECK lo_arg = nil.
       result = true.
     ENDMETHOD.                    "proc_is_boolean
-
-    METHOD proc_is_vector.  " argument in list->car
-      validate: list, list->car.
-
-      result = false.
-
-      DATA(lo_arg) = list->car.
-      CHECK lo_arg->type = lcl_lisp=>type_vector.
-      result = true.
-    ENDMETHOD.
 
     METHOD proc_is_procedure.
       result = false.
@@ -5138,12 +5124,16 @@
       ro_cons->cdr = io_cdr.
     ENDMETHOD.                    "new_cons
 
+    METHOD box.
+      ro_elem = cons( io_car = io_proc
+                      io_cdr = cons( io_car = io_elem )  ).
+    ENDMETHOD.
+
     METHOD quasicons.
-*     Copy of box( )
       ro_cons = cons( io_car = io_car
-                      io_cdr = cons( io_car = io_cdr
-                                     io_cdr = cons( io_car = io_cddr ) ) ).
-    ENDMETHOD.                    "new_cons
+                      io_cdr = box( io_proc = io_cdr
+                                    io_elem = io_cddr ) ).
+    ENDMETHOD.
 
     METHOD vector.
       ro_vec = NEW lcl_lisp_vector( ).
@@ -5172,11 +5162,6 @@
       ro_hash = NEW lcl_lisp_hash( ).
       ro_hash->type = lcl_lisp=>type_hash.
       ro_hash->fill( io_list->car ).
-    ENDMETHOD.
-
-    METHOD box.
-      ro_elem = cons( io_car = io_proc
-                      io_cdr = cons( io_car = io_elem )  ).
     ENDMETHOD.
 
     METHOD quote.

@@ -138,7 +138,8 @@
        METHODS setup.
        METHODS teardown.
 
-       METHODS closing FOR TESTING.
+       METHODS closing_1 FOR TESTING.
+       METHODS closing_2 FOR TESTING.
 
 *   Stability tests - No Dump should occur
        METHODS stability_1 FOR TESTING.
@@ -208,10 +209,15 @@
                title = 'CODE' ).
      ENDMETHOD.                    "code_test_f
 
-     METHOD closing.
+     METHOD closing_1.
        code_test( code = '( + 1'
                   expected = |Parse: missing a ) to close expression| ).
-     ENDMETHOD.                    "lambda
+     ENDMETHOD.
+
+     METHOD closing_2.
+       code_test( code = '(let ([x 3)] (* x x))'
+                  expected = |Parse: a ) found while ] expected| ).
+     ENDMETHOD.
 
      METHOD stability_1.
        code_test( code = 'a'
