@@ -35,6 +35,8 @@
   DATA gv_lisp_trace TYPE flag VALUE abap_false ##NEEDED.
 
   CONSTANTS:
+    c_debug TYPE flag VALUE abap_true.
+  CONSTANTS:
     c_error_message        TYPE string VALUE 'Error in processing',
     c_error_incorect_input TYPE string VALUE 'Incorrect input',
     c_error_unexpected_end TYPE string VALUE 'Unexpected end',
@@ -46,8 +48,9 @@
     c_lisp_else TYPE string VALUE 'else',
     c_lisp_then TYPE c LENGTH 2 VALUE '=>'.
   CONSTANTS:
-    c_eval_quasicons        TYPE string VALUE 'quasicons',
     c_eval_append           TYPE string VALUE 'append',
+    c_eval_cons             TYPE string VALUE 'cons',
+    c_eval_list             TYPE string VALUE 'list',
 
     c_eval_quote            TYPE string VALUE 'quote',
     c_eval_quasiquote       TYPE string VALUE 'quasiquote',
@@ -305,8 +308,9 @@
       CLASS-DATA unquote          TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA unquote_splicing TYPE REF TO  lcl_lisp READ-ONLY.
 
-      CLASS-DATA quasicons        TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA concat           TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA cons             TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA list             TYPE REF TO  lcl_lisp READ-ONLY.
 
       CLASS-DATA new_line   TYPE REF TO  lcl_lisp READ-ONLY.
 
@@ -322,9 +326,9 @@
       METHODS new_iterator RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_iterator
                            RAISING   lcx_lisp_exception.
 
-      METHODS is_equivalent IMPORTING io_elem TYPE REF TO lcl_lisp
+      METHODS is_equivalent IMPORTING io_elem       TYPE REF TO lcl_lisp
                             RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                            RAISING lcx_lisp_exception.
+                            RAISING   lcx_lisp_exception.
 
       METHODS is_equal IMPORTING io_elem       TYPE REF TO lcl_lisp
                                  comp          TYPE REF TO lcl_lisp DEFAULT nil
@@ -380,10 +384,10 @@
                                    io_cdr         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                          RETURNING VALUE(ro_cons) TYPE REF TO lcl_lisp.
 
-      CLASS-METHODS quasicons IMPORTING io_car         TYPE REF TO lcl_lisp
-                                        io_cdr         TYPE REF TO lcl_lisp
-                                        io_cddr        TYPE REF TO lcl_lisp
-                              RETURNING VALUE(ro_cons) TYPE REF TO lcl_lisp.
+      CLASS-METHODS list3 IMPORTING io_first       TYPE REF TO lcl_lisp
+                                    io_second      TYPE REF TO lcl_lisp
+                                    io_third       TYPE REF TO lcl_lisp
+                          RETURNING VALUE(ro_cons) TYPE REF TO lcl_lisp.
 
       CLASS-METHODS vector IMPORTING it_vector     TYPE tt_lisp
                                      iv_mutable    TYPE flag
@@ -761,8 +765,6 @@
       proc_cdr,             ##called
       proc_cons,            ##called
 
-      proc_quasicons,       ##called
-
       proc_caar,             ##called
       proc_cadr,             ##called
       proc_cdar,             ##called
@@ -1041,6 +1043,13 @@
                             RETURNING VALUE(result) TYPE REF TO lcl_lisp
                             RAISING   lcx_lisp_exception.
 
+      METHODS concat IMPORTING head          TYPE REF TO lcl_lisp
+                               tail          TYPE REF TO lcl_lisp
+                     RETURNING VALUE(result) TYPE REF TO lcl_lisp.
+
+      METHODS quasiquote IMPORTING list          TYPE REF TO lcl_lisp
+                         RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                         RAISING   lcx_lisp_exception.
 
       METHODS quasi_quote IMPORTING list          TYPE REF TO lcl_lisp
                                     level         TYPE sytabix
@@ -1393,8 +1402,6 @@
       env->define_value( symbol = 'list-tail'    type = lcl_lisp=>type_native value   = 'PROC_LIST_TAIL' ).
       env->define_value( symbol = 'list-ref'     type = lcl_lisp=>type_native value   = 'PROC_LIST_REF' ).
       env->define_value( symbol = 'list->vector' type = lcl_lisp=>type_native value   = 'PROC_LIST_TO_VECTOR' ).
-
-      env->define_value( symbol = 'quasicons' type = lcl_lisp=>type_native value   = 'PROC_QUASICONS' ).
 
       env->define_value( symbol = 'memq'    type = lcl_lisp=>type_native value   = 'PROC_MEMQ' ).
       env->define_value( symbol = 'memv'    type = lcl_lisp=>type_native value   = 'PROC_MEMV' ).
@@ -2025,10 +2032,40 @@
       ENDIF.
     END-OF-DEFINITION.
 
-    METHOD quasi_quote.
-      CONSTANTS:
-        c_debug TYPE flag VALUE abap_false.
+    METHOD concat.
+*     Create append tail to head - head must be a list
+      validate: head, tail.
 
+      IF tail->type = lcl_lisp=>type_pair.
+        IF tail->car = lcl_lisp=>quote.
+          IF head->type EQ lcl_lisp=>type_pair AND head->car = lcl_lisp=>quote.
+            result = lcl_lisp_new=>cons( io_car = head->cdr->car     " cadr lo_first
+                                         io_cdr = tail->cdr->car ).  " cadr lo_rest
+          ELSEIF tail->cdr->car->type EQ lcl_lisp=>type_null.
+            result = lcl_lisp_new=>cons( io_car = head ).
+          ELSE.
+            result = lcl_lisp_new=>list3( io_first = lcl_lisp=>concat
+                                          io_second = head
+                                          io_third = tail ).
+          ENDIF.
+        ELSEIF tail->car = lcl_lisp=>concat.
+          result = lcl_lisp_new=>list3( io_first = lcl_lisp=>concat
+                                        io_second = head
+                                        io_third = lcl_lisp_new=>cons( io_car = lcl_lisp=>unquote_splicing
+                                                                       io_cdr = tail->cdr ) ).
+        ELSE.
+          result = lcl_lisp_new=>list3( io_first = lcl_lisp=>concat
+                                        io_second = head
+                                        io_third = tail ).
+        ENDIF.
+      ELSE.
+        result = lcl_lisp_new=>list3( io_first = lcl_lisp=>concat
+                                      io_second = head
+                                      io_third = tail ).
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD quasi_quote.
       DEFINE debug.
         IF c_debug EQ abap_true.
           DATA(&1) = &2->to_string( ).
@@ -2041,11 +2078,13 @@
 *    - (FOO BAR...)                   -> (cons FOO quasiquote(BAR...))
       validate list.
 
+      debug debug2 list.
+
       DATA(lo_ptr) = list.
 
       CASE lo_ptr->type.
         WHEN lcl_lisp=>type_pair.
-
+*         Non-empty list
           DATA(lo_first) = lo_ptr->car.
           DATA(lo_next) = lo_ptr->cdr.
           validate lo_next.
@@ -2053,24 +2092,19 @@
           IF lo_first = lcl_lisp=>quasiquote.
             validate_quote lo_ptr `quasiquote`.
 
-            result = lcl_lisp_new=>quasicons( io_car = lcl_lisp=>quasiquote
-                                              io_cdr = lo_next
-                                              io_cddr = lcl_lisp_new=>number( level + 1 )  ).
-*           TCO
-            debug debug1 result.
+            result = lcl_lisp_new=>cons( io_car = lcl_lisp=>quasiquote
+                                         io_cdr = quasi_quote( list = lo_next
+                                                               level = level + 1 ) ).
 
           ELSEIF lo_first->type EQ lcl_lisp=>type_symbol AND lo_first->value EQ c_eval_unquote.
             validate_quote lo_ptr `unquote`.
 
-            debug debug2 list.
-
             IF level = 0.
+*             (quasiquote (unquote rest)) => rest
               result = lo_next->car.
             ELSE.
-              result = lcl_lisp_new=>quasicons( io_car = lcl_lisp=>unquote
-                                                io_cdr = lo_next
-                                                io_cddr = lcl_lisp_new=>number( level - 1 ) ).
-*             TCO
+              result = quasi_quote( list = lo_next
+                                    level = level - 1 ).
             ENDIF.
 
           ELSEIF lo_first->type EQ lcl_lisp=>type_symbol AND lo_first->value EQ c_eval_unquote_splicing.
@@ -2079,76 +2113,60 @@
             IF level = 0.
               throw( |unquote-splicing: invalid context for { lo_next->car->to_string( ) }| ).
             ELSE.
-              result = lcl_lisp_new=>quasicons( io_car = lcl_lisp=>unquote_splicing
-                                                io_cdr = lo_next
-                                                io_cddr = lcl_lisp_new=>number( level - 1 ) ).
-*             TCO
+*             (quasiquote (quasiquote (unquote-splicing list) rest... )  rest2) => ( (quasiquote (unquote-splicing list) rest... )) ) )
+              result = concat( head = lcl_lisp=>unquote_splicing
+                               tail = quasi_quote( list = lo_next
+                                                   level = level - 1 ) ).
             ENDIF.
 
           ELSEIF level = 0 AND lo_first->type EQ lcl_lisp=>type_pair AND lo_first->car->value EQ c_eval_unquote_splicing.
+            validate_quote lo_first `unquote-splicing`.
+*           (quasiquote (unquote-splicing list) rest... ) => (items-from list items-from (quasiquote rest...) )
+            DATA(lo_rest) = quasi_quote( list = lo_next
+                                         level = level ).
+            debug debug4 lo_rest.
 
             lo_next = lo_first->cdr.
             validate lo_next.
 
-            validate_quote lo_first `unquote-splicing`.
-
             debug debug3 lo_next.
 
-            DATA(lo_last) = quasi_quote( list = lo_ptr->cdr
-                                        level = level ).
-            debug debug4 lo_last.
+            IF lo_rest = nil.
 
-            IF lo_last = nil.
-
-              result = lo_next.  " last
+              result = lo_next->car.
             ELSE.
-*             verify that lo_next is a list ?
-
 *             return (append lo_next quasiquote( lo_ptr->cdr ) )
-              result = lcl_lisp_new=>cons( io_car = lcl_lisp=>concat
-                                           io_cdr = lo_next ).
-              result->cdr->cdr = lcl_lisp_new=>cons( io_car = lo_last ).
+              result = concat( head = lo_next->car
+                               tail = lo_rest ).
             ENDIF.
 
-            debug debug5 result.
-
           ELSE.
-*           return (cons ( quasiquote lo_first ) ( quasiquote lo_next ) )
-
-            result = lcl_lisp_new=>quasicons( io_car = lcl_lisp=>quasicons
-                                              io_cdr = quasi_quote( list = lo_first
-                                                                    level = level )
-                                              io_cddr = quasi_quote( list = lo_next
-                                                                     level = level ) ).
-
-*            result = lcl_lisp_new=>quasicons( io_car = quasi_quote( list = lo_first
-*                                                                    level = level )
-*                                              io_cdr = quasi_quote( list = lo_next
-*                                                                         level = level ) ).
-
-            debug debug6 result.
+*           return (cons ( quasiquote lo_first level ) ( quasiquote lo_next level ) )
+            result = lcl_lisp_new=>list3( io_first = lcl_lisp=>cons
+                                          io_second = quasi_quote( list = lo_first
+                                                                   level = level )
+                                          io_third = quasi_quote( list = lo_next
+                                                                  level = level ) ).
           ENDIF.
 
         WHEN lcl_lisp=>type_vector.
 
-          debug debug7 list.
-
           result = lcl_lisp_new=>box( io_proc = lcl_lisp_new=>symbol( 'list->vector' )
                                       io_elem = quasi_quote( list = CAST lcl_lisp_vector( list )->to_list( )
                                                              level = 0 ) ).
-
-          debug debug9 result.
-
-        WHEN lcl_lisp=>type_null.
-          result = nil.
-
         WHEN OTHERS.
-
+*         Quasi quote works as quote for atom or empty list
           result = lcl_lisp_new=>quote( lo_ptr ).
 
-          debug debug10 result.
       ENDCASE.
 
+      debug debug10 result.
+
+    ENDMETHOD.
+
+    METHOD quasiquote.
+      result = quasi_quote( list = list
+                            level = 0 ).
     ENDMETHOD.
 
 **********************************************************************
@@ -2187,16 +2205,10 @@
                     result = lr_tail->car.
 
                   WHEN c_eval_quasiquote.
-                    DATA(level) = 0.
                     IF lr_tail->cdr NE nil.
-                      validate lr_tail->cdr.
-                      DATA(lo_level) = lr_tail->cdr->car.
-*                     quasiquote can only take a single argument, but we use the list tail internally for nesting level
-                      validate_integer lo_level `quasiquote nesting`.
-                      level = lo_level->value.
+                      throw( |quasiquote can only take a single argument| ).
                     ENDIF.
-                    lo_elem = quasi_quote( list = lr_tail->car
-                                           level = level ).
+                    lo_elem = quasiquote( lr_tail->car ).
                     CONTINUE.  "tail_expression lo_elem.
 
                   WHEN 'newline'.
@@ -2636,7 +2648,7 @@
 
           DATA(lo_last) = result.
           DATA(lo_arg) = first->cdr.
-          WHILE lo_arg NE nil AND lo_arg->type = lcl_lisp=>type_pair.
+          WHILE lo_arg->type = lcl_lisp=>type_pair.
             lo_last = lo_last->cdr = lcl_lisp_new=>cons( io_car = lo_arg->car ).
             lo_arg = lo_arg->cdr.
           ENDWHILE.
@@ -2662,7 +2674,7 @@
         CHECK first NE nil.
 
 *       Append lo_arg to result, from last element on
-        WHILE lo_arg NE nil AND lo_arg->type = lcl_lisp=>type_pair.
+        WHILE lo_arg->type = lcl_lisp=>type_pair.
           lo_last = lo_last->cdr = lcl_lisp_new=>cons( io_car = lo_arg->car ).
           lo_arg = lo_arg->cdr.
         ENDWHILE.
@@ -2829,43 +2841,6 @@
                                    io_cdr = list->cdr->car ).
     ENDMETHOD.                    "proc_cons
 
-    METHOD proc_quasicons.
-*     Create new cell and prepend it to second parameter
-      validate: list, list->car, list->cdr.
-      IF list->cdr->cdr NE nil.
-        throw( `quasicons: only 2 arguments allowed` ).
-      ENDIF.
-
-      DATA(lo_first) = list->car.
-      DATA(lo_rest) = list->cdr->car.
-
-      IF lo_rest->type = lcl_lisp=>type_pair.
-        IF lo_rest->car = lcl_lisp=>quote.
-          IF lo_first->type EQ lcl_lisp=>type_pair AND lo_first->car = lcl_lisp=>quote.
-            result = lcl_lisp_new=>cons( io_car = lo_first->cdr->car    " cadr lo_first
-                                         io_cdr = lo_rest->cdr->car ).  " cadr lo_rest
-          ELSEIF lo_rest->cdr->car EQ nil.
-            result = lcl_lisp_new=>cons( io_car = lo_first ).  " ?? eval lo_first?
-          ELSE.
-            result = lcl_lisp_new=>cons( io_car = lo_first
-                                         io_cdr = lo_rest ).
-          ENDIF.
-        ELSE.
-          IF lo_rest->car = lcl_lisp=>quasicons. " OR lo_rest->car->value = 'list'.
-            result = lcl_lisp_new=>quasicons( io_car = lo_rest->car
-                                              io_cdr = lo_first
-                                              io_cddr = lo_rest->cdr ).
-          ELSE.
-            result = lcl_lisp_new=>cons( io_car = lo_first
-                                         io_cdr = lo_rest ).
-          ENDIF.
-        ENDIF.
-      ELSE.
-        result = lcl_lisp_new=>cons( io_car = lo_first
-                                     io_cdr = lo_rest ).
-      ENDIF.
-    ENDMETHOD.
-
     METHOD proc_not.
 *     Create new cell and prepend it to second parameter
       validate list.
@@ -3024,10 +2999,10 @@
 
     METHOD proc_list_tail.
       validate: list, list->cdr.
-      validate_number list->cdr->car 'list-tail'.
+      validate_integer list->cdr->car 'list-tail'.
 
       result = list_tail( list = list->car
-                          k    = CONV i( list->cdr->car->number )
+                          k    = CONV sytabix( list->cdr->car->number )
                           area = 'list-tail' ).
     ENDMETHOD.
 
@@ -4794,8 +4769,9 @@
       quasiquote = lcl_lisp_new=>symbol( c_eval_quasiquote ).
       unquote = lcl_lisp_new=>symbol( c_eval_unquote ).
       unquote_splicing = lcl_lisp_new=>symbol( c_eval_unquote_splicing ).
-      quasicons = lcl_lisp_new=>symbol( c_eval_quasicons ).
       concat = lcl_lisp_new=>symbol( c_eval_append ).
+      cons = lcl_lisp_new=>symbol( c_eval_cons ).
+      list = lcl_lisp_new=>symbol( c_eval_list ).
 
       new_line = lcl_lisp_new=>string( |\n| ).
     ENDMETHOD.
@@ -4855,9 +4831,9 @@
       validate: io_elem.
 
       IF comp NE nil.
-        DATA(lo_head) = lcl_lisp_new=>quasicons( io_car = comp->car
-                                                 io_cdr = me
-                                                 io_cddr = io_elem ).
+        DATA(lo_head) = lcl_lisp_new=>list3( io_first = comp->car
+                                             io_second = me
+                                             io_third = io_elem ).
 
         result = interpreter->eval( element = lo_head
                                     environment = comp->environment ).
@@ -5129,10 +5105,10 @@
                       io_cdr = cons( io_car = io_elem )  ).
     ENDMETHOD.
 
-    METHOD quasicons.
-      ro_cons = cons( io_car = io_car
-                      io_cdr = box( io_proc = io_cdr
-                                    io_elem = io_cddr ) ).
+    METHOD list3.
+      ro_cons = cons( io_car = io_first
+                      io_cdr = box( io_proc = io_second
+                                    io_elem = io_third ) ).
     ENDMETHOD.
 
     METHOD vector.
@@ -5411,8 +5387,8 @@
     METHOD eval.
       DATA lt_vector TYPE tt_lisp.
 
-      LOOP AT vector INTO DATA(list).
-        APPEND interpreter->eval( element = list
+      LOOP AT vector INTO DATA(lo_list).
+        APPEND interpreter->eval( element = lo_list
                                   environment = environment ) TO lt_vector.
       ENDLOOP.
       result = lcl_lisp_new=>vector( it_vector = lt_vector
