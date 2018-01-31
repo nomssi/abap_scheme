@@ -134,7 +134,7 @@
     validate_number list->car &2.
     DATA(cell) = list->cdr.
     DATA(carry) = list->car->number.  " CONV decfloat34( )
-    WHILE cell NE nil.
+    WHILE cell->type EQ lcl_lisp=>type_pair.
       validate cell->car.
       validate_number list->car &2.
       IF carry &1 cell->car->number.
@@ -1716,7 +1716,7 @@
       eo_step = nil.
 
       DATA(lo_loop) = io_head.
-      WHILE lo_loop NE nil.
+      WHILE lo_loop->type EQ lcl_lisp=>type_pair.
         DATA(lo_spec) = lo_loop->car.
 *       max. 3 entries
 *       <variable>
@@ -1756,7 +1756,7 @@
       DATA(lo_command) = io_command.
 
 *     Evaluate in order
-      WHILE lo_command NE nil.
+      WHILE lo_command->type EQ lcl_lisp=>type_pair.
         eval( element = lo_command->car
               environment = io_env ).
         lo_command = lo_command->cdr.
@@ -1765,7 +1765,7 @@
       DATA(lo_local_env) = lcl_lisp_environment=>new( ).
 *     the <step> expressions are evaluated in some unspecified order
       DATA(lo_step) = io_steps.
-      WHILE lo_step NE nil.
+      WHILE lo_step->type EQ lcl_lisp=>type_pair.
         DATA(lo_ptr) = lo_step->car.
 
 *       <variable>s are bound to fresh locations to avoid dependencies in the next step
@@ -1776,7 +1776,7 @@
       ENDWHILE.
 
       lo_step = io_steps.
-      WHILE lo_step NE nil.
+      WHILE lo_step->type EQ lcl_lisp=>type_pair.
         DATA(lv_symbol) = lo_step->car->car->value.
 
 *       the results of the <step>s are stored in the bindings of the <variable>s
@@ -1849,15 +1849,16 @@
       eo_args = lo_arg.
 
       lo_ptr = io_head->cdr.
-      WHILE lo_ptr IS BOUND AND lo_ptr NE nil.
+      WHILE lo_ptr->type EQ lcl_lisp=>type_pair. " IS BOUND AND lo_ptr NE nil.
 *       Rest of list, pick head
-        DATA(lo_pair) = lo_ptr->car.
-        IF lo_pair IS BOUND AND lo_pair->car NE nil.
-          lo_par = lo_par->cdr = lcl_lisp_new=>cons( io_car = lo_pair->car ).
+        DATA(lo_first) = lo_ptr->car.
+        IF lo_first IS BOUND AND lo_first->car NE nil.
+          lo_par = lo_par->cdr = lcl_lisp_new=>cons( io_car = lo_first->car ).
         ENDIF.
 
-        IF lo_pair->cdr IS BOUND AND lo_pair->cdr NE nil.
-          lo_arg = lo_arg->cdr = lcl_lisp_new=>cons( io_car = lo_pair->cdr->car ).
+        DATA(lo_second) = lo_first->cdr.
+        IF lo_second IS BOUND AND lo_second NE nil.
+          lo_arg = lo_arg->cdr = lcl_lisp_new=>cons( io_car = lo_second->car ).
         ENDIF.
 
         lo_ptr = lo_ptr->cdr.
@@ -2284,7 +2285,7 @@
                   WHEN 'cond'.
                     lo_ptr = lr_tail.
                     lo_elem = nil.
-                    WHILE lo_ptr NE nil.
+                    WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
                       DATA(lo_clause) = lo_ptr->car.
                       IF lo_clause->car->value EQ c_lisp_else.
                         lo_elem = lo_clause->cdr.
@@ -2463,7 +2464,7 @@
 
                     lo_elem = nil.
                     DATA(lv_match) = abap_false.
-                    WHILE lr_tail NE nil AND lv_match EQ abap_false.
+                    WHILE lr_tail->type EQ lcl_lisp=>type_pair AND lv_match EQ abap_false.
                       lo_clause = lr_tail->car.
 
                       DATA(lo_datum) = lo_clause->car.
@@ -2679,6 +2680,7 @@
         IF first->type = lcl_lisp=>type_pair.
           result = lcl_lisp_new=>cons( io_car = first->car ).
 
+*         TO DO: Test for circular list! ------------------------------
           DATA(lo_last) = result.
           DATA(lo_arg) = first->cdr.
           WHILE lo_arg->type = lcl_lisp=>type_pair.

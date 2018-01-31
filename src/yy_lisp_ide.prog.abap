@@ -496,15 +496,12 @@ CLASS lcl_ide IMPLEMENTATION.
       WHEN lcl_lisp=>type_pair.
         writeln( `(` ).
         lo_elem = element.
-        DO.
+        WHILE lo_elem->type EQ lcl_lisp=>type_pair.
           ADD 2 TO print_offset.
           lif_port~write( lo_elem->car ).
           SUBTRACT 2 FROM print_offset.
-          IF lo_elem->cdr IS NOT BOUND OR lo_elem->cdr EQ lcl_lisp=>nil.
-            EXIT.
-          ENDIF.
           lo_elem = lo_elem->cdr.
-        ENDDO.
+        ENDWHILE.
         add( ` )` ).
         mo_console->append_string( flush( ) ).
 
