@@ -35,8 +35,6 @@
   DATA gv_lisp_trace TYPE flag VALUE abap_false ##NEEDED.
 
   CONSTANTS:
-    c_debug TYPE flag VALUE abap_true.
-  CONSTANTS:
     c_error_message        TYPE string VALUE 'Error in processing',
     c_error_incorect_input TYPE string VALUE 'Incorrect input',
     c_error_unexpected_end TYPE string VALUE 'Unexpected end',
@@ -249,7 +247,7 @@
 
   CLASS lcl_lisp_environment DEFINITION DEFERRED.
 
-  CLASS lcl_elem DEFINITION.
+  CLASS lcl_sexps DEFINITION.   " Symbolic expression (S-expression)
     PUBLIC SECTION.
       TYPES tv_type TYPE char1.
 *      Type definitions for the various elements
@@ -289,7 +287,7 @@
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp DEFINITION
 *----------------------------------------------------------------------*
-  CLASS lcl_lisp DEFINITION INHERITING FROM lcl_elem FRIENDS lcl_lisp_new.
+  CLASS lcl_lisp DEFINITION INHERITING FROM lcl_sexps FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
 *     Can this be replaced by a mesh? cf. DEMO_RND_PARSER_AST
       DATA mutable TYPE flag VALUE abap_true READ-ONLY.
@@ -308,7 +306,7 @@
       CLASS-DATA unquote          TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA unquote_splicing TYPE REF TO  lcl_lisp READ-ONLY.
 
-      CLASS-DATA concat           TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA append           TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA cons             TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA list             TYPE REF TO  lcl_lisp READ-ONLY.
 
@@ -370,6 +368,8 @@
                             RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS number IMPORTING value          TYPE any
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+      CLASS-METHODS primitive IMPORTING value          TYPE any
+                              RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS string IMPORTING value          TYPE any
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
 
@@ -1043,22 +1043,27 @@
                             RETURNING VALUE(result) TYPE REF TO lcl_lisp
                             RAISING   lcx_lisp_exception.
 
-      METHODS concat IMPORTING head          TYPE REF TO lcl_lisp
-                               tail          TYPE REF TO lcl_lisp
-                     RETURNING VALUE(result) TYPE REF TO lcl_lisp.
+      METHODS is_constant IMPORTING exp TYPE REF TO lcl_lisp
+                          RETURNING VALUE(rv_flag) TYPE flag.
+      METHODS combine IMPORTING left TYPE REF TO lcl_lisp
+                                right TYPE REF TO lcl_lisp
+                                exp TYPE REF TO lcl_lisp
+                                environment TYPE REF TO lcl_lisp_environment
+                      RETURNING VALUE(result) TYPE REF TO lcl_lisp.
 
-      METHODS quasiquote IMPORTING list          TYPE REF TO lcl_lisp
+      METHODS quasiquote IMPORTING exp TYPE REF TO lcl_lisp
+                                   nesting TYPE sytabix
+                                   environment TYPE REF TO lcl_lisp_environment
                          RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                         RAISING   lcx_lisp_exception.
-
-      METHODS quasi_quote IMPORTING list          TYPE REF TO lcl_lisp
-                                    level         TYPE sytabix
-                          RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                          RAISING   lcx_lisp_exception.
+                         RAISING   lcx_lisp_exception.  " ?
 
       METHODS list_reverse IMPORTING io_list       TYPE REF TO lcl_lisp
                            RETURNING VALUE(result) TYPE REF TO lcl_lisp
                            RAISING   lcx_lisp_exception.
+
+      METHODS list_length IMPORTING list          TYPE REF TO lcl_lisp
+                          RETURNING VALUE(result) TYPE tv_int
+                          RAISING   lcx_lisp_exception.
 
       METHODS list_tail IMPORTING list          TYPE REF TO lcl_lisp
                                   k             TYPE sytabix
@@ -1416,6 +1421,7 @@
       env->define_value( symbol = 'cons'    type = lcl_lisp=>type_native value   = 'PROC_CONS' ).
       env->define_value( symbol = 'nil?'    type = lcl_lisp=>type_native value   = 'PROC_NILP' ).
       env->define_value( symbol = 'null?'   type = lcl_lisp=>type_native value   = 'PROC_NILP' ).
+
       env->define_value( symbol = '>'       type = lcl_lisp=>type_native value   = 'PROC_GT' ).
       env->define_value( symbol = '>='      type = lcl_lisp=>type_native value   = 'PROC_GTE' ).
       env->define_value( symbol = '<'       type = lcl_lisp=>type_native value   = 'PROC_LT' ).
@@ -1512,6 +1518,11 @@
 
       env->define_value( symbol = 'ab-get' type = lcl_lisp=>type_native value = 'PROC_ABAP_GET' ).
       env->define_value( symbol = 'ab-set' type = lcl_lisp=>type_native value = 'PROC_ABAP_SET' ).
+
+*     Compatibility
+      env->define_value( symbol = 'empty?'  type = lcl_lisp=>type_native value   = 'PROC_NILP' ).
+      env->define_value( symbol = 'first'   type = lcl_lisp=>type_native value   = 'PROC_CAR' ).
+      env->define_value( symbol = 'rest'    type = lcl_lisp=>type_native value   = 'PROC_CDR' ).
 
       DATA lr_ref TYPE REF TO data.
 *     Define a value in the environment for SYST
@@ -2032,141 +2043,160 @@
       ENDIF.
     END-OF-DEFINITION.
 
-    METHOD concat.
-*     Create append tail to head - head must be a list
-      validate: head, tail.
-
-      IF tail->type = lcl_lisp=>type_pair.
-        IF tail->car = lcl_lisp=>quote.
-          IF head->type EQ lcl_lisp=>type_pair AND head->car = lcl_lisp=>quote.
-            result = lcl_lisp_new=>cons( io_car = head->cdr->car     " cadr lo_first
-                                         io_cdr = tail->cdr->car ).  " cadr lo_rest
-          ELSEIF tail->cdr->car->type EQ lcl_lisp=>type_null.
-            result = lcl_lisp_new=>cons( io_car = head ).
-          ELSE.
-            result = lcl_lisp_new=>list3( io_first = lcl_lisp=>concat
-                                          io_second = head
-                                          io_third = tail ).
-          ENDIF.
-        ELSEIF tail->car = lcl_lisp=>concat.
-          result = lcl_lisp_new=>list3( io_first = lcl_lisp=>concat
-                                        io_second = head
-                                        io_third = lcl_lisp_new=>cons( io_car = lcl_lisp=>unquote_splicing
-                                                                       io_cdr = tail->cdr ) ).
-        ELSE.
-          result = lcl_lisp_new=>list3( io_first = lcl_lisp=>concat
-                                        io_second = head
-                                        io_third = tail ).
-        ENDIF.
+    METHOD is_constant.
+*    (define (constant? exp)
+*      (if (pair? exp) (eq? (car exp) 'quote) (not (symbol? exp))))
+      IF exp->type EQ lcl_lisp=>type_pair.
+        rv_flag = xsdbool( exp->car = lcl_lisp=>quote ).
       ELSE.
-        result = lcl_lisp_new=>list3( io_first = lcl_lisp=>concat
-                                      io_second = head
-                                      io_third = tail ).
+        rv_flag = xsdbool( exp->type NE lcl_lisp=>type_symbol ).
       ENDIF.
     ENDMETHOD.
 
-    METHOD quasi_quote.
-      DEFINE debug.
-        IF c_debug EQ abap_true.
-          DATA(&1) = &2->to_string( ).
-        ENDIF.
-      END-OF-DEFINITION.
+    METHOD combine.
+      IF is_constant( left ) and is_constant( right ).
+*       (eqv? (eval right) (cdr exp)))
+        DATA(eval_left) = eval( element = left
+                                environment = environment ).
+        DATA(eval_right) = eval( element = right
+                                environment = environment ).
+        if eval_left = exp->car and eval_right = exp->cdr.
+*	        (list 'quote exp)
+          result = lcl_lisp_new=>quote( exp ).
+        else.
+*	        (list 'quote (cons (eval left) (eval right)))))
+          result = lcl_lisp_new=>quote( eval_left ).
+          result->cdr->cdr = eval_right.
+        endif.
+      ELSEIF right = nil.
+*       ((null? right) (list 'list left))
+        result = lcl_lisp_new=>box( io_proc = lcl_lisp=>list
+                                    io_elem = left ).
+      ELSEIF right->type = lcl_lisp=>type_pair AND right->car = lcl_lisp=>list.
+*       ((and (pair? right) (eq? (car right) 'list))
+*        (cons 'list (cons left (cdr right))))
+        result = lcl_lisp_new=>cons( io_car = lcl_lisp=>list
+                                     io_cdr = lcl_lisp_new=>cons( io_car = left
+                                                                  io_cdr = right->cdr ) ).
+      ELSE.
+*      (else (list 'cons left right))))
+        result = lcl_lisp_new=>list3( io_first = lcl_lisp=>cons
+                                      io_second = left
+                                      io_third = right ).
+      ENDIF.
+    ENDMETHOD.
 
-*    - list is empty or not a list    -> (quote list)
-*    - (unquote FOO)                  -> FOO
-*    - ((unquote-splicing FOO) BAR..) -> (concat FOO quasiquote(BAR...))
-*    - (FOO BAR...)                   -> (cons FOO quasiquote(BAR...))
-      validate list.
-
-      debug debug2 list.
-
-      DATA(lo_ptr) = list.
+*     `atom/nil  -> 'atom/nil
+*     `,expr     -> expr
+*     `,@expr    -> error
+*     ``expr     -> `expr-expanded
+*     `list-expr -> expand each element and handle dotted tails:
+*        `(x1 x2 ... xn)     -> (append y1 y2 ... yn)
+*        `(x1 x2 ... . xn)   -> (append y1 y2 ... 'xn)
+*        `(x1 x2 ... . ,xn)  -> (append y1 y2 ... xn)
+*        `(x1 x2 ... . ,@xn) -> error
+*      where each yi is the output of (qq-transform xi)
+    METHOD quasiquote.
+*     adapted from http://norvig.com/jscheme/primitives.scm
+      DATA(lo_ptr) = exp.
 
       CASE lo_ptr->type.
-        WHEN lcl_lisp=>type_pair.
-*         Non-empty list
+        WHEN lcl_lisp=>type_pair. "non empty list
+*         ((and (eq? (car exp) 'unquote) (= (length exp) 2))
           DATA(lo_first) = lo_ptr->car.
           DATA(lo_next) = lo_ptr->cdr.
           validate lo_next.
 
-          IF lo_first = lcl_lisp=>quasiquote.
-            validate_quote lo_ptr `quasiquote`.
+          IF ( lo_first = lcl_lisp=>unquote
+              OR ( lo_first->type EQ lcl_lisp=>type_symbol AND lo_first->value EQ c_eval_unquote ) )
+              AND list_length( exp ) EQ 2.
+*          ((and (eq? (first = 'unquote) (= (length exp) 2))
+            validate_quote lo_ptr c_eval_unquote.
 
-            result = lcl_lisp_new=>cons( io_car = lcl_lisp=>quasiquote
-                                         io_cdr = quasi_quote( list = lo_next
-                                                               level = level + 1 ) ).
-
-          ELSEIF lo_first->type EQ lcl_lisp=>type_symbol AND lo_first->value EQ c_eval_unquote.
-            validate_quote lo_ptr `unquote`.
-
-            IF level = 0.
-*             (quasiquote (unquote rest)) => rest
-              result = lo_next->car.
-            ELSE.
-              result = quasi_quote( list = lo_next
-                                    level = level - 1 ).
-            ENDIF.
-
-          ELSEIF lo_first->type EQ lcl_lisp=>type_symbol AND lo_first->value EQ c_eval_unquote_splicing.
-            validate_quote lo_ptr `unquote-splicing`.
-
-            IF level = 0.
-              throw( |unquote-splicing: invalid context for { lo_next->car->to_string( ) }| ).
-            ELSE.
-*             (quasiquote (quasiquote (unquote-splicing list) rest... )  rest2) => ( (quasiquote (unquote-splicing list) rest... )) ) )
-              result = concat( head = lcl_lisp=>unquote_splicing
-                               tail = quasi_quote( list = lo_next
-                                                   level = level - 1 ) ).
-            ENDIF.
-
-          ELSEIF level = 0 AND lo_first->type EQ lcl_lisp=>type_pair AND lo_first->car->value EQ c_eval_unquote_splicing.
-            validate_quote lo_first `unquote-splicing`.
-*           (quasiquote (unquote-splicing list) rest... ) => (items-from list items-from (quasiquote rest...) )
-            DATA(lo_rest) = quasi_quote( list = lo_next
-                                         level = level ).
-            debug debug4 lo_rest.
-
-            lo_next = lo_first->cdr.
-            validate lo_next.
-
-            debug debug3 lo_next.
-
-            IF lo_rest = nil.
+            IF nesting = 0.
 
               result = lo_next->car.
+
             ELSE.
-*             return (append lo_next quasiquote( lo_ptr->cdr ) )
-              result = concat( head = lo_next->car
-                               tail = lo_rest ).
+
+              result = combine( left = lcl_lisp=>unquote
+                                right = quasiquote( exp = lo_next
+                                                    nesting = nesting - 1
+                                                    environment = environment )
+                                exp = exp
+                                environment = environment ).
+            ENDIF.
+
+          ELSEIF ( lo_first = lcl_lisp=>quasiquote
+              OR ( lo_first->type EQ lcl_lisp=>type_symbol AND lo_first->value EQ c_eval_quasiquote ) )
+              AND list_length( exp ) EQ 2.
+            validate_quote lo_ptr c_eval_quasiquote.
+*           (and (eq? (car exp) 'quasiquote) (= (length exp) 2))
+
+            result = combine( left = lcl_lisp=>quasiquote
+                              right = quasiquote( exp = lo_next
+                                                  nesting = nesting + 1
+                                                  environment = environment )
+                              exp = exp
+                              environment = environment ).
+
+          ELSEIF lo_first->type EQ lcl_lisp=>type_pair AND
+            ( lo_first->car = lcl_lisp=>unquote_splicing OR lo_first->car->value EQ c_eval_unquote_splicing )
+            AND list_length( lo_first ) EQ 2.
+*           ((and (pair? (car exp))
+*          	     (eq? (caar exp) 'unquote-splicing)
+*          	     (= (length (car exp)) 2))
+            validate_quote lo_first c_eval_unquote_splicing.
+
+            IF nesting = 0.
+*	            (list 'append (second (first exp))
+*                           (expand-quasiquote (cdr exp) nesting))
+              result = lcl_lisp_new=>list3( io_first = lcl_lisp=>append
+                                            io_second = lo_first->cdr->car
+                                            io_third = quasiquote( exp = lo_next
+                                                                   nesting = nesting
+                                                                   environment = environment ) ).
+            ELSE.
+
+              result = combine( left = quasiquote( exp = lo_first
+                                                   nesting = nesting - 1
+                                                   environment = environment )
+                                right = quasiquote( exp = lo_next
+                                                    nesting = nesting
+                                                    environment = environment )
+                                exp = exp
+                                environment = environment ).
             ENDIF.
 
           ELSE.
-*           return (cons ( quasiquote lo_first level ) ( quasiquote lo_next level ) )
-            result = lcl_lisp_new=>list3( io_first = lcl_lisp=>cons
-                                          io_second = quasi_quote( list = lo_first
-                                                                   level = level )
-                                          io_third = quasi_quote( list = lo_next
-                                                                  level = level ) ).
+
+            result = combine( left = quasiquote( exp = lo_first
+                                                 nesting = nesting
+                                                 environment = environment )
+                              right = quasiquote( exp = lo_next
+                                                  nesting = nesting
+                                                  environment = environment )
+                              exp = exp
+                              environment = environment ).
           ENDIF.
 
         WHEN lcl_lisp=>type_vector.
-
+*        	(list 'apply 'vector (expand-quasiquote (vector->list exp) nesting)))
+          DATA(lo_vec) = CAST lcl_lisp_vector( exp ).
           result = lcl_lisp_new=>box( io_proc = lcl_lisp_new=>symbol( 'list->vector' )
-                                      io_elem = quasi_quote( list = CAST lcl_lisp_vector( list )->to_list( )
-                                                             level = 0 ) ).
+                                      io_elem = quasiquote( exp = lo_vec->to_list( )
+                                                            nesting = nesting
+                                                            environment = environment ) ).
         WHEN OTHERS.
-*         Quasi quote works as quote for atom or empty list
-          result = lcl_lisp_new=>quote( lo_ptr ).
+*	        (if (constant? exp) exp (list 'quote exp)))
+          IF is_constant( exp ).
+            result = exp.
+          ELSE.
+            result = lcl_lisp_new=>quote( exp ).
+          ENDIF.
 
       ENDCASE.
 
-      debug debug10 result.
-
-    ENDMETHOD.
-
-    METHOD quasiquote.
-      result = quasi_quote( list = list
-                            level = 0 ).
     ENDMETHOD.
 
 **********************************************************************
@@ -2208,7 +2238,10 @@
                     IF lr_tail->cdr NE nil.
                       throw( |quasiquote can only take a single argument| ).
                     ENDIF.
-                    lo_elem = quasiquote( lr_tail->car ).
+                    lo_elem = quasiquote( exp = lr_tail->car
+                                          nesting = 0
+                                          environment = lo_env ).
+
                     CONTINUE.  "tail_expression lo_elem.
 
                   WHEN 'newline'.
@@ -2928,6 +2961,7 @@
       result = lo_arg->cdr.
     ENDMETHOD.                    "proc_cdr
 
+
 * (defun list-length (x)
 *   (do ((n 0 (+ n 2))           ;Counter.
 *        (fast x (cddr fast))    ;Fast pointer: leaps by 2.
@@ -2940,29 +2974,36 @@
 *     ;; (A deeper property is the converse: if we are stuck in a circular list, then eventually
 *     ;; the fast pointer will equal the slow pointer. That fact justifies this implementation.
 *     (when (and (eq fast slow) (> n 0)) (return nil))))
-    METHOD proc_length.
-      validate: list, list->car, list->cdr.
-      IF list->cdr NE nil.
-        throw( |length takes only one argument| ).
-      ENDIF.
+    METHOD list_length.
+      validate list.
+      DATA lo_elem TYPE REF TO lcl_lisp.
+      DATA lo_slow TYPE REF TO lcl_lisp.
 
-      result = lcl_lisp_new=>number( 0 ).
-      DATA(lo_elem) = list->car.
-      DATA(lo_slow) = list->car.
+      result = 0.
+      lo_slow = lo_elem = list.
 *     Iterate over list to count the number of items
       WHILE lo_elem->type EQ lcl_lisp=>type_pair.
-        ADD 1 TO result->number.
+        ADD 1 TO result.
         lo_elem = lo_elem->cdr.
         lo_slow = lo_slow->cdr.
         CHECK lo_elem->type EQ lcl_lisp=>type_pair.
-        ADD 1 TO result->number.
+        ADD 1 TO result.
         lo_elem = lo_elem->cdr.
         CHECK lo_elem = lo_slow.
 *       Circular list
       ENDWHILE.
       CHECK lo_elem NE nil.
 *     If the last item is not a cons cell, return an error
-      error_no_list list->car `length`.
+      error_no_list list `list-length`.
+    ENDMETHOD.
+
+    METHOD proc_length.
+      validate: list, list->car, list->cdr.
+      IF list->cdr NE nil.
+        throw( |length takes only one argument| ).
+      ENDIF.
+
+      result = lcl_lisp_new=>number( list_length( list->car ) ).
     ENDMETHOD.                    "proc_length
 
     METHOD proc_list.
@@ -2976,7 +3017,7 @@
     ENDMETHOD.                    "proc_nilp
 
     METHOD proc_make_list.
-*     returns a list of length n and every atom is an empty list ().
+*     returns a list of length n and every atom is the default value supplied or the empty list
       validate list.
       validate_number list->car 'make-list'.
 
@@ -4765,11 +4806,12 @@
       nil = lcl_lisp_new=>null( ).
       false = lcl_lisp_new=>boolean( '#f' ).
       true = lcl_lisp_new=>boolean( '#t' ).
+
       quote = lcl_lisp_new=>symbol( c_eval_quote ).
       quasiquote = lcl_lisp_new=>symbol( c_eval_quasiquote ).
       unquote = lcl_lisp_new=>symbol( c_eval_unquote ).
       unquote_splicing = lcl_lisp_new=>symbol( c_eval_unquote_splicing ).
-      concat = lcl_lisp_new=>symbol( c_eval_append ).
+      append = lcl_lisp_new=>symbol( c_eval_append ).
       cons = lcl_lisp_new=>symbol( c_eval_cons ).
       list = lcl_lisp_new=>symbol( c_eval_list ).
 
@@ -4876,20 +4918,35 @@
       DATA(lv_parens) = abap_true.
       WHILE lo_elem IS BOUND AND lo_elem NE nil.
 
-*       Quasiquoting output
+*       Quasiquoting output (quasiquote x) is displayed as `x without parenthesis
         IF lv_first EQ abap_true AND lo_elem->type EQ type_pair.
           lv_first = abap_false.
-          IF lo_elem->car->type EQ type_symbol.
+          IF lo_elem->car->type EQ type_symbol OR lo_elem->car->type EQ type_primitive.
             CASE lo_elem->car->value.
-              WHEN 'quote'
-                OR 'quasiquote'
-                OR 'unquote'
-                OR 'unquote-slicing'.
-                lv_parens = abap_false.
+                WHEN c_eval_quote OR  `'`.
+                  lv_parens = abap_false.
+                  lv_str = lv_str && `'`.
+                  lo_elem = lo_elem->cdr.
+                  CONTINUE.
 
-                lv_str = lv_str && lo_elem->car->write( ).
-                lo_elem = lo_elem->cdr.
-                CONTINUE.
+                WHEN c_eval_quasiquote OR '`'.
+                  lv_parens = abap_false.
+                  lv_str = lv_str && '`'.
+                  lo_elem = lo_elem->cdr.
+                  CONTINUE.
+
+                WHEN c_eval_unquote OR ','.
+                  lv_parens = abap_false.
+                  lv_str = lv_str && ','.
+                  lo_elem = lo_elem->cdr.
+                  CONTINUE.
+
+                WHEN c_eval_unquote_splicing OR ',@'.
+                  lv_parens = abap_false.
+                  lv_str = lv_str && ',@'.
+                  lo_elem = lo_elem->cdr.
+                  CONTINUE.
+
             ENDCASE.
           ENDIF.
         ENDIF.
@@ -4917,18 +4974,7 @@
         WHEN type_primitive.
           str = value.
         WHEN type_symbol.
-          CASE value.
-            WHEN 'quote'.
-              str = `'`.
-            WHEN 'quasiquote'.
-              str = '`'.
-            WHEN 'unquote'.
-              str = ','.
-            WHEN 'unquote-slicing'.
-              str = ',@'.
-            WHEN OTHERS.
-              str = value.
-          ENDCASE.
+          str = value.
         WHEN type_boolean.
           str = value.
         WHEN type_string.
@@ -5036,31 +5082,36 @@
         WHEN OTHERS.
           ro_elem->value = value.
       ENDCASE.
-    ENDMETHOD.                    "new_elem
+    ENDMETHOD.
 
     METHOD string.
       ro_elem = node( lcl_lisp=>type_string ).
       ro_elem->value = value.
-    ENDMETHOD.                    "new_string
+    ENDMETHOD.
 
     METHOD symbol.
       ro_elem = node( lcl_lisp=>type_symbol ).
       ro_elem->value = value.
-    ENDMETHOD.                    "new_symbol
+    ENDMETHOD.
 
     METHOD boolean.
       ro_elem = node( lcl_lisp=>type_boolean ).
       ro_elem->value = value.
-    ENDMETHOD.                    "new_symbol
+    ENDMETHOD.
 
     METHOD null.
       ro_elem = node( lcl_lisp=>type_null ).
       ro_elem->value = 'nil'.
-    ENDMETHOD.                    "new_symbol
+    ENDMETHOD.
 
     METHOD number.
       ro_elem = node( lcl_lisp=>type_number ).
       ro_elem->number = value.
+    ENDMETHOD.
+
+    METHOD primitive.
+      ro_elem = node( lcl_lisp=>type_primitive ).
+      ro_elem->value = value.
     ENDMETHOD.                    "new_number
 
     METHOD atom.

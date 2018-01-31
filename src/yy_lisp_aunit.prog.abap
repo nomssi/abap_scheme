@@ -3411,7 +3411,7 @@
        code_test( code = |(let ((name1 'x)| &
                          |      (name2 'y))| &
                          |  `(a `(b ,,name1 ,',name2 d) e))|
-                  expected = |( a `( b ,x ,'y d ) e )|  ).
+                  expected = |( a ` ( b , x , ' y d ) e )|  ).
      ENDMETHOD.
 
      METHOD quasiquote_9.

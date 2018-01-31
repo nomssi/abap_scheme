@@ -799,7 +799,7 @@ CLASS lcl_editor IMPLEMENTATION.
 
   METHOD lif_source_editor~set_focus.
     set_focus( EXPORTING control = me
-               EXCEPTIONS OTHERS = 1 ).
+               EXCEPTIONS OTHERS = 0 ).
   ENDMETHOD.
 
   METHOD lif_source_editor~free.
@@ -873,7 +873,7 @@ CLASS lcl_source IMPLEMENTATION.
 
   METHOD lif_source_editor~set_focus.
     set_focus( EXPORTING control = me
-               EXCEPTIONS OTHERS = 1 ).
+               EXCEPTIONS OTHERS = 0 ).
   ENDMETHOD.
 
   METHOD lif_source_editor~free.
@@ -884,7 +884,7 @@ CLASS lcl_source IMPLEMENTATION.
     DATA lt_text TYPE STANDARD TABLE OF string.
 
     get_text( IMPORTING table = lt_text
-              EXCEPTIONS OTHERS = 1 ).
+              EXCEPTIONS OTHERS = 0 ).
     cl_gui_cfw=>flush( ).
     rv_text = concat_lines_of( table = lt_text ).
   ENDMETHOD.                    "to_string
@@ -897,7 +897,7 @@ CLASS lcl_source IMPLEMENTATION.
     DATA lt_text TYPE STANDARD TABLE OF string.
 
     set_text( EXPORTING table = lt_text
-              EXCEPTIONS OTHERS = 1  ).
+              EXCEPTIONS OTHERS = 0 ).
   ENDMETHOD.
 
   METHOD lif_source_editor~push_text.
@@ -915,7 +915,7 @@ CLASS lcl_source IMPLEMENTATION.
 *    clear( ).
     APPEND code TO lt_text.
     set_text( EXPORTING table = lt_text
-              EXCEPTIONS OTHERS = 1 ).
+              EXCEPTIONS OTHERS = 0 ).
   ENDMETHOD.
 
 ENDCLASS.
