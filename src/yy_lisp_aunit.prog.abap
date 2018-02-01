@@ -80,7 +80,7 @@
        CHECK element IS BOUND.
 
        CASE element->type.
-         WHEN lcl_lisp=>type_conscell.
+         WHEN lcl_lisp=>type_pair.
            writeln( `(` ).
            lo_elem = element.
            DO.
@@ -137,6 +137,9 @@
      PRIVATE SECTION.
        METHODS setup.
        METHODS teardown.
+
+       METHODS closing_1 FOR TESTING.
+       METHODS closing_2 FOR TESTING.
 
 *   Stability tests - No Dump should occur
        METHODS stability_1 FOR TESTING.
@@ -205,6 +208,16 @@
                expected = expected
                title = 'CODE' ).
      ENDMETHOD.                    "code_test_f
+
+     METHOD closing_1.
+       code_test( code = '( + 1'
+                  expected = |Parse: missing a ) to close expression| ).
+     ENDMETHOD.
+
+     METHOD closing_2.
+       code_test( code = '(let ([x 3)] (* x x))'
+                  expected = |Parse: a ) found while ] expected| ).
+     ENDMETHOD.
 
      METHOD stability_1.
        code_test( code = 'a'
@@ -387,12 +400,18 @@
        METHODS let_2 FOR TESTING.
        METHODS let_3 FOR TESTING.
 
+       METHODS let_star_1 FOR TESTING.
+
        METHODS do_1 FOR TESTING.
        METHODS do_2 FOR TESTING.
+       METHODS do_3 FOR TESTING.
 
        METHODS named_let_1 FOR TESTING.
        METHODS named_let_2 FOR TESTING.
        METHODS named_let_3 FOR TESTING.
+
+       METHODS let_no_body FOR TESTING.
+       METHODS define_no_body FOR TESTING.
 
        METHODS letrec_1 FOR TESTING.
        METHODS letrec_2 FOR TESTING.
@@ -400,8 +419,15 @@
        METHODS letrec_star_0 FOR TESTING.
        METHODS values_0 FOR TESTING.
 
-       METHODS is_symbol_true FOR TESTING.
+       METHODS is_symbol_true_1 FOR TESTING.
+       METHODS is_symbol_true_2 FOR TESTING.
+       METHODS is_symbol_true_3 FOR TESTING.
+       METHODS is_symbol_true_4 FOR TESTING.
+       METHODS is_symbol_true_5 FOR TESTING.
+
        METHODS is_symbol_false FOR TESTING.
+       METHODS is_symbol_false_1 FOR TESTING.
+
        METHODS is_hash_true FOR TESTING.
        METHODS is_hash_false FOR TESTING.
 
@@ -422,8 +448,21 @@
        METHODS list_is_boolean_1 FOR TESTING.
        METHODS list_is_boolean_2 FOR TESTING.
        METHODS list_is_boolean_3 FOR TESTING.
+       METHODS list_is_boolean_4 FOR TESTING.
 
    ENDCLASS.                    "ltc_basic DEFINITION
+
+   CLASS ltc_string DEFINITION INHERITING FROM ltc_interpreter
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PRIVATE SECTION.
+
+       METHODS setup.
+       METHODS teardown.
+
+       METHODS char_1 FOR TESTING.
+       METHODS char_2 FOR TESTING.
+       METHODS char_3 FOR TESTING.
+   ENDCLASS.
 
    CLASS ltc_conditionals DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
@@ -449,6 +488,8 @@
        METHODS cond_1 FOR TESTING.
        METHODS cond_2 FOR TESTING.
        METHODS cond_3 FOR TESTING.
+       METHODS cond_4 FOR TESTING.
+       METHODS cond_5 FOR TESTING.
 
        METHODS case_1 FOR TESTING.
        METHODS case_2 FOR TESTING.
@@ -466,6 +507,28 @@
        METHODS when_1 FOR TESTING.
 
        METHODS unless_1 FOR TESTING.
+
+   ENDCLASS.
+
+   CLASS ltc_quote DEFINITION INHERITING FROM ltc_interpreter
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PRIVATE SECTION.
+
+       METHODS setup.
+       METHODS teardown.
+
+       METHODS quasiquote_1 FOR TESTING.
+       METHODS quasiquote_2 FOR TESTING.
+       METHODS quasiquote_3 FOR TESTING.
+       METHODS quasiquote_4 FOR TESTING.
+       METHODS quasiquote_5 FOR TESTING.
+       METHODS quasiquote_6 FOR TESTING.
+
+       METHODS quasiquote_7 FOR TESTING.
+       METHODS quasiquote_8 FOR TESTING.
+       METHODS quasiquote_9 FOR TESTING.
+       METHODS quasiquote_10 FOR TESTING.
+       METHODS quasiquote_11 FOR TESTING.
 
    ENDCLASS.
 
@@ -557,10 +620,17 @@
      ENDMETHOD.
 
      METHOD let_3.
-*      not allowed if we strictly follow the Scheme standard
        code_test( code = |(let ((x 2) (x 0))| &
                          |    (+ x 5))|
-                  expected = '5' ).
+                  expected = 'Eval: variable x appears more than once' ).
+     ENDMETHOD.
+
+     METHOD let_star_1.
+       code_test( code = |(let ((x 2) (y 3))| &
+                         |  (let* ((x 7)| &
+                         |        (z (+ x y)))| &
+                         |  (* z x)))|
+                  expected = '70' ).
      ENDMETHOD.
 
      METHOD do_1.
@@ -579,6 +649,14 @@
                   expected = '25' ).
      ENDMETHOD.
 
+     METHOD do_3.
+       code_test( code = |(let ((x '(1 3)))| &
+                         |  (do ((x x (cdr x))| &
+                         |    (sum 0  (+ sum (car x))))| &
+                         |((null? x) )))|              " Do without a body
+                  expected = 'nil' ).                  " unspecified
+     ENDMETHOD.
+
      METHOD named_let_1.
        code_test( code = |(define (number->list n)| &
                          |  (let loop ((n n)| &
@@ -586,7 +664,7 @@
                          |    (if (< n 10)| &
                          |        (cons n acc)| &
                          |        (loop (quotient n 10)| &
-                         |              (cons (remainder n 10) acc))))|
+                         |              (cons (remainder n 10) acc)))))|
                   expected = 'number->list' ).
        code_test( code = |(number->list 239056)|
                   expected = '( 2 3 9 0 5 6 )' ).
@@ -618,6 +696,17 @@
                   expected = 'duplicate' ).
        code_test( code = |(duplicate 1 (list "apple" "cheese burger!" "banana"))|
                   expected = |( "apple" "cheese burger!" "cheese burger!" "banana" )| ).
+     ENDMETHOD.
+
+     METHOD let_no_body.
+       code_test( code = |(let ((var 10))| &
+                         |     )|
+                  expected = 'Eval: no expression in body' ).
+     ENDMETHOD.
+
+     METHOD define_no_body.
+       code_test( code = |(define (comp? (a b) (eq? a b)))|
+                  expected = 'Eval: ( comp? ( a b ) ( eq? a b ) ) no expression in body' ).
      ENDMETHOD.
 
      METHOD letrec_1.
@@ -657,7 +746,7 @@
           |                (+ (sum g (car ton))| &
           |                   (sum g (cdr ton)))))))| &
           |      (n (sum (lambda (x) 1) ton)))| &
-          |   (mean / /)|
+          |   (mean / /)))|
                   expected = 'means' ).
 
 *      evaluating (means '(3 (1 4))) returns 36/19.
@@ -694,16 +783,32 @@
 *                  expected = |8/3 2.28942848510666 36/19| ).
      ENDMETHOD.
 
-     METHOD is_symbol_true.
+     METHOD is_symbol_true_1.
        code_test( code = |(define x 5)|
                   expected = 'x' ).
        code_test( code = |(symbol? 'x)|
                   expected = '#t' ).
-       code_test( code = |(symbol? (car '(a b)))|
-                  expected = '#t' ).
        code_test( code = |(symbol? x)|
                   expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD is_symbol_true_2.
+       code_test( code = |(symbol? (car '(a b)))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_symbol_true_3.
+       code_test( code = |(symbol? x)|
+                  expected = 'Eval: Symbol x is unbound' ).
+     ENDMETHOD.
+
+     METHOD is_symbol_true_4.
        code_test( code = |(symbol? 'nil)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_symbol_true_5.
+       code_test( code = |(apply symbol? '(primitive-procedure-test))|
                   expected = '#t' ).
      ENDMETHOD.
 
@@ -716,8 +821,13 @@
                   expected = '#f' ).
      ENDMETHOD.
 
+     METHOD is_symbol_false_1.
+       code_test( code = |(symbol? #f)|
+                  expected = '#f' ).
+     ENDMETHOD.
+
      METHOD is_hash_true.
-       code_test( code = |(define h (make-hash '(dog 4 car 5))|
+       code_test( code = |(define h (make-hash '(dog 4 car 5)))|
                   expected = 'h' ).
        code_test( code = |(hash? h)|
                   expected = '#t' ).
@@ -812,7 +922,39 @@
                   expected = '#t' ).
      ENDMETHOD.
 
+     METHOD list_is_boolean_4.
+       code_test( code = |(boolean=? #t #f 1)|
+                  expected = '#f' ).
+     ENDMETHOD.
+
    ENDCLASS.                    "ltc_basic IMPLEMENTATION
+
+   CLASS ltc_string IMPLEMENTATION.
+
+     METHOD setup.
+       CREATE OBJECT mo_int.
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
+
+     METHOD char_1.
+       code_test( code = `'(#\A #\a)`
+                  expected = '( "A" "a" )' ).
+     ENDMETHOD.
+
+     METHOD char_2.
+       code_test( code = '#\A'
+                  expected = '"A"' ).
+     ENDMETHOD.
+
+     METHOD char_3.
+       code_test( code = '#\aA'
+                  expected = 'Eval: Symbol A is unbound' ).
+     ENDMETHOD.
+
+   ENDCLASS.
 
    CLASS ltc_conditionals IMPLEMENTATION.
 
@@ -890,15 +1032,27 @@
 
      METHOD cond_2.
        code_test( code = |(cond ((> 3 3) 'greater)| &
-                         |((< 3 3) 'less)| &
-                         |(else 'equal))|
+                         |      ((< 3 3) 'less)| &
+                         |      (else 'equal))|
                   expected = 'equal' ).
      ENDMETHOD.
 
      METHOD cond_3.
        code_test( code = |(cond ((assv 'b '((a 1) (b 2))) => cadr)| &
-                         |(else #f))|
+                         |      (else #f))|
                   expected = '2' ).
+     ENDMETHOD.
+
+     METHOD cond_4.
+       code_test( code = |(cond ('(1 2 3) => cadr)| &
+                         |      (else #f))|
+                  expected = |2| ).
+     ENDMETHOD.
+
+     METHOD cond_5.
+       code_test( code = |(cond (#f 'false)| &
+                         |      ((cadr '(x y))))|
+                  expected = |y| ).
      ENDMETHOD.
 
      METHOD case_1.
@@ -1466,7 +1620,12 @@
        METHODS list_memq_3 FOR TESTING.
        METHODS list_memq_4 FOR TESTING.  " unspecified
 
-       METHODS list_member FOR TESTING.
+       METHODS list_member_1 FOR TESTING.
+       METHODS list_member_2 FOR TESTING.
+       METHODS list_member_3 FOR TESTING.
+       METHODS list_member_4 FOR TESTING.
+       METHODS list_member_5 FOR TESTING.
+
        METHODS list_memv FOR TESTING.
 
        METHODS list_assq_0 FOR TESTING.
@@ -1714,7 +1873,7 @@
      ENDMETHOD.                    "list_length_2
 
      METHOD list_length_3.
-       code_test( code = |(length '()|
+       code_test( code = |(length '())|
                   expected = '0' ).
      ENDMETHOD.                    "list_length_0
 
@@ -1748,10 +1907,32 @@
                   expected = '#f' ).
      ENDMETHOD.
 
-     METHOD list_member.
+     METHOD list_member_1.
        code_test( code = |(member (list 'a)| &
                          |        '(b (a) c))|
                   expected = '( ( a ) c )' ).
+     ENDMETHOD.
+
+     METHOD list_member_2.
+       code_test( code = |(define (comp? a b) (eq? a b))|
+                  expected = 'comp?' ).
+       code_test( code = |(member 2 (list 1 2 3 4) comp?)|
+                  expected = '( 2 3 4 )' ).
+     ENDMETHOD.
+
+     METHOD list_member_3.
+       code_test( code = |(member 7 '((1 3) (2 5) (3 7) (4 8)) (lambda (x y) (= x (cadr y))))|
+                  expected = '( ( 3 7 ) ( 4 8 ) )' ).
+     ENDMETHOD.
+
+     METHOD list_member_4.
+       code_test( code = |(member 7 '(1 2 3 4 5 6) (lambda (y z) (> z 3)) )|
+                  expected = '( 4 5 6 )' ).
+     ENDMETHOD.
+
+     METHOD list_member_5.
+       code_test( code = |(member 2 (list 1 2 3 4) (lambda (x y) (= x y)) )|
+                  expected = '( 2 3 4 )' ).
      ENDMETHOD.
 
      METHOD list_memq_4.
@@ -2097,15 +2278,33 @@
        METHODS setup.
        METHODS teardown.
 
+       METHODS make_vector_0 FOR TESTING.
+       METHODS make_vector_1 FOR TESTING.
+       METHODS make_vector_2 FOR TESTING.
+
        METHODS vector_0 FOR TESTING.
        METHODS vector_1 FOR TESTING.
+
+       METHODS vector_length_0 FOR TESTING.
+       METHODS vector_length_1 FOR TESTING.
+       METHODS vector_length_2 FOR TESTING.
+       METHODS vector_length_3 FOR TESTING.
+
        METHODS vector_ref_1 FOR TESTING.
        METHODS vector_ref_2 FOR TESTING.
+       METHODS vector_ref_3 FOR TESTING.
+
        METHODS vector_set_1 FOR TESTING.
        METHODS vector_set_2 FOR TESTING.
+
        METHODS vector_to_list_1 FOR TESTING.
        METHODS vector_to_list_2 FOR TESTING.
+       METHODS vector_to_list_3 FOR TESTING.
+       METHODS vector_to_list_4 FOR TESTING.
+       METHODS vector_to_list_5 FOR TESTING.
+
        METHODS list_to_vector_1 FOR TESTING.
+       METHODS list_to_vector_2 FOR TESTING.
 
    ENDCLASS.
 
@@ -2119,6 +2318,21 @@
        FREE mo_int.
      ENDMETHOD.                    "teardown
 
+     METHOD make_vector_0.
+       code_test( code = |(make-vector 0)|
+                  expected = '#()' ).
+     ENDMETHOD.
+
+     METHOD make_vector_1.
+       code_test( code = |(make-vector 0 '#(a))|
+                  expected = '#()' ).
+     ENDMETHOD.
+
+     METHOD make_vector_2.
+       code_test( code = |(make-vector 5 '#(a))|
+                  expected = '#( #( a ) #( a ) #( a ) #( a ) #( a ) )' ).
+     ENDMETHOD.
+
      METHOD vector_0.
        code_test( code = |(vector? '#())|
                   expected = '#t' ).
@@ -2127,6 +2341,26 @@
      METHOD vector_1.
        code_test( code = |(vector 0 '(2 3 4) "Anna")|
                   expected = |#( 0 ( 2 3 4 ) "Anna" )| ).
+     ENDMETHOD.
+
+     METHOD vector_length_0.
+       code_test( code = |(vector-length '#())|
+                  expected = '0' ).
+     ENDMETHOD.
+
+     METHOD vector_length_1.
+       code_test( code = |(vector-length '#(a b c))|
+                  expected = '3' ).
+     ENDMETHOD.
+
+     METHOD vector_length_2.
+       code_test( code = |(vector-length (vector 1 '(2) 3 '#(4 5)))|
+                  expected = '4' ).
+     ENDMETHOD.
+
+     METHOD vector_length_3.
+       code_test( code = |(vector-length (make-vector 300))|
+                  expected = '300' ).
      ENDMETHOD.
 
      METHOD vector_ref_1.
@@ -2138,6 +2372,13 @@
        code_test( code = |(vector-ref '#(1 1 2 3 5 8 13 21)| &
                          |    (round (* 2 (acos -1))) )|
                   expected = '13' ).
+     ENDMETHOD.
+
+     METHOD vector_ref_3.
+       code_test( code = |(define vec (vector 1 2 3 4 5))|
+                  expected = 'vec' ).
+       code_test( code = |(vector-ref vec 0)|
+                  expected = '1' ).
      ENDMETHOD.
 
      METHOD vector_set_1.
@@ -2162,9 +2403,32 @@
                   expected = '( dah )' ).
      ENDMETHOD.
 
+     METHOD vector_to_list_3.
+       code_test( code = |(vector->list (vector)) |
+                  expected = 'nil' ).
+     ENDMETHOD.
+
+     METHOD vector_to_list_4.
+       code_test( code = |(vector->list '#(a b c))|
+                  expected = '( a b c )' ).
+     ENDMETHOD.
+
+     METHOD vector_to_list_5.
+       code_test( code = |(let ((v '#(1 2 3 4 5)))| &
+                         |  (apply * (vector->list v)))|
+                  expected = '120' ).
+     ENDMETHOD.
+
      METHOD list_to_vector_1.
        code_test( code = |(list->vector '(dididit dah))|
                   expected = '#( dididit dah )' ).
+     ENDMETHOD.
+
+     METHOD list_to_vector_2.
+       code_test( code = |(let ([v '#(1 2 3 4 5)])| &
+                         |  (let ([ls (vector->list v)])| &
+                         |    (list->vector (map * ls ls))))|
+                  expected = '#( 1 4 9 16 25 )' ).
      ENDMETHOD.
 
    ENDCLASS.
@@ -2239,6 +2503,12 @@
        METHODS apply_2 FOR TESTING.
        METHODS apply_3 FOR TESTING.
        METHODS apply_4 FOR TESTING.
+       METHODS apply_5 FOR TESTING.
+       METHODS apply_6 FOR TESTING.
+       METHODS apply_7 FOR TESTING.
+       METHODS apply_8 FOR TESTING.
+       METHODS apply_9 FOR TESTING.
+       METHODS apply_10 FOR TESTING.
 
        METHODS map_1 FOR TESTING.
        METHODS map_2 FOR TESTING.
@@ -2246,6 +2516,7 @@
        METHODS map_4 FOR TESTING.
        METHODS map_5 FOR TESTING.
        METHODS map_6 FOR TESTING.
+       METHODS map_7 FOR TESTING.
 
        METHODS for_each_1 FOR TESTING.
        METHODS for_each_2 FOR TESTING.
@@ -2386,6 +2657,46 @@
                   expected = '30' ).
      ENDMETHOD.
 
+     METHOD apply_5.
+       code_test( code = |(apply apply (list list (list 'apply 'list)))|
+                  expected = '( apply list )' ).
+     ENDMETHOD.
+
+     METHOD apply_6.
+       code_test( code = |(apply (lambda (x y . z) (vector x y z)) '(1 2))|
+                  expected = |#( 1 2 nil )| ).
+     ENDMETHOD.
+
+     METHOD apply_7.
+       code_test( code = |(apply vector 'a 'b '(c d e))|
+                  expected = |#( a b c d e )| ).
+     ENDMETHOD.
+
+     METHOD apply_8.
+       code_test( code = |(define first| &
+                         |  (lambda (ls)| &
+                         |(apply (lambda (x . y) x) ls)))|
+                  expected = |first| ).
+       code_test( code = |(first '(a b c d))|
+                  expected = |a| ).
+     ENDMETHOD.
+
+     METHOD apply_9.
+       code_test( code = |(define rest| &
+                         |  (lambda (ls)| &
+                         |(apply (lambda (x . y) y) ls)))|
+                  expected = |rest| ).
+       code_test( code = |(rest '(a b c d))|
+                  expected = |( b c d )| ).
+     ENDMETHOD.
+
+     METHOD apply_10.
+       code_test( code = |(apply append| &
+                         |  '(1 2 3)| &
+                         |  '((a b) (c d e) (f)))|
+                  expected = |( 1 2 3 a b c d e f )| ).
+     ENDMETHOD.
+
      METHOD map_1.
        code_test( code = |(map cadr '((a b) (d e) (g h)))|
                   expected = '( b e h )' ).
@@ -2420,6 +2731,11 @@
        code_test( code = |(map (lambda (n) (+ n 3))| &
                          |     '(1 2 3 4 5) )|
                   expected = |( 4 5 6 7 8 )| ).
+     ENDMETHOD.
+
+     METHOD map_7.
+       code_test( code = |(map car '())|
+                  expected = |nil| ).
      ENDMETHOD.
 
      METHOD for_each_1.
@@ -2479,6 +2795,19 @@
        METHODS compa_eq_1 FOR TESTING.
        METHODS compa_eq_2 FOR TESTING.
        METHODS compa_eq_3 FOR TESTING.
+
+       METHODS compa_is_eq_1 FOR TESTING.
+       METHODS compa_is_eq_2 FOR TESTING.
+       METHODS compa_is_eq_3 FOR TESTING.
+       METHODS compa_is_eq_4 FOR TESTING.
+       METHODS compa_is_eq_5 FOR TESTING.
+       METHODS compa_is_eq_6 FOR TESTING.
+       METHODS compa_is_eq_7 FOR TESTING.
+       METHODS compa_is_eq_8 FOR TESTING.
+       METHODS compa_is_eq_9 FOR TESTING.
+       METHODS compa_is_eq_10 FOR TESTING.
+       METHODS compa_is_eq_11 FOR TESTING.
+       METHODS compa_is_eq_12 FOR TESTING.
 
        METHODS compa_nil_1 FOR TESTING.
        METHODS compa_nil_2 FOR TESTING.
@@ -2607,6 +2936,70 @@
        code_test( code = '(= (+ 3 4) 7 (+ 2 5))'
                   expected = '#t' ).
      ENDMETHOD.                    "compa_eq_2
+
+     METHOD compa_is_eq_1.
+       code_test( code = |(eq? 'a 'a)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_is_eq_2.
+       code_test( code = |(eq? '(a) '(a))|
+                  expected = '#f' ).   " unspecified
+     ENDMETHOD.
+
+     METHOD compa_is_eq_3.
+       code_test( code = |(eq? (list 'a) (list 'a))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD compa_is_eq_4.
+       code_test( code = |(eq? "a" "a")|
+                  expected = '#t' ).    " unspecified
+     ENDMETHOD.
+
+     METHOD compa_is_eq_5.
+       code_test( code = '(eq? "" "")'
+                  expected = '#t' ).   " unspecified
+     ENDMETHOD.
+
+     METHOD compa_is_eq_6.
+       code_test( code = |(eq? '() '())|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_is_eq_7.
+       code_test( code = |(eq? 2 2)|
+                  expected = '#t' ).    " unspecified
+     ENDMETHOD.
+
+     METHOD compa_is_eq_8.
+       code_test( code = '(eq? #\A #\A)'
+                  expected = '#t' ).   " unspecified
+     ENDMETHOD.
+
+     METHOD compa_is_eq_9.
+       code_test( code = |(eq? car car)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_is_eq_10.
+       code_test( code = |(let ((n (+ 2 3)))| &
+                         |  (let ((x '(a))) | &
+                         | (eq? x x)))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_is_eq_11.
+       code_test( code = |(let ((x '#()))| &
+                         |  (eq? x x))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_is_eq_12.
+       code_test( code = |(let ((p (lambda (x) x)))| &
+                         |  (eq? p p))|
+                  expected = '#t' ).
+     ENDMETHOD.
 
      METHOD compa_nil_1.
 *      Test nil?
@@ -2967,3 +3360,73 @@
      ENDMETHOD.                    "fm_user_details
 
    ENDCLASS.                    "ltc_abap_function_module IMPLEMENTATION
+
+   CLASS ltc_quote IMPLEMENTATION.
+
+     METHOD setup.
+       CREATE OBJECT mo_int.
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
+
+     METHOD quasiquote_1.
+       code_test( code = '`(list ,(+ 1 2) 4)'
+                  expected = '( list 3 4 )' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_2.
+       code_test( code = |(let ((name 'a)) `(list ,name ',name))|
+                  expected = |( list a ' a )| ).
+     ENDMETHOD.
+
+     METHOD quasiquote_3.
+       code_test( code = |`(a ,(+ 1 2) ,@(map abs '(4 -5 6)) b)|
+                  expected = '( a 3 4 5 6 b )' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_4.
+       code_test( code = |`(( foo ,(- 10 3)) ,@(cdr '(c)) . ,(car '(cons)))|
+                  expected = '( ( foo 7 ) . cons )' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_5.
+       code_test( code = |`#(10 5 ,(sqrt 4) ,@(map sqrt '(16 9)) 8)|
+                  expected = '#( 10 5 2 4 3 8 )' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_6.
+       code_test( code = |(let ((foo '(foo bar)) (@baz 'baz))| &
+                         |`(list ,@foo , @baz))|
+                  expected = '( list foo bar baz )' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_7.
+       code_test( code = '`(a `(b ,(+ 1 2) ,(foo ,(+ 1 3) d) e) f)'
+                  expected = '( a ` ( b , ( + 1 2 ) , ( foo 4 d ) e ) f )' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_8.
+       code_test( code = |(let ((name1 'x)| &
+                         |      (name2 'y))| &
+                         |  `(a `(b ,,name1 ,',name2 d) e))|
+                  expected = |( a ` ( b , x , ' y d ) e )|  ).
+     ENDMETHOD.
+
+     METHOD quasiquote_9.
+       code_test( code = '(quasiquote (list (unquote (+ 1 2)) 4))'
+                  expected = '( list 3 4 )' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_10.
+       code_test( code = |,4|
+                  expected = 'Eval: unquote not valid outside of quasiquote' ).
+     ENDMETHOD.
+
+     METHOD quasiquote_11.
+       code_test( code = |'(quasiquote (list (unquote (+ 1 2)) 4))|
+                  expected = '` ( list , ( + 1 2 ) 4 )' ).
+     ENDMETHOD.
+
+   ENDCLASS.
