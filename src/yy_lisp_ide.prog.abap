@@ -6,9 +6,9 @@ CONSTANTS:
   c_lisp_input    TYPE string VALUE 'ABAP Lisp Input',
   c_lisp_untitled TYPE programm VALUE 'Untitled',
 * Experimental
-* enable if you uploaded LISP config files or also change c_source_type to 'ABAP'
+* enable if you uploaded LISP config files or also change c_source_type to 'LISP'
   c_new_abap_editor TYPE flag VALUE abap_false,
-  c_source_type TYPE string VALUE 'LISP'.
+  c_source_type TYPE string VALUE 'ABAP'.
 
 CONSTANTS:
   c_lisp_ast_view TYPE cl_abap_browser=>title VALUE 'ABAP Lisp S-Expression Viewer'.
