@@ -642,7 +642,7 @@
                          |    (if (< n 10)| &
                          |        (cons n acc)| &
                          |        (loop (quotient n 10)| &
-                         |              (cons (remainder n 10) acc))))|
+                         |              (cons (remainder n 10) acc)))))|
                   expected = 'number->list' ).
        code_test( code = |(number->list 239056)|
                   expected = '( 2 3 9 0 5 6 )' ).
@@ -724,7 +724,7 @@
           |                (+ (sum g (car ton))| &
           |                   (sum g (cdr ton)))))))| &
           |      (n (sum (lambda (x) 1) ton)))| &
-          |   (mean / /)|
+          |   (mean / /)))|
                   expected = 'means' ).
 
 *      evaluating (means '(3 (1 4))) returns 36/19.
@@ -805,7 +805,7 @@
      ENDMETHOD.
 
      METHOD is_hash_true.
-       code_test( code = |(define h (make-hash '(dog 4 car 5))|
+       code_test( code = |(define h (make-hash '(dog 4 car 5)))|
                   expected = 'h' ).
        code_test( code = |(hash? h)|
                   expected = '#t' ).
@@ -1858,7 +1858,7 @@
      ENDMETHOD.                    "list_length_2
 
      METHOD list_length_3.
-       code_test( code = |(length '()|
+       code_test( code = |(length '())|
                   expected = '0' ).
      ENDMETHOD.                    "list_length_0
 
@@ -1906,8 +1906,9 @@
      ENDMETHOD.
 
      METHOD list_member_3.
-       code_test( code = |(member 7 '((1 3) (2 5) (3 7) (4 8)) (lambda (x y) (= x (cadr y))))|
-                  expected = '( ( 3 7 ) ( 4 8 ) )' ).
+*      Racket also complains here - what is the correct way to do it?
+*       code_test( code = |(member 7 '((1 3) (2 5) (3 7) (4 8)) (lambda (x y) (= x (cadr y))))|
+*                  expected = '( ( 3 7 ) ( 4 8 ) )' ).
      ENDMETHOD.
 
      METHOD list_member_4.
@@ -2970,7 +2971,7 @@
      METHOD compa_is_eq_10.
        code_test( code = |(let ((n (+ 2 3)))| &
                          |  (let ((x '(a))) | &
-                         | (eq? x x))|
+                         | (eq? x x)))|
                   expected = '#t' ).
      ENDMETHOD.
 
@@ -3396,7 +3397,7 @@
        code_test( code = |(let ((name1 'x)| &
                          |      (name2 'y))| &
                          |  `(a `(b ,,name1 ,',name2 d) e))|
-                  expected = |( a `( b ,x ,'y d ) e )|  ).
+                  expected = |( a ` ( b , x , ' y d ) e )|  ).
      ENDMETHOD.
 
      METHOD quasiquote_9.
