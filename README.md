@@ -1,34 +1,36 @@
 # abap_scheme
-# LISP interpreter in ABAP with Editor
+# LISP interpreter in ABAP with Workbench
 
 [![Language: ABAP](https://img.shields.io/badge/Language-ABAP-blue.svg?style=flat)](https://www.sap.com/developer/topics/abap-platform.html)
 [![License: MIT](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat)](https://opensource.org/licenses/MIT)
 
 ## Overview 
 
-After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a>.
+After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a> inspired by [Peter Norvig](http://norvig.com/lispy2.html).
+So I started my [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) project based on [https://github.com/mydoghasworms/abap-lisp](https://github.com/mydoghasworms/abap-lisp). My contributions:
+- target the _Revised <sup>7</sup> Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) including proper treatment of tail calls
+- a programming environment to make it fun to use, featuring the editor and console views, a trace view, a graphcal S-Expression viewer
 
-So this is my learning project that started as a fork of https://github.com/mydoghasworms/abap-lisp, itself inspired by [Peter Norvig](http://norvig.com/lispy2.html). You can [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) too. My contributions:
-- _Scheme_ as the target language, I am implementing features from the [R7RS](http://www.r7rs.org/) specification
-- An _ABAP Unit_ regression test suite
-- a Workbench to make it fun to use
+![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_scheme_workbench.png)
+![abap_trace](https://github.com/nomssi/abap_scheme/blob/master/img/abap_lisp_trace.png)
+![abap_expression](https://github.com/nomssi/abap_scheme/blob/master/img/SExpressionViewer.png)
 
-### Requirements
-
-The current version was tested on ABAP Netweaver 7.50 and can be cloned with <a href="http://docs.abapgit.org/">ABAP GIT</a>. For an older version, check the <a href="https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP">SCN Code Gallery</a>.
+Check the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) for documentation.
 
 ### Architecture
 
-- Report ZZ_LISP_IDE - Main report
-- Include YY_LIB_LISP - Custom version of ABAP LISP
-- Include YY_LISP_AUNIT - ABAP Unit tests
-- Include YY_LISP_IDE - Workbench
+- Report ZZ_LISP_IDE - Main report for the workbench
+- Include YY_LIB_LISP - Complete ABAP LISP library
+- Include YY_LISP_AUNIT - a large _ABAP Unit_ regression test suite
+- Include YY_LISP_IDE - Editor/Tools
 
-![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_scheme_workbench.png)
-The ABAP LISP Workbench has commands:
-- Evaluate (F8) executes the Scheme code 
-- Refresh (Shift-F2) will delete the source and console and reset the environment
-- Previous/Next expression
+The code can be cloned with [ABAP GIT](http://docs.abapgit.org/) 
+
+- The main version is developed on Netweaver 7.5 and should work on ABAP Netweaver 7.4
+- Milestones are downported to ABAP Netweaver 7.02 - use the 7.02 branch 
+      Note the Eval. with Trace is not supported in this version
+- A version is available that should work on older releases, but is not maintained anymore
+      Note: check the [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP).
 
 ### ABAP Integration
 #### Interpreter
