@@ -17,7 +17,9 @@ So I started my [Make your own Lisp](https://github.com/kanaka/mal/blob/master/p
 
 Check the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) for documentation.
 
-The ABAP Scheme was a ![popular blog](https://github.com/nomssi/abap_scheme/blob/master/img/popular_blogs.png) when it was announced in February 2018 on SAP Community Network.
+The ABAP Scheme was a popular blog when it was [announced]https://blogs.sap.com/2018/02/01/announcing-the-abap-scheme-workbench/)
+in February 2018 on SAP Community Network.
+![SAP Community](https://github.com/nomssi/abap_scheme/blob/master/img/popular_blogs.png)
 
 ### Architecture
 
