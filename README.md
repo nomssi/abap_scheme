@@ -9,7 +9,7 @@
 After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a> inspired by [Peter Norvig](http://norvig.com/lispy2.html).
 So I started my [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) project based on [https://github.com/mydoghasworms/abap-lisp](https://github.com/mydoghasworms/abap-lisp). My contributions:
 - target the _Revised <sup>7</sup> Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) including proper treatment of tail calls
-- a programming environment to make it fun to use, featuring the editor and console views, a trace view, a graphcal S-Expression viewer
+- a programming environment to make it fun to use, featuring the editor and console views, a trace view, a graphical S-Expression viewer
 
 ![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_scheme_workbench.png)
 ![abap_trace](https://github.com/nomssi/abap_scheme/blob/master/img/abap_lisp_trace.png)
@@ -17,7 +17,7 @@ So I started my [Make your own Lisp](https://github.com/kanaka/mal/blob/master/p
 
 Check the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) for documentation.
 
-Capturing our 15 minutes of fame: The ABAP Scheme [announcement](https://blogs.sap.com/2018/02/01/announcing-the-abap-scheme-workbench/) February 2018 was popular in the SAP Community ![SAP Community](https://github.com/nomssi/abap_scheme/blob/master/img/popular_blogs.png)
+Capturing our 15 minutes of fame: The ABAP Scheme [announcement](https://blogs.sap.com/2018/02/01/announcing-the-abap-scheme-workbench/) was popular in the SAP Community ![SAP Community](https://github.com/nomssi/abap_scheme/blob/master/img/popular_blogs.png)
 
 ### Architecture
 
