@@ -17,6 +17,8 @@ So I started my [Make your own Lisp](https://github.com/kanaka/mal/blob/master/p
 
 Check the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) for documentation.
 
+The ABAP Scheme was a ![popular blog](https://github.com/nomssi/abap_scheme/blob/master/img/popular_blog.png) when it was announced in February 2018 on SAP Community Network.
+
 ### Architecture
 
 - Report ZZ_LISP_IDE - Main report for the workbench
