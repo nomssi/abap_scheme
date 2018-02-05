@@ -449,6 +449,8 @@
        METHODS list_is_boolean_2 FOR TESTING.
        METHODS list_is_boolean_3 FOR TESTING.
        METHODS list_is_boolean_4 FOR TESTING.
+       METHODS list_is_boolean_5 FOR TESTING.
+       METHODS list_is_boolean_6 FOR TESTING.
 
    ENDCLASS.                    "ltc_basic DEFINITION
 
@@ -909,22 +911,32 @@
 
      METHOD list_is_boolean_1.
        code_test( code = |(boolean=? '())|
-                  expected = '#f' ).
+                  expected = 'Eval: boolean=? missing boolean argument in nil' ).
      ENDMETHOD.
 
      METHOD list_is_boolean_2.
        code_test( code = |(boolean=? '(#t #f))|
-                  expected = '#f' ).
+                  expected = 'Eval: boolean=? missing boolean argument in ( #t #f )' ).
      ENDMETHOD.
 
      METHOD list_is_boolean_3.
        code_test( code = |(boolean=? #t #f)|
-                  expected = '#t' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD list_is_boolean_4.
        code_test( code = |(boolean=? #t #f 1)|
                   expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD list_is_boolean_5.
+       code_test( code = |(boolean=? #t 1)|
+                  expected = 'Eval: boolean=? wrong argument 1' ).
+     ENDMETHOD.
+
+     METHOD list_is_boolean_6.
+       code_test( code = |(boolean=? #f #f #f)|
+                  expected = '#t' ).
      ENDMETHOD.
 
    ENDCLASS.                    "ltc_basic IMPLEMENTATION
@@ -951,7 +963,7 @@
 
      METHOD char_3.
        code_test( code = '#\aA'
-                  expected = 'Eval: Symbol A is unbound' ).
+                  expected = 'Parse: unknown char #\aA found' ).
      ENDMETHOD.
 
    ENDCLASS.
@@ -1223,6 +1235,7 @@
 
        METHODS math_addition FOR TESTING.
 
+       METHODS math_mult_0 FOR TESTING.
        METHODS math_mult_1 FOR TESTING.
        METHODS math_mult_2 FOR TESTING.
        METHODS math_mult_3 FOR TESTING.
@@ -1268,6 +1281,8 @@
        METHODS math_modulo FOR TESTING.
        METHODS math_random FOR TESTING.
 
+       METHODS math_div_test_1 FOR TESTING.
+
        METHODS math_min_0 FOR TESTING.
        METHODS math_min_1 FOR TESTING.
        METHODS math_min_2 FOR TESTING.
@@ -1300,8 +1315,13 @@
                   expected = '71' ).
      ENDMETHOD.                    "math_addition
 
-     METHOD math_mult_1.
+     METHOD math_mult_0.
 *   Test multiplication
+       code_test( code = '(*)'
+                  expected = '1' ).
+     ENDMETHOD.                    "math_mult_0
+
+     METHOD math_mult_1.
        code_test( code = '(* 22)'
                   expected = '22' ).
      ENDMETHOD.                    "math_mult_1
@@ -1496,6 +1516,21 @@
        code_test( code =  '(remainder -17 -9)'
                   expected = '-8' ).
      ENDMETHOD.                    "math_remainder
+
+     METHOD math_div_test_1.
+       code_test( code =  |(define (divtest n1 n2)| &
+                          |  (= n1 (+ (* n2 (quotient n1 n2))| &
+                          | (remainder n1 n2))))|
+                  expected = 'divtest' ).
+       code_test( code =  '(divtest 238 9)'
+                  expected = '#t' ).
+       code_test( code =  '(divtest -238 9)'
+                  expected = '#t' ).
+       code_test( code =  '(divtest 238 -9)'
+                  expected = '#t' ).
+       code_test( code =  '(divtest -238 -9)'
+                  expected = '#t' ).
+     ENDMETHOD.
 
      METHOD math_modulo.
        code_test( code =  '(modulo 5 4)'
@@ -1703,6 +1738,18 @@
        METHODS list_cddr_3 FOR TESTING.
        METHODS list_cddr_4 FOR TESTING.
        METHODS list_cddr_5 FOR TESTING.
+
+       METHODS make_string_1      FOR TESTING.
+       METHODS make_string_2      FOR TESTING.
+       METHODS string_to_list_1   FOR TESTING.
+       METHODS string_to_list_2   FOR TESTING.
+       METHODS string_to_list_3   FOR TESTING.
+       METHODS list_to_string_1   FOR TESTING.
+       METHODS string_to_number_1 FOR TESTING.
+       METHODS string_to_number_2 FOR TESTING.
+       METHODS number_to_string_1 FOR TESTING.
+       METHODS string_append_1    FOR TESTING.
+
    ENDCLASS.                    "ltc_list DEFINITION
 
 *----------------------------------------------------------------------*
@@ -1921,6 +1968,7 @@
      ENDMETHOD.
 
      METHOD list_member_3.
+*      This is the normal behavior in other Scheme
        code_test( code = |(member 7 '((1 3) (2 5) (3 7) (4 8)) (lambda (x y) (= x (cadr y))))|
                   expected = '( ( 3 7 ) ( 4 8 ) )' ).
      ENDMETHOD.
@@ -2268,6 +2316,55 @@
                   expected = '( 2 )' ).
      ENDMETHOD.
 
+     METHOD make_string_1.
+       code_test( code = |(make-string 3 "a")|
+                  expected = 'Eval: a is not a char in make-string' ).
+     ENDMETHOD.
+
+     METHOD make_string_2.
+       code_test( code = '(make-string 3 #\a)'
+                  expected = '"aaa"' ).
+     ENDMETHOD.
+
+     METHOD string_to_list_1.
+       code_test( code = |(string->list "Aali")|
+                  expected = '( "A" "a" "l" "i" )' ).
+     ENDMETHOD.
+
+     METHOD string_to_list_2.
+       code_test( code = |(string->list "Aali" 1)|
+                  expected = '( "a" "l" "i" )' ).
+     ENDMETHOD.
+
+     METHOD string_to_list_3.
+       code_test( code = |(string->list "Aali" 2 3)|
+                  expected = '( "l" )' ).
+     ENDMETHOD.
+
+     METHOD list_to_string_1.
+       code_test( code = '(list->string `( #\A #\a #\l #\i ))'
+                  expected = '"Aali"' ).
+     ENDMETHOD.
+
+     METHOD string_to_number_1.
+       code_test( code = |(string->number '( 13 ))|
+                  expected = 'Eval: ( 13 ) is not a string in string->number' ).
+     ENDMETHOD.
+
+     METHOD string_to_number_2.
+       code_test( code = |(string->number "42")|
+                  expected = '42' ).
+     ENDMETHOD.
+
+     METHOD number_to_string_1.
+       code_test( code = |(number->string '21)|
+                  expected = '"21"' ).
+     ENDMETHOD.
+
+     METHOD string_append_1.
+       code_test( code = |(string-append "ABAP" "Scheme" "Lisp")|
+                  expected = '"ABAPSchemeLisp"' ).
+     ENDMETHOD.
    ENDCLASS.                    "ltc_list IMPLEMENTATION
 
 *----------------------------------------------------------------------*
