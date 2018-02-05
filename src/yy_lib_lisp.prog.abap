@@ -4004,6 +4004,18 @@
       ENDTRY.
     ENDMETHOD.                    "proc_remainder
 
+    METHOD proc_quotient.
+      result = nil.
+      validate: list, list->cdr.
+      validate_number: list->car '[quotient]',
+                       list->cdr->car '[quotient]'.
+      _is_last_param list->cdr.
+      TRY.
+          result = lcl_lisp_new=>number( trunc( list->car->number / list->cdr->car->number ) ).
+          _catch_arithmetic_error.
+      ENDTRY.
+    ENDMETHOD.                    "proc_quotient
+
     METHOD proc_modulo.
       result = nil.
       validate: list, list->cdr.
@@ -4031,18 +4043,6 @@
           throw( lx_error->get_text( ) ).
       ENDTRY.
     ENDMETHOD.                    "proc_random
-
-    METHOD proc_quotient.
-      result = nil.
-      validate: list, list->cdr.
-      validate_number: list->car '[quotient]',
-                       list->cdr->car '[quotient]'.
-      _is_last_param list->cdr.
-      TRY.
-          result = lcl_lisp_new=>number( list->car->number DIV list->cdr->car->number ).
-          _catch_arithmetic_error.
-      ENDTRY.
-    ENDMETHOD.                    "proc_quotient
 
     METHOD proc_num_to_string.
       validate list.
