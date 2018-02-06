@@ -1,6 +1,6 @@
 ABAP Editor Configuration
 
-# How to enable the new ABAP editor.
+# How To Enable The New ABAP Editor
 
 ## Copy files 
 The SAP GUI configuration files  are located in the roaming user application directory. They can be reachead using the environment variable %APPDATA%.
