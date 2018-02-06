@@ -434,7 +434,10 @@
        METHODS is_procedure_true FOR TESTING.
        METHODS is_procedure_true_1 FOR TESTING.
        METHODS is_procedure_true_2 FOR TESTING.
+       METHODS is_procedure_true_3 FOR TESTING.
+       METHODS is_procedure_true_4 FOR TESTING.
        METHODS is_procedure_false FOR TESTING.
+       METHODS is_procedure_false_1 FOR TESTING.
 
        METHODS is_string_true FOR TESTING.
        METHODS is_string_false FOR TESTING.
@@ -858,6 +861,21 @@
        code_test( code = |(procedure? (lambda (x) (* x x)))|
                   expected = '#t' ).
        code_test( code = |(procedure? '(lambda (x) (* x x)))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD is_procedure_true_3.
+       code_test( code = |(procedure? apply)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_procedure_true_4.
+       code_test( code = |(procedure? map)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_procedure_false_1.
+       code_test( code = |(procedure? define)|
                   expected = '#f' ).
      ENDMETHOD.
 

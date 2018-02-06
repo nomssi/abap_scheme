@@ -277,6 +277,7 @@
         type_lambda    TYPE tv_type VALUE 'λ',
         type_native    TYPE tv_type VALUE 'P',
         type_primitive TYPE tv_type VALUE 'I',
+        type_syntax    TYPE tv_type VALUE 'y',
         type_hash      TYPE tv_type VALUE 'H',
         type_vector    TYPE tv_type VALUE 'V'.
 *      Types for ABAP integration:
@@ -397,8 +398,6 @@
                             RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS number IMPORTING value          TYPE any
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
-      CLASS-METHODS primitive IMPORTING value          TYPE any
-                              RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS string IMPORTING value          TYPE any
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS char IMPORTING value          TYPE any
@@ -1430,35 +1429,37 @@
       env->set( symbol = '#t' element = true ).
 
 *     Add primitive functions to environment
-      env->define_value( symbol = 'define'          type = lcl_lisp=>type_primitive value   = 'define' ).
-      env->define_value( symbol = 'lambda'          type = lcl_lisp=>type_primitive value   = 'lambda' ).
-      env->define_value( symbol = 'if'              type = lcl_lisp=>type_primitive value   = 'if' ).
-      env->define_value( symbol = c_eval_quote      type = lcl_lisp=>type_primitive value   = `'` ).
-      env->define_value( symbol = c_eval_quasiquote type = lcl_lisp=>type_primitive value   = '`' ).
-      env->define_value( symbol = 'set!'            type = lcl_lisp=>type_primitive value   = 'set!' ).
-      env->define_value( symbol = 'apply'           type = lcl_lisp=>type_primitive value   = 'apply' ).
+      env->define_value( symbol = 'define'          type = lcl_lisp=>type_syntax value   = 'define' ).
+      env->define_value( symbol = 'lambda'          type = lcl_lisp=>type_syntax value   = 'lambda' ).
+      env->define_value( symbol = 'if'              type = lcl_lisp=>type_syntax value   = 'if' ).
+      env->define_value( symbol = c_eval_quote      type = lcl_lisp=>type_syntax value   = `'` ).
+      env->define_value( symbol = c_eval_quasiquote type = lcl_lisp=>type_syntax value   = '`' ).
+      env->define_value( symbol = 'set!'            type = lcl_lisp=>type_syntax value   = 'set!' ).
 
-      env->define_value( symbol = 'and'      type = lcl_lisp=>type_primitive value   = 'and' ).
-      env->define_value( symbol = 'or'       type = lcl_lisp=>type_primitive value   = 'or' ).
-      env->define_value( symbol = 'cond'     type = lcl_lisp=>type_primitive value   = 'cond' ).
-      env->define_value( symbol = 'unless'   type = lcl_lisp=>type_primitive value   = 'unless' ).
-      env->define_value( symbol = 'when'     type = lcl_lisp=>type_primitive value   = 'when' ).
-      env->define_value( symbol = 'begin'    type = lcl_lisp=>type_primitive value   = 'begin' ).
-      env->define_value( symbol = 'let'      type = lcl_lisp=>type_primitive value   = 'let' ).
-      env->define_value( symbol = 'let*'     type = lcl_lisp=>type_primitive value   = 'let*' ).
-      env->define_value( symbol = 'letrec'   type = lcl_lisp=>type_primitive value   = 'letrec' ).
-      env->define_value( symbol = 'letrec*'  type = lcl_lisp=>type_primitive value   = 'letrec*' ).
-      env->define_value( symbol = 'do'       type = lcl_lisp=>type_primitive value   = 'do' ).
-      env->define_value( symbol = 'case'     type = lcl_lisp=>type_primitive value   = 'case' ).
+      env->define_value( symbol = 'and'      type = lcl_lisp=>type_syntax value   = 'and' ).
+      env->define_value( symbol = 'or'       type = lcl_lisp=>type_syntax value   = 'or' ).
+      env->define_value( symbol = 'cond'     type = lcl_lisp=>type_syntax value   = 'cond' ).
+      env->define_value( symbol = 'unless'   type = lcl_lisp=>type_syntax value   = 'unless' ).
+      env->define_value( symbol = 'when'     type = lcl_lisp=>type_syntax value   = 'when' ).
+      env->define_value( symbol = 'begin'    type = lcl_lisp=>type_syntax value   = 'begin' ).
+      env->define_value( symbol = 'let'      type = lcl_lisp=>type_syntax value   = 'let' ).
+      env->define_value( symbol = 'let*'     type = lcl_lisp=>type_syntax value   = 'let*' ).
+      env->define_value( symbol = 'letrec'   type = lcl_lisp=>type_syntax value   = 'letrec' ).
+      env->define_value( symbol = 'letrec*'  type = lcl_lisp=>type_syntax value   = 'letrec*' ).
+      env->define_value( symbol = 'do'       type = lcl_lisp=>type_syntax value   = 'do' ).
+      env->define_value( symbol = 'case'     type = lcl_lisp=>type_syntax value   = 'case' ).
+
+      env->define_value( symbol = c_eval_unquote          type = lcl_lisp=>type_syntax value   = ',' ).
+      env->define_value( symbol = c_eval_unquote_splicing type = lcl_lisp=>type_syntax value   = ',@' ).
+
+*     Procedures
+      env->define_value( symbol = 'apply'    type = lcl_lisp=>type_primitive value   = 'apply' ).
       env->define_value( symbol = 'for-each' type = lcl_lisp=>type_primitive value   = 'for-each' ).
       env->define_value( symbol = 'map'      type = lcl_lisp=>type_primitive value   = 'map' ).
-
-      env->define_value( symbol = c_eval_unquote          type = lcl_lisp=>type_primitive value   = ',' ).
-      env->define_value( symbol = c_eval_unquote_splicing type = lcl_lisp=>type_primitive value   = ',@' ).
-      env->define_value( symbol = 'newline'               type = lcl_lisp=>type_primitive value   = 'newline' ).
-      env->define_value( symbol = 'display'               type = lcl_lisp=>type_primitive value   = 'display' ).
-      env->define_value( symbol = 'write'                 type = lcl_lisp=>type_primitive value   = 'write' ).
-      env->define_value( symbol = 'read'                  type = lcl_lisp=>type_primitive value   = 'read' ).
+      env->define_value( symbol = 'newline'  type = lcl_lisp=>type_primitive value   = 'newline' ).
+      env->define_value( symbol = 'display'  type = lcl_lisp=>type_primitive value   = 'display' ).
+      env->define_value( symbol = 'write'    type = lcl_lisp=>type_primitive value   = 'write' ).
+      env->define_value( symbol = 'read'     type = lcl_lisp=>type_primitive value   = 'read' ).
 
 *     Add native functions to environment
       env->define_value( symbol = '+'        type = lcl_lisp=>type_native value   = 'PROC_ADD' ).
@@ -2645,7 +2646,7 @@
                           RECEIVING
                             result = result.
 
-                      WHEN lcl_lisp=>type_primitive.
+                      WHEN lcl_lisp=>type_primitive OR lcl_lisp=>type_syntax.
                         lo_elem = lcl_lisp_new=>cons( io_car = lo_proc
                                                       io_cdr = lr_tail ).
                         CONTINUE. "tail_expression lo_elem.
@@ -3839,8 +3840,9 @@
       result = false.
       CHECK list IS BOUND        " paramater (car) must not be valid
         AND list->car IS BOUND.  " Body
+
       CASE list->car->type.
-        WHEN lcl_lisp=>type_lambda OR lcl_lisp=>type_native OR lcl_lisp=>type_abap_function.
+        WHEN lcl_lisp=>type_lambda OR lcl_lisp=>type_native OR lcl_lisp=>type_primitive OR lcl_lisp=>type_abap_function.
           result = true.
       ENDCASE.
     ENDMETHOD.
@@ -4024,7 +4026,7 @@
       _is_last_param list->cdr.
       TRY.
           result = lcl_lisp_new=>number( list->car->number MOD list->cdr->car->number ).
-          IF sign( list->cdr->car->number ) LE 0.
+          IF sign( list->cdr->car->number ) LE 0 AND result->number NE 0.
             result->number = result->number + list->cdr->car->number.
           ENDIF.
           _catch_arithmetic_error.
@@ -5240,7 +5242,7 @@
 *       Quasiquoting output (quasiquote x) is displayed as `x without parenthesis
         IF lv_first EQ abap_true AND lo_elem->type EQ type_pair.
           lv_first = abap_false.
-          IF lo_elem->car->type EQ type_symbol OR lo_elem->car->type EQ type_primitive.
+          IF lo_elem->car->type EQ type_symbol OR lo_elem->car->type EQ type_syntax.
             CASE lo_elem->car->value.
               WHEN c_eval_quote OR  `'`.
                 lv_parens = abap_false.
@@ -5291,6 +5293,8 @@
         WHEN type_null.
           str = 'nil'.
         WHEN type_primitive.
+          str = value.
+        WHEN type_syntax.
           str = value.
         WHEN type_symbol.
           str = value.
@@ -5437,11 +5441,6 @@
       ro_elem = node( lcl_lisp=>type_number ).
       ro_elem->number = value.
     ENDMETHOD.
-
-    METHOD primitive.
-      ro_elem = node( lcl_lisp=>type_primitive ).
-      ro_elem->value = value.
-    ENDMETHOD.                    "new_number
 
     METHOD atom.
       CASE value.
