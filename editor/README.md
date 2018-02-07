@@ -1,4 +1,4 @@
-ABAP Editor Configuration
+# ABAP Editor Configuration
 
 ## ABAP Editor Configuration Folder
 
@@ -8,7 +8,7 @@ The SAP GUI configuration files are located in the roaming user application dire
     Windows 10 => [ C:\Users\<username>\AppData\Roaming\SAP\SAP GUI\ABAP Editor ]
 
 
-# How To Enable The New ABAP Editor
+## How To Enable The New ABAP Editor
 
 to configure the powerful SAP GUI ABAP Editor for LISP you need
 
