@@ -42,11 +42,16 @@ read
 * https://github.com/alexey-arseniev/ab4-code-templates
 * https://blogs.sap.com/2017/08/01/old-new-abap-editor/
 
-The blog post in particular gives useful hints:
+The comments in the blog post 
 
-In lisp_spec.xml,
+* https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/
 
-add
+give useful hints:
+
+
+    In lisp_spec.xml,
+    
+    add
     <TextType id="52" name="Keywords" ...>
       <Keywords>
     …
