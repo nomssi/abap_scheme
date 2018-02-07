@@ -10,13 +10,18 @@ The SAP GUI ABAP Editor for LISP enables
 
 ![Default Editor](/img/new_editor.png)
 
-#### Configuration Steps
-1. You must manually copy the files two configuration files for the language LISPin your local SAP GUI configuration folder for the ABAP Editor
+## SAP GUI Configuration Folder
+
+The SAP GUI configuration files are located in the roaming user application directory. They can be reached using the environment variable %APPDATA%.
+ 
+    cd %APPDATA%\SAP\SAP GUI\ABAP Editor
+    Windows 10 => [ C:\Users\<username>\AppData\Roaming\SAP\SAP GUI\ABAP Editor ]
+
+## Configuration Steps
+1. You must manually copy two configuration files provided here in your local SAP GUI configuration folder for the ABAP Editor
 
 * lisp_spec.xml
-* lisp_user.xml 
-
-provided here to your _…\AppData\Roaming\SAP\SAP GUI\ABAP Editor_ folder.
+* lisp_user.xml
 
 2. Change in the first lines of ABAP Include YY_LISP_IDE
 
@@ -24,13 +29,6 @@ provided here to your _…\AppData\Roaming\SAP\SAP GUI\ABAP Editor_ folder.
       c_source_type TYPE string VALUE 'LISP'.
 
 3. Restart the workbench.
-
-## SAP GUI Configuration Folder
-
-The SAP GUI configuration files are located in the roaming user application directory. They can be reached using the environment variable %APPDATA%.
- 
-    cd %APPDATA%\SAP\SAP GUI\ABAP Editor
-    Windows 10 => [ C:\Users\<username>\AppData\Roaming\SAP\SAP GUI\ABAP Editor ]
 
 ## Configuration Files
 
@@ -51,7 +49,6 @@ The comments in the blog post
 * https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/
 
 give useful hints:
-
 
     In lisp_spec.xml,
     
