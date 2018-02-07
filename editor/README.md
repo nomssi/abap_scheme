@@ -3,15 +3,8 @@
 ## Default ABAP Scheme Workbench Editor
 ![Default Editor](/img/default_editor.png)
 
-## SAP GUI Configuration Folder
-
-The SAP GUI configuration files are located in the roaming user application directory. They can be reached using the environment variable %APPDATA%.
- 
-    cd %APPDATA%\SAP\SAP GUI\ABAP Editor
-    Windows 10 => [ C:\Users\<username>\AppData\Roaming\SAP\SAP GUI\ABAP Editor ]
-
-
 ## How To Enable The New ABAP Editor
+![Default Editor](/img/new_editor.png)
 
 to configure the powerful SAP GUI ABAP Editor for LISP you need
 
@@ -30,6 +23,13 @@ provided here to your _…\AppData\Roaming\SAP\SAP GUI\ABAP Editor_ folder.
       c_source_type TYPE string VALUE 'LISP'.
 
 Restart the workbench.
+
+## SAP GUI Configuration Folder
+
+The SAP GUI configuration files are located in the roaming user application directory. They can be reached using the environment variable %APPDATA%.
+ 
+    cd %APPDATA%\SAP\SAP GUI\ABAP Editor
+    Windows 10 => [ C:\Users\<username>\AppData\Roaming\SAP\SAP GUI\ABAP Editor ]
 
 ## Configuration Files
 
