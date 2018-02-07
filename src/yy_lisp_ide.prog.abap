@@ -5,8 +5,8 @@
 CONSTANTS:
   c_lisp_input    TYPE string VALUE 'ABAP Lisp Input',
   c_lisp_untitled TYPE programm VALUE 'Untitled',
-* Experimental
 * enable if you uploaded LISP config files or also change c_source_type to 'LISP'
+* check: https://github.com/nomssi/abap_scheme/blob/master/editor/README.md
   c_new_abap_editor TYPE flag VALUE abap_false,
   c_source_type TYPE string VALUE 'ABAP'.
 
@@ -883,7 +883,7 @@ CLASS lcl_source IMPLEMENTATION.
     get_text( IMPORTING table = lt_text
               EXCEPTIONS OTHERS = 0 ).
     cl_gui_cfw=>flush( ).
-    rv_text = concat_lines_of( table = lt_text ).
+    rv_text = concat_lines_of( table = lt_text sep = |\n| ).
   ENDMETHOD.                    "to_string
 
   METHOD lif_source_editor~update_status.

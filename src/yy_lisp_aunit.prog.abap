@@ -294,6 +294,7 @@
        METHODS parse_test IMPORTING code     TYPE string
                                     expected TYPE string
                                     level    TYPE aunit_level DEFAULT if_aunit_constants=>critical.
+       METHODS delimiter FOR TESTING.
        METHODS empty FOR TESTING.
        METHODS lambda FOR TESTING.
        METHODS lambda_comments FOR TESTING.
@@ -326,8 +327,9 @@
          act = lines( elements )
          msg = |No evaluated element from first expression| ).
 
-       READ TABLE elements INDEX 1 INTO element.
-       output->write( element ).
+       LOOP AT elements INTO element.
+         output->write( element ).
+       ENDLOOP.
      ENDMETHOD.                    "parse
 
 * Test parsing of a given piece of code and write out result
@@ -339,6 +341,11 @@
              title = 'PARSE'
              level = level ).
      ENDMETHOD.                    "parse_test
+
+     METHOD delimiter.
+       parse_test( code = 'list' && cl_abap_char_utilities=>horizontal_tab && |; return|
+                   expected = | list| ).
+     ENDMETHOD.                    "lambda
 
      METHOD empty.
        parse_test( code = ''
@@ -467,6 +474,8 @@
        METHODS char_1 FOR TESTING.
        METHODS char_2 FOR TESTING.
        METHODS char_3 FOR TESTING.
+       METHODS len_1 FOR TESTING.
+       METHODS symbol_to_string_1 FOR TESTING.
    ENDCLASS.
 
    CLASS ltc_conditionals DEFINITION INHERITING FROM ltc_interpreter
@@ -982,6 +991,16 @@
      METHOD char_3.
        code_test( code = '#\aA'
                   expected = 'Parse: unknown char #\aA found' ).
+     ENDMETHOD.
+
+     METHOD len_1.
+       code_test( code = '(string-length "Abd#\aA")'
+                  expected = '7' ).
+     ENDMETHOD.
+
+     METHOD symbol_to_string_1.
+       code_test( code = |(symbol->string 'mysymbol)|
+                  expected = '"mysymbol"' ).
      ENDMETHOD.
 
    ENDCLASS.

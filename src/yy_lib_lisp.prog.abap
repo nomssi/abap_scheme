@@ -279,7 +279,8 @@
         type_primitive TYPE tv_type VALUE 'I',
         type_syntax    TYPE tv_type VALUE 'y',
         type_hash      TYPE tv_type VALUE 'H',
-        type_vector    TYPE tv_type VALUE 'V'.
+        type_vector    TYPE tv_type VALUE 'V',
+        type_port      TYPE tv_type VALUE 'p'.
 *      Types for ABAP integration:
       CONSTANTS:
         type_abap_data     TYPE tv_type VALUE 'D',
@@ -460,11 +461,22 @@
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
   ENDCLASS.
 
-  INTERFACE lif_port.
+  INTERFACE lif_input_port.
+    METHODS read IMPORTING iv_input        TYPE string
+                 RETURNING VALUE(rv_input) TYPE string.
+  ENDINTERFACE.
+
+  INTERFACE lif_output_port.
     METHODS write IMPORTING element         TYPE REF TO lcl_lisp
                   RETURNING VALUE(rv_input) TYPE string.
-    METHODS read IMPORTING iv_input        TYPE string OPTIONAL
-                 RETURNING VALUE(rv_input) TYPE string.
+  ENDINTERFACE.
+
+  INTERFACE lif_port.
+    INTERFACES lif_input_port.
+    INTERFACES lif_output_port.
+
+    ALIASES: read FOR lif_input_port~read,
+             write FOR lif_output_port~write.
   ENDINTERFACE.
 
   CLASS lcl_console DEFINITION.
@@ -733,8 +745,8 @@
       DATA char TYPE char1.
 
       DATA mv_eol TYPE char1.
-      DATA mv_whitespace TYPE char04.
-      DATA mv_delimiters TYPE char07.
+      DATA mv_whitespace TYPE char07. " Case sensitive
+      DATA mv_delimiters TYPE text11. " Case sensitive
 
       METHODS:
         next_char RAISING lcx_lisp_exception,
@@ -880,18 +892,20 @@
       proc_max,          ##called
       proc_min,          ##called
 * Formating
-      proc_string,         ##called
-      proc_make_string,    ##called
-      proc_num_to_string,  ##called
-      proc_list_to_string, ##called
-      proc_list_is_string, ##called
-      proc_string_length,  ##called
-      proc_substring,      ##called
-      proc_string_to_num,  ##called
-      proc_string_ref,     ##called
-      proc_string_set,     ##called
-      proc_string_append,  ##called
-      proc_string_to_list, ##called
+      proc_string,           ##called
+      proc_make_string,      ##called
+      proc_num_to_string,    ##called
+      proc_list_to_string,   ##called
+      proc_symbol_to_string, ##called
+      proc_list_is_string,   ##called
+      proc_string_length,    ##called
+      proc_substring,        ##called
+      proc_string_to_num,    ##called
+      proc_string_ref,       ##called
+      proc_string_set,       ##called
+      proc_string_append,    ##called
+      proc_string_to_list,   ##called
+      proc_string_to_symbol, ##called
 
 * Not in the spec: Just adding it anyway
       proc_random,       ##called
@@ -1133,13 +1147,17 @@
       mv_whitespace+0(1) = ' '.
       mv_whitespace+1(1) = cl_abap_char_utilities=>newline.
       mv_whitespace+2(1) = cl_abap_char_utilities=>cr_lf(1).
-      mv_whitespace+3(1) = cl_abap_char_utilities=>horizontal_tab.
+      mv_whitespace+3(1) = cl_abap_char_utilities=>cr_lf(2).
+      mv_whitespace+4(1) = cl_abap_char_utilities=>horizontal_tab.
+      mv_whitespace+5(1) = cl_abap_char_utilities=>vertical_tab.
+      mv_whitespace+6(1) = cl_abap_char_utilities=>form_feed.
+
 *     Delimiters value
       mv_delimiters = mv_whitespace.
-      mv_delimiters+3(1) = c_close_paren.
-      mv_delimiters+4(1) = c_open_paren.
-      mv_delimiters+5(1) = c_close_bracket.
-      mv_delimiters+6(1) = c_open_bracket.
+      mv_delimiters+7(1) = c_close_paren.
+      mv_delimiters+8(1) = c_open_paren.
+      mv_delimiters+9(1) = c_close_bracket.
+      mv_delimiters+10(1) = c_open_bracket.
     ENDMETHOD.                    "constructor
 
     METHOD skip_whitespace.
@@ -1453,13 +1471,15 @@
       env->define_value( symbol = c_eval_unquote_splicing type = lcl_lisp=>type_syntax value   = ',@' ).
 
 *     Procedures
-      env->define_value( symbol = 'apply'    type = lcl_lisp=>type_primitive value   = 'apply' ).
-      env->define_value( symbol = 'for-each' type = lcl_lisp=>type_primitive value   = 'for-each' ).
-      env->define_value( symbol = 'map'      type = lcl_lisp=>type_primitive value   = 'map' ).
-      env->define_value( symbol = 'newline'  type = lcl_lisp=>type_primitive value   = 'newline' ).
-      env->define_value( symbol = 'display'  type = lcl_lisp=>type_primitive value   = 'display' ).
-      env->define_value( symbol = 'write'    type = lcl_lisp=>type_primitive value   = 'write' ).
-      env->define_value( symbol = 'read'     type = lcl_lisp=>type_primitive value   = 'read' ).
+      env->define_value( symbol = 'apply'        type = lcl_lisp=>type_primitive value   = 'apply' ).
+      env->define_value( symbol = 'for-each'     type = lcl_lisp=>type_primitive value   = 'for-each' ).
+      env->define_value( symbol = 'map'          type = lcl_lisp=>type_primitive value   = 'map' ).
+      env->define_value( symbol = 'newline'      type = lcl_lisp=>type_primitive value   = 'newline' ).
+      env->define_value( symbol = 'display'      type = lcl_lisp=>type_primitive value   = 'display' ).
+      env->define_value( symbol = 'write'        type = lcl_lisp=>type_primitive value   = 'write' ).
+      env->define_value( symbol = 'read'         type = lcl_lisp=>type_primitive value   = 'read' ).
+
+      env->define_value( symbol = 'write-string' type = lcl_lisp=>type_primitive value   = 'write-string' ).
 
 *     Add native functions to environment
       env->define_value( symbol = '+'        type = lcl_lisp=>type_native value   = 'PROC_ADD' ).
@@ -1545,7 +1565,10 @@
       env->define_value( symbol = 'string'         type = lcl_lisp=>type_native value = 'PROC_STRING' ).
       env->define_value( symbol = 'string->list'   type = lcl_lisp=>type_native value = 'PROC_STRING_TO_LIST' ).
       env->define_value( symbol = 'list->string'   type = lcl_lisp=>type_native value = 'PROC_LIST_TO_STRING' ).
+      env->define_value( symbol = 'symbol->string' type = lcl_lisp=>type_native value = 'PROC_SYMBOL_TO_STRING' ).
+      env->define_value( symbol = 'string->symbol' type = lcl_lisp=>type_native value = 'PROC_STRING_TO_SYMBOL' ).
       env->define_value( symbol = 'string-append'  type = lcl_lisp=>type_native value = 'PROC_STRING_APPEND' ).
+      env->define_value( symbol = 'string-length'  type = lcl_lisp=>type_native value = 'PROC_STRING_LENGTH' ).
       env->define_value( symbol = 'string-ref'     type = lcl_lisp=>type_native value = 'PROC_STRING_REF' ).
       env->define_value( symbol = 'string-set!'    type = lcl_lisp=>type_native value = 'PROC_STRING_SET' ).
 *     Math
@@ -2335,6 +2358,11 @@
                   WHEN 'write'.
                     result = write( eval( element = lr_tail->car
                                           environment = lo_env )  ).
+                  WHEN 'write-string'.
+                    DATA(lo_str) = eval_ast( element = lr_tail->car
+                                             environment = lo_env ).
+                    validate_string lo_str `write-string`.
+                    result = write( lo_str ).
 
                   WHEN 'and'.
 *                   (and <expression>* >tail expression>)
@@ -3412,27 +3440,29 @@
       DATA(lo_key) = list->car.
       WHILE lo_sublist->type EQ lcl_lisp=>type_pair.
         DATA(lo_pair) = lo_sublist->car.
-        CHECK lo_pair->car->type EQ lo_key->type.
+        IF lo_pair->car->type EQ lo_key->type.
 
-        CASE lo_key->type.
-          WHEN lcl_lisp=>type_number.
-            IF lo_key->number = lo_pair->car->number.
-              result = lo_pair.
-              RETURN.
-            ENDIF.
+          CASE lo_key->type.
+            WHEN lcl_lisp=>type_number.
+              IF lo_key->number = lo_pair->car->number.
+                result = lo_pair.
+                RETURN.
+              ENDIF.
 
-          WHEN lcl_lisp=>type_symbol OR lcl_lisp=>type_string.
-            IF lo_key->value = lo_pair->car->value.
-              result = lo_pair.
-              RETURN.
-            ENDIF.
+            WHEN lcl_lisp=>type_symbol OR lcl_lisp=>type_string.
+              IF lo_key->value = lo_pair->car->value.
+                result = lo_pair.
+                RETURN.
+              ENDIF.
 
-          WHEN OTHERS.
-            IF lo_key = lo_pair->car.
-              result = lo_pair.
-              RETURN.
-            ENDIF.
-        ENDCASE.
+            WHEN OTHERS.
+              IF lo_key = lo_pair->car.
+                result = lo_pair.
+                RETURN.
+              ENDIF.
+          ENDCASE.
+
+        ENDIF.
 
         lo_sublist = lo_sublist->cdr.
       ENDWHILE.
@@ -4070,7 +4100,7 @@
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
       IF lo_ptr NE nil.
-         throw( |{ lo_ptr->to_string( ) } is not a list of char | ).
+        throw( |{ lo_ptr->to_string( ) } is not a list of char | ).
       ENDIF.
 
       result = lcl_lisp_new=>string( lv_text ).
@@ -4235,6 +4265,26 @@
         throw( |{ lo_ptr->to_string( ) } is not a list of char| ).
       ENDIF.
       result = lcl_lisp_new=>string( lv_text ).
+    ENDMETHOD.
+
+    METHOD proc_symbol_to_string.
+      validate: list, list->car.
+
+      IF list->car->type = lcl_lisp=>type_symbol.
+        result = lcl_lisp_new=>string( list->car->value ).
+      ELSE.
+        throw( |{ list->car->to_string( ) } is not a symbol| ).
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD proc_string_to_symbol.
+      validate: list, list->car.
+
+      IF list->car->type = lcl_lisp=>type_string.
+        result = lcl_lisp_new=>symbol( list->car->value ).
+      ELSE.
+        throw( |{ list->car->to_string( ) } is not a string| ).
+      ENDIF.
     ENDMETHOD.
 
     METHOD proc_string_append.
