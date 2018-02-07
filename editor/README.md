@@ -4,9 +4,13 @@
 ![Default Editor](/img/default_editor.png)
 
 ## How To Enable The New ABAP Editor
+The SAP GUI ABAP Editor for LISP enables
+* syntax highlighting
+* code completion
+
 ![Default Editor](/img/new_editor.png)
 
-to configure the powerful SAP GUI ABAP Editor for LISP you need
+You need
 
 1) Two configuration files for the language LISPin your local SAP GUI configuration folder for the ABAP Editor.
 
