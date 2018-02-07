@@ -10,23 +10,20 @@ The SAP GUI ABAP Editor for LISP enables
 
 ![Default Editor](/img/new_editor.png)
 
-You need
-
-1) Two configuration files for the language LISPin your local SAP GUI configuration folder for the ABAP Editor.
-
-Manually copy the files
+#### Configuration Steps
+1. You must manually copy the files two configuration files for the language LISPin your local SAP GUI configuration folder for the ABAP Editor
 
 * lisp_spec.xml
 * lisp_user.xml 
 
 provided here to your _…\AppData\Roaming\SAP\SAP GUI\ABAP Editor_ folder.
 
-2) A change in the first lines of ABAP Include YY_LISP_IDE
+2. Change in the first lines of ABAP Include YY_LISP_IDE
 
       c_new_abap_editor TYPE flag VALUE abap_true,
       c_source_type TYPE string VALUE 'LISP'.
 
-Restart the workbench.
+3. Restart the workbench.
 
 ## SAP GUI Configuration Folder
 
