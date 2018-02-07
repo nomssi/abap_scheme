@@ -76,4 +76,5 @@ The result on the expression either `#t` or `#f`.
       ENDINTERFACE.
 
 ## FAQ
-For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
+* How to [enable the new editor](/editor)
+* For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
