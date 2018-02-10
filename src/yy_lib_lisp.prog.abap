@@ -1697,6 +1697,7 @@
         elem = elem->cdr.
       ENDIF.
 
+*     TO DO: check if circular list are allowed
       WHILE elem->type EQ lcl_lisp=>type_pair.
         lo_arg = lo_arg->cdr = lcl_lisp_new=>cons( io_car = eval_ast( element = elem->car
                                                                       environment = environment ) ).
@@ -1724,6 +1725,7 @@
       result = lo_new.
 
 *     Collect arg1 to argn
+*     TO DO: check if circular lists are allowed
       WHILE lo_arg->cdr->type EQ lcl_lisp=>type_pair.
 *       At least two entries (argn and rest), build (list arg1 . . argn )
 
@@ -1735,6 +1737,7 @@
       DATA(lo_rest) = eval_ast( element = lo_arg->car
                                 environment = environment ).
 
+*     TO DO: check if circular lists are allowed
       WHILE lo_rest->type EQ lcl_lisp=>type_pair.  " e.g. NE nil
         lo_new = lo_new->cdr = lcl_lisp_new=>box_quote( lo_rest->car ).
         lo_rest = lo_rest->cdr.
@@ -2637,11 +2640,9 @@
                                                                          environment = lo_env ) ).
                     tail_expression lo_elem.
 
-                  WHEN c_eval_unquote.
-                    throw( |{ c_eval_unquote } not valid outside of quasiquote| ).
-
-                  WHEN c_eval_unquote_splicing.
-                    throw( |{ c_eval_unquote_splicing }  not valid outside of quasiquote| ).
+                  WHEN c_eval_unquote
+                    OR c_eval_unquote_splicing.
+                    throw( |{ lr_head->value } not valid outside of quasiquote| ).
 
 *                  WHEN 'error'.
 
@@ -2816,6 +2817,7 @@
         first = lo_arg = lo_iter->next( ).
         CHECK first NE nil.
 
+*       TO DO: Check for circular list
 *       Append lo_arg to result, from last element on
         WHILE lo_arg->type = lcl_lisp=>type_pair.
           lo_last = lo_last->cdr = lcl_lisp_new=>cons( io_car = lo_arg->car ).
@@ -2835,6 +2837,7 @@
       result = nil.
       DATA(lo_ptr) = io_list.
 
+*     TO DO: check if circular lists are allowed
       WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
         result = lcl_lisp_new=>cons( io_car = lo_ptr->car
                                      io_cdr = result ).
@@ -2881,10 +2884,7 @@
           RETURN.
         ELSE.
 *         Parameters are already evaluated, use special form to avoid repeated evaluation
-          DATA(lo_prev) = lcl_lisp_new=>cons( io_car = lcl_lisp=>quote
-                                              io_cdr = lcl_lisp_new=>cons( io_car = <lo_list>->car ) ).
-
-          lo_next = lo_next->cdr = lcl_lisp_new=>cons( io_car = lo_prev ).
+          lo_next = lo_next->cdr = lcl_lisp_new=>box_quote( <lo_list>->car ).
           <lo_list> = <lo_list>->cdr.
         ENDIF.
         CHECK <lo_list> EQ nil.
@@ -3101,6 +3101,7 @@
         lo_elem = lo_elem->cdr.
         CHECK lo_elem = lo_slow.
 *       Circular list
+        RETURN.
       ENDWHILE.
       CHECK lo_elem NE nil.
 *     If the last item is not a cons cell, return an error
@@ -5245,8 +5246,8 @@
 
       IF comp NE nil.
         DATA(lo_head) = lcl_lisp_new=>list3( io_first = comp->car
-                                             io_second = me
-                                             io_third = io_elem ).
+                                             io_second = lcl_lisp_new=>quote( me )
+                                             io_third = lcl_lisp_new=>quote( io_elem ) ).
 
         result = interpreter->eval( element = lo_head
                                     environment = comp->environment ).
@@ -5264,10 +5265,30 @@
           result = true.
 
         WHEN lcl_lisp=>type_pair.
-*         circular list
-          CHECK car->is_equal( io_elem->car ) NE false
-            AND cdr->is_equal( io_elem->cdr ) NE false.
-          result = true.
+          DATA(lo_a) = me.
+          DATA(lo_slow) = me.
+          DATA(lo_b) = io_elem.
+
+          WHILE lo_a->type EQ lcl_lisp=>type_pair AND lo_b->type EQ lcl_lisp=>type_pair.
+            IF lo_a->car->is_equal( lo_b->car ) EQ false.
+              RETURN.
+            ENDIF.
+            lo_slow = lo_slow->cdr.
+            lo_a = lo_a->cdr.
+            lo_b = lo_b->cdr.
+            CHECK lo_a->type EQ lcl_lisp=>type_pair AND lo_b->type EQ lcl_lisp=>type_pair.
+            IF lo_a->car->is_equal( lo_b->car ) EQ false.
+              RETURN.
+            ENDIF.
+            lo_a = lo_a->cdr.
+            lo_b = lo_b->cdr.
+            CHECK lo_slow EQ lo_a.
+*           Circular list
+            result = true.
+            RETURN.
+          ENDWHILE.
+
+          result = lo_a->is_equal( lo_b ).
 
         WHEN OTHERS.
           result = is_equivalent( io_elem ).
