@@ -426,6 +426,10 @@
        METHODS letrec_star_0 FOR TESTING.
        METHODS values_0 FOR TESTING.
 
+       METHODS call_cc_0 FOR TESTING.
+       METHODS call_cc_1 FOR TESTING.
+       METHODS call_cc_values FOR TESTING.
+
        METHODS is_symbol_true_1 FOR TESTING.
        METHODS is_symbol_true_2 FOR TESTING.
        METHODS is_symbol_true_3 FOR TESTING.
@@ -795,6 +799,44 @@
 **       8/3, 2.28942848510666 (approximately), and 36/19.
 *       code_test( code = |(means '(3 (1 4)))|
 *                  expected = |8/3 2.28942848510666 36/19| ).
+     ENDMETHOD.
+
+     METHOD call_cc_0.
+       code_test( code = |(call-with-current-continuation | &
+                         |  (lambda (exit)           | &
+                         |    (for-each (lambda (x)  | &
+                         |       (if (negative? x)   | &
+                         |         (exit x)))        | &
+                         |      '(54 0 37 -3 245 19))| &
+                         |  #t))|
+                  expected = '-3' ).
+     ENDMETHOD.
+
+     METHOD call_cc_1.
+       code_test( code = |(define list-length                              | &
+                         |  (lambda (obj)                                  | &
+                         |    (call-with-current-continuation              | &
+                         |       (lambda (return)                          | &
+                         |         (letrec ((r                             | &
+                         |                   (lambda (obj)                 | &
+                         |                     (cond ((null? obj) 0)       | &
+                         |                           ((pair? obj)          | &
+                         |                             (+ (r (cdr obj)) 1))| &
+                         |                           (else (return #f))))))| &
+                         |          (r obj)))))) |
+                  expected = 'list-length' ).
+
+       code_test( code = |(list-length '(1 2 3 4))|
+                  expected = '4' ).
+       code_test( code = |(list-length '(a b . c))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD call_cc_values.
+       code_test( code = |(define (values . things)                 | &
+                         |  (call-with-current-continuation          | &
+                         |     (lambda (cont) (apply cont things)))) |
+                  expected = 'values' ).
      ENDMETHOD.
 
      METHOD is_symbol_true_1.

@@ -361,6 +361,8 @@
                        RETURNING VALUE(result) TYPE REF TO lcl_lisp
                        RAISING   lcx_lisp_exception.
 
+      METHODS is_procedure RETURNING VALUE(result) TYPE REF TO lcl_lisp.
+
       METHODS error_not_a_pair IMPORTING context TYPE string DEFAULT space
                                RAISING   lcx_lisp_exception.
 
@@ -907,6 +909,8 @@
       proc_string_to_list,   ##called
       proc_string_to_symbol, ##called
 
+* Continuation
+      proc_call_cc,          ##called
 * Not in the spec: Just adding it anyway
       proc_random,       ##called
       proc_eq,           ##called
@@ -1607,6 +1611,9 @@
       env->define_value( symbol = 'negative?' type = lcl_lisp=>type_native value = 'PROC_IS_NEGATIVE' ).
       env->define_value( symbol = 'odd?'      type = lcl_lisp=>type_native value = 'PROC_IS_ODD' ).
       env->define_value( symbol = 'even?'     type = lcl_lisp=>type_native value = 'PROC_IS_EVEN' ).
+*     Continuation
+      env->define_value( symbol = 'call-with-current-continuation' type = lcl_lisp=>type_native value = 'PROC_CALL_CC' ).
+      env->define_value( symbol = 'call/cc'                        type = lcl_lisp=>type_native value = 'PROC_CALL_CC' ).
 
 *     Native functions for ABAP integration
       env->define_value( symbol = 'ab-data'       type = lcl_lisp=>type_native value   = 'PROC_ABAP_DATA' ).
@@ -3871,11 +3878,7 @@
       result = false.
       CHECK list IS BOUND        " paramater (car) must not be valid
         AND list->car IS BOUND.  " Body
-
-      CASE list->car->type.
-        WHEN lcl_lisp=>type_lambda OR lcl_lisp=>type_native OR lcl_lisp=>type_primitive OR lcl_lisp=>type_abap_function.
-          result = true.
-      ENDCASE.
+      result = list->car->is_procedure( ).
     ENDMETHOD.
 
     METHOD proc_is_alist. " not in standard?
@@ -4332,6 +4335,39 @@
         validate_number cell '[min]'.
         result->number = nmin( val1 = cell->number val2 = result->number ).
       ENDWHILE.
+    ENDMETHOD.
+
+    METHOD proc_call_cc.
+* A continuation denotes a suspended computation that is awaiting a value
+
+* from: https://link.springer.com/content/pdf/10.1023%2FA%3A1010016816429.pdf
+* Implementation Strategies for First-Class Continuations
+* by William D. ClingerAnne H. HartheimerEric M. Ost
+* Higher-Order and Symbolic Computation. April 1999, Volume 12, Issue 1, pp 7–45
+
+*(define (call-with-current-continuation f)
+*  (let ((k (creg-get)))
+*    (f (lambda (v)
+*      (creg-set! k)
+*      v))))
+
+*implementation in terms of low-level procedures creg-get and creg-set!
+* A)creg-get - capture procedure - converts the implicit continuation passed to
+*             call-with-current-continuationinto some kind of Scheme object with unlimited extent
+*B) creg-set! - throw procedure - takes such an object and installs it as the continuation
+*      for the currently executing procedure overriding the previous implicit continuation.
+* f is called an escape procedure, because a call to the escape procedure will allow control
+*   to bypass the implicit continuation.
+
+*simplest implementation strategy: allocate storage for each continuation frame (activation record)
+*  on a heap and reclaim that storage through garbage collection or reference counting [23].
+*  With this strategy, which we call the gc strategy, creg-get can just return the contents of a
+*  continuation register (which is often called the dynamic link, stack pointer, or frame pointer),
+*  and creg-set! can just store its argument into that register.
+
+      validate list.
+      result = nil.
+      throw( `call/cc not implemented yet` ).
     ENDMETHOD.
 
 **********************************************************************
@@ -5235,6 +5271,18 @@
           CHECK me = b.
       ENDCASE.
       result = true.
+    ENDMETHOD.
+
+    METHOD is_procedure.
+      CASE type.
+        WHEN type_lambda
+          OR type_native
+          OR type_primitive
+          OR type_abap_function.  " really?
+          result = true.
+        WHEN OTHERS.
+          result = false.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD is_equal. "equal?

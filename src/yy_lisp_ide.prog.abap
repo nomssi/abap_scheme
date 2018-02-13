@@ -3,17 +3,22 @@
 *&---------------------------------------------------------------------*
 
 CONSTANTS:
-  c_lisp_input    TYPE string VALUE 'ABAP Lisp Input',
-  c_lisp_untitled TYPE programm VALUE 'Untitled',
+  c_lisp_input      TYPE string VALUE 'ABAP Lisp Input',
+  c_lisp_untitled   TYPE programm VALUE 'Untitled',
 * enable if you uploaded LISP config files or also change c_source_type to 'LISP'
 * check: https://github.com/nomssi/abap_scheme/blob/master/editor/README.md
   c_new_abap_editor TYPE flag VALUE abap_false,
-  c_source_type TYPE string VALUE 'ABAP'.
+  c_source_type     TYPE string VALUE 'LISP'.
 
 CONSTANTS:
   c_lisp_ast_view TYPE cl_abap_browser=>title VALUE 'ABAP Lisp S-Expression Viewer'.
 
 DATA g_ok_code TYPE syucomm.
+
+TYPES: BEGIN OF ts_settings,
+         stack      TYPE string_table,
+         new_editor TYPE flag,
+       END OF ts_settings .
 
 CLASS lcl_stack DEFINITION.
   PUBLIC SECTION.
@@ -21,6 +26,9 @@ CLASS lcl_stack DEFINITION.
     METHODS push IMPORTING iv_key TYPE tv_data.
     METHODS pop RETURNING VALUE(rv_data) TYPE tv_data.
     METHODS empty RETURNING VALUE(rv_flag) TYPE xsdboolean.
+
+    METHODS serialize RETURNING VALUE(rt_string) TYPE string_table.
+    METHODS deserialize IMPORTING it_string      TYPE string_table.
   PROTECTED SECTION.
     TYPES: BEGIN OF ts_node,
              data TYPE tv_data,
@@ -56,9 +64,10 @@ INTERFACE lif_source_editor.
   METHODS pop_text RETURNING VALUE(code) TYPE string.
   METHODS to_string RETURNING VALUE(rv_text) TYPE string.
   METHODS update_status IMPORTING iv_string TYPE string.
+  METHODS setup IMPORTING is_settings TYPE ts_settings.
 
   METHODS set_focus.
-  METHODS free.
+  METHODS free RETURNING VALUE(rt_string) TYPE string_table.
 ENDINTERFACE.
 
 CLASS lcl_source DEFINITION INHERITING FROM cl_gui_sourceedit.
@@ -110,6 +119,23 @@ CLASS lcl_stack IMPLEMENTATION.
 
   METHOD empty.
     rv_flag = xsdbool( mr_top IS NOT BOUND ).
+  ENDMETHOD.
+
+  METHOD deserialize.
+    LOOP AT it_string INTO DATA(lv_string).
+      push( lv_string ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD serialize.
+    DATA lr_node TYPE REF TO ts_node.
+
+    CLEAR rt_string.
+    lr_node = mr_top.
+    WHILE lr_node IS BOUND.
+      APPEND lr_node->data TO rt_string.
+      lr_node ?= lr_node->next.
+    ENDWHILE.
   ENDMETHOD.
 
 ENDCLASS.
@@ -296,6 +322,7 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
   PRIVATE SECTION.
     CLASS-DATA go_ide TYPE REF TO lcl_ide.
 
+    DATA ms_settings TYPE ts_settings.
     DATA mv_first TYPE flag VALUE abap_true.
     DATA mo_cont TYPE REF TO lcl_container.
     DATA mo_int TYPE REF TO lcl_lisp_profiler. "The Lisp interpreter
@@ -333,6 +360,11 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
     METHODS previous.
     METHODS next.
 
+    METHODS read_settings.
+    METHODS save_settings.
+    METHODS post_settings IMPORTING handle TYPE REF TO zcl_lisp_area
+                          RAISING   cx_shm_error cx_dynamic_check.
+
 ENDCLASS.                    "lcl_ide DEFINITION
 
 *----------------------------------------------------------------------*
@@ -341,6 +373,8 @@ ENDCLASS.                    "lcl_ide DEFINITION
 CLASS lcl_ide IMPLEMENTATION.
 
   METHOD constructor.
+    read_settings( ).
+    "VALUE #( stack = serialize( )
     CREATE OBJECT:
       mo_cont,
 
@@ -358,6 +392,70 @@ CLASS lcl_ide IMPLEMENTATION.
     mi_source = new_source_editor( mo_cont->mo_input ).
     refresh( ).
   ENDMETHOD.                    "constructor
+
+  METHOD read_settings.
+    DATA params TYPE REF TO zcl_lisp_shm_root.
+    DATA: handle TYPE REF TO zcl_lisp_area,
+          exc    TYPE REF TO cx_root.
+
+    TRY.
+
+        TRY.
+           handle = zcl_lisp_area=>attach_for_read( ).
+        CATCH cx_shm_no_active_version.
+          WAIT UP TO 1 SECONDS.
+          handle = zcl_lisp_area=>attach_for_read( ).
+        ENDTRY.
+
+        params = handle->root.
+        ms_settings = params->load( ).
+        handle->detach( ).
+      CATCH cx_shm_attach_error INTO exc.
+
+        TRY.
+            post_settings( zcl_lisp_area=>attach_for_write( ) ).
+          CATCH cx_shm_error cx_dynamic_check INTO exc.
+            MESSAGE exc TYPE 'S'.
+        ENDTRY.
+
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD save_settings.
+    DATA handle TYPE REF TO zcl_lisp_area.
+    DATA params TYPE REF TO zcl_lisp_shm_root.
+    DATA exc    TYPE REF TO cx_root.
+
+    TRY.
+        TRY.
+            handle = zcl_lisp_area=>attach_for_update( ).
+          CATCH cx_shm_no_active_version.
+            WAIT UP TO 1 SECONDS.
+            handle = zcl_lisp_area=>attach_for_update( ).
+        ENDTRY.
+
+        params ?= handle->get_root( ).
+        IF params IS NOT BOUND.
+          post_settings( handle ).
+        ELSE.
+          params->save( ms_settings ).
+          handle->detach_commit( ).
+        ENDIF.
+      CATCH cx_shm_error cx_dynamic_check INTO exc.
+        MESSAGE exc TYPE 'S'.
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD post_settings.
+    DATA params TYPE REF TO zcl_lisp_shm_root.
+
+    CREATE OBJECT params AREA HANDLE handle.
+    params->save( ms_settings ).
+
+    handle->set_root( params ).
+    handle->detach_commit( ).
+  ENDMETHOD.
 
   METHOD new_source_editor.
     DATA gui_support TYPE boolean.
@@ -389,6 +487,8 @@ CLASS lcl_ide IMPLEMENTATION.
           iv_read_only = abap_false
           iv_toolbar   = abap_true.
     ENDIF.
+    ri_source->setup( ms_settings ).
+
   ENDMETHOD.
 
   METHOD init.
@@ -598,8 +698,9 @@ CLASS lcl_ide IMPLEMENTATION.
     mo_console->free( ).
     mo_log->free( ).
     mo_output->free( ).
-    mi_source->free( ).
+    ms_settings-stack = mi_source->free( ).
     mo_cont->free_controls( ).
+    save_settings( ).
   ENDMETHOD.                    "free_controls
 
   METHOD pbo.
@@ -801,6 +902,11 @@ CLASS lcl_editor IMPLEMENTATION.
 
   METHOD lif_source_editor~free.
     free( ).
+    rt_string = mo_stack->serialize( ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~setup.
+    mo_stack->deserialize( is_settings-stack ).
   ENDMETHOD.
 
 ENDCLASS.                    "lcl_editor IMPLEMENTATION
@@ -875,6 +981,11 @@ CLASS lcl_source IMPLEMENTATION.
 
   METHOD lif_source_editor~free.
     free( ).
+    rt_string = mo_stack->serialize( ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~setup.
+    mo_stack->deserialize( is_settings-stack ).
   ENDMETHOD.
 
   METHOD lif_source_editor~to_string.
@@ -882,7 +993,7 @@ CLASS lcl_source IMPLEMENTATION.
 
     get_text( IMPORTING table = lt_text
               EXCEPTIONS OTHERS = 0 ).
-    cl_gui_cfw=>flush( ).
+    "cl_gui_cfw=>flush( ).
     rv_text = concat_lines_of( table = lt_text sep = |\n| ).
   ENDMETHOD.                    "to_string
 
