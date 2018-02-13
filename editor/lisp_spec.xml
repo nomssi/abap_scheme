@@ -4,166 +4,179 @@
 	<FILEINFO>
 		<Author>Jacques Nomssi</Author>
 		<Type>LangSpec</Type>
-		<Language>LISP</Language>
+		<Language>Scheme</Language>
 		<Desc>Language specification for LISP</Desc>
 	</FILEINFO>
 	<SPECIFICATION>
 		<FilePattern>*.scm</FilePattern>
 		<CaseSensitive>1</CaseSensitive>
-		<OpenClose>()[]""</OpenClose>
+		<OpenClose>()[]{}''""#||#</OpenClose>
+		<EscapeChar>\</EscapeChar>
 	</SPECIFICATION>
 	<STRUCTURES>
-		<Structure open="(" close=")" header="1" sent_start="1"/>
-		<Structure open="[" close="]" header="1" sent_start="1"/>
-		<Structure open="#|" close="|#" header="1" sent_start="1"/>
+		<Structure open="(" close=")" has_name="0" separator="0" header="0" sent_start="1"/>
 	</STRUCTURES>
 	<FORMAT>
 		<DefaultIndent>2</DefaultIndent>
-		<FormatWords>
-			<FormatWord word="define" indent="6" next_line="1"/>
-			<FormatWord word="if" indent="6" next_line="1"/>
-			<FormatWord word="cond" indent="6" next_line="1"/>
-			<FormatWord word="do" indent="6" next_line="1"/>
-			<FormatWord word="let" indent="6" next_line="1"/>
-		</FormatWords>
 	</FORMAT>
 	<SYNTAXINFO>
-		<InfoType id="1" name="Parser error" clr="-1"/>
-		<InfoType id="3" name="Eval error" clr="-1"/>
+		<InfoType id="1" name="Compiler error" clr="-1"/>
+		<InfoType id="2" name="Performance tip" clr="-1"/>
+		<InfoType id="3" name="Syntax tip" clr="-1"/>
+		<InfoType id="4" name="Spelling error" clr="-1"/>
 	</SYNTAXINFO>
-	<FILTERICONCAPTION>
-		<IconIndex id="0" name="Bold"/>
-		<IconIndex id="5" name="Variable"/>
-		<IconIndex id="6" name="Constant"/>
-		<IconIndex id="7" name="Structure"/>
-		<IconIndex id="8" name="Function"/>
-		<IconIndex id="9" name="Type"/>
-	</FILTERICONCAPTION>
 	<COLORSYNTAX>
-		<TextType id="8" name="define" dstyle="1" dbkclr="0" clr="16777215" bkclr="139"/>
-		<TextType id="10" name="#f" dstyle="1" dbkclr="1" clr="139"/>
-		<TextType id="11" name="#t" dstyle="1" dbkclr="1" clr="12895487"/>
-		<TextType id="5" name="nil" dstyle="1" dbkclr="0" clr="-1" bkclr="15918553"/>
-		<TextType id="6" name="lambda" dstyle="1" dbkclr="0" clr="65535" bkclr="255"/>
-		<TextType id="7" name="let" dstyle="1" dbkclr="0" clr="16777215" bkclr="3329330"/>
-		<TextType id="3" name="let*" dstyle="1" dbkclr="0" clr="-1" bkclr="-1"/>
-		<TextType id="4" name="letrec" dstyle="1" dbkclr="1" clr="9342520"/>
-		<TextType id="13" name="letrec*" dstyle="1" dbkclr="1" clr="255"/>
-		<TextType id="2" name="do" dstyle="1" dbkclr="0" clr="16777215" bkclr="9922608"/>
-		<TextType id="1" name="if" dstyle="1" dbkclr="1" clr="14281970"/>
-		<TextType id="21" name="cond" bold="1" italic="0" underline="0" clr="0" bkclr="-1"/>
-		<TextType id="22" name="and" bold="1" italic="0" underline="0" clr="255" bkclr="-1"/>
-		<TextType id="30" name="or" dstyle="0" dbkclr="0" bold="0" italic="0" underline="0" clr="-1" bkclr="-1"/>
-		<TextType id="9" name="else" dstyle="1" dbkclr="1" clr="15789798"/>
-		<TextType id="31" name="Comments" dstyle="0" dbkclr="0" text="1" bold="0" italic="1" underline="0" clr="12632256" bkclr="-1">
+		<TextType id="10" name="Changed indicator" dstyle="1" dbkclr="1" clr="139"/>
+		<TextType id="11" name="Changed and saved indicator" dstyle="1" dbkclr="1" clr="12895487"/>
+		<TextType id="5" name="Current line" dstyle="1" dbkclr="0" clr="-1" bkclr="15918553"/>
+		<TextType id="6" name="Erroneous line" dstyle="1" dbkclr="0" clr="65535" bkclr="255"/>
+		<TextType id="7" name="Execution" dstyle="1" dbkclr="0" clr="16777215" bkclr="3329330"/>
+		<TextType id="3" name="Inactive selected text" dstyle="1" dbkclr="0" clr="-1" bkclr="-1"/>
+		<TextType id="4" name="Line number" dstyle="1" dbkclr="1" clr="9342520"/>
+      	<TextType id="13" name="Maximum line length" dstyle="1" dbkclr="1" clr="255"/>
+		<TextType id="2" name="Selected text" dstyle="1" dbkclr="0" clr="16777215" bkclr="9922608"/>
+		<TextType id="1" name="Selection margin" dstyle="1" dbkclr="1" clr="14281970"/>
+
+		<TextType id="21" name="#f" dstyle="1" dbkclr="1" clr="139"/>
+		<TextType id="22" name="#t" dstyle="1" dbkclr="1" clr="139"/>
+		<TextType id="9" name="nil" dstyle="1" dbkclr="0" clr="139" bkclr="-1"/>
+
+		<TextType id="30" name="Normal" dstyle="0" dbkclr="0" bold="0" italic="0" underline="0" clr="-1" bkclr="-1"/>
+
+		<TextType id="31" name="Comments" dstyle="0" dbkclr="0" text="1" bold="0" italic="1" underline="0" clr="8421504" bkclr="-1">
+			<FirstChar>;</FirstChar>
 			<Conditions>
 				<Condition start=";" end="\n"/>
+				<Condition start="#|" end="|#"/>
 			</Conditions>
 		</TextType>
-		<TextType id="52" name="Keywords" ImageIdx="13" bold="0" italic="0" underline="0" clr="16711680" bkclr="-1">
+		<TextType id="54" name="Scheme Keywords" ImageIdx="13" bold="0" italic="0" underline="0" clr="10917" bkclr="-1" CaseDisplayMode="1">
 			<Keywords>
-				<Keyword text="define"/>
-				<Keyword text="lambda"/>
-				<Keyword text="and"/>
-				<Keyword text="or"/>
-				<Keyword text="if"/>
-				<Keyword text="cond"/>
-				<Keyword text="eq?"/>
-				<Keyword text="eqv?"/>
-				<Keyword text="equal?"/>
-				<Keyword text="car"/>
-				<Keyword text="cdr"/>
-				<Keyword text="modulo"/>
-				<Keyword text="random"/>
-				<Keyword text="remainder"/>
-				<Keyword text="quote"/>
-				<Keyword text="newline"/>
-				<Keyword text="display"/>
-				<Keyword text="set!"/>
-				<Keyword text="letrec"/>
-				<Keyword text="let*"/>
-				<Keyword text="begin"/>
-				<Keyword text="read"/>
-				<Keyword text="nil"/>
-				<Keyword text="#f"/>
-				<Keyword text="#t"/>
-				<Keyword text="+"/>
-				<Keyword text="append"/>
-				<Keyword text="append!"/>
-				<Keyword text="list"/>
-				<Keyword text="length"/>
-				<Keyword text="reverse"/>
-				<Keyword text="memq"/>
-				<Keyword text="memv"/>
-				<Keyword text="member"/>
-				<Keyword text="assq"/>
-				<Keyword text="assv"/>
-				<Keyword text="assoc"/>
-				<Keyword text="not"/>
-				<Keyword text="when"/>
-				<Keyword text="unless"/>
-				<Keyword text="apply"/>
-				<Keyword text="for-each"/>
-				<Keyword text="map"/>
-				<Keyword text="cons"/>
-				<Keyword text="nil?"/>
-				<Keyword text="null?"/>
-				<Keyword text="boolean?"/>
-				<Keyword text="string?"/>
-				<Keyword text="procedure?"/>
-				<Keyword text="unquote"/>
-				<Keyword text="unquote-splicing"/>
-				<Keyword text="quasiquote"/>
-				<Keyword text="eq?"/>
-				<Keyword text="eqv?"/>
-				<Keyword text="equal?"/>
-				<Keyword text="make-hash"/>
-				<Keyword text="hash-get"/>
-				<Keyword text="string?"/>
-				<Keyword text="hash?"/>
-				<Keyword text="number?"/>
-				<Keyword text="list?"/>
-				<Keyword text="alist?"/>
-				<Keyword text="procedure?"/>
-				<Keyword text="symbol?"/>
-				<Keyword text="type"/>
-				<Keyword text="abs"/>
-				<Keyword text="sin"/>
-				<Keyword text="cos"/>
-				<Keyword text="tan"/>
-				<Keyword text="asin"/>
-				<Keyword text="acos"/>
-				<Keyword text="atan"/>
-				<Keyword text="sinh"/>
-				<Keyword text="cosh"/>
-				<Keyword text="tanh"/>
-				<Keyword text="asinh"/>
-				<Keyword text="acosh"/>
-				<Keyword text="atanh"/>
-				<Keyword text="expt"/>
-				<Keyword text="exp"/>
-				<Keyword text="log"/>
-				<Keyword text="sqrt"/>
-				<Keyword text="floor"/>
-				<Keyword text="ceiling"/>
-				<Keyword text="truncate"/>
-				<Keyword text="round"/>
-				<Keyword text="modulo"/>
-				<Keyword text="quotient"/>
-				<Keyword text="zero?"/>
-				<Keyword text="positive?"/>
-				<Keyword text="negative?"/>
-				<Keyword text="odd?"/>
-				<Keyword text="even?"/>
-				<Keyword text="ab-data"/>
-				<Keyword text="ab-function"/>
-				<Keyword text="ab-table"/>
-				<Keyword text="ab-get"/>
-				<Keyword text="ab-set"/>
-				<Keyword text="ab-sy"/>
+				<Keyword text=",@"/>				
+				<Keyword text=","/>				
+				<Keyword text="'"/>				
 			</Keywords>
+		</TextType>				
+		<TextType id="52" name="Procedures" ImageIdx="13" bold="0" italic="0" underline="0" clr="9342520" bkclr="-1" CaseDisplayMode="1">
+			<FirstChar>(</FirstChar>
+			<Conditions>
+				<Condition start="eq?" end=""/>
+				<Condition start="eqv?" end="" />
+				<Condition start="equal?" end="" />
+				<Condition start="car" end="" />
+				<Condition start="cdr" end="" />
+				<Condition start="caar" end="" />
+				<Condition start="cadr" end="" />
+				<Condition start="cdar" end="" />				
+				<Condition start="cddr" end="" />
+				<Condition start="modulo" end="" />
+				<Condition start="random" end="" />
+				<Condition start="remainder" end="" />
+				<Condition start="newline" end="" />
+				<Condition start="display" end="" />
+				<Condition start="read" end="" />
+				<Condition start="+" end="" />
+				<Condition start="append" end="" />
+				<Condition start="append!" end="" />
+				<Condition start="list" end="" />
+				<Condition start="length" end="" />
+				<Condition start="reverse" end="" />
+				<Condition start="memq" end="" />
+				<Condition start="memv" end="" />
+				<Condition start="member" end="" />
+				<Condition start="assq" end="" />
+				<Condition start="assv" end="" />
+				<Condition start="assoc" end="" />
+				<Condition start="not" end="" />
+				<Condition start="when" end="" />
+				<Condition start="unless" end="" />
+				<Condition start="apply" end="" />
+				<Condition start="for-each" end="" />
+				<Condition start="map" end="" />
+				<Condition start="cons" end="" />
+				<Condition start="nil?" end="" />
+				<Condition start="null?" end="" />
+				<Condition start="boolean?" end="" />
+				<Condition start="string?" end="" />
+				<Condition start="procedure?" end="" />
+				<Condition start="eq?" end="" />
+				<Condition start="eqv?" end="" />
+				<Condition start="equal?" end="" />
+				<Condition start="make-hash" end="" />
+				<Condition start="hash-get" end="" />
+				<Condition start="string?" end="" />
+				<Condition start="hash?" end="" />
+				<Condition start="number?" end="" />
+				<Condition start="list?" end="" />
+				<Condition start="alist?" end="" />
+				<Condition start="procedure?" end="" />
+				<Condition start="symbol?" end="" />
+				<Condition start="type" end="" />
+				<Condition start="abs" end="" />
+				<Condition start="sin" end="" />
+				<Condition start="cos" end="" />
+				<Condition start="tan" end="" />
+				<Condition start="asin" end="" />
+				<Condition start="acos" end="" />
+				<Condition start="atan" end="" />
+				<Condition start="sinh" end="" />
+				<Condition start="cosh" end="" />
+				<Condition start="tanh" end="" />
+				<Condition start="asinh" end="" />
+				<Condition start="acosh" end="" />
+				<Condition start="atanh" end="" />
+				<Condition start="expt" end="" />
+				<Condition start="exp" end="" />
+				<Condition start="log" end="" />
+				<Condition start="sqrt" end="" />
+				<Condition start="floor" end="" />
+				<Condition start="ceiling" end="" />
+				<Condition start="truncate" end="" />
+				<Condition start="round" end="" />
+				<Condition start="modulo" end="" />
+				<Condition start="quotient" end="" />
+				<Condition start="zero?" end="" />
+				<Condition start="positive?" end="" />
+				<Condition start="negative?" end="" />
+				<Condition start="odd?" end="" />
+				<Condition start="even?" end="" />
+				<Condition start="ab-data" end="" />
+				<Condition start="ab-function" end="" />
+				<Condition start="ab-table" end="" />
+				<Condition start="ab-get" end="" />
+				<Condition start="ab-set" end="" />
+				<Condition start="ab-sy" end="" />
+			</Conditions>
 		</TextType>
+		<TextType id="53" name="Scheme Syntax" ImageIdx="13" bold="0" italic="0" underline="0" clr="16711680" bkclr="-1" CaseDisplayMode="1">
+			<FirstChar>(</FirstChar>		
+			<Conditions>
+				<Condition start="define" end="" />
+				<Condition start="lambda" end=""/>
+				<Condition start="and" end=""/>
+				<Condition start="or" end=""/>
+				<Condition start="if" end=""/>
+				<Condition start="cond" end=""/>
+				<Condition start="set!" end=""/>
+				<Condition start="letrec" end=""/>/>
+				<Condition start="let*" end=""/>/>
+				<Condition start="begin" end=""/>/>
+				<Condition start="quasiquote" end=""/>/>
+				<Condition start="quote" end=""/>/>
+				<Condition start="unquote" end=""/>/>
+				<Condition start="unquote-splicing" end=""/>/>
+				<Condition start="do" end=""/>/>
+				<Condition start="case" end=""/>/>
+			</Conditions>			
+		</TextType>
+		
 		<TextType id="32" name="Numbers" dstyle="0" dbkclr="0" bold="0" italic="0" underline="0" clr="16750899" bkclr="-1"/>
+		<TextType id="33" name="Strings" dstyle="0" dbkclr="0" text="1" bold="0" italic="0" underline="0" clr="1680973" bkclr="-1">
+			<FirstChar/>
+			<Conditions>
+				<Condition start="&quot;" end="&quot;"/>
+			</Conditions>
+		</TextType>		
 		<TextType id="40" name="Syntactical error" dstyle="1" dbkclr="0" clr="255" bkclr="-1"/>
 	</COLORSYNTAX>
 </XMLConfigSettings>
