@@ -1820,6 +1820,8 @@
        METHODS list_cddr_4 FOR TESTING.
        METHODS list_cddr_5 FOR TESTING.
 
+       METHODS list_shared_1 FOR TESTING.
+
        METHODS make_string_1      FOR TESTING.
        METHODS make_string_2      FOR TESTING.
        METHODS string_to_list_1   FOR TESTING.
@@ -2265,6 +2267,13 @@
      METHOD list_cddr_5.
        code_test( code = |(cddr '(1 2 6))|
                   expected = '( 6 )' ).
+     ENDMETHOD.
+
+     METHOD list_shared_1.
+       code_test( code = |(let ((x (list 'a 'b 'c)))| &
+                         |  (set-cdr! (cddr x) x)| &
+                         |  x)|
+                  expected = '#0 = ( a b c . #0# )' ).
      ENDMETHOD.
 
      METHOD list_cons_two_lists.

@@ -371,6 +371,10 @@
 
       METHODS list_to_string RETURNING VALUE(str) TYPE string
                              RAISING   lcx_lisp_exception.
+
+      METHODS format_quasiquote IMPORTING io_elem TYPE REF TO lcl_lisp
+                                EXPORTING ev_skip TYPE flag
+                                          ev_str TYPE string.
   ENDCLASS.                    "lcl_lisp DEFINITION
 
   INTERFACE lif_native.
@@ -4370,9 +4374,9 @@
     METHOD proc_call_cc.
 * A continuation denotes a suspended computation that is awaiting a value
 
-* from: https://link.springer.com/content/pdf/10.1023%2FA%3A1010016816429.pdf
+* http://www.ccs.neu.edu/home/dherman/browse/projects/vm/implementation-strategies2.pdf
 * Implementation Strategies for First-Class Continuations
-* by William D. ClingerAnne H. HartheimerEric M. Ost
+* by William D. Clinger Anne H. Hartheimer Eric M. Ost
 * Higher-Order and Symbolic Computation. April 1999, Volume 12, Issue 1, pp 7–45
 *(define (call-with-current-continuation f)
 *  (let ((k (creg-get)))
@@ -5063,17 +5067,17 @@
     ENDMETHOD.
 
     METHOD get.
+**     Clever but probably expensive TRY / CATCH. This logic is use very often
+*      TRY.
+*          cell = VALUE #( map[ symbol = symbol ]-value DEFAULT outer->get( symbol ) ).
+*        CATCH cx_root.
+*          unbound_symbol( symbol ).
+*      ENDTRY.
       DATA ls_map LIKE LINE OF map.
       DATA lo_env TYPE REF TO lcl_lisp_environment.
 *     takes a symbol key and uses the find logic to locate the environment with the key,
 *     then returns the matching value.
-      READ TABLE map INTO ls_map WITH KEY symbol = symbol.
-      IF sy-subrc EQ 0.
-        cell = ls_map-value.
-        RETURN.
-      ENDIF.
-
-      lo_env = outer.
+      lo_env = me.
       WHILE lo_env IS BOUND.
         READ TABLE lo_env->map INTO ls_map WITH KEY symbol = symbol.
         IF sy-subrc EQ 0.
@@ -5085,15 +5089,6 @@
 *     raises an "unbound" error if key is not found
       unbound_symbol( symbol ).
     ENDMETHOD.
-
-*    METHOD get.
-**     Clever but the TRY / CATCH is probably expensive. This logic is use very, very often
-*      TRY.
-*          cell = VALUE #( map[ symbol = symbol ]-value DEFAULT outer->get( symbol ) ).
-*        CATCH cx_root.
-*          unbound_symbol( symbol ).
-*      ENDTRY.
-*    ENDMETHOD.
 
     METHOD unbound_symbol.
 *     symbol not found in the environment chain
@@ -5220,6 +5215,8 @@
   CLASS lcl_lisp IMPLEMENTATION.
 
     METHOD class_constructor.
+      DATA x TYPE x LENGTH 2.
+
       nil = lcl_lisp_new=>null( ).
       false = lcl_lisp_new=>boolean( '#f' ).
       true = lcl_lisp_new=>boolean( '#t' ).
@@ -5232,7 +5229,7 @@
       cons = lcl_lisp_new=>symbol( c_eval_cons ).
       list = lcl_lisp_new=>symbol( c_eval_list ).
 
-      DATA x TYPE x LENGTH 2 VALUE '0007'.
+      x = '0007'.
       char_alarm = lcl_lisp_new=>char( x ).
       x = '0008'.
       char_backspace = lcl_lisp_new=>char( x ).
@@ -5376,52 +5373,80 @@
       ro_iter = NEW lcl_lisp_iterator( me ).
     ENDMETHOD.
 
+    METHOD format_quasiquote.
+*     Quasiquoting output (quasiquote x) is displayed as `x without parenthesis
+      ev_skip = abap_false.
+      CHECK io_elem->type EQ type_pair.
+
+      IF io_elem->car->type EQ type_symbol OR io_elem->car->type EQ type_syntax.
+        CASE io_elem->car->value.
+          WHEN c_eval_quote OR `'`.
+            ev_str = ev_str && `'`.
+            ev_skip = abap_true.
+
+          WHEN c_eval_quasiquote OR '`'.
+            ev_str = ev_str && '`'.
+            ev_skip = abap_true.
+
+          WHEN c_eval_unquote OR ','.
+            ev_str = ev_str && ','.
+            ev_skip = abap_true.
+
+          WHEN c_eval_unquote_splicing OR ',@'.
+            ev_str = ev_str && ',@'.
+            ev_skip = abap_true.
+
+        ENDCASE.
+      ENDIF.
+    ENDMETHOD.
+
     METHOD list_to_string.
       DATA lv_str TYPE string.
+      DATA lv_skip TYPE flag.
+      DATA lv_parens TYPE flag.
       DATA lv_first TYPE flag VALUE abap_true.
+      DATA lo_elem TYPE REF TO lcl_lisp.
+      DATA lo_fast TYPE REF TO lcl_lisp.
+      DATA lv_shared TYPE i VALUE -1.
 
-      DATA(lo_elem) = me.
+      lo_elem = lo_fast = me.
 
-      DATA(lv_parens) = abap_true.
+      lv_parens = abap_true.
       WHILE lo_elem IS BOUND AND lo_elem NE nil.
 
 *       Quasiquoting output (quasiquote x) is displayed as `x without parenthesis
+        lv_skip = abap_false.
         IF lv_first EQ abap_true AND lo_elem->type EQ type_pair.
           lv_first = abap_false.
-          IF lo_elem->car->type EQ type_symbol OR lo_elem->car->type EQ type_syntax.
-            CASE lo_elem->car->value.
-              WHEN c_eval_quote OR  `'`.
-                lv_parens = abap_false.
-                lv_str = lv_str && `'`.
-                lo_elem = lo_elem->cdr.
-                CONTINUE.
 
-              WHEN c_eval_quasiquote OR '`'.
-                lv_parens = abap_false.
-                lv_str = lv_str && '`'.
-                lo_elem = lo_elem->cdr.
-                CONTINUE.
-
-              WHEN c_eval_unquote OR ','.
-                lv_parens = abap_false.
-                lv_str = lv_str && ','.
-                lo_elem = lo_elem->cdr.
-                CONTINUE.
-
-              WHEN c_eval_unquote_splicing OR ',@'.
-                lv_parens = abap_false.
-                lv_str = lv_str && ',@'.
-                lo_elem = lo_elem->cdr.
-                CONTINUE.
-
-            ENDCASE.
+          format_quasiquote( EXPORTING io_elem = lo_elem
+                             IMPORTING ev_skip = lv_skip
+                                       ev_str = lv_str ).
+          IF lv_skip EQ abap_true.
+            lv_parens = abap_false.
           ENDIF.
         ENDIF.
 
-        lv_str = lv_str && COND string( WHEN lo_elem->type NE type_pair     " If item is not a cons cell
-                                        THEN | . { lo_elem->write( ) }|      " indicate with dot notation:
-                                        ELSE | { lo_elem->car->write( ) }| ).
+        IF lv_skip EQ abap_false.
+          lv_str = lv_str && COND string( WHEN lo_elem->type NE type_pair     " If item is not a cons cell
+                                          THEN | . { lo_elem->write( ) }|      " indicate with dot notation:
+                                          ELSE | { lo_elem->car->write( ) }| ).
+        ENDIF.
+
         lo_elem = lo_elem->cdr.
+
+        CHECK lo_fast IS BOUND AND lo_fast NE nil.
+        lo_fast = lo_fast->cdr.
+
+        CHECK lo_fast IS BOUND AND lo_fast NE nil.
+        lo_fast = lo_fast->cdr.
+
+        CHECK lo_elem = lo_fast.
+*       Circular list
+        ADD 1 TO lv_shared.
+        lv_str = lv_str && | . #{ lv_shared }#|.
+        EXIT.
+
       ENDWHILE.
 
       IF lv_parens EQ abap_true.
@@ -5429,6 +5454,10 @@
       ELSE.
 *       Quasiquoting output
         str = lv_str.
+      ENDIF.
+      IF lv_shared GE 0.
+*       Circular / shared list
+        str = |#{ lv_shared } = { str }|.
       ENDIF.
     ENDMETHOD.                    "list_to_string
 
