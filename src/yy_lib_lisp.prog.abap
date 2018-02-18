@@ -206,9 +206,9 @@
     validate_number list->car &2.
     _is_last_param list.
     TRY.
-    carry = list->car->number.
-    result = lcl_lisp_new=>number( &1( carry ) ).
-    _catch_arithmetic_error.
+          carry = list->car->number.
+          result = lcl_lisp_new=>number( &1( carry ) ).
+      _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
 
@@ -907,6 +907,7 @@
       proc_string_append,    ##called
       proc_string_to_list,   ##called
       proc_string_to_symbol, ##called
+      proc_iota,             ##called
 
 * Continuation
       proc_call_cc,          ##called
@@ -1501,6 +1502,7 @@
       env->define_value( symbol = 'list-ref'     type = lcl_lisp=>type_native value   = 'PROC_LIST_REF' ).
       env->define_value( symbol = 'list-copy'    type = lcl_lisp=>type_native value   = 'PROC_LIST_COPY' ).
       env->define_value( symbol = 'list->vector' type = lcl_lisp=>type_native value   = 'PROC_LIST_TO_VECTOR' ).
+      env->define_value( symbol = 'iota'         type = lcl_lisp=>type_native value   = 'PROC_IOTA' ).
 
       env->define_value( symbol = 'memq'    type = lcl_lisp=>type_native value   = 'PROC_MEMQ' ).
       env->define_value( symbol = 'memv'    type = lcl_lisp=>type_native value   = 'PROC_MEMV' ).
@@ -3215,6 +3217,44 @@
         result = result->cdr.
         CHECK result IS NOT BOUND.
         throw( area && |: an entry before index { k } is not a pair| ).
+      ENDDO.
+    ENDMETHOD.
+
+    METHOD proc_iota.
+      DATA lv_count TYPE sytabix.
+      DATA lv_start TYPE sytabix VALUE 0.
+      DATA lv_step TYPE sytabix VALUE 1.
+      DATA lo_ptr TYPE REF TO lcl_lisp.
+
+      validate list.
+
+      DATA(lo_count) = list->car.
+      validate_integer lo_count 'iota count'.
+      lv_count = lo_count->number.
+
+      result = nil.
+      CHECK lv_count GT 0.
+
+      validate list->cdr.
+      IF list->cdr NE nil.
+        DATA(lo_start) = list->cdr->car.
+        validate_integer lo_start 'iota start'.
+        lv_start = lo_start->number.
+
+        validate list->cdr->cdr.
+        IF list->cdr->cdr NE nil.
+          DATA(lo_step) = list->cdr->cdr->car.
+          validate_integer lo_step 'iota step'.
+          lv_step = lo_step->number.
+        ENDIF.
+      ENDIF.
+
+
+      result = lo_ptr = lcl_lisp_new=>cons( io_car = lcl_lisp_new=>number( lv_start ) ).
+
+      DO lv_count - 1 TIMES.
+        ADD lv_step TO lv_start.
+        lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = lcl_lisp_new=>number( lv_start ) ).
       ENDDO.
     ENDMETHOD.
 

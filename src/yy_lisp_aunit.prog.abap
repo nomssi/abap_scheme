@@ -1800,6 +1800,10 @@
 
        METHODS list_tail FOR TESTING.
 
+       METHODS iota_1 FOR TESTING.
+       METHODS iota_2 FOR TESTING.
+       METHODS iota_3 FOR TESTING.
+
        METHODS list_caar_1 FOR TESTING.
        METHODS list_caar_2 FOR TESTING.
        METHODS list_caar_3 FOR TESTING.
@@ -2402,6 +2406,21 @@
      METHOD list_tail.
        code_test( code = |(list-tail '(a b c d) 2)|
                   expected = '( c d )' ).
+     ENDMETHOD.
+
+     METHOD iota_1.
+       code_test( code = |(iota 3)|
+                  expected = '( 0 1 2 )' ).
+     ENDMETHOD.
+
+     METHOD iota_2.
+       code_test( code = |(iota 5 2)|
+                  expected = '( 2 3 4 5 6 )' ).
+     ENDMETHOD.
+
+     METHOD iota_3.
+       code_test( code = |(iota 4 2 -1)|
+                  expected = '( 2 1 0 -1 )' ).
      ENDMETHOD.
 
      METHOD list_ref.
