@@ -34,6 +34,8 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/)
 - A version is available that should work on older releases, but is not maintained anymore
       Note: check the [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP).
 
+![class_diagram](https://github.com/nomssi/abap_scheme/blob/master/img/zz_lisp_uml.png)
+
 ### ABAP Integration
 #### Interpreter
 Class `lcl_lisp_interpreter` evaluates your Scheme code in a string `code`, using either method `eval_repl( code )` which throws an exception on errors, or method `eval_source( code )` catches exception:
