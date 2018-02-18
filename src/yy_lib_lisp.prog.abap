@@ -59,8 +59,7 @@
 
   DEFINE trace_call.
     IF gv_lisp_trace EQ abap_true.
-      cl_demo_output=>write( |call { &1->value } { &1->to_string( ) } |
-                          && |param { &2->to_string( ) }| ).
+      cl_demo_output=>write( |call { &1->value } { &1->to_string( ) } param { &2->to_string( ) }| ).
     ENDIF.
   END-OF-DEFINITION.
 
@@ -94,32 +93,27 @@
     ENDIF.
   END-OF-DEFINITION.
 
-  DEFINE validate_number.
+  DEFINE validate_type.
     validate &1.
-    IF &1->type NE lcl_lisp=>type_number.
-      throw( |{ &1->to_string( ) } is not a number | && &2 ).
+    IF &1->type NE lcl_lisp=>type_&3.
+      throw( &1->to_string( ) && ` is not a ` && &4 && ` in ` && &2 ).
     ENDIF.
+  END-OF-DEFINITION.
+
+  DEFINE validate_number.
+    validate_type &1 &2 number `number`.
   END-OF-DEFINITION.
 
   DEFINE validate_char.
-    validate &1.
-    IF &1->type NE lcl_lisp=>type_char.
-      throw( |{ &1->to_string( ) } is not a char in | && &2 ).
-    ENDIF.
+    validate_type &1 &2 char `char`.
   END-OF-DEFINITION.
 
   DEFINE validate_string.
-    validate &1.
-    IF &1->type NE lcl_lisp=>type_string.
-      throw( |{ &1->to_string( ) } is not a string in | && &2 ).
-    ENDIF.
+    validate_type &1 &2 string `string`.
   END-OF-DEFINITION.
 
   DEFINE validate_vector.
-    validate &1.
-    IF &1->type NE lcl_lisp=>type_vector.
-      throw( |{ &1->to_string( ) } is not a vector in | && &2 ).
-    ENDIF.
+    validate_type &1 &2 vector `vector`.
   END-OF-DEFINITION.
 
   DEFINE validate_integer.
@@ -280,7 +274,7 @@
         type_syntax    TYPE tv_type VALUE 'y',
         type_hash      TYPE tv_type VALUE 'H',
         type_vector    TYPE tv_type VALUE 'V',
-        type_port      TYPE tv_type VALUE 'p'.
+        type_port      TYPE tv_type VALUE 'p'.  " not implemented yet
 *      Types for ABAP integration:
       CONSTANTS:
         type_abap_data     TYPE tv_type VALUE 'D',
@@ -563,7 +557,7 @@
 
       CLASS-METHODS init IMPORTING size             TYPE sytabix
                                    io_fill          TYPE REF TO lcl_lisp DEFAULT nil
-                                   mutable          TYPE flag DEFAULT abap_true
+                                   iv_mutable       TYPE flag DEFAULT abap_true
                          RETURNING VALUE(ro_vector) TYPE REF TO lcl_lisp_vector
                          RAISING   lcx_lisp_exception.
 
@@ -737,7 +731,7 @@
 
       METHODS:
         constructor,
-        parse IMPORTING code            TYPE clike
+        parse IMPORTING iv_code         TYPE clike
               RETURNING VALUE(elements) TYPE tt_element
               RAISING   lcx_lisp_exception.
     PRIVATE SECTION.
@@ -800,8 +794,8 @@
 
 * Functions for dealing with lists:
       _proc_meth:
-      proc_append,          ##called
-      proc_append_unsafe,   ##called
+      proc_append          ##called,
+      proc_append_unsafe   ##called,
       proc_reverse,         ##called
       proc_set_car,         ##called
       proc_set_cdr,         ##called
@@ -821,10 +815,11 @@
       proc_assv,     ##called
       proc_assoc,    ##called
 
-      proc_make_list,       ##called
-      proc_list_tail,       ##called
-      proc_list_ref,        ##called
-      proc_list_to_vector,  ##called
+      proc_make_list       ##called,
+      proc_list_tail       ##called,
+      proc_list_ref        ##called,
+      proc_list_copy       ##called,
+      proc_list_to_vector  ##called,
 
       proc_length,   ##called
       proc_list,     ##called
@@ -1228,7 +1223,7 @@
     METHOD parse.
 *     Entry point for parsing code. This is not thread-safe, but as an ABAP
 *     process does not have the concept of threads, we are safe :-)
-      me->code = code.
+      code = iv_code.
       length = strlen( code ).
       IF length = 0.
         APPEND lcl_lisp=>nil TO elements.
@@ -1500,6 +1495,7 @@
       env->define_value( symbol = 'make-list'    type = lcl_lisp=>type_native value   = 'PROC_MAKE_LIST' ).
       env->define_value( symbol = 'list-tail'    type = lcl_lisp=>type_native value   = 'PROC_LIST_TAIL' ).
       env->define_value( symbol = 'list-ref'     type = lcl_lisp=>type_native value   = 'PROC_LIST_REF' ).
+      env->define_value( symbol = 'list-copy'    type = lcl_lisp=>type_native value   = 'PROC_LIST_COPY' ).
       env->define_value( symbol = 'list->vector' type = lcl_lisp=>type_native value   = 'PROC_LIST_TO_VECTOR' ).
 
       env->define_value( symbol = 'memq'    type = lcl_lisp=>type_native value   = 'PROC_MEMQ' ).
@@ -1905,9 +1901,10 @@
 *     ( eval LOOP for the last evaluation step )
       validate io_head.
       result = nil.
+      eo_elem = io_head.
+
       CHECK io_head NE nil.
 
-      eo_elem = io_head.
       WHILE eo_elem IS BOUND AND eo_elem->type EQ lcl_lisp=>type_pair
         AND eo_elem->cdr NE nil.  " Do not evaluate the last list element
 
@@ -2175,10 +2172,10 @@
         DATA(eval_right) = eval( element = right
                                 environment = environment ).
         IF eval_left = exp->car AND eval_right = exp->cdr.
-*	        (list 'quote exp)
+*         (list 'quote exp)
           result = lcl_lisp_new=>quote( exp ).
         ELSE.
-*	        (list 'quote (cons (eval left) (eval right)))))
+*         (list 'quote (cons (eval left) (eval right)))))
           result = lcl_lisp_new=>quote( eval_left ).
           result->cdr->cdr = eval_right.
         ENDIF.
@@ -2263,7 +2260,7 @@
             validate_quote lo_first c_eval_unquote_splicing.
 
             IF nesting = 0.
-*	            (list 'append (second (first exp))
+*             (list 'append (second (first exp))
 *                           (expand-quasiquote (cdr exp) nesting))
               result = lcl_lisp_new=>list3( io_first = lcl_lisp=>append
                                             io_second = lo_first->cdr->car
@@ -3092,9 +3089,9 @@
 *     ;; the fast pointer will equal the slow pointer. That fact justifies this implementation.
 *     (when (and (eq fast slow) (> n 0)) (return nil))))
     METHOD list_length.
-      validate list.
       DATA lo_elem TYPE REF TO lcl_lisp.
       DATA lo_slow TYPE REF TO lcl_lisp.
+      validate list.
 
       result = 0.
       lo_slow = lo_elem = list.
@@ -3122,6 +3119,37 @@
       ENDIF.
 
       result = lcl_lisp_new=>number( list_length( list->car ) ).
+    ENDMETHOD.                    "proc_length
+
+    METHOD proc_list_copy.
+      DATA lo_slow TYPE REF TO lcl_lisp.
+      DATA lo_ptr TYPE REF TO lcl_lisp.
+      DATA lo_new TYPE REF TO lcl_lisp.
+
+      validate: list, list->cdr.
+      IF list->cdr NE nil.
+        throw( |list-copy takes only one argument| ).
+      ENDIF.
+
+      validate list->car.
+      result = list->car.
+      CHECK result->type EQ lcl_lisp=>type_pair.
+
+      lo_slow = lo_ptr = result->cdr.
+      result = lo_new = lcl_lisp_new=>cons( io_car = result->car ).
+
+*     Iterate over list to count the number of items
+      WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+        lo_new = lo_new->cdr = lcl_lisp_new=>cons( io_car = lo_ptr->car ).
+        lo_ptr = lo_ptr->cdr.
+        lo_slow = lo_slow->cdr.
+        CHECK lo_ptr->type EQ lcl_lisp=>type_pair.
+        lo_new = lo_new->cdr = lcl_lisp_new=>cons( io_car = lo_ptr->car ).
+        lo_ptr = lo_ptr->cdr.
+        CHECK lo_ptr = lo_slow.
+        throw( |list-copy: circular list| ).
+      ENDWHILE.
+      lo_new->cdr = lo_ptr.
     ENDMETHOD.                    "proc_length
 
     METHOD proc_list.
@@ -3689,19 +3717,6 @@
       ENDWHILE.
     ENDMETHOD.                    "proc_eq
 
-*(equal? 'a 'a) =) #t
-*(equal? '(a) '(a)) =) #t
-*(equal? '(a (b) c)
-*'(a (b) c)) =) #t
-*(equal? "abc" "abc") =) #t
-*(equal? 2 2) =) #t
-*(equal? (make-vector 5 'a)
-*(make-vector 5 'a)) =) #t
-*(equal? '#1=(a b . #1#)
-*'#2=(a b a b . #2#))=) #t
-*(equal? (lambda (x) x)
-*(lambda (y) y)) =) unspecied
-
     METHOD proc_equal.
 * equal? returns the same as eqv? when applied to booleans, symbols, numbers, characters, ports,
 * procedures, and the empty list. If two objects are eqv?, they must be equal? as well.
@@ -3710,6 +3725,7 @@
       validate: list, list->car.
       result = false.
       DATA(lo_ptr) = list.
+      DATA(lo_slow) = list.
 
       WHILE lo_ptr->cdr NE nil.
         DATA(lo_next) = lo_ptr->cdr->car.
@@ -3720,6 +3736,20 @@
           RETURN.
         ENDIF.
         lo_ptr = lo_ptr->cdr.
+        lo_slow = lo_slow->cdr.
+
+        CHECK lo_ptr->cdr NE nil.
+        lo_next = lo_ptr->cdr->car.
+        validate lo_next.
+
+        result = lo_next->is_equal( lo_ptr->car ).
+        IF result EQ false.
+          RETURN.
+        ENDIF.
+        lo_ptr = lo_ptr->cdr.
+        CHECK lo_ptr EQ lo_slow.
+*       Circular list
+        RETURN.
       ENDWHILE.
 
     ENDMETHOD.                    "proc_equal
@@ -4094,7 +4124,6 @@
 
     METHOD proc_string.
       DATA lo_ptr TYPE REF TO lcl_lisp.
-      DATA lv_char TYPE c LENGTH 1.
       DATA lv_text TYPE string.
 
       validate: list, list->car.
@@ -4197,9 +4226,9 @@
     ENDMETHOD.
 
     METHOD proc_substring.
-      DATA lv_char TYPE c LENGTH 1.
       DATA lv_start TYPE sytabix.
       DATA lv_len TYPE sytabix.
+      DATA lv_end TYPE sytabix.
       DATA lv_text TYPE string.
 
       validate: list, list->cdr, list->cdr->cdr.
@@ -4208,9 +4237,10 @@
       validate_integer list->cdr->cdr->car 'substring'.
 
       lv_start = list->cdr->car->number.
-      lv_len = list->cdr->cdr->car->number.
-      lv_len = lv_len  - lv_start + 1.
-      lv_text = list->car->value+lv_start(lv_len).
+      lv_end = list->cdr->cdr->car->number.
+      lv_len = lv_end - lv_start + 1.
+      "lv_text = list->car->value+lv_start(lv_len).
+      lv_text = substring( val = list->car->value off = lv_start len = lv_len ).
 
       result = lcl_lisp_new=>string( lv_text ).
     ENDMETHOD.
@@ -4344,7 +4374,6 @@
 * Implementation Strategies for First-Class Continuations
 * by William D. ClingerAnne H. HartheimerEric M. Ost
 * Higher-Order and Symbolic Computation. April 1999, Volume 12, Issue 1, pp 7–45
-
 *(define (call-with-current-continuation f)
 *  (let ((k (creg-get)))
 *    (f (lambda (v)
@@ -4552,13 +4581,11 @@
         cl_abap_typedescr=>describe_by_data_ref( lo_ref->data )->kind = cl_abap_typedescr=>kind_elem.
 *       Elementary type; can return the value without mapping
         DATA(lr_data) = lo_ref->data.
-      ELSE.
+      ELSEIF list->cdr = nil.
 *       Could short-cut here and provide the value right away
-        IF list->cdr = nil.
-          throw( |ab-get: Complex type requires identifier for lookup| ).
-        ELSE.
-          lr_data = get_element( list ).
-        ENDIF.
+        throw( |ab-get: Complex type requires identifier for lookup| ).
+      ELSE.
+        lr_data = get_element( list ).
       ENDIF.
 
       result = create_element_from_data( lr_data ).
@@ -5036,7 +5063,7 @@
     ENDMETHOD.
 
     METHOD get.
-      DATA ls_map TYPE ts_map.
+      DATA ls_map LIKE LINE OF map.
       DATA lo_env TYPE REF TO lcl_lisp_environment.
 *     takes a symbol key and uses the find logic to locate the environment with the key,
 *     then returns the matching value.
@@ -5262,8 +5289,8 @@
 
         WHEN lcl_lisp=>type_pair OR lcl_lisp=>type_lambda.
 * obj1 and obj2 are procedures whose location tags are equal (section 4.1.4).
-
-          CHECK car EQ b->car AND cdr EQ b->cdr.
+          CHECK car EQ b->car AND cdr EQ b->cdr
+            AND environment = b->environment.
 
         WHEN OTHERS.
 * obj1 and obj2 are pairs, vectors, bytevectors, records, or strings that denote the same location  in the store (section 3.4).
@@ -5411,13 +5438,10 @@
           str = |<lambda> { car->list_to_string( ) }|.
         WHEN type_null.
           str = 'nil'.
-        WHEN type_primitive.
-          str = value.
-        WHEN type_syntax.
-          str = value.
-        WHEN type_symbol.
-          str = value.
-        WHEN type_boolean.
+        WHEN type_syntax
+          OR type_primitive
+          OR type_symbol
+          OR type_boolean.
           str = value.
         WHEN type_string.
           str = value.
@@ -5684,6 +5708,18 @@
 *----------------------------------------------------------------------*
   CLASS lcl_lisp_hash IMPLEMENTATION.
 
+    METHOD eval.
+      result = NEW lcl_lisp_hash( ).
+      result->type = lcl_lisp=>type_hash.
+
+      LOOP AT hash INTO DATA(ls_entry).
+        INSERT VALUE #( key = ls_entry-key
+                        element = interpreter->eval( element = ls_entry-element
+                                                     environment = environment ) ) INTO TABLE result->hash.
+      ENDLOOP.
+
+    ENDMETHOD.
+
     METHOD fill.
       validate list.
 
@@ -5753,18 +5789,6 @@
       ro_hash = CAST #( list->car ).
     ENDMETHOD.                    "from_list
 
-    METHOD eval.
-      result = NEW lcl_lisp_hash( ).
-      result->type = lcl_lisp=>type_hash.
-
-      LOOP AT hash INTO DATA(ls_entry).
-        INSERT VALUE #( key = ls_entry-key
-                        element = interpreter->eval( element = ls_entry-element
-                                                     environment = environment ) ) INTO TABLE result->hash.
-      ENDLOOP.
-
-    ENDMETHOD.
-
   ENDCLASS.                    "lcl_lisp_hash IMPLEMENTATION
 
   CLASS lcl_lisp_vector IMPLEMENTATION.
@@ -5776,7 +5800,7 @@
         APPEND io_fill TO lt_vector.
       ENDDO.
       ro_vector = lcl_lisp_new=>vector( it_vector = lt_vector
-                                        iv_mutable = mutable ).
+                                        iv_mutable = iv_mutable ).
     ENDMETHOD.
 
     METHOD from_list.

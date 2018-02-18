@@ -1772,6 +1772,8 @@
        METHODS list_cons_with_list FOR TESTING.
        METHODS list_cons_two_elems FOR TESTING.
 
+       METHODS list_copy_1 FOR TESTING.
+
        METHODS code_count.
        METHODS list_count_1 FOR TESTING.
        METHODS list_count_2 FOR TESTING.
@@ -2285,6 +2287,19 @@
        code_test( code = '(cons 2 3)'
                   expected = '( 2 . 3 )' ).
      ENDMETHOD.                    "list_cons_two_elems
+
+     METHOD list_copy_1.
+       code_test( code = |(define a '(1 8 2 8)) ; a may be immutable|
+                  expected = 'a' ).
+       code_test( code = |(define b (list-copy a))|
+                  expected = 'b' ).
+       code_test( code = |(set-car! b 3) ; b is mutable|
+                  expected = 'nil' ).
+       code_test( code = |a|
+                  expected = '( 1 8 2 8 )' ).
+       code_test( code = |b|
+                  expected = '( 3 8 2 8 )' ).
+     ENDMETHOD.
 
      METHOD code_count.
        code_test( code = |(define first car)|
@@ -2963,6 +2978,13 @@
        METHODS compa_equal_1 FOR TESTING.
        METHODS compa_equal_2 FOR TESTING.
        METHODS compa_equal_3 FOR TESTING.
+       METHODS compa_equal_4 FOR TESTING.
+       METHODS compa_equal_5 FOR TESTING.
+       METHODS compa_equal_6 FOR TESTING.
+       METHODS compa_equal_7 FOR TESTING.
+       METHODS compa_equal_8 FOR TESTING.
+       METHODS compa_equal_9 FOR TESTING.
+       METHODS compa_equal_10 FOR TESTING.
 
        METHODS compa_if_1 FOR TESTING.
        METHODS compa_if_2 FOR TESTING.
@@ -2994,6 +3016,21 @@
        METHODS compa_null_2 FOR TESTING.
 
        METHODS compa_string FOR TESTING.
+
+       METHODS comp_eqv_1 FOR TESTING.
+       METHODS comp_eqv_2 FOR TESTING.
+       METHODS comp_eqv_3 FOR TESTING.
+       METHODS comp_eqv_4 FOR TESTING.
+       METHODS comp_eqv_5 FOR TESTING.
+       METHODS comp_eqv_6 FOR TESTING.
+       METHODS comp_eqv_7 FOR TESTING.
+       METHODS comp_eqv_8 FOR TESTING.
+       METHODS comp_eqv_9 FOR TESTING.
+       METHODS comp_eqv_10 FOR TESTING.
+       METHODS comp_eqv_11 FOR TESTING.
+       METHODS comp_eqv_12 FOR TESTING.
+       METHODS comp_eqv_13 FOR TESTING.
+       METHODS comp_eqv_14 FOR TESTING.
    ENDCLASS.                    "ltc_comparison DEFINITION
 
 *----------------------------------------------------------------------*
@@ -3079,6 +3116,45 @@
        code_test( code = '(equal? (list 21) (list 21))'
                   expected = '#t' ).
      ENDMETHOD.                    "compa_equal_3
+
+     METHOD compa_equal_4.
+       code_test( code = |(equal? (make-vector 5 'a)| &
+                         |        (make-vector 5 'a))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_equal_5.
+       code_test( code = |(equal? 'a 'a)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_equal_6.
+       code_test( code = |(equal? '(a) '(a))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_equal_7.
+       code_test( code = |(equal? '(a (b) c)| &
+                         |        '(a (b) c))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_equal_8.
+       code_test( code = |(equal? "abc" "abc")|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_equal_9.
+       code_test( code = |(equal? '#1=(a b . #1#)| &
+                         |        '#2=(a b a b . #2#))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_equal_10.
+       code_test( code = |(equal? (lambda (x) x)| &
+                         |        (lambda (y) y))|
+                  expected = '#f' ).   " unspecified
+     ENDMETHOD.
 
      METHOD compa_if_1.
 *   Test IF
@@ -3212,8 +3288,97 @@
        code_test( code = '(define str "A string")'
                   expected = 'str' ).
        code_test( code = '(< str "The string")'
-                  expected = 'Eval: A string is not a number [<]' ).
+                  expected = 'Eval: A string is not a number in [<]' ).
      ENDMETHOD.                    "compa_string
+
+     METHOD comp_eqv_1.
+       code_test( code = |(eqv? 'a 'a)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_2.
+       code_test( code = |(eqv? 'a 'b)|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_3.
+       code_test( code = |(eqv? 2 2)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_4.
+*       code_test( code = |(eqv? 2 2.0)|
+*                  expected = '#f' ). " #f  but we do not have inexact numbers yet
+     ENDMETHOD.
+
+     METHOD comp_eqv_5.
+       code_test( code = |(eqv? '() '())|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_6.
+       code_test( code = |(eqv? 100000000 100000000)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_7.
+*       code_test( code = |(eqv? 0.0 +nan.0)|
+*                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_8.
+       code_test( code = |(eqv? (cons 1 2) (cons 1 2))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_9.
+       code_test( code = |(eqv? (lambda () 1) (lambda () 2))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_10.
+       code_test( code = |(let ((p (lambda (x) x)))| &
+                         |(eqv? p p))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_11.
+       code_test( code = |(eqv? #f 'nil)|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_12.
+       code_test( code = |(define gen-counter | &
+                         | (lambda () | &
+                         |   (let ((n 0)) | &
+                         |     (lambda () (set! n (+ n 1)) n))))|
+                  expected = 'gen-counter' ).
+       code_test( code = |(let ((g (gen-counter))) | &
+                         |  (eqv? g g))|
+                  expected = '#t' ).
+       code_test( code = |(eqv? (gen-counter) (gen-counter))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_13.
+       code_test( code = |(define gen-loser | &
+                         | (lambda () | &
+                         |   (let ((n 0)) | &
+                         |     (lambda () (set! n (+ n 1)) 27))))|
+                  expected = 'gen-loser' ).
+       code_test( code = |(let ((g (gen-loser))) | &
+                         |  (eqv? g g))|
+                  expected = '#t' ).
+       code_test( code = |(eqv? (gen-loser) (gen-loser))|
+                  expected = '#f' ).  " unspecfied
+     ENDMETHOD.
+
+     METHOD comp_eqv_14.
+       code_test( code = |(letrec ((f (lambda () (if (eqv? f g) 'f 'both)))| &
+                         |         (g (lambda () (if (eqv? f g) 'g 'both))))| &
+                         | (eqv? f g))|
+                  expected = '#f' ).
+     ENDMETHOD.
 
    ENDCLASS.                    "ltc_comparison IMPLEMENTATION
 

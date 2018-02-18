@@ -18,13 +18,17 @@ DATA g_ok_code TYPE syucomm.
 TYPES: BEGIN OF ts_settings,
          stack      TYPE string_table,
          new_editor TYPE flag,
-       END OF ts_settings .
+       END OF ts_settings.
 
 CLASS lcl_stack DEFINITION.
   PUBLIC SECTION.
     TYPES tv_data TYPE string.
+
+    METHODS previous RETURNING VALUE(rv_data) TYPE tv_data.
+    METHODS next RETURNING VALUE(rv_data) TYPE tv_data.
+
     METHODS push IMPORTING iv_key TYPE tv_data.
-    METHODS pop RETURNING VALUE(rv_data) TYPE tv_data.
+    "METHODS pop RETURNING VALUE(rv_data) TYPE tv_data.
     METHODS empty RETURNING VALUE(rv_flag) TYPE xsdboolean.
 
     METHODS serialize RETURNING VALUE(rt_string) TYPE string_table.
@@ -33,9 +37,12 @@ CLASS lcl_stack DEFINITION.
     TYPES: BEGIN OF ts_node,
              data TYPE tv_data,
              next TYPE REF TO data,
+             prev TYPE REF TO data,
            END OF ts_node.
 
     DATA mr_top TYPE REF TO ts_node.
+    DATA mr_last TYPE REF TO ts_node.
+    DATA mr_head TYPE REF TO ts_node.
 ENDCLASS.
 
 *----------------------------------------------------------------------*
@@ -61,7 +68,8 @@ ENDCLASS.                    "lcl_container DEFINITION
 INTERFACE lif_source_editor.
   METHODS clear.
   METHODS push_text.
-  METHODS pop_text RETURNING VALUE(code) TYPE string.
+  METHODS previous.
+  METHODS next.
   METHODS to_string RETURNING VALUE(rv_text) TYPE string.
   METHODS update_status IMPORTING iv_string TYPE string.
   METHODS setup IMPORTING is_settings TYPE ts_settings.
@@ -106,15 +114,45 @@ ENDCLASS.                    "lcl_editor DEFINITION
 CLASS lcl_stack IMPLEMENTATION.
 
   METHOD push.
-    mr_top = NEW ts_node( data = iv_key
-                          next = mr_top ).
+    DATA lo_node TYPE REF TO ts_node.
+    DATA lo_last TYPE REF TO ts_node.
+
+    IF mr_top IS BOUND.
+      lo_last = mr_top.
+      mr_top = NEW ts_node( data = iv_key
+                            prev = lo_last->prev
+                            next = lo_last ).
+      IF lo_last->prev IS BOUND.
+        lo_node ?= lo_last->prev.
+        lo_node->next = mr_top.
+      ENDIF.
+      lo_last->prev = mr_top.
+    ELSE.
+      mr_top = NEW ts_node( data = iv_key
+                            next = mr_top ).
+    ENDIF.
   ENDMETHOD.
 
-  METHOD pop.
+*  METHOD pop.
+*    CLEAR rv_data.
+*    CHECK mr_top IS BOUND.
+*    rv_data = mr_top->data.
+*    mr_top ?= mr_top->next.
+*  ENDMETHOD.
+
+  METHOD previous.
     CLEAR rv_data.
     CHECK mr_top IS BOUND.
     rv_data = mr_top->data.
+    CHECK mr_top->next IS BOUND.
     mr_top ?= mr_top->next.
+  ENDMETHOD.
+
+  METHOD next.
+    CLEAR rv_data.
+    CHECK mr_top IS BOUND AND mr_top->prev IS BOUND.
+    mr_top ?= mr_top->prev.
+    rv_data = mr_top->data.
   ENDMETHOD.
 
   METHOD empty.
@@ -705,7 +743,7 @@ CLASS lcl_ide IMPLEMENTATION.
 
   METHOD pbo.
     SET PF-STATUS 'STATUS_100'.
-    SET TITLEBAR  'TITLE_100' WITH go_ide->mv_title.
+    SET TITLEBAR 'TITLE_100' WITH go_ide->mv_title.
     go_ide->first_output( ).
   ENDMETHOD.                    "pbo
 
@@ -741,11 +779,11 @@ CLASS lcl_ide IMPLEMENTATION.
   ENDMETHOD.                    "user_command
 
   METHOD previous.
-    mi_source->pop_text( ).
+    mi_source->previous( ).
   ENDMETHOD.
 
   METHOD next.
-    mi_source->push_text( ).
+    mi_source->next( ).
   ENDMETHOD.
 
 ENDCLASS.                    "lcl_ide IMPLEMENTATION
@@ -888,11 +926,21 @@ CLASS lcl_editor IMPLEMENTATION.
     lif_source_editor~clear( ).
   ENDMETHOD.
 
-  METHOD lif_source_editor~pop_text.
-    CHECK mo_stack->empty( ) EQ abap_false.
-    code = mo_stack->pop( ).
+*  METHOD lif_source_editor~pop_text.
+*    CHECK mo_stack->empty( ) EQ abap_false.
+*    code = mo_stack->pop( ).
+*    lif_source_editor~clear( ).
+*    append_string( code ).
+*  ENDMETHOD.
+
+  METHOD lif_source_editor~previous.
     lif_source_editor~clear( ).
-    append_string( code ).
+    append_string( mo_stack->previous( ) ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~next.
+    lif_source_editor~clear( ).
+    append_string( mo_stack->next( ) ).
   ENDMETHOD.
 
   METHOD lif_source_editor~set_focus.
@@ -1015,16 +1063,32 @@ CLASS lcl_source IMPLEMENTATION.
     lif_source_editor~clear( ).
   ENDMETHOD.
 
-  METHOD lif_source_editor~pop_text.
+  METHOD lif_source_editor~previous.
     DATA lt_text TYPE STANDARD TABLE OF string.
 
-    CHECK mo_stack->empty( ) EQ abap_false.
-    code = mo_stack->pop( ).
-*    clear( ).
-    APPEND code TO lt_text.
+    APPEND mo_stack->previous( ) TO lt_text.
     set_text( EXPORTING table = lt_text
               EXCEPTIONS OTHERS = 0 ).
   ENDMETHOD.
+
+  METHOD lif_source_editor~next.
+    DATA lt_text TYPE STANDARD TABLE OF string.
+
+    APPEND mo_stack->next( ) TO lt_text.
+    set_text( EXPORTING table = lt_text
+              EXCEPTIONS OTHERS = 0 ).
+  ENDMETHOD.
+
+*  METHOD lif_source_editor~pop_text.
+*    DATA lt_text TYPE STANDARD TABLE OF string.
+*
+*    CHECK mo_stack->empty( ) EQ abap_false.
+*    code = mo_stack->pop( ).
+**    clear( ).
+*    APPEND code TO lt_text.
+*    set_text( EXPORTING table = lt_text
+*              EXCEPTIONS OTHERS = 0 ).
+*  ENDMETHOD.
 
 ENDCLASS.
 
