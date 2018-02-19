@@ -5,7 +5,7 @@
 		<Author>Jacques Nomssi</Author>
 		<Type>LangUser</Type>
 		<Language>LISP</Language>
-		<Desc>User specific settings for LISP</Desc>
+		<Desc>User specific settings for Scheme</Desc>
 	</FILEINFO>
 	<EXPANDS>
 		<Expand key="cond">

@@ -22,15 +22,15 @@
 	</STRUCTURES>
 	<FORMAT>
 		<DefaultIndent>2</DefaultIndent>
-		<ResetFormatSymbols>,</ResetFormatSymbols>
+		<ResetFormatSymbols></ResetFormatSymbols>
 		<FormatWords>
 			<FormatWord word="data" indent="6" next_line="1"/>
-			<FormatWord word="elseif" indent="-2"/>
-			<FormatWord word="binding" indent="2" next_line="1"/>
+			<FormatWord word="define" indent="4"/>
+			<FormatWord word="let" indent="4" next_line="1"/>
 		</FormatWords>
 	</FORMAT>
 	<SYNTAXINFO>
-		<InfoType id="1" name="Compiler error" clr="-1"/>
+		<InfoType id="1" name="Invalid input" clr="-1"/>
 		<InfoType id="2" name="Performance tip" clr="-1"/>
 		<InfoType id="3" name="Syntax tip" clr="-1"/>
 		<InfoType id="4" name="Spelling error" clr="-1"/>
@@ -248,7 +248,9 @@
 				<Keyword text="'()"/>
 				<Keyword text=",@"/>				
 				<Keyword text=","/>				
-				<Keyword text="'"/>							
+				<Keyword text="'"/>
+				<Keyword text="=&gt;"/>								
+				<Keyword text="else"/>
 				<Keyword text="#\alarm"/>
 				<Keyword text="#\backspace"/>
 				<Keyword text="#\delete"/>
