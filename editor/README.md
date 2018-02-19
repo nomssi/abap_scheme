@@ -20,13 +20,13 @@ The SAP GUI configuration files are located in the roaming user application dire
 ## Configuration Steps
 1. You must manually copy two configuration files provided here in your local SAP GUI configuration folder for the ABAP Editor
 
-* lisp_spec.xml
-* lisp_user.xml
+* scheme_spec.xml
+* scheme_user.xml
 
 2. Change in the first lines of ABAP Include YY_LISP_IDE
 
       c_new_abap_editor TYPE flag VALUE abap_true,
-      c_source_type TYPE string VALUE 'LISP'.
+      c_source_type TYPE string VALUE 'SCHEME'.
 
 3. Restart the workbench.
 
@@ -34,8 +34,8 @@ The SAP GUI configuration files are located in the roaming user application dire
 
 To create your own theme files
 
-* lisp_spec.xml
-* lisp_user.xml
+* scheme_spec.xml
+* scheme_user.xml
 
 read
 
