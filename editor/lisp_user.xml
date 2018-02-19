@@ -8,29 +8,25 @@
 		<Desc>User specific settings for LISP</Desc>
 	</FILEINFO>
 	<EXPANDS>
-		<Expand key="lambda">
-			<Descr>procedure</Descr>
-			<Text>(lambda (&lt;formals&gt;)\n    (&lt;body&gt;))</Text>
-		</Expand>
-		<Expand key="#|">
-			<Descr>#| block comment</Descr>
-			<Text>#|\n  ...\n|#</Text>
+		<Expand key="cond">
+			<Descr>cond Conditionals</Descr>
+			<Text>(cond ((&lt;test1&gt;) &lt;expression11&gt; ... )\n          ((&lt;test2&gt;) &lt;expression21&gt; ... )\n          (else          &lt;expressionN1&gt; ... )</Text>
 		</Expand>
 		<Expand key=";;;">
 			<Descr>;;;-----</Descr>
 			<Text>;;;-------------------------------------------------------------------</Text>
 		</Expand>
+		<Expand key="define">
+			<Descr>(define ...)</Descr>
+			<Text>(define  \n%SurroundedText%\n )</Text>
+		</Expand>
+		<Expand key="let">
+			<Descr>(let ...) binding</Descr>
+			<Text>(let ((&lt;variable1&gt; &lt;init1&gt;)\n        ( &lt;variableN&gt; &lt;initN&gt;) )\n       &lt;body&gt;)</Text>
+		</Expand>
 		<Expand key="*;;">
 			<Descr>;-------...</Descr>
 			<Text></Text>
 		</Expand>
-		<Expand key="begin">
-			<Descr>(begin ...) sequencing</Descr>
-			<Text>(begin ... )</Text>
-		</Expand>
-		<Expand key="let">
-			<Descr>(let ...) binding</Descr>
-			<Text>(let ((&lt;variable1&gt; &lt;init1&gt;)\n        ( &lt;variableN&gt; &lt;initN&gt;) )\n       &lt;body&gt;)  </Text>
-		</Expand>
-		<Expand key="define"><Descr>(define ...)</Descr><Text>(define  \n%SurroundedText%\n )</Text></Expand><Expand key="cond"><Descr>cond Conditionals</Descr><Text>(cond ((&lt;test1&gt;) &lt;expression11&gt; ... )\n          ((&lt;test2&gt;) &lt;expression21&gt; ... )\n          (else          &lt;expressionN1&gt; ... )</Text></Expand><Expand key="do"><Descr>(do ...) Iteration</Descr><Text>(do (&lt;variable1&gt; &lt;init1&gt; &lt;step1&gt;)\n      ... )\n    (&lt;test&gt; &lt;expression&gt; ... )\n      &lt;command&gt; ... )</Text></Expand><Expand key="if"><Descr>(if ...) Conditional</Descr><Text>(if &lt;test&gt; \n    &lt;consequent&gt;\n    &lt;alternate&gt; )</Text></Expand></EXPANDS>
+		<Expand key="if"><Descr>(if ...) Conditional</Descr><Text>(if &lt;test&gt; \n    &lt;consequent&gt;\n    &lt;alternate&gt; )</Text></Expand><Expand key="lambda"><Descr>procedure</Descr><Text>(lambda (&lt;formals&gt;)\n    (&lt;body&gt;))</Text></Expand><Expand key="do"><Descr>(do ...) Iteration</Descr><Text>(do (&lt;variable1&gt; &lt;init1&gt; &lt;step1&gt;)\n      ... )\n    (&lt;test&gt; &lt;expression&gt; ... )\n      &lt;command&gt; ... )</Text></Expand><Expand key="begin"><Descr>(begin ...) sequencing</Descr><Text>(begin ... )</Text></Expand></EXPANDS>
 </XMLConfigSettings>

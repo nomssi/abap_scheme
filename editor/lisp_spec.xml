@@ -4,25 +4,19 @@
 	<FILEINFO>
 		<Author>Jacques Nomssi</Author>
 		<Type>LangSpec</Type>
-		<Language>SCHEME</Language>
+		<Language>LISP</Language>
 		<Desc>Language specification for Scheme</Desc>
 	</FILEINFO>
 	<SPECIFICATION>
 		<FilePattern>*.scm</FilePattern>
 		<CaseSensitive>1</CaseSensitive>
-		<OpenClose>()[]''``||{}</OpenClose>
-		<Delimiters>,.:</Delimiters>
+		<OpenClose>()[]''&quot;&quot;||{}</OpenClose>
+		<Delimiters></Delimiters>
 		<WrapBy>(),</WrapBy>
-		<LineEnd>.</LineEnd>
-		<Words>0-9a-Z_/&lt;&gt;</Words>
-		<HierarchySeparator>
-			<Separator id="5" text="\"/>
-			<Separator id="7" text="@"/>
-		</HierarchySeparator>
+		<LineEnd></LineEnd>
+		<Words>0-9a-Z_/&lt;&gt;!$%&amp;*+-.:=?@^~</Words>
 	</SPECIFICATION>
 	<STRUCTURES>
-		<exception-follows value="="/>
-		<Structure open="region" close="endregion" header="0" has_name="1" sent_start="1"/>
 		<Structure open="(" close=")">
 		</Structure>
 	</STRUCTURES>
