@@ -188,6 +188,17 @@
 				<Keyword text="first"/>
 				<Keyword text="rest"/>
 
+				<Keyword text="input-port?"/>
+				<Keyword text="output-port?"/>
+				<Keyword text="textual-port?"/>
+				<Keyword text="binary-port?"/>
+				<Keyword text="port?"/>
+				<Keyword text="input-port-open?"/>
+				<Keyword text="output-port-open?"/>
+				<Keyword text="current-input-port"/>				
+				<Keyword text="current-output-port"/>
+				<Keyword text="current-error-port"/>
+
 				<Keyword text="type"/>
 				<Keyword text="abs"/>
 				<Keyword text="sin"/>
