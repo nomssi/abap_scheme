@@ -425,6 +425,9 @@
                                     iv_error     TYPE flag DEFAULT abap_false.
       METHODS close.
 
+      METHODS to_text IMPORTING element TYPE REF TO lcl_lisp
+                      RETURNING VALUE(result) TYPE string.
+
       DATA port_type TYPE tv_port_type READ-ONLY.
       DATA input TYPE flag READ-ONLY.
       DATA output TYPE flag READ-ONLY.
@@ -558,10 +561,14 @@
     ENDMETHOD.
 
     METHOD lif_output_port~write.
+      rv_output = to_text( element ).
+    ENDMETHOD.
+
+    METHOD to_text.
       TRY.
-          rv_output = element->to_string( ).
+          result = element->to_string( ).
         CATCH lcx_lisp_exception INTO DATA(lx_error).
-          rv_output = lx_error->get_text( ).
+          result = lx_error->get_text( ).
       ENDTRY.
     ENDMETHOD.
 
