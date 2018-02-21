@@ -35,76 +35,6 @@
 *  THE SOFTWARE.
 
 *----------------------------------------------------------------------*
-*       CLASS lcl_output_port DEFINITION
-*----------------------------------------------------------------------*
-   CLASS lcl_output_port DEFINITION.
-     PUBLIC SECTION.
-       CLASS-METHODS new
-         RETURNING VALUE(ro_port) TYPE REF TO lcl_output_port.
-       INTERFACES lif_port.
-       ALIASES: write FOR lif_port~write,
-                read FOR lif_port~read.
-       METHODS get RETURNING VALUE(rv_text) TYPE string.
-     PRIVATE SECTION.
-       DATA print_offset TYPE i.
-       DATA buffer TYPE string.
-
-       METHODS writeln IMPORTING text TYPE string.
-       METHODS add IMPORTING text TYPE string.
-   ENDCLASS.
-
-*----------------------------------------------------------------------*
-*       CLASS lcl_output_port  IMPLEMENTATION
-*----------------------------------------------------------------------*
-   CLASS lcl_output_port IMPLEMENTATION.
-
-     METHOD new.
-       CREATE OBJECT ro_port.
-     ENDMETHOD.                    "new
-
-     METHOD get.
-       rv_text = buffer.
-     ENDMETHOD.                    "get
-
-     METHOD add.
-       buffer = buffer && text.
-     ENDMETHOD.                    "add
-
-     METHOD writeln.
-       add( |\n{ repeat( val = ` ` occ = print_offset ) }{ text }| ).
-     ENDMETHOD.                    "writeln
-
-* Write out a given element
-     METHOD write.
-       DATA lo_elem TYPE REF TO lcl_lisp.
-       CHECK element IS BOUND.
-
-       CASE element->type.
-         WHEN lcl_lisp=>type_pair.
-           writeln( `(` ).
-           lo_elem = element.
-           DO.
-             ADD 2 TO print_offset.
-             write( lo_elem->car ).
-             SUBTRACT 2 FROM print_offset.
-             IF lo_elem->cdr IS NOT BOUND OR lo_elem->cdr EQ lcl_lisp=>nil.
-               EXIT.
-             ENDIF.
-             lo_elem = lo_elem->cdr.
-           ENDDO.
-           add( ` )` ).
-         WHEN lcl_lisp=>type_number OR lcl_lisp=>type_symbol.
-           add( ` ` && element->value ).
-       ENDCASE.
-     ENDMETHOD.                    "write
-
-     METHOD read.
-       rv_input = iv_input.
-     ENDMETHOD.
-
-   ENDCLASS.                    "lcl_console IMPLEMENTATION
-
-*----------------------------------------------------------------------*
 *       CLASS ltc_interpreter DEFINITION
 *----------------------------------------------------------------------*
 *
@@ -112,8 +42,8 @@
    CLASS ltc_interpreter DEFINITION FOR TESTING
      RISK LEVEL HARMLESS DURATION SHORT.
      PROTECTED SECTION.
-       "    DATA code TYPE string.
        DATA mo_int TYPE REF TO lcl_lisp_interpreter.
+       DATA mo_port TYPE REF TO lcl_lisp_buffered_port.
 *   Initialize Lisp interpreter
        METHODS test IMPORTING title    TYPE string
                               code     TYPE string
@@ -134,6 +64,7 @@
 
        METHODS riff_shuffle_code RETURNING VALUE(code) TYPE string.
 
+       METHODS new_interpreter.
      PRIVATE SECTION.
        METHODS setup.
        METHODS teardown.
@@ -164,8 +95,17 @@
 *----------------------------------------------------------------------*
    CLASS ltc_interpreter IMPLEMENTATION.
 
+     METHOD new_interpreter.
+       CREATE OBJECT mo_port
+         EXPORTING iv_input  = abap_false
+                   iv_output = abap_true
+                   iv_error  = abap_true.
+       mo_int = lcl_lisp_interpreter=>new( io_port = mo_port
+                                           ii_log = mo_port ).
+     ENDMETHOD.
+
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -286,8 +226,6 @@
    CLASS ltc_parse DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
-       DATA output TYPE REF TO lcl_output_port.
-
        METHODS setup.
        METHODS teardown.
        METHODS parse IMPORTING code TYPE string.
@@ -309,12 +247,10 @@
    CLASS ltc_parse IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT output.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
-       FREE output.
        FREE mo_int.
      ENDMETHOD.                    "teardown
 
@@ -328,14 +264,14 @@
          msg = |No evaluated element from first expression| ).
 
        LOOP AT elements INTO element.
-         output->write( element ).
+         mo_port->write( element ).
        ENDLOOP.
      ENDMETHOD.                    "parse
 
 * Test parsing of a given piece of code and write out result
      METHOD parse_test.
        parse( code ).
-       test( actual = output->get( )
+       test( actual = mo_port->flush( )
              code = code
              expected = expected
              title = 'PARSE'
@@ -344,7 +280,7 @@
 
      METHOD delimiter.
        parse_test( code = 'list' && cl_abap_char_utilities=>horizontal_tab && |; return|
-                   expected = | list| ).
+                   expected = |list| ).
      ENDMETHOD.                    "lambda
 
      METHOD empty.
@@ -354,26 +290,26 @@
 
      METHOD lambda.
        parse_test( code = '(define a(lambda()20))'
-                   expected = |\n( define a\n  ( lambda  ) )| ).
+                   expected = |( define a ( lambda () 20 ) )| ).
      ENDMETHOD.                    "lambda
 
      METHOD lambda_comments.
        parse_test( code = |;; Comments\n| &
                           |(define a(lambda()20)) ; comments|
-                   expected = |\n( define a\n  ( lambda  ) )| ).
+                   expected = |\n( define a\n ( lambda () 20 ) )| ).
      ENDMETHOD.                    "lambda
 
      METHOD riff_shuffle.
        parse_test( code = riff_shuffle_code( )
                    expected =
-   |\n( define riff-shuffle\n  ( lambda\n    ( deck )\n    ( begin\n      ( define take\n        ( lambda| &
-   |\n          ( n seq )\n          ( if\n            ( <= n  )\n            ( quote )\n            ( cons| &
-   |\n              ( car seq )\n              ( take\n                ( - n  )\n                ( cdr seq ) ) ) ) ) )| &
-   |\n      ( define drop\n        ( lambda\n          ( n seq )\n          ( if\n            ( <= n  ) seq| &
-   |\n            ( drop\n              ( - n  )\n              ( cdr seq ) ) ) ) )\n      ( define mid\n| &
-   |        ( lambda\n          ( seq )\n          ( /\n            ( length seq )  ) ) )\n      (\n| &
-   |        ( combine append )\n        ( take\n          ( mid deck ) deck )\n        ( drop| &
-   |\n          ( mid deck ) deck ) ) ) ) )|
+   |\n( define riff-shuffle\n ( lambda\n ( deck )\n ( begin\n ( define take\n ( lambda| &
+   |\n ( n seq )\n ( if\n ( <= n 0 )\n '()\n ( cons| &
+   |\n ( car seq )\n ( take\n ( - n  )\n ( cdr seq ) ) ) ) ) )| &
+   |\n ( define drop\n ( lambda\n ( n seq )\n ( if\n  ( <= n 0 ) seq| &
+   |\n ( drop\n    ( - n  )\n ( cdr seq ) ) ) ) )\n ( define mid\n| &
+   | ( lambda\n ( seq )\n ( /\n ( length seq )  ) ) )\n (\n| &
+   | ( combine append )\n ( take\n ( mid deck ) deck )\n ( drop| &
+   |\n ( mid deck ) deck ) ) ) ) )|
              ).
      ENDMETHOD.                    "riff_shuffle
 
@@ -558,7 +494,7 @@
    CLASS ltc_basic IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -1013,7 +949,7 @@
    CLASS ltc_string IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -1050,7 +986,7 @@
    CLASS ltc_conditionals IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -1253,7 +1189,7 @@
    CLASS ltc_functional_tests IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -1382,7 +1318,7 @@
    CLASS ltc_math IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -1847,7 +1783,7 @@
    CLASS ltc_list IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -2440,7 +2376,7 @@
 
      METHOD make_string_1.
        code_test( code = |(make-string 3 "a")|
-                  expected = 'Eval: a is not a char in make-string' ).
+                  expected = 'Eval: "a" is not a char in make-string' ).
      ENDMETHOD.
 
      METHOD make_string_2.
@@ -2530,7 +2466,7 @@
    CLASS ltc_vector IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -2674,7 +2610,7 @@
    CLASS ltc_library_function IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -2752,7 +2688,7 @@
    CLASS ltc_higher_order IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -3069,7 +3005,7 @@
    CLASS ltc_comparison IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -3316,7 +3252,7 @@
        code_test( code = '(define str "A string")'
                   expected = 'str' ).
        code_test( code = '(< str "The string")'
-                  expected = 'Eval: A string is not a number in [<]' ).
+                  expected = 'Eval: "A string" is not a number in [<]' ).
      ENDMETHOD.                    "compa_string
 
      METHOD comp_eqv_1.
@@ -3439,7 +3375,7 @@
    CLASS ltc_basic_functions IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -3516,7 +3452,7 @@
    CLASS ltc_hash_element IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -3572,7 +3508,7 @@
    CLASS ltc_abap_integration IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -3645,7 +3581,7 @@
    CLASS ltc_abap_function_module IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -3733,7 +3669,7 @@
    CLASS ltc_quote IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.

@@ -3,7 +3,6 @@
 *&---------------------------------------------------------------------*
 
 CONSTANTS:
-  c_lisp_input      TYPE string VALUE 'ABAP Lisp Input',
   c_lisp_untitled   TYPE programm VALUE 'Untitled',
 * enable if you uploaded LISP config files or also change c_source_type to 'LISP'
 * check: https://github.com/nomssi/abap_scheme/blob/master/editor/README.md
@@ -343,7 +342,7 @@ ENDCLASS.
 *----------------------------------------------------------------------*
 *       CLASS lcl_ide DEFINITION
 *----------------------------------------------------------------------*
-CLASS lcl_ide DEFINITION CREATE PRIVATE.
+CLASS lcl_ide DEFINITION INHERITING FROM lcl_lisp_buffered_port CREATE PRIVATE.
   PUBLIC SECTION.
     DATA mv_title TYPE string VALUE c_lisp_untitled READ-ONLY.
 
@@ -355,8 +354,8 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
       pai IMPORTING iv_code        TYPE syucomm
           RETURNING VALUE(rv_flag) TYPE flag.
     METHODS first_output.
-
-    INTERFACES lif_port.
+    METHODS read REDEFINITION.
+    METHODS write REDEFINITION.
   PRIVATE SECTION.
     CLASS-DATA go_ide TYPE REF TO lcl_ide.
 
@@ -370,9 +369,6 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
     DATA mo_log TYPE REF TO lcl_editor.
     DATA mo_console TYPE REF TO lcl_editor.
     DATA mo_alv TYPE REF TO cl_salv_table.
-
-    DATA print_offset TYPE i.
-    DATA buffer TYPE string.
 
     METHODS:
       constructor,
@@ -390,11 +386,6 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
 
     METHODS new_source_editor IMPORTING io_cont          TYPE REF TO cl_gui_container
                               RETURNING VALUE(ri_source) TYPE REF TO lif_source_editor.
-    METHODS flush RETURNING VALUE(rv_text) TYPE string.
-
-    METHODS writeln IMPORTING text TYPE string.
-    METHODS add IMPORTING text TYPE string.
-
     METHODS previous.
     METHODS next.
 
@@ -411,6 +402,8 @@ ENDCLASS.                    "lcl_ide DEFINITION
 CLASS lcl_ide IMPLEMENTATION.
 
   METHOD constructor.
+    super->constructor( iv_input = abap_true
+                        iv_output = abap_true ).
     read_settings( ).
     "VALUE #( stack = serialize( )
     CREATE OBJECT:
@@ -542,9 +535,9 @@ CLASS lcl_ide IMPLEMENTATION.
     mi_source->clear( ).
     mo_output->delete_text( ).
     mo_log->delete_text( ).
-    CREATE OBJECT mo_int   " LISP Interpreter
-      EXPORTING
-        ii_port = me.
+    CREATE OBJECT mo_int
+      EXPORTING io_port = me  " LISP Interpreter
+                ii_log = me.
   ENDMETHOD.                    "refresh
 
   METHOD show_docu.
@@ -579,40 +572,13 @@ CLASS lcl_ide IMPLEMENTATION.
     lcl_configuration=>query( ).
   ENDMETHOD.
 
-  METHOD lif_port~read.
-    DATA lt_fields TYPE STANDARD TABLE OF sval.
-    DATA lv_user_response TYPE flag.
-
-    rv_input = iv_input.
-    CHECK iv_input IS INITIAL.
-    lt_fields = VALUE #( ( tabname = 'ABDBG'     " Text: Input Line
-                           fieldname = 'LTEXT'
-                           field_obl = 'X' ) ).
-
-    CALL FUNCTION 'POPUP_GET_VALUES'
-      EXPORTING
-        popup_title  = c_lisp_input
-        start_column = '45'
-        start_row    = '11'
-      IMPORTING
-        returncode   = lv_user_response
-      TABLES
-        fields       = lt_fields
-      EXCEPTIONS
-        OTHERS       = 2.
-
-    CHECK sy-subrc EQ 0
-      AND lv_user_response NE 'A'
-      AND line_exists( lt_fields[ 1 ] ).
-
-    rv_input = lt_fields[ 1 ]-value.
+  METHOD read.
+    rv_input = super->read( ).
     mo_console->append_string( rv_input && |\n| ).
   ENDMETHOD.
 
-  METHOD lif_port~write.
+  METHOD write.
     DATA lx_error TYPE REF TO cx_root.
-    DATA lo_elem TYPE REF TO lcl_lisp.
-
     FIELD-SYMBOLS <lt_table> TYPE STANDARD TABLE.
 
     CASE element->type.
@@ -631,40 +597,12 @@ CLASS lcl_ide IMPLEMENTATION.
             lcl_lisp=>throw( lx_error->get_text( ) ).
         ENDTRY.
 
-      WHEN lcl_lisp=>type_pair.
-        writeln( `(` ).
-        lo_elem = element.
-        WHILE lo_elem->type EQ lcl_lisp=>type_pair.
-          ADD 2 TO print_offset.
-          lif_port~write( lo_elem->car ).
-          SUBTRACT 2 FROM print_offset.
-          lo_elem = lo_elem->cdr.
-        ENDWHILE.
-        add( ` )` ).
-        mo_console->append_string( flush( ) ).
-
       WHEN OTHERS.
-        TRY.
-            add( element->write( ) ).
-            mo_console->append_string( flush( ) ).
-          CATCH cx_root INTO lx_error.
-            mo_console->append_string( lx_error->get_text( ) ).
-        ENDTRY.
+        rv_output = super->write( element ).
+        mo_console->append_string( rv_output ).
+
     ENDCASE.
   ENDMETHOD.                    "lif_console~write
-
-  METHOD flush.
-    rv_text = buffer.
-    CLEAR buffer.
-  ENDMETHOD.                    "get
-
-  METHOD add.
-    buffer = buffer && text.
-  ENDMETHOD.                    "add
-
-  METHOD writeln.
-    add( |\\n{ repeat( val = ` ` occ = print_offset ) }{ text }| ).
-  ENDMETHOD.
 
   METHOD welcome.
     text = |==> Welcome to ABAP List Processing!\n|.
