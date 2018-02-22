@@ -78,6 +78,7 @@
 			<Conditions>
 				<Condition start=";" end="\n"/>
 				<Condition start="#|" end="|#"/>
+				<Condition start="#;" end="\n"/>
 			</Conditions>
 		</TextType>
 		<TextType id="59" name="Scheme Syntax" ImageIdx="13" bold="0" italic="0" underline="0" clr="139" bkclr="-1">
@@ -198,6 +199,15 @@
 				<Keyword text="current-input-port"/>				
 				<Keyword text="current-output-port"/>
 				<Keyword text="current-error-port"/>
+				<Keyword text="close-port"/>
+                <Keyword text="close-input-port"/>
+                <Keyword text="close-output-port"/>
+                <Keyword text="open-input-string"/>
+                <Keyword text="open-output-string"/>
+                <Keyword text="get-output-string"/>
+				<Keyword text="peek-char"/>
+				<Keyword text="char-ready?"/>
+				<Keyword text="parameterize"/>			
 
 				<Keyword text="type"/>
 				<Keyword text="abs"/>
