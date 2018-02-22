@@ -598,9 +598,7 @@ CLASS lcl_ide IMPLEMENTATION.
         ENDTRY.
 
       WHEN OTHERS.
-        rv_output = super->write( element ).
-        mo_console->append_string( rv_output ).
-        flush( ).
+        super->write( element ).
 
     ENDCASE.
   ENDMETHOD.                    "lif_console~write

@@ -403,8 +403,7 @@
   ENDINTERFACE.
 
   INTERFACE lif_output_port.
-    METHODS write IMPORTING element          TYPE REF TO lcl_lisp
-                  RETURNING VALUE(rv_output) TYPE string.
+    METHODS write IMPORTING element          TYPE REF TO lcl_lisp.
   ENDINTERFACE.
 
   CLASS lcl_lisp_port DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
@@ -561,7 +560,7 @@
     ENDMETHOD.
 
     METHOD lif_output_port~write.
-      rv_output = to_text( element ).
+      RETURN.
     ENDMETHOD.
 
     METHOD to_text.
@@ -614,13 +613,8 @@
     ENDMETHOD.
 
     METHOD write.
-
-      CLEAR rv_output.
-
       CHECK element IS BOUND.
-      add( super->write( element ) ).
-      rv_output = get( ).
-
+      add( to_text( element ) ).
     ENDMETHOD.
 
     METHOD flush.
@@ -1152,7 +1146,6 @@
 
       METHODS write IMPORTING io_elem       TYPE REF TO lcl_lisp
                               io_arg        TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
-                    EXPORTING ev_output     TYPE string
                     RETURNING VALUE(result) TYPE REF TO lcl_lisp.
 
       METHODS display IMPORTING io_elem       TYPE REF TO lcl_lisp
@@ -1345,6 +1338,20 @@
         WHILE char CN mv_eol AND index LT length.
           next_char( ).
         ENDWHILE.
+        rv_has_next = skip_whitespace( ).
+      ENDIF.
+
+      IF char EQ c_lisp_hash AND rv_has_next EQ abap_true AND peek_char( ) EQ c_lisp_comment.
+        " Character constant  #; comment
+        next_char( ).       " skip #
+        next_char( ).       " skip ;
+*       skip optional blanks, max. until end of line
+        WHILE char CN mv_eol AND index LT length AND peek_char( ) EQ ` `.
+          next_char( ).
+        ENDWHILE.
+*       skip one datum
+        DATA sval TYPE string.
+        match_atom( CHANGING cv_val = sval ).
         rv_has_next = skip_whitespace( ).
       ENDIF.
 
@@ -2931,43 +2938,33 @@
                                                   environment = environment ) ).
     ENDMETHOD.
 
-    METHOD write.
-      DATA li_port TYPE REF TO lif_output_port.
+    DEFINE optional_port.
+      DATA li_port TYPE REF TO lif_&1_port.
 
       IF io_arg->type EQ lcl_lisp=>type_pair.
-        validate_port io_arg->car `write`.
+        validate_port io_arg->car &2.
         li_port ?= io_arg->car.
       ELSE.
-        li_port = go_output_port.
+        li_port = go_&1_port.
       ENDIF.
-      ev_output = li_port->write( io_elem ).
+    END-OF-DEFINITION.
+
+    METHOD write.
+      optional_port output `write`.
+      li_port->write( io_elem ).
       result = io_elem.
     ENDMETHOD.
 
     METHOD display.
-      DATA li_port TYPE REF TO lif_output_port.
-
-      IF io_arg->type EQ lcl_lisp=>type_pair.
-        validate_port io_arg->car `display`.
-        li_port ?= io_arg->car.
-      ELSE.
-        li_port = go_output_port.
-      ENDIF.
-
+      optional_port output `display`.
       li_port->write( io_elem ).
       result = io_elem.
     ENDMETHOD.
 
     METHOD read.
       DATA lo_conscell TYPE REF TO lcl_lisp. " Lisp-side  (target)
-      DATA li_port TYPE REF TO lif_input_port.
 
-      IF io_arg->type EQ lcl_lisp=>type_pair.
-        validate_port io_arg->car `read`.
-        li_port ?= io_arg->car.
-      ELSE.
-        li_port = go_input_port.
-      ENDIF.
+      optional_port input `read`.
 
 *     Create list with cell for each row AND Set pointer to start of list
       result = nil.
@@ -2981,14 +2978,7 @@
     ENDMETHOD.
 
     METHOD read_char.
-      DATA li_port TYPE REF TO lif_input_port.
-
-      IF io_arg->type EQ lcl_lisp=>type_pair.
-        validate_port io_arg->car `read-char`.
-        li_port ?= io_arg->car.
-      ELSE.
-        li_port = go_input_port.
-      ENDIF.
+      optional_port input `read-char`.
 
       result = lcl_lisp_new=>char( li_port->read( ) ).
     ENDMETHOD.
@@ -5821,8 +5811,12 @@
 
         WHEN type_string
           OR type_char.
-*         give back the string as a quoted string
-          str = |"{ escape( val = value format = cl_abap_format=>e_html_js ) }"|.
+          IF me EQ lcl_lisp=>new_line.
+            str = |\n|.
+          ELSE.
+*           give back the string as a quoted string
+            str = |"{ escape( val = value format = cl_abap_format=>e_html_js ) }"|.
+          ENDIF.
 
         WHEN type_number.
           str = number.
