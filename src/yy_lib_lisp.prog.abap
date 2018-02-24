@@ -35,7 +35,10 @@
   DATA gv_lisp_trace TYPE flag VALUE abap_false ##NEEDED.
 
   CONSTANTS:
-    c_lisp_input      TYPE string VALUE 'ABAP Lisp Input'.
+    c_lisp_input     TYPE string VALUE 'ABAP Lisp Input',
+    c_lisp_eof       TYPE x LENGTH 2 VALUE 'FFFF', " we do not expect this in source code
+    c_lisp_nil       TYPE string VALUE 'nil',
+    c_expr_separator TYPE string VALUE ` `.   " multiple expression output
   CONSTANTS:
     c_error_message        TYPE string VALUE 'Error in processing',
     c_error_incorect_input TYPE string VALUE 'Incorrect input',
@@ -338,12 +341,15 @@
       CLASS-DATA char_tab         TYPE REF TO  lcl_lisp READ-ONLY.
 
       CLASS-DATA new_line   TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA eof_object TYPE REF TO  lcl_lisp READ-ONLY.
 
 *     Specifically for lambdas:
       DATA environment TYPE REF TO lcl_lisp_environment.
 *     Format
       METHODS to_string RETURNING VALUE(str) TYPE string
                         RAISING   lcx_lisp_exception.
+      METHODS to_text RETURNING VALUE(str) TYPE string
+                      RAISING   lcx_lisp_exception.
 *     Utilities
       METHODS rest RETURNING VALUE(ro_cdr) TYPE REF TO lcl_lisp.
       METHODS new_iterator RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_iterator
@@ -400,10 +406,15 @@
   INTERFACE lif_input_port.
     METHODS read IMPORTING iv_title        TYPE string OPTIONAL
                  RETURNING VALUE(rv_input) TYPE string.
+    METHODS peek_char RETURNING VALUE(rv_char) TYPE char01.
+    METHODS is_char_ready RETURNING VALUE(rv_flag) TYPE flag.
+    METHODS read_char RETURNING VALUE(rv_char) TYPE char01.
+    METHODS put IMPORTING iv_text TYPE string.
   ENDINTERFACE.
 
   INTERFACE lif_output_port.
-    METHODS write IMPORTING element          TYPE REF TO lcl_lisp.
+    METHODS write IMPORTING element TYPE REF TO lcl_lisp.
+    METHODS display IMPORTING element TYPE REF TO lcl_lisp.
   ENDINTERFACE.
 
   CLASS lcl_lisp_port DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
@@ -417,32 +428,51 @@
       INTERFACES lif_output_port.
 
       ALIASES: read FOR lif_input_port~read,
-               write FOR lif_output_port~write.
+               write FOR lif_output_port~write,
+               display FOR lif_output_port~display,
+               set_input_string FOR lif_input_port~put.
       METHODS constructor IMPORTING iv_port_type TYPE lcl_lisp_port=>tv_port_type DEFAULT c_port_textual
                                     iv_input     TYPE flag
                                     iv_output    TYPE flag
                                     iv_error     TYPE flag DEFAULT abap_false.
       METHODS close.
+      METHODS close_input.
+      METHODS close_output.
 
-      METHODS to_text IMPORTING element TYPE REF TO lcl_lisp
-                      RETURNING VALUE(result) TYPE string.
+      METHODS read_stream IMPORTING iv_title        TYPE string OPTIONAL
+                          RETURNING VALUE(rv_input) TYPE string.
 
       DATA port_type TYPE tv_port_type READ-ONLY.
       DATA input TYPE flag READ-ONLY.
       DATA output TYPE flag READ-ONLY.
       DATA error TYPE flag READ-ONLY.
-      DATA open TYPE flag READ-ONLY.
+    PROTECTED SECTION.
+*     input is always buffered
+      DATA last_input TYPE string.
+      DATA last_index TYPE sytabix.
+      DATA last_len TYPE sytabix.
+
+      METHODS read_block.
   ENDCLASS.
 
   CLASS lcl_lisp_buffered_port DEFINITION INHERITING FROM lcl_lisp_port FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
       INTERFACES lif_log.
       METHODS write REDEFINITION.
+      METHODS read REDEFINITION.
+      METHODS lif_input_port~peek_char REDEFINITION.
+      METHODS display REDEFINITION.
       METHODS flush RETURNING VALUE(rv_text) TYPE string.
-      METHODS get RETURNING VALUE(rv_text) TYPE string.
+      METHODS constructor IMPORTING iv_port_type TYPE lcl_lisp_port=>tv_port_type DEFAULT c_port_textual
+                                    iv_input     TYPE flag
+                                    iv_output    TYPE flag
+                                    iv_error     TYPE flag DEFAULT abap_false
+                                    iv_separator TYPE string DEFAULT c_expr_separator
+                                    iv_string    TYPE flag.
     PROTECTED SECTION.
-      DATA print_offset TYPE i.
+      DATA string_mode TYPE flag.
       DATA buffer TYPE string.
+      DATA separator TYPE string.
 
       METHODS add IMPORTING text TYPE string.
   ENDCLASS.
@@ -466,6 +496,9 @@
                                    iv_input       TYPE flag
                                    iv_output      TYPE flag
                                    iv_error       TYPE flag
+                                   iv_buffered    TYPE flag
+                                   iv_separator   TYPE string OPTIONAL
+                                   iv_string      TYPE flag DEFAULT abap_false
                          RETURNING VALUE(ro_port) TYPE REF TO lcl_lisp_port.
 
       CLASS-METHODS elem IMPORTING type           TYPE lcl_lisp=>tv_type
@@ -525,13 +558,13 @@
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
   ENDCLASS.
 
-  CLASS lcl_console DEFINITION INHERITING FROM lcl_lisp_port.
+  CLASS lcl_port_dummy DEFINITION INHERITING FROM lcl_lisp_port.
     PUBLIC SECTION.
       METHODS read REDEFINITION.
       METHODS write REDEFINITION.
   ENDCLASS.                    "lcl_console DEFINITION
 
-  CLASS lcl_console IMPLEMENTATION.
+  CLASS lcl_port_dummy IMPLEMENTATION.
 
     METHOD write.
     ENDMETHOD.
@@ -548,37 +581,50 @@
       super->constructor( ).
       type = lcl_lisp=>type_port.
 
-      open = abap_true.
       port_type = iv_port_type.
-      input = input.
-      output = output.
-      error = error.
+      input = iv_input.
+      output = iv_output.
+      error = iv_error.
     ENDMETHOD.
 
     METHOD close.
-      open = abap_false.
+      input = abap_false.
+      output = abap_false.
+    ENDMETHOD.
+
+    METHOD close_input.
+      input = abap_false.
+    ENDMETHOD.
+
+    METHOD close_output.
+      output = abap_false.
     ENDMETHOD.
 
     METHOD lif_output_port~write.
+      CHECK output EQ abap_true.
       RETURN.
     ENDMETHOD.
 
-    METHOD to_text.
-      TRY.
-          result = element->to_string( ).
-        CATCH lcx_lisp_exception INTO DATA(lx_error).
-          result = lx_error->get_text( ).
-      ENDTRY.
+    METHOD lif_output_port~display.
+      CHECK output EQ abap_true.
+      RETURN.
     ENDMETHOD.
 
-    METHOD lif_input_port~read.
+    METHOD read_stream.
       DATA lt_fields TYPE STANDARD TABLE OF sval.
       DATA lv_user_response TYPE flag.
 
       CLEAR rv_input.
-      lt_fields = VALUE #( ( tabname = 'ABDBG'     " Text: Input Line
-                             fieldname = 'LTEXT'
-                             field_obl = 'X' ) ).
+      IF iv_title IS INITIAL.
+        lt_fields = VALUE #( ( tabname = 'ABDBG'     " Text: Input Line
+                               fieldname = 'LTEXT'
+                               field_obl = 'X' ) ).
+      ELSE.
+        lt_fields = VALUE #( ( tabname = 'ABDBG'     " Text: Input Line
+                               fieldname = 'LTEXT'
+                               fieldtext = iv_title
+                               field_obl = 'X' ) ).
+      ENDIF.
 
       CALL FUNCTION 'POPUP_GET_VALUES'
         EXPORTING
@@ -597,12 +643,68 @@
         AND line_exists( lt_fields[ 1 ] ).
 
       rv_input = lt_fields[ 1 ]-value.
+    ENDMETHOD.
 
+    METHOD set_input_string.
+      last_input = last_input && iv_text.
+      last_len = strlen( last_input ).
+    ENDMETHOD.
+
+    METHOD read_block.
+      last_input = read_stream( ).
+      last_len = strlen( last_input ).
+      last_index = 0.
+    ENDMETHOD.
+
+    METHOD lif_input_port~peek_char.
+      CHECK input EQ abap_true.
+      IF last_index < last_len.
+         rv_char = last_input+last_index(1).
+      ELSE.
+        read_block( ).
+        rv_char = last_input+0(1).
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD lif_input_port~read_char.
+      CHECK input EQ abap_true.
+      IF last_index < last_len.
+         rv_char = last_input+last_index(1).
+      ELSE.
+        read_block( ).
+        rv_char = last_input+0(1).
+      ENDIF.
+      ADD 1 TO last_index.
+    ENDMETHOD.
+
+    METHOD lif_input_port~is_char_ready.
+      rv_flag = abap_false.
+      CHECK input EQ abap_true.
+      rv_flag = xsdbool( last_index < last_len ).
+    ENDMETHOD.
+
+    METHOD lif_input_port~read.
+      CHECK input EQ abap_true.
+      IF last_index < last_len.
+        rv_input = last_input+last_index.
+        CLEAR: last_input, last_index, last_len.
+      ELSE.
+        rv_input = read_stream( iv_title ).
+      ENDIF.
     ENDMETHOD.
 
   ENDCLASS.
 
   CLASS lcl_lisp_buffered_port IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( iv_port_type = iv_port_type
+                          iv_input = iv_input
+                          iv_output = iv_output
+                          iv_error = iv_error ).
+      separator = iv_separator.
+      string_mode = iv_string.
+    ENDMETHOD.
 
     METHOD lif_log~put.
       write( io_elem ).
@@ -613,8 +715,54 @@
     ENDMETHOD.
 
     METHOD write.
+      DATA lv_text TYPE string.
+
       CHECK element IS BOUND.
-      add( to_text( element ) ).
+      TRY.
+          lv_text = element->to_string( ).
+        CATCH lcx_lisp_exception INTO DATA(lx_error).
+          lv_text = lx_error->get_text( ).
+      ENDTRY.
+      add( lv_text ).
+    ENDMETHOD.
+
+    METHOD display.
+      DATA lv_text TYPE string.
+
+      CHECK element IS BOUND.
+      TRY.
+          lv_text = element->to_text( ).
+        CATCH lcx_lisp_exception INTO DATA(lx_error).
+          lv_text = lx_error->get_text( ).
+      ENDTRY.
+      add( lv_text ).
+    ENDMETHOD.
+
+    METHOD read.
+      CHECK input EQ abap_true.
+      IF string_mode EQ abap_false.
+        rv_input = super->read( ).
+        RETURN.
+      ENDIF.
+      IF last_index < last_len.
+        rv_input = last_input+last_index.
+      ELSE.
+        rv_input = c_lisp_eof.
+      ENDIF.
+      CLEAR: last_input, last_index, last_len.
+    ENDMETHOD.
+
+    METHOD lif_input_port~peek_char.
+      CHECK input EQ abap_true.
+      IF string_mode EQ abap_false.
+        rv_char = super->lif_input_port~peek_char( ).
+        RETURN.
+      ENDIF.
+      IF last_index < last_len.
+        rv_char = last_input+last_index(1).
+      ELSE.
+        rv_char = c_lisp_eof.
+      ENDIF.
     ENDMETHOD.
 
     METHOD flush.
@@ -622,15 +770,11 @@
       CLEAR buffer.
     ENDMETHOD.
 
-    METHOD get.
-      rv_text = buffer.
-    ENDMETHOD.                    "get
-
     METHOD add.
       IF buffer IS INITIAL.
         buffer = text.
       ELSE.
-        buffer = |{ buffer } { text }|.
+        buffer = |{ buffer }{ separator }{ text }|.
       ENDIF.
     ENDMETHOD.                    "add
 
@@ -869,14 +1013,17 @@
         c_lisp_comment   TYPE char1 VALUE ';',
         c_block_comment  TYPE char1 VALUE '|', " start #|, end |#
         c_open_bracket   TYPE char1 VALUE '[',
-        c_close_bracket  TYPE char1 VALUE ']',
-        c_peek_dummy     TYPE char1 VALUE 'Ü'. " we do not expect this in source code
+        c_close_bracket  TYPE char1 VALUE ']'.
 
       METHODS:
         constructor,
         parse IMPORTING iv_code         TYPE clike
               RETURNING VALUE(elements) TYPE tt_element
-              RAISING   lcx_lisp_exception.
+              RAISING   lcx_lisp_exception,
+        read_from IMPORTING ii_port TYPE REF TO lif_input_port
+                  RETURNING VALUE(element) TYPE REF TO lcl_lisp
+                  RAISING   lcx_lisp_exception.
+
     PRIVATE SECTION.
       DATA code TYPE string.
       DATA length TYPE i.
@@ -938,7 +1085,10 @@
         eval_repl
           IMPORTING code            TYPE clike
           RETURNING VALUE(response) TYPE string
-          RAISING   lcx_lisp_exception.
+          RAISING   lcx_lisp_exception,
+        validate_source
+          IMPORTING code            TYPE clike
+          RETURNING VALUE(response) TYPE string.
 
 * Functions for dealing with lists:
       _proc_meth:
@@ -969,23 +1119,23 @@
       proc_list_copy       ##called,
       proc_list_to_vector  ##called,
 
-      proc_length,   ##called
-      proc_list,     ##called
-      proc_nilp.     ##called
+      proc_length    ##called,
+      proc_list      ##called,
+      proc_nilp      ##called.
 
 * Native functions:
       _proc_meth:
-      proc_add,      ##called
-      proc_subtract, ##called
-      proc_multiply, ##called
-      proc_divide,   ##called
-      proc_gt,       ##called
-      proc_gte,      ##called
-      proc_lt,       ##called
-      proc_lte,      ##called
-      proc_eql,      ##called
-      proc_eqv,      ##called
-      proc_not,      ##called
+      proc_add       ##called,
+      proc_subtract  ##called,
+      proc_multiply  ##called,
+      proc_divide    ##called,
+      proc_gt        ##called,
+      proc_gte       ##called,
+      proc_lt        ##called,
+      proc_lte       ##called,
+      proc_eql       ##called,
+      proc_eqv       ##called,
+      proc_not       ##called,
 
       proc_is_number,       ##called
       proc_is_integer,      ##called
@@ -1037,7 +1187,16 @@
       proc_max,          ##called
       proc_min,          ##called
 * Formating
-      proc_string,           ##called
+      proc_newline           ##called,
+      proc_write             ##called,
+      proc_display           ##called,
+      proc_read              ##called,
+      proc_write_string      ##called,
+      proc_read_char         ##called,
+      proc_peek_char         ##called,
+      proc_is_char_ready     ##called,
+
+      proc_string            ##called,
       proc_make_string,      ##called
       proc_num_to_string,    ##called
       proc_list_to_string,   ##called
@@ -1084,8 +1243,16 @@
       proc_is_textual_port        ##called,
       proc_is_binary_port         ##called,
       proc_is_port                ##called,
+      proc_is_eof_object          ##called,
       proc_is_open_input_port     ##called,
-      proc_is_open_output_port    ##called.
+      proc_is_open_output_port    ##called,
+      proc_eof_object             ##called,
+      proc_current_input_port     ##called,
+      proc_current_output_port    ##called,
+      proc_current_error_port     ##called,
+      proc_open_output_string     ##called,
+      proc_open_input_string      ##called,
+      proc_get_output_string      ##called.
 
 * Built-in functions for ABAP integration:
       _proc_meth:
@@ -1398,7 +1565,7 @@
       IF lv_idx < length.
         rv_char = code+lv_idx(1).
       ELSE.
-        rv_char = c_peek_dummy.
+        rv_char = c_lisp_eof.
       ENDIF.
     ENDMETHOD.
 
@@ -1422,6 +1589,24 @@
         ENDIF.
       ENDWHILE.
     ENDMETHOD.                    "parse
+
+    METHOD read_from.
+      code = ii_port->read( ).
+      length = strlen( code ).
+      element = lcl_lisp=>eof_object.
+
+      CHECK code NE c_lisp_eof AND length GT 0.
+
+      index = 0.
+      char = code+index(1).           "Kick off things by reading first char
+      skip_whitespace( ).
+      IF char = c_open_paren OR char = c_open_bracket.
+        element = parse_list( char ).
+      ELSEIF index < length.
+        element = parse_token( ).
+      ENDIF.
+      ii_port->put( substring( val = code off = index ) ).
+    ENDMETHOD.
 
     METHOD parse_list.
       DATA lo_cell TYPE REF TO lcl_lisp.
@@ -1663,16 +1848,6 @@
       env->define_value( symbol = 'apply'        type = lcl_lisp=>type_primitive value   = 'apply' ).
       env->define_value( symbol = 'for-each'     type = lcl_lisp=>type_primitive value   = 'for-each' ).
       env->define_value( symbol = 'map'          type = lcl_lisp=>type_primitive value   = 'map' ).
-      env->define_value( symbol = 'newline'      type = lcl_lisp=>type_primitive value   = 'newline' ).
-      env->define_value( symbol = 'display'      type = lcl_lisp=>type_primitive value   = 'display' ).
-      env->define_value( symbol = 'write'        type = lcl_lisp=>type_primitive value   = 'write' ).
-      env->define_value( symbol = 'read'         type = lcl_lisp=>type_primitive value   = 'read' ).
-
-      env->define_value( symbol = 'write-string' type = lcl_lisp=>type_primitive value   = 'write-string' ).
-      env->define_value( symbol = 'read-char'    type = lcl_lisp=>type_primitive value   = 'read-char' ).
-      env->define_value( symbol = 'current-input-port'  type = lcl_lisp=>type_primitive value   = 'current-input-port' ).
-      env->define_value( symbol = 'current-output-port' type = lcl_lisp=>type_primitive value   = 'current-output-port' ).
-      env->define_value( symbol = 'current-error-port'  type = lcl_lisp=>type_primitive value   = 'current-error-port' ).
 
 *     Add native functions to environment
       env->define_value( symbol = '+'        type = lcl_lisp=>type_native value   = 'PROC_ADD' ).
@@ -1723,6 +1898,10 @@
       env->define_value( symbol = 'cdar'     type = lcl_lisp=>type_native value   = 'PROC_CDAR' ).
       env->define_value( symbol = 'cddr'     type = lcl_lisp=>type_native value   = 'PROC_CDDR' ).
 
+      env->define_value( symbol = 'current-input-port'  type = lcl_lisp=>type_native value   = 'PROC_CURRENT_INPUT_PORT' ).
+      env->define_value( symbol = 'current-output-port' type = lcl_lisp=>type_native value   = 'PROC_CURRENT_OUTPUT_PORT' ).
+      env->define_value( symbol = 'current-error-port'  type = lcl_lisp=>type_native value   = 'PROC_CURRENT_ERROR_PORT' ).
+
 *     vector-related functions
       env->define_value( symbol = 'vector'        type = lcl_lisp=>type_native value   = 'PROC_VECTOR' ).
       env->define_value( symbol = 'vector-length' type = lcl_lisp=>type_native value   = 'PROC_VECTOR_LENGTH' ).
@@ -1754,6 +1933,19 @@
       env->define_value( symbol = 'string=?'    type = lcl_lisp=>type_native value = 'PROC_LIST_IS_STRING' ).
 
 *     Format
+      env->define_value( symbol = 'newline'     type = lcl_lisp=>type_native value = 'PROC_NEWLINE' ).
+      env->define_value( symbol = 'write'       type = lcl_lisp=>type_native value = 'PROC_WRITE' ).
+      env->define_value( symbol = 'display'     type = lcl_lisp=>type_native value = 'PROC_DISPLAY' ).
+
+      env->define_value( symbol = 'read'         type = lcl_lisp=>type_native value = 'PROC_READ' ).
+      env->define_value( symbol = 'write-string' type = lcl_lisp=>type_native value = 'PROC_WRITE_STRING' ).
+      env->define_value( symbol = 'read-char'    type = lcl_lisp=>type_native value = 'PROC_READ_CHAR' ).
+      env->define_value( symbol = 'char-ready?'  type = lcl_lisp=>type_native value = 'PROC_IS_CHAR_READY' ).
+      env->define_value( symbol = 'peek-char'    type = lcl_lisp=>type_native value = 'PROC_PEEK_CHAR' ).
+
+      env->define_value( symbol = 'string->number' type = lcl_lisp=>type_native value = 'PROC_STRING_TO_NUM' ).
+      env->define_value( symbol = 'make-string'    type = lcl_lisp=>type_native value = 'PROC_MAKE_STRING' ).
+
       env->define_value( symbol = 'number->string' type = lcl_lisp=>type_native value = 'PROC_NUM_TO_STRING' ).
       env->define_value( symbol = 'string->number' type = lcl_lisp=>type_native value = 'PROC_STRING_TO_NUM' ).
       env->define_value( symbol = 'make-string'    type = lcl_lisp=>type_native value = 'PROC_MAKE_STRING' ).
@@ -1833,6 +2025,11 @@
       env->define_value( symbol = 'port?'               type = lcl_lisp=>type_native value   = 'PROC_IS_PORT' ).
       env->define_value( symbol = 'input-port-open?'    type = lcl_lisp=>type_native value   = 'PROC_IS_OPEN_INPUT_PORT' ).
       env->define_value( symbol = 'output-port-open?'   type = lcl_lisp=>type_native value   = 'PROC_IS_OPEN_OUTPUT_PORT' ).
+      env->define_value( symbol = 'eof-object?'         type = lcl_lisp=>type_native value   = 'PROC_IS_EOF_OBJECT' ).
+      env->define_value( symbol = 'open-output-string'  type = lcl_lisp=>type_native value   = 'PROC_OPEN_OUTPUT_STRING' ).
+      env->define_value( symbol = 'open-input-string'   type = lcl_lisp=>type_native value   = 'PROC_OPEN_INPUT_STRING' ).
+      env->define_value( symbol = 'get-output-string'   type = lcl_lisp=>type_native value   = 'PROC_GET_OUTPUT_STRING' ).
+      env->define_value( symbol = 'eof-object'          type = lcl_lisp=>type_native value   = 'PROC_EOF_OBJECT' ).
 
       DATA lr_ref TYPE REF TO data.
 *     Define a value in the environment for SYST
@@ -2559,31 +2756,6 @@
 
                     CONTINUE.  "tail_expression lo_elem.
 
-                  WHEN 'newline'.
-                    result = write( io_elem = lcl_lisp=>new_line
-                                    io_arg = lr_tail ).
-
-                  WHEN 'read'.
-                    result = read( io_arg = lr_tail ).
-
-                  WHEN 'read-char'.
-                    result = read_char( io_arg = lr_tail ).
-
-                  WHEN 'display'.
-                    result = display( io_elem = eval( element = lr_tail->car
-                                                      environment = lo_env )
-                                      io_arg = lr_tail->cdr ).
-
-                  WHEN 'write'.
-                    result = write( io_elem = eval( element = lr_tail->car
-                                                    environment = lo_env )
-                                    io_arg = lr_tail->cdr ).
-                  WHEN 'write-string'.
-                    DATA(lo_str) = eval_ast( element = lr_tail->car
-                                             environment = lo_env ).
-                    validate_string lo_str `write-string`.
-                    result = write( io_elem = lo_str
-                                    io_arg = lr_tail->cdr ).
                   WHEN 'and'.
 *                   (and <expression>* >tail expression>)
                     result = true.
@@ -2839,15 +3011,6 @@
 
                     ENDIF.
 
-                  WHEN 'current-input-port'.
-                    result = go_input_port.
-
-                  WHEN 'current-output-port'.
-                    result = go_output_port.
-
-                  WHEN 'current-error-port'.
-                    result = go_error_port.
-
                   WHEN 'for-each'.
                     result = expand_for_each( io_list = lr_tail
                                               environment = lo_env ).
@@ -2939,46 +3102,39 @@
     ENDMETHOD.
 
     DEFINE optional_port.
-      DATA li_port TYPE REF TO lif_&1_port.
+      DATA li_port TYPE REF TO lif_&2_port.
 
-      IF io_arg->type EQ lcl_lisp=>type_pair.
-        validate_port io_arg->car &2.
-        li_port ?= io_arg->car.
+      IF &1->type EQ lcl_lisp=>type_pair.
+        validate_port &1->car &3.
+        li_port ?= &1->car.
       ELSE.
-        li_port = go_&1_port.
+        li_port = go_&2_port.
       ENDIF.
     END-OF-DEFINITION.
 
+    DEFINE optional_port_arg.
+      optional_port io_arg &1 &2.
+    END-OF-DEFINITION.
+
     METHOD write.
-      optional_port output `write`.
+      optional_port_arg output `write`.
       li_port->write( io_elem ).
       result = io_elem.
     ENDMETHOD.
 
     METHOD display.
-      optional_port output `display`.
-      li_port->write( io_elem ).
+      optional_port_arg output `display`.
+      li_port->display( io_elem ).
       result = io_elem.
     ENDMETHOD.
 
     METHOD read.
-      DATA lo_conscell TYPE REF TO lcl_lisp. " Lisp-side  (target)
-
-      optional_port input `read`.
-
-*     Create list with cell for each row AND Set pointer to start of list
-      result = nil.
-      LOOP AT parse( li_port->read( ) ) INTO DATA(lo_elem).
-        IF sy-tabix EQ 1.
-          lo_conscell = result = lo_elem.
-        ELSE.
-          lo_conscell = lo_conscell->cdr = lcl_lisp_new=>cons( io_car = lo_elem ).
-        ENDIF.
-      ENDLOOP.
+      optional_port_arg input `read`.
+      result = read_from( li_port ).
     ENDMETHOD.
 
     METHOD read_char.
-      optional_port input `read-char`.
+      optional_port_arg input `read-char`.
 
       result = lcl_lisp_new=>char( li_port->read( ) ).
     ENDMETHOD.
@@ -2998,6 +3154,17 @@
         gi_log->put( lo_result ).
       ENDLOOP.
       response = gi_log->get( ).
+    ENDMETHOD.
+
+    METHOD validate_source.
+      TRY.
+          LOOP AT parse( code ) INTO DATA(lo_element).
+            gi_log->put( lo_element ).
+          ENDLOOP.
+          response = gi_log->get( ).
+        CATCH cx_root INTO DATA(lx_root).
+          response = lx_root->get_text( ).
+      ENDTRY.
     ENDMETHOD.
 
 **********************************************************************
@@ -4394,6 +4561,50 @@
       result = lcl_lisp_new=>number( list->car->value ).
     ENDMETHOD.
 
+    METHOD proc_newline.
+      result = write( io_elem = lcl_lisp=>new_line
+                      io_arg = list ).
+    ENDMETHOD.
+
+    METHOD proc_write.
+      validate: list, list->car.
+      result = write( io_elem = list->car
+                      io_arg = list->cdr ).
+    ENDMETHOD.
+
+    METHOD proc_write_string.
+      validate_string list `write-string`.
+      result = write( io_elem = list
+                      io_arg = list->cdr ).
+    ENDMETHOD.
+
+    METHOD proc_display.
+      validate: list, list->car.
+      result = display( io_elem = list->car
+                        io_arg = list->cdr ).
+    ENDMETHOD.
+
+    METHOD proc_read.
+      result = read( io_arg = list ).
+    ENDMETHOD.
+
+    METHOD proc_read_char.
+      result = read_char( io_arg = list ).
+    ENDMETHOD.
+
+    METHOD proc_peek_char.
+      optional_port list input `peek-char`.
+      result = lcl_lisp_new=>char( li_port->peek_char( ) ).
+    ENDMETHOD.
+
+    METHOD proc_is_char_ready.
+      optional_port list input `char-ready?`.
+
+      result = false.
+      CHECK li_port->is_char_ready( ).
+      result = true.
+    ENDMETHOD.
+
     METHOD proc_string.
       DATA lo_ptr TYPE REF TO lcl_lisp.
       DATA lv_text TYPE string.
@@ -4639,71 +4850,121 @@
       ENDWHILE.
     ENDMETHOD.
 
-    METHOD proc_is_input_port.
-      DATA lo_port TYPE REF TO lcl_lisp_port.
-      validate list.
-      result = false.
-      CHECK list->type EQ lcl_lisp=>type_port.
-      lo_port ?= list.
-      CHECK lo_port->input EQ abap_true.
-      result = true.
-    ENDMETHOD.
-
-    METHOD proc_is_output_port.
-      DATA lo_port TYPE REF TO lcl_lisp_port.
-      validate list.
-      result = false.
-      CHECK list->type EQ lcl_lisp=>type_port.
-      lo_port ?= list.
-      CHECK lo_port->output EQ abap_true.
-      result = true.
-    ENDMETHOD.
-
     METHOD proc_is_textual_port.
       DATA lo_port TYPE REF TO lcl_lisp_port.
-      validate list.
+
+      validate: list, list->car.
       result = false.
-      CHECK list->type EQ lcl_lisp=>type_port.
-      lo_port ?= list.
+      CHECK list->car->type EQ lcl_lisp=>type_port.
+      lo_port ?= list->car.
       CHECK lo_port->port_type EQ lcl_lisp_port=>c_port_textual.
       result = true.
     ENDMETHOD.
 
     METHOD proc_is_binary_port.
       DATA lo_port TYPE REF TO lcl_lisp_port.
-      validate list.
+
+      validate: list, list->car.
       result = false.
-      CHECK list->type EQ lcl_lisp=>type_port.
-      lo_port ?= list.
+      CHECK list->car->type EQ lcl_lisp=>type_port.
+      lo_port ?= list->car.
       CHECK lo_port->port_type EQ lcl_lisp_port=>c_port_binary.
       result = true.
     ENDMETHOD.
 
     METHOD proc_is_port.
-      validate list.
+      validate: list, list->car.
       result = false.
-      CHECK list->type EQ lcl_lisp=>type_port.
+      CHECK list->car->type EQ lcl_lisp=>type_port.
+      result = true.
+    ENDMETHOD.
+
+    METHOD proc_is_input_port.
+      DATA lo_port TYPE REF TO lcl_lisp_port.
+
+      validate: list, list->car.
+      result = false.
+      CHECK list->car->type EQ lcl_lisp=>type_port.
+      lo_port ?= list->car.
+      CHECK lo_port->input EQ abap_true.
+      result = true.
+    ENDMETHOD.
+
+    METHOD proc_is_output_port.
+      DATA lo_port TYPE REF TO lcl_lisp_port.
+
+      validate: list, list->car.
+      result = false.
+      CHECK list->car->type EQ lcl_lisp=>type_port.
+      lo_port ?= list->car.
+      CHECK lo_port->output EQ abap_true.
       result = true.
     ENDMETHOD.
 
     METHOD proc_is_open_input_port.
-      DATA lo_port TYPE REF TO lcl_lisp_port.
-
-      validate list.
       result = false.
-      CHECK list->type EQ lcl_lisp=>type_port.
-      lo_port ?= list.
-      CHECK lo_port->input EQ abap_true AND lo_port->open EQ abap_true.
+      CHECK proc_is_input_port( list ) EQ true.
       result = true.
     ENDMETHOD.
 
     METHOD proc_is_open_output_port.
+      result = false.
+      CHECK proc_is_output_port( list ) EQ true.
+      result = true.
+    ENDMETHOD.
+
+    METHOD proc_current_output_port.
+      result = go_output_port.
+    ENDMETHOD.
+
+    METHOD proc_current_input_port.
+      result = go_input_port.
+    ENDMETHOD.
+
+    METHOD proc_current_error_port.
+      result = go_error_port.
+    ENDMETHOD.
+
+    METHOD proc_open_output_string.
+      result = lcl_lisp_new=>port( iv_port_type = lcl_lisp_port=>c_port_textual
+                                   iv_output = abap_true
+                                   iv_input = abap_false
+                                   iv_error = abap_false
+                                   iv_buffered = abap_true ).
+    ENDMETHOD.
+
+    METHOD proc_open_input_string.
       DATA lo_port TYPE REF TO lcl_lisp_port.
       validate list.
+      validate_string list->car `open-input-string`.
+
+      lo_port = lcl_lisp_new=>port( iv_port_type = lcl_lisp_port=>c_port_textual
+                                    iv_output = abap_false
+                                    iv_input = abap_true
+                                    iv_error = abap_false
+                                    iv_buffered = abap_true   " only buffered input, but currently needed for peek_char
+                                    iv_string = abap_true ).
+      lo_port->set_input_string( list->car->value ).
+      result = lo_port.
+    ENDMETHOD.
+
+    METHOD proc_get_output_string.
+      DATA lo_port TYPE REF TO lcl_lisp_buffered_port.
+      validate list.
+      validate_port list->car `get-output-string`.
+
+      lo_port ?= list->car.
+      result = lcl_lisp_new=>string( lo_port->flush( ) ).
+    ENDMETHOD.
+
+    METHOD proc_eof_object.
+      result = lcl_lisp=>eof_object. " cannot be read using (read), must not be unique
+    ENDMETHOD.
+
+    METHOD proc_is_eof_object.
+      validate: list, list->car.
       result = false.
-      CHECK list->type EQ lcl_lisp=>type_port.
-      lo_port ?= list.
-      CHECK lo_port->output EQ abap_true AND lo_port->open EQ abap_true.
+      CHECK list->car EQ lcl_lisp=>eof_object.
       result = true.
     ENDMETHOD.
 
@@ -5551,7 +5812,16 @@
   CLASS lcl_lisp IMPLEMENTATION.
 
     METHOD class_constructor.
-      DATA x TYPE x LENGTH 2.
+      TYPES tv_word TYPE x LENGTH 2.
+      CONSTANTS:
+        x0007 TYPE tv_word VALUE  '0007',
+        x0008 TYPE tv_word VALUE  '0008',
+        x0009 TYPE tv_word VALUE  '0009',
+        x007F TYPE tv_word VALUE  '007F',
+        x000A TYPE tv_word VALUE  '000A',
+        x001B TYPE tv_word VALUE  '001B',
+        x0000 TYPE tv_word VALUE  '0000',
+        x000D TYPE tv_word VALUE  '000D'.
 
       nil = lcl_lisp_new=>null( ).
       false = lcl_lisp_new=>boolean( '#f' ).
@@ -5565,25 +5835,18 @@
       cons = lcl_lisp_new=>symbol( c_eval_cons ).
       list = lcl_lisp_new=>symbol( c_eval_list ).
 
-      x = '0007'.
-      char_alarm = lcl_lisp_new=>char( x ).
-      x = '0008'.
-      char_backspace = lcl_lisp_new=>char( x ).
-      x = '007F'.
-      char_delete = lcl_lisp_new=>char( x ).
-      x = '001B'.
-      char_escape = lcl_lisp_new=>char( x ).
-      x = '000A'.
-      char_newline = lcl_lisp_new=>char( x ).
-      x = '0000'.
-      char_null = lcl_lisp_new=>char( x ).
-      x = '000D'.
-      char_return = lcl_lisp_new=>char( x ).
+      char_alarm = lcl_lisp_new=>char( x0007 ).
+      char_backspace = lcl_lisp_new=>char( x0008 ).
+      char_delete = lcl_lisp_new=>char( x007F ).
+      char_escape = lcl_lisp_new=>char( x001B ).
+      char_newline = lcl_lisp_new=>char( x000A ).
+      char_null = lcl_lisp_new=>char( x0000 ).
+      char_return = lcl_lisp_new=>char( x000D ).
       char_space = lcl_lisp_new=>char( ` ` ).
-      x = '0009'.
-      char_tab = lcl_lisp_new=>char( x ).
+      char_tab = lcl_lisp_new=>char( x0009 ).
 
       new_line = lcl_lisp_new=>string( |\n| ).
+      eof_object = lcl_lisp_new=>char( c_lisp_eof ).
     ENDMETHOD.
 
     METHOD rest.
@@ -5802,7 +6065,7 @@
         WHEN type_lambda.
           str = |<lambda> { car->list_to_string( ) }|.
         WHEN type_null.
-          str = 'nil'.
+          str = c_lisp_nil.
         WHEN type_syntax
           OR type_primitive
           OR type_symbol
@@ -5828,6 +6091,8 @@
           str = '<hash>'.
         WHEN type_vector.
           str = '<vector>'.
+        WHEN type_port.
+          str = '<port>'.
 *--------------------------------------------------------------------*
 *        Additions for ABAP Types:
         WHEN type_abap_function.
@@ -5843,6 +6108,26 @@
           str = |<ABAP Table>|.
       ENDCASE.
     ENDMETHOD.                    "to_string
+
+    METHOD to_text.
+      CASE type.
+        WHEN type_string
+          OR type_char.
+          CASE me.
+            WHEN lcl_lisp=>new_line.
+              str = |\n|.
+            WHEN lcl_lisp=>eof_object
+              OR nil.
+              str = space.
+            WHEN OTHERS.
+              str = value.
+          ENDCASE.
+        WHEN type_null.
+          str = |'()|.
+        WHEN OTHERS.
+          str = to_string( ).
+      ENDCASE.
+    ENDMETHOD.
 
     METHOD error_not_a_pair.
       throw( context && to_string( ) && ` is not a pair` ).
@@ -5945,12 +6230,23 @@
     ENDMETHOD.
 
     METHOD port.
-      CREATE OBJECT ro_port
-        EXPORTING
-          iv_port_type = iv_port_type
-          iv_input     = iv_input
-          iv_output    = iv_output
-          iv_error     = iv_error.
+      IF iv_buffered EQ abap_true.
+        CREATE OBJECT ro_port TYPE lcl_lisp_buffered_port
+          EXPORTING
+            iv_port_type = iv_port_type
+            iv_input     = iv_input
+            iv_output    = iv_output
+            iv_error     = iv_error
+            iv_separator = iv_separator
+            iv_string    = iv_string.
+      ELSE.
+        CREATE OBJECT ro_port
+          EXPORTING
+            iv_port_type = iv_port_type
+            iv_input     = iv_input
+            iv_output    = iv_output
+            iv_error     = iv_error.
+      ENDIF.
     ENDMETHOD.
 
     METHOD atom.

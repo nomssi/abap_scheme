@@ -99,7 +99,8 @@
        CREATE OBJECT mo_port
          EXPORTING iv_input  = abap_false
                    iv_output = abap_true
-                   iv_error  = abap_true.
+                   iv_error  = abap_true
+                   iv_string = abap_false.
        mo_int = lcl_lisp_interpreter=>new( io_port = mo_port
                                            ii_log = mo_port ).
      ENDMETHOD.
@@ -290,26 +291,23 @@
 
      METHOD lambda.
        parse_test( code = '(define a(lambda()20))'
-                   expected = |( define a ( lambda () 20 ) )| ).
+                   expected = |( define a ( lambda { c_lisp_nil } 20 ) )| ).
      ENDMETHOD.                    "lambda
 
      METHOD lambda_comments.
        parse_test( code = |;; Comments\n| &
                           |(define a(lambda()20)) ; comments|
-                   expected = |\n( define a\n ( lambda () 20 ) )| ).
+                   expected = |( define a ( lambda { c_lisp_nil } 20 ) )| ).
      ENDMETHOD.                    "lambda
 
      METHOD riff_shuffle.
        parse_test( code = riff_shuffle_code( )
                    expected =
-   |\n( define riff-shuffle\n ( lambda\n ( deck )\n ( begin\n ( define take\n ( lambda| &
-   |\n ( n seq )\n ( if\n ( <= n 0 )\n '()\n ( cons| &
-   |\n ( car seq )\n ( take\n ( - n  )\n ( cdr seq ) ) ) ) ) )| &
-   |\n ( define drop\n ( lambda\n ( n seq )\n ( if\n  ( <= n 0 ) seq| &
-   |\n ( drop\n    ( - n  )\n ( cdr seq ) ) ) ) )\n ( define mid\n| &
-   | ( lambda\n ( seq )\n ( /\n ( length seq )  ) ) )\n (\n| &
-   | ( combine append )\n ( take\n ( mid deck ) deck )\n ( drop| &
-   |\n ( mid deck ) deck ) ) ) ) )|
+   |( define riff-shuffle ( lambda ( deck ) ( begin ( define take ( lambda| &
+   | ( n seq ) ( if ( <= n 0 ) ' { c_lisp_nil } ( cons ( car seq ) ( take ( - n 1 ) ( cdr seq ) ) ) ) ) )| &
+   | ( define drop ( lambda ( n seq ) ( if ( <= n 0 ) seq| &
+   | ( drop ( - n 1 ) ( cdr seq ) ) ) ) ) ( define mid ( lambda ( seq ) ( / ( length seq ) 2 ) ) )| &
+   | ( ( combine append ) ( take ( mid deck ) deck ) ( drop ( mid deck ) deck ) ) ) ) )|
              ).
      ENDMETHOD.                    "riff_shuffle
 
@@ -416,6 +414,8 @@
        METHODS char_3 FOR TESTING.
        METHODS len_1 FOR TESTING.
        METHODS symbol_to_string_1 FOR TESTING.
+       METHODS input_string_1 FOR TESTING.
+       METHODS output_string_1 FOR TESTING.
    ENDCLASS.
 
    CLASS ltc_conditionals DEFINITION INHERITING FROM ltc_interpreter
@@ -608,7 +608,7 @@
                          |  (do ((x x (cdr x))| &
                          |    (sum 0  (+ sum (car x))))| &
                          |((null? x) )))|              " Do without a body
-                  expected = 'nil' ).                  " unspecified
+                  expected = c_lisp_nil ).                  " unspecified
      ENDMETHOD.
 
      METHOD named_let_1.
@@ -916,7 +916,7 @@
 
      METHOD list_is_boolean_1.
        code_test( code = |(boolean=? '())|
-                  expected = 'Eval: boolean=? missing boolean argument in nil' ).
+                  expected = |Eval: boolean=? missing boolean argument in { c_lisp_nil }| ).
      ENDMETHOD.
 
      METHOD list_is_boolean_2.
@@ -949,7 +949,13 @@
    CLASS ltc_string IMPLEMENTATION.
 
      METHOD setup.
-       new_interpreter( ).
+       CREATE OBJECT mo_port
+         EXPORTING iv_input  = abap_false
+                   iv_output = abap_true
+                   iv_error  = abap_true
+                   iv_string = abap_true.
+       mo_int = lcl_lisp_interpreter=>new( io_port = mo_port
+                                           ii_log = mo_port ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -979,6 +985,28 @@
      METHOD symbol_to_string_1.
        code_test( code = |(symbol->string 'mysymbol)|
                   expected = '"mysymbol"' ).
+     ENDMETHOD.
+
+     METHOD input_string_1.
+       code_test( code = | (define p (open-input-string "(a . (b . (c . ()))) 34"))|
+                  expected = 'p' ).
+       code_test( code = | (input-port? p)|
+                  expected = '#t' ).
+       code_test( code = | (read p)|
+                  expected = '( a b c )' ).
+       code_test( code = | (read p)|
+                  expected = '34' ).
+       code_test( code = | (eof-object? (peek-char p))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD output_string_1.
+       code_test( code = |(let ((q (open-output-string))| &
+                         |      (x '(a b c)))| &
+                         |  (write (car x) q)| &
+                         |  (write (cdr x) q)| &
+                         |  (get-output-string q))|
+                  expected = '"a( b c )"' ).
      ENDMETHOD.
 
    ENDCLASS.
@@ -1093,7 +1121,7 @@
        code_test( code = |(case (car '(c d))| &
                          |      ((a) 'a)| &
                          |      ((b) 'b))|
-                  expected = 'nil' ).  " unspecified
+                  expected = c_lisp_nil ).  " unspecified
      ENDMETHOD.
 
      METHOD case_3.
@@ -1148,14 +1176,14 @@
        code_test( code = |(when (= 1 1.0)| &
                          |(display "1")| &
                          |(display "2"))|
-                  expected = '"2"' ).  " prints "12", returns "2"
+                  expected = '1 2 "2"' ).  " prints "12", returns "2"
      ENDMETHOD.
 
      METHOD unless_1.
        code_test( code = |(unless (= 1 1.0)| &
                          |(display "1")| &
                          |(display "2"))|
-                  expected = 'nil' ).  " prints nothing
+                  expected = c_lisp_nil ).  " prints nothing
      ENDMETHOD.
 
    ENDCLASS.
@@ -1830,12 +1858,12 @@
      METHOD list_nil_1.
 *  Test list
        code_test( code = '(list ())'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.                    "list_nil_1
 
      METHOD list_nil_2.
        code_test( code = '(list nil)'
-                  expected = '( nil )' ).
+                  expected = |( { c_lisp_nil } )| ).
      ENDMETHOD.                    "list_nil_2
 
      METHOD list_test_1.
@@ -1912,7 +1940,7 @@
 
      METHOD list_append_arg_0.
        code_test( code = '(append)'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.
 
      METHOD list_append_arg_1.
@@ -2091,7 +2119,7 @@
 
      METHOD list_car_5.
        code_test( code = '(car ''())'
-                  expected = 'Eval: car: nil is not a pair' ).
+                  expected = |Eval: car: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.
 
      METHOD list_cdr_1.
@@ -2111,7 +2139,7 @@
 
      METHOD list_cdr_4.
        code_test( code = |(cdr '())|
-                  expected = 'Eval: cdr: nil is not a pair' ).
+                  expected = |Eval: cdr: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.                    "list_cdr_1
 
      METHOD list_car_car_cdr.
@@ -2121,7 +2149,7 @@
 
      METHOD list_car_nil.
        code_test( code = '(car nil)'
-                  expected = 'Eval: car: nil is not a pair' ).
+                  expected = |Eval: car: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.                    "list_car_nil
 
      METHOD list_car_list.
@@ -2136,7 +2164,7 @@
 
      METHOD list_caar_2.
        code_test( code = |(caar '())|
-                  expected = 'Eval: caar: nil is not a pair' ).
+                  expected = |Eval: caar: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.
 
      METHOD list_caar_3.
@@ -2146,7 +2174,7 @@
 
      METHOD list_cadr_1.
        code_test( code = |(cadr '())|
-                  expected = 'Eval: cadr: nil is not a pair' ).
+                  expected = |Eval: cadr: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.
 
      METHOD list_cadr_2.
@@ -2161,7 +2189,7 @@
 
      METHOD list_cadr_4.
        code_test( code = |(cadr '((1)))|
-                  expected = 'Eval: cadr: nil is not a pair' ).
+                  expected = |Eval: cadr: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.
 
      METHOD list_cdar_1.
@@ -2171,7 +2199,7 @@
 
      METHOD list_cdar_2.
        code_test( code = |(cdar '())|
-                  expected = 'Eval: cdar: nil is not a pair' ).
+                  expected = |Eval: cdar: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.
 
      METHOD list_cdar_3.
@@ -2181,27 +2209,27 @@
 
      METHOD list_cdar_4.
        code_test( code = |(cdar '((c) 2))|
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.
 
      METHOD list_cddr_1.
        code_test( code = |(cddr '())|
-                  expected = 'Eval: cddr: nil is not a pair' ).
+                  expected = |Eval: cddr: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.
 
      METHOD list_cddr_2.
        code_test( code = |(cddr '(1  2))|
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.
 
      METHOD list_cddr_3.
        code_test( code = |(cddr '(1 (2 6)))|
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.
 
      METHOD list_cddr_4.
        code_test( code = |(cddr '(1 (2)))|
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.
 
      METHOD list_cddr_5.
@@ -2243,7 +2271,7 @@
        code_test( code = |(define b (list-copy a))|
                   expected = 'b' ).
        code_test( code = |(set-car! b 3) ; b is mutable|
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = |a|
                   expected = '( 1 8 2 8 )' ).
        code_test( code = |b|
@@ -2560,7 +2588,7 @@
 
      METHOD vector_to_list_3.
        code_test( code = |(vector->list (vector)) |
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.
 
      METHOD vector_to_list_4.
@@ -2819,7 +2847,7 @@
 
      METHOD apply_6.
        code_test( code = |(apply (lambda (x y . z) (vector x y z)) '(1 2))|
-                  expected = |#( 1 2 nil )| ).
+                  expected = |#( 1 2 { c_lisp_nil } )| ).
      ENDMETHOD.
 
      METHOD apply_7.
@@ -2890,7 +2918,7 @@
 
      METHOD map_7.
        code_test( code = |(map car '())|
-                  expected = |nil| ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.
 
      METHOD for_each_1.
@@ -2905,7 +2933,7 @@
 
      METHOD for_each_3.
        code_test( code = |(for-each even? '())|
-                  expected = 'nil' ).   " #f, unspecified
+                  expected = c_lisp_nil ).   " #f, unspecified
      ENDMETHOD.
 
      METHOD for_each_4.
@@ -3470,11 +3498,11 @@
        code_test( code = '(hash-get h1 ''kennel)'
                   expected = '( dog cat hedgehog )' ).
        code_test( code = '(hash-remove h1 ''kennel)'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = '(hash-get h1 ''sparrow)'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = '(hash-insert h1 ''sparrow "whoosh")'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = '(hash-get h1 ''sparrow)'
                   expected = '"whoosh"' ).
        code_test( code = '(hash-keys h1)'
@@ -3519,7 +3547,7 @@
        code_test( code = '(define mandt (ab-data "MANDT"))'
                   expected = 'mandt' ).
        code_test( code = '(ab-set-value mandt "000")'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = 'mandt'
                   expected = '<ABAP Data>' ).
      ENDMETHOD.                    "abap_data
@@ -3528,7 +3556,7 @@
        code_test( code = '(define t005g (ab-data "T005G"))'
                   expected = 't005g' ).
        code_test( code = '(ab-set t005g "LAND1" "ZA")'  " Set field "LAND1" to "ZA"
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = '(ab-get t005g "LAND1")'       " Return the value of field "LAND1"
                   expected = '"ZA"' ).
      ENDMETHOD.                    "abap_data
@@ -3537,7 +3565,7 @@
        code_test( code = '(define t005g (ab-data "T005G"))'
                   expected = 't005g' ).
        code_test( code = '(ab-set-value t005g ''("000" "ZA" "ABC" "JHB"))'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = '(ab-get-value t005g)'
                   expected = '( "000" "ZA" "ABC" "JHB" )' ).
        code_test( code = '(ab-get t005g "LAND1")'
@@ -3614,7 +3642,7 @@
        code_test( code = '(define f2 (ab-function "TH_TEST_RFC"))'
                   expected = 'f2' ).
        code_test( code = '(ab-set f2 "TEXT_IN" "Calling from ABAP Lisp")'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = '(f2)'
                   expected = '<ABAP function module TH_TEST_RFC>' ).
        code_test( code = '(ab-get f2 "TEXT_OUT")'
@@ -3650,7 +3678,7 @@
        code_test( code = '(define f3 (ab-function "BAPI_USER_GET_DETAIL"))'
                   expected = 'f3' ).
        code_test( code = '(ab-set f3 "USERNAME" (ab-get ab-sy "UNAME"))'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = '(f3)'
                   expected = '<ABAP function module BAPI_USER_GET_DETAIL>' ).
        code_test( code = '(define profiles (ab-get f3 "PROFILES"))'

@@ -28,7 +28,7 @@ CLASS lcl_stack DEFINITION.
 
     METHODS push IMPORTING iv_key TYPE tv_data.
     "METHODS pop RETURNING VALUE(rv_data) TYPE tv_data.
-    METHODS empty RETURNING VALUE(rv_flag) TYPE xsdboolean.
+    "METHODS empty RETURNING VALUE(rv_flag) TYPE xsdboolean.
 
     METHODS serialize RETURNING VALUE(rt_string) TYPE string_table.
     METHODS deserialize IMPORTING it_string      TYPE string_table.
@@ -40,8 +40,6 @@ CLASS lcl_stack DEFINITION.
            END OF ts_node.
 
     DATA mr_top TYPE REF TO ts_node.
-    DATA mr_last TYPE REF TO ts_node.
-    DATA mr_head TYPE REF TO ts_node.
 ENDCLASS.
 
 *----------------------------------------------------------------------*
@@ -154,9 +152,9 @@ CLASS lcl_stack IMPLEMENTATION.
     rv_data = mr_top->data.
   ENDMETHOD.
 
-  METHOD empty.
-    rv_flag = xsdbool( mr_top IS NOT BOUND ).
-  ENDMETHOD.
+*  METHOD empty.
+*    rv_flag = xsdbool( mr_top IS NOT BOUND ).
+*  ENDMETHOD.
 
   METHOD deserialize.
     LOOP AT it_string INTO DATA(lv_string).
@@ -355,7 +353,7 @@ CLASS lcl_ide DEFINITION INHERITING FROM lcl_lisp_buffered_port CREATE PRIVATE.
           RETURNING VALUE(rv_flag) TYPE flag.
     METHODS first_output.
     METHODS read REDEFINITION.
-    METHODS write REDEFINITION.
+    METHODS display REDEFINITION.
   PRIVATE SECTION.
     CLASS-DATA go_ide TYPE REF TO lcl_ide.
 
@@ -373,6 +371,7 @@ CLASS lcl_ide DEFINITION INHERITING FROM lcl_lisp_buffered_port CREATE PRIVATE.
     METHODS:
       constructor,
       evaluate,
+      validate,
       trace,
       refresh,
       show_docu,
@@ -381,6 +380,7 @@ CLASS lcl_ide DEFINITION INHERITING FROM lcl_lisp_buffered_port CREATE PRIVATE.
       free_controls,
       user_command IMPORTING iv_code        TYPE syucomm
                    RETURNING VALUE(rv_flag) TYPE flag.
+    METHODS view_table IMPORTING element TYPE REF TO lcl_lisp.
     METHODS welcome RETURNING VALUE(text) TYPE string.
     METHODS console_header RETURNING VALUE(text) TYPE string.
 
@@ -403,7 +403,8 @@ CLASS lcl_ide IMPLEMENTATION.
 
   METHOD constructor.
     super->constructor( iv_input = abap_true
-                        iv_output = abap_true ).
+                        iv_output = abap_true
+                        iv_string = abap_false ).
     read_settings( ).
     "VALUE #( stack = serialize( )
     CREATE OBJECT:
@@ -577,31 +578,36 @@ CLASS lcl_ide IMPLEMENTATION.
     mo_console->append_string( rv_input && |\n| ).
   ENDMETHOD.
 
-  METHOD write.
+  METHOD view_table.
     DATA lx_error TYPE REF TO cx_root.
     FIELD-SYMBOLS <lt_table> TYPE STANDARD TABLE.
 
+    CHECK element->type EQ lcl_lisp=>type_abap_table.
+    TRY.
+        ASSIGN element->data->* TO <lt_table>.
+        cl_salv_table=>factory(
+          EXPORTING r_container    = mo_cont->mo_alv
+          IMPORTING r_salv_table   = mo_alv
+          CHANGING  t_table        = <lt_table> ).
+
+        mo_alv->get_functions( )->set_all( abap_true ).
+        mo_alv->display( ).
+
+      CATCH cx_root INTO lx_error.
+        lcl_lisp=>throw( lx_error->get_text( ) ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD display.
     CASE element->type.
       WHEN lcl_lisp=>type_abap_table.
-        TRY.
-            ASSIGN element->data->* TO <lt_table>.
-            cl_salv_table=>factory(
-              EXPORTING r_container    = mo_cont->mo_alv
-              IMPORTING r_salv_table   = mo_alv
-              CHANGING  t_table        = <lt_table> ).
-
-            mo_alv->get_functions( )->set_all( abap_true ).
-            mo_alv->display( ).
-
-          CATCH cx_root INTO lx_error.
-            lcl_lisp=>throw( lx_error->get_text( ) ).
-        ENDTRY.
+        view_table( element ).
 
       WHEN OTHERS.
-        super->write( element ).
-
+        super->display( element ).
+        mo_console->append_string( flush( ) ).
     ENDCASE.
-  ENDMETHOD.                    "lif_console~write
+  ENDMETHOD.
 
   METHOD welcome.
     text = |==> Welcome to ABAP List Processing!\n|.
@@ -637,6 +643,15 @@ CLASS lcl_ide IMPLEMENTATION.
 
     mo_log->append_string( |{ code }\n=> { response }\n| ).
   ENDMETHOD.                    "evaluate
+
+  METHOD validate.
+    TRY.
+        DATA(response) = mo_int->eval_repl( mi_source->to_string( ) ).
+      CATCH cx_root INTO DATA(lx_root).
+        response = lx_root->get_text( ).
+    ENDTRY.
+    mi_source->update_status( response ).
+  ENDMETHOD.
 
   METHOD trace.
     TYPES: BEGIN OF ts_header,
@@ -696,6 +711,8 @@ CLASS lcl_ide IMPLEMENTATION.
         evaluate( ).
       WHEN 'TRACE'.
         trace( ).
+      WHEN 'VALIDATE'.
+        validate( ).
       WHEN 'CLEAR'.
         refresh( ).
       WHEN 'PREV'.
