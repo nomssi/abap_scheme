@@ -6,7 +6,7 @@ CONSTANTS:
   c_lisp_untitled   TYPE programm VALUE 'Untitled',
 * enable if you uploaded LISP config files or also change c_source_type to 'LISP'
 * check: https://github.com/nomssi/abap_scheme/blob/master/editor/README.md
-  c_new_abap_editor TYPE flag VALUE abap_false,
+  c_new_abap_editor TYPE flag VALUE abap_true,
   c_source_type     TYPE string VALUE 'LISP'.
 
 CONSTANTS:
@@ -1336,8 +1336,10 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
         rv_node = get_object_id( io_elem ).
       WHEN lcl_lisp=>type_null.
         rv_node = space.
-      WHEN lcl_lisp=>type_number.
-        rv_node = |{ io_elem->number }|.
+      WHEN lcl_lisp=>type_real.
+        rv_node = |{ io_elem->real }|.
+      WHEN lcl_lisp=>type_integer.
+        rv_node = |{ io_elem->integer }|.
       WHEN OTHERS.
         rv_node = io_elem->value.
     ENDCASE.

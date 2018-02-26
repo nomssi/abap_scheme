@@ -416,6 +416,43 @@
        METHODS symbol_to_string_1 FOR TESTING.
        METHODS input_string_1 FOR TESTING.
        METHODS output_string_1 FOR TESTING.
+
+       METHODS char_alphabetic_1 FOR TESTING.
+       METHODS char_alphabetic_2 FOR TESTING.
+       METHODS char_alphabetic_3 FOR TESTING.
+
+       METHODS char_numeric_1 FOR TESTING.
+       METHODS char_numeric_2 FOR TESTING.
+       METHODS char_numeric_3 FOR TESTING.
+
+       METHODS char_whitespace_1 FOR TESTING.
+       METHODS char_whitespace_2 FOR TESTING.
+       METHODS char_whitespace_3 FOR TESTING.
+
+       METHODS char_upper_case_1 FOR TESTING.
+       METHODS char_upper_case_2 FOR TESTING.
+       METHODS char_upper_case_3 FOR TESTING.
+
+       METHODS char_lower_case_1 FOR TESTING.
+       METHODS char_lower_case_2 FOR TESTING.
+       METHODS char_lower_case_3 FOR TESTING.
+
+       METHODS digit_value_1 FOR TESTING.
+       METHODS digit_value_2 FOR TESTING.
+       METHODS digit_value_3 FOR TESTING.
+       METHODS digit_value_4 FOR TESTING.
+       METHODS digit_value_5 FOR TESTING.
+
+       METHODS char_to_integer_1 FOR TESTING.
+       METHODS char_to_integer_2 FOR TESTING.
+
+       METHODS integer_to_char_1 FOR TESTING.
+       METHODS integer_to_char_2 FOR TESTING.
+
+       METHODS char_upcase_1 FOR TESTING.
+
+       METHODS char_downcase_1 FOR TESTING.
+
    ENDCLASS.
 
    CLASS ltc_conditionals DEFINITION INHERITING FROM ltc_interpreter
@@ -483,6 +520,26 @@
        METHODS quasiquote_9 FOR TESTING.
        METHODS quasiquote_10 FOR TESTING.
        METHODS quasiquote_11 FOR TESTING.
+
+   ENDCLASS.
+
+   CLASS ltc_macro DEFINITION INHERITING FROM ltc_interpreter
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PRIVATE SECTION.
+
+       METHODS setup.
+       METHODS teardown.
+
+       METHODS macro_1 FOR TESTING.
+       METHODS macro_2 FOR TESTING.
+
+       METHODS macro_one FOR TESTING.
+       METHODS macro_two FOR TESTING.
+
+       METHODS macro_unless_1 FOR TESTING.
+       METHODS macro_unless_2 FOR TESTING.
+
+       METHODS macro_eval_1 FOR TESTING.
 
    ENDCLASS.
 
@@ -1009,6 +1066,137 @@
                   expected = '"a( b c )"' ).
      ENDMETHOD.
 
+
+     METHOD char_alphabetic_1.
+       code_test( code = '(char-alphabetic? #\A)'
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD char_alphabetic_2.
+       code_test( code = '(char-alphabetic? #\1)'
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD char_alphabetic_3.
+       code_test( code = '(char-alphabetic? "Not a char")'
+                  expected = 'Eval: "Not a char" is not a char in char-alphabetic?' ).
+     ENDMETHOD.
+
+     METHOD char_numeric_1.
+       code_test( code = '(char-numeric? #\p)'
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD char_numeric_2.
+       code_test( code = '(char-numeric? #\1)'
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD char_numeric_3.
+       code_test( code = '(char-numeric? "Not a char")'
+                  expected = 'Eval: "Not a char" is not a char in char-numeric?' ).
+     ENDMETHOD.
+
+     METHOD char_whitespace_1.
+       code_test( code = '(char-whitespace? #\1)'
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD char_whitespace_2.
+       code_test( code = '(char-whitespace? #\space)'
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD char_whitespace_3.
+       code_test( code = '(char-whitespace? "Not a char")'
+                  expected = 'Eval: "Not a char" is not a char in char-whitespace?' ).
+     ENDMETHOD.
+
+     METHOD char_upper_case_1.
+       code_test( code = '(char-upper-case? #\1)'
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD char_upper_case_2.
+       code_test( code = '(char-upper-case? #\C)'
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD char_upper_case_3.
+       code_test( code = '(char-upper-case? "Not a char")'
+                  expected = 'Eval: "Not a char" is not a char in char-upper-case?' ).
+     ENDMETHOD.
+
+     METHOD char_lower_case_1.
+       code_test( code = '(char-lower-case? #\1)'
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD char_lower_case_2.
+       code_test( code = '(char-lower-case? #\c)'
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD char_lower_case_3.
+       code_test( code = '(char-lower-case? "Not a char")'
+                  expected = 'Eval: "Not a char" is not a char in char-lower-case?' ).
+     ENDMETHOD.
+
+     METHOD digit_value_1.
+       code_test( code = '(digit-value #\3)'
+                  expected = '3' ).
+     ENDMETHOD.
+
+     METHOD digit_value_2.
+       code_test( code = '(digit-value #\x0EA)'
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD digit_value_3.
+       code_test( code = '(digit-value "Not a char")'
+                  expected = 'Eval: "Not a char" is not a char in digit-value' ).
+     ENDMETHOD.
+
+     METHOD digit_value_4.
+       code_test( code = '(digit-value #\x0664)'
+                  expected = '4' ).
+     ENDMETHOD.
+
+     METHOD digit_value_5.
+       code_test( code = '(digit-value #\x0AE6)'
+                  expected = '0' ).
+     ENDMETHOD.
+
+     METHOD char_to_integer_1.
+       code_test( code = '(char->integer #\3)'
+                  expected = '3' ).
+     ENDMETHOD.
+
+     METHOD char_to_integer_2.
+       code_test( code = '(char->integer #\a)'
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD integer_to_char_1.
+       code_test( code = '(integer->char #\a)'
+                  expected = 'Eval: "a" is not an integer in integer->char' ).
+     ENDMETHOD.
+
+     METHOD integer_to_char_2.
+       code_test( code = '(integer->char 3)'
+                  expected = '3' ).
+     ENDMETHOD.
+
+     METHOD char_upcase_1.
+       code_test( code = '(char-upcase #\a)'
+                  expected = '"A"' ).
+     ENDMETHOD.
+
+     METHOD char_downcase_1.
+       code_test( code = '(char-downcase #\B)'
+                  expected = '"b"' ).
+     ENDMETHOD.
+
    ENDCLASS.
 
    CLASS ltc_conditionals IMPLEMENTATION.
@@ -1286,11 +1474,13 @@
        METHODS math_subtract_1 FOR TESTING.
        METHODS math_subtract_2 FOR TESTING.
        METHODS math_subtract_3 FOR TESTING.
+       METHODS math_subtract_4 FOR TESTING.
 
        METHODS math_division_1 FOR TESTING.
        METHODS math_division_2 FOR TESTING.
        METHODS math_division_3 FOR TESTING.
        METHODS math_division_4 FOR TESTING.
+       METHODS math_division_5 FOR TESTING.
 
        METHODS math_sin FOR TESTING.
        METHODS math_cos FOR TESTING.
@@ -1394,6 +1584,11 @@
                   expected = '0' ).
      ENDMETHOD.                    "math_subtract_3
 
+     METHOD math_subtract_4.
+       code_test( code = '(-)'
+                  expected = 'Eval: no number in [-]' ).
+     ENDMETHOD.                    "math_subtract_4
+
      METHOD math_division_1.
 *   Test division
        code_test( code = '(/ 2)'
@@ -1414,6 +1609,11 @@
        code_test_f( code =  '(/ 11 12 13)'
                     expected = '0.07051282051282051282051282051282052' ).
      ENDMETHOD.                    "math_division_4
+
+     METHOD math_division_5.
+       code_test( code = '(/)'
+                  expected = 'Eval: no number in [/]' ).
+     ENDMETHOD.
 
      METHOD math_sin.
        code_test( code =  '(sin 0)'
@@ -3763,3 +3963,73 @@
      ENDMETHOD.
 
    ENDCLASS.
+
+   CLASS ltc_macro IMPLEMENTATION.
+
+     METHOD setup.
+       new_interpreter( ).
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
+
+     METHOD macro_1.
+       code_test( code = '(define-macro (let1 var val . body)' &
+                         '`(let ((,var ,val)) ,@body ) )'
+                  expected = 'let1' ).
+       code_test( code = '(let1 foo (+ 2 3)' &
+                         '  (* foo foo))'
+                  expected = '25' ).
+     ENDMETHOD.
+
+     METHOD macro_2.
+       code_test( code = '(define-macro (let1 var val . body)' &
+                         '`(let ((,var ,val)) ,@body ) )'
+                  expected = 'let1' ).
+       code_test( code = '(macroexpand (let1 foo (+ 2 3) (* foo foo)) )'
+                  expected = '(let ((foo (+ 2 3)) (* foo foo))' ).
+     ENDMETHOD.
+
+     METHOD macro_one.
+       code_test( code = '(define-macro one (lambda () 1))'
+                  expected = 'one' ).
+       code_test( code = '(one)'
+                  expected = '1' ).
+     ENDMETHOD.
+
+     METHOD macro_two.
+       code_test( code = '(define-macro two (lambda () 2))'
+                  expected = 'two' ).
+       code_test( code = '(two)'
+                  expected = '2' ).
+     ENDMETHOD.
+
+     METHOD macro_unless_1.
+       code_test( code = '(define-macro my-unless (lambda (pred a b) `(if ,pred ,b ,a)))'
+                  expected = 'my-unless' ).
+       code_test( code = '(my-unless #f 7 8)'
+                  expected = '7' ).
+       code_test( code = '(my-unless #t 7 8)'
+                  expected = '8' ).
+     ENDMETHOD.
+
+     METHOD macro_unless_2.
+       code_test( code = '(define-macro my-unless (lambda (pred a b) `(if (not ,pred) ,a ,b)))'
+                  expected = 'my-unless' ).
+       code_test( code = '(my-unless #f 7 8)'
+                  expected = '7' ).
+       code_test( code = '(my-unless #t 7 8)'
+                  expected = '8' ).
+       code_test( code = '(macroexpand (my-unless 2 3 4))'
+                  expected = '(if ( not 2 ) 3 4 )' ).
+     ENDMETHOD.
+
+     METHOD macro_eval_1.
+       code_test( code = |(define-macro identity (lambda (x) x))| &
+                         | (let* (a 123) (identity a))|
+                  expected = '123' ).
+
+     ENDMETHOD.
+
+  ENDCLASS.
