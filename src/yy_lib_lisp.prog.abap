@@ -577,7 +577,7 @@
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS table IMPORTING ref            TYPE REF TO data OPTIONAL
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
-      CLASS-METHODS query IMPORTING value TYPE any OPTIONAL
+      CLASS-METHODS query IMPORTING value          TYPE any OPTIONAL
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS cons IMPORTING io_car         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                                    io_cdr         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
@@ -1025,14 +1025,14 @@
       DATA result_set TYPE REF TO cl_sql_result_set.
   ENDCLASS.
 
- CLASS lcl_lisp_query DEFINITION INHERITING FROM lcl_lisp
-    CREATE PROTECTED FRIENDS lcl_lisp_new.
+  CLASS lcl_lisp_query DEFINITION INHERITING FROM lcl_lisp
+     CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
       METHODS constructor IMPORTING osql TYPE string OPTIONAL
-                          RAISING cx_sql_exception.
-      METHODS execute IMPORTING query TYPE string
+                          RAISING   cx_sql_exception.
+      METHODS execute IMPORTING query         TYPE string
                       RETURNING VALUE(result) TYPE REF TO lcl_lisp_sql_result
-                      RAISING cx_sql_exception.
+                      RAISING   cx_sql_exception.
     PROTECTED SECTION.
       DATA mv_hold_cursor TYPE flag.
       DATA sql_query TYPE string.
@@ -2250,8 +2250,8 @@
           lo_lambda = environment->get( element->car->value ).
           CHECK lo_lambda->is_procedure( ) EQ true.
           result = lo_lambda->macro.
-      CATCH lcx_lisp_exception.
-        RETURN.
+        CATCH lcx_lisp_exception.
+          RETURN.
       ENDTRY.
     ENDMETHOD.
 
@@ -2263,11 +2263,14 @@
       WHILE is_macro_call( element = result
                            environment = environment ).
         lo_lambda = environment->get( result->car->value ).
+
+*        lo_lambda->environment->parameters_to_symbols( io_args = result->cdr
+*                                                       io_pars = lo_lambda->car ).
+*        result = eval( element = lo_lambda
+*                       environment = lo_lambda->environment ).
         result = eval( element = lcl_lisp_new=>cons( io_car = lo_lambda
                                                      io_cdr = result->cdr )
                        environment = lo_lambda->environment ).
-*        result = lcl_lisp_new=>cons( io_car = lo_lambda
-*                                     io_cdr = result->cdr ).
       ENDWHILE.
     ENDMETHOD.
 
@@ -2535,9 +2538,15 @@
       validate io_head.
       ro_env = lcl_lisp_environment=>new( io_head->environment ).
 
-      ro_env->parameters_to_symbols( io_args = evaluate_parameters( io_list = io_args           " Pointer to arguments
-                                                                    environment = environment )
-                                     io_pars = io_head->car ).   " Pointer to formal parameters
+      IF io_head->macro EQ abap_true.
+        ro_env->parameters_to_symbols( io_args = io_args           " Pointer to arguments
+                                       io_pars = io_head->car ).   " Pointer to formal parameters
+
+      ELSE.
+        ro_env->parameters_to_symbols( io_args = evaluate_parameters( io_list = io_args           " Pointer to arguments
+                                                                      environment = environment )
+                                       io_pars = io_head->car ).   " Pointer to formal parameters
+      ENDIF.
     ENDMETHOD.
 
     METHOD extract_arguments.
@@ -2926,13 +2935,14 @@
             result = lo_elem.
 
           WHEN OTHERS.
+            IF lo_elem->type EQ lcl_lisp=>type_pair.
+              lo_elem = macro_expand( element = lo_elem
+                                      environment = lo_env ).
+            ENDIF.
+
 *           Evaluate element
             CASE lo_elem->type.
               WHEN lcl_lisp=>type_pair. " List
-                lo_elem = macro_expand( element = lo_elem
-                                        environment = lo_env ).
-                CHECK lo_elem->type EQ lcl_lisp=>type_pair.
-
 *               return a new list that is the result of calling EVAL on each of the members of the list
 
 *               To evaluate list, we must first evaluate head value
@@ -6810,9 +6820,9 @@
 
     METHOD query.
       TRY.
-        ro_elem = NEW lcl_lisp_query( ).
-      CATCH cx_sql_exception.
-        ro_elem = lcl_lisp=>nil.
+          ro_elem = NEW lcl_lisp_query( ).
+        CATCH cx_sql_exception.
+          ro_elem = lcl_lisp=>nil.
       ENDTRY.
     ENDMETHOD.
 

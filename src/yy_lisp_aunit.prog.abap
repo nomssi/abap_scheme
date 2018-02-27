@@ -3988,7 +3988,7 @@
                          '`(let ((,var ,val)) ,@body ) )'
                   expected = 'let1' ).
        code_test( code = '(macroexpand (let1 foo (+ 2 3) (* foo foo)) )'
-                  expected = '(let ((foo (+ 2 3)) (* foo foo))' ).
+                  expected = '( let ( ( foo ( + 2 3 ) ) ) ( * foo foo ) )' ).
      ENDMETHOD.
 
      METHOD macro_one.
@@ -4026,10 +4026,10 @@
      ENDMETHOD.
 
      METHOD macro_eval_1.
-       code_test( code = |(define-macro identity (lambda (x) x))| &
-                         | (let* (a 123) (identity a))|
+       code_test( code = |(define-macro identity (lambda (x) x))|
+                  expected = 'identity' ).
+       code_test( code = |(let* ((a 123)) (identity a))|
                   expected = '123' ).
-
      ENDMETHOD.
 
   ENDCLASS.
