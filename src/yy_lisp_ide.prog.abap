@@ -90,7 +90,8 @@ ENDCLASS.
 *----------------------------------------------------------------------*
 CLASS lcl_editor DEFINITION INHERITING FROM cl_gui_textedit.
   PUBLIC SECTION.
-    CONSTANTS c_comments_string TYPE char01 VALUE ';'.
+    CONSTANTS: c_comments_string TYPE char01 VALUE ';',
+               c_max_line_count TYPE i VALUE 10000.
 
     METHODS constructor IMPORTING io_container TYPE REF TO cl_gui_container
                                   iv_read_only TYPE flag DEFAULT abap_true
@@ -851,6 +852,7 @@ CLASS lcl_editor IMPLEMENTATION.
 
   METHOD append_string.
     set_textstream( |{ lif_source_editor~to_string( ) }{ iv_text }| ).
+    go_to_line( c_max_line_count ).
   ENDMETHOD.
 
   METHOD format_input.

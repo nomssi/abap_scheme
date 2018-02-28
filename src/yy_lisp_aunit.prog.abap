@@ -445,6 +445,7 @@
 
        METHODS char_to_integer_1 FOR TESTING.
        METHODS char_to_integer_2 FOR TESTING.
+       METHODS char_to_integer_3 FOR TESTING.
 
        METHODS integer_to_char_1 FOR TESTING.
        METHODS integer_to_char_2 FOR TESTING.
@@ -1169,12 +1170,19 @@
 
      METHOD char_to_integer_1.
        code_test( code = '(char->integer #\3)'
-                  expected = '3' ).
+                  expected = '51' ).
      ENDMETHOD.
 
      METHOD char_to_integer_2.
        code_test( code = '(char->integer #\a)'
-                  expected = '#f' ).
+                  expected = '97' ).
+     ENDMETHOD.
+
+     METHOD char_to_integer_3.
+       code_test( code = '(char->integer #\A)'
+*                  expected = '65' ).
+*                  expected = '577' ).
+                  expected = '262145' ).
      ENDMETHOD.
 
      METHOD integer_to_char_1.
@@ -1798,8 +1806,10 @@
        code_test( code =  '(< (random 10) 11)'
                   expected = '#t' ).
        code_test( code =  '(random 100000000000000)'
-                  expected = |Eval: { NEW cx_sy_conversion_overflow( textid = '5E429A39EE412B43E10000000A11447B'
-                                                                     value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
+                  expected = |Eval: 100000000000000 is not an integer in [random]| ). "Overflow converting from &
+*       code_test( code =  '(random 100000000000000)'
+*                  expected = |Eval: { NEW cx_sy_conversion_overflow( textid = '5E429A39EE412B43E10000000A11447B'
+*                                                                     value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
      ENDMETHOD.                    "math_modulo
 
      METHOD math_min_0.
