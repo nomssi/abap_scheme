@@ -1413,6 +1413,11 @@
         RETURNING VALUE(result) TYPE  REF TO lcl_lisp
         RAISING   lcx_lisp_exception.
 
+      METHODS generate_symbol
+        IMPORTING environment   TYPE REF TO lcl_lisp_environment
+        RETURNING VALUE(result) TYPE  REF TO lcl_lisp
+        RAISING   lcx_lisp_exception.
+
 *----  ABAP Integration support functions; mapping -----
       METHODS:
 *       Convert ABAP data to Lisp element
@@ -1440,6 +1445,7 @@
       CLASS-DATA: go_input_port  TYPE REF TO lcl_lisp_port,
                   go_output_port TYPE REF TO lcl_lisp_port,
                   go_error_port  TYPE REF TO lcl_lisp_port.
+      CLASS-DATA gensym_counter TYPE i.
 
       METHODS write IMPORTING io_elem       TYPE REF TO lcl_lisp
                               io_arg        TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
@@ -1968,7 +1974,11 @@
       env->define_value( symbol = c_eval_quote      type = lcl_lisp=>type_syntax value   = `'` ).
       env->define_value( symbol = c_eval_quasiquote type = lcl_lisp=>type_syntax value   = '`' ).
       env->define_value( symbol = 'set!'            type = lcl_lisp=>type_syntax value   = 'set!' ).
+
       env->define_value( symbol = 'define-macro'    type = lcl_lisp=>type_syntax value   = 'define-macro' ).
+      env->define_value( symbol = 'define-syntax'   type = lcl_lisp=>type_syntax value   = 'define-macro' ).
+      env->define_value( symbol = 'macroexpand'     type = lcl_lisp=>type_syntax value   = 'macroexpand' ).
+      env->define_value( symbol = 'gensym'          type = lcl_lisp=>type_syntax value   = 'gensym' ).
 
       env->define_value( symbol = 'and'      type = lcl_lisp=>type_syntax value   = 'and' ).
       env->define_value( symbol = 'or'       type = lcl_lisp=>type_syntax value   = 'or' ).
@@ -2285,6 +2295,20 @@
                                                      io_cdr = lo_args )
                        environment = lo_lambda->environment ).
       ENDWHILE.
+    ENDMETHOD.
+
+    METHOD generate_symbol.
+      DO.
+        DATA(lv_name) = |_0as{ gensym_counter }|.
+        TRY.
+          environment->find( lv_name ).
+          ADD 1 TO gensym_counter.
+          EXIT.
+        CATCH lcx_lisp_exception.
+          ADD 1 TO gensym_counter.
+        ENDTRY.
+      ENDDO.
+      result = lcl_lisp_new=>symbol( lv_name ).
     ENDMETHOD.
 
     METHOD re_assign_symbol.
@@ -3254,6 +3278,9 @@
                     validate lr_tail->car.
                     result = macro_expand( element = lr_tail->car
                                            environment = lo_env ).
+
+                  WHEN 'gensym'.
+                    result = generate_symbol( lo_env ).
 
                   WHEN c_eval_unquote
                     OR c_eval_unquote_splicing.
