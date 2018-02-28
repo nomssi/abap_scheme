@@ -4022,7 +4022,7 @@
        code_test( code = '(my-unless #t 7 8)'
                   expected = '8' ).
        code_test( code = '(macroexpand (my-unless 2 3 4))'
-                  expected = '(if ( not 2 ) 3 4 )' ).
+                  expected = '( if ( not 2 ) 3 4 )' ).
      ENDMETHOD.
 
      METHOD macro_eval_1.

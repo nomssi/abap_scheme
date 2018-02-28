@@ -1071,7 +1071,6 @@
 
       METHODS parameters_to_symbols IMPORTING io_pars       TYPE REF TO lcl_lisp
                                               io_args       TYPE REF TO lcl_lisp
-                                    RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
                                     RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
 *     Reference to outer (parent) environment:
@@ -2213,9 +2212,11 @@
         WHEN lcl_lisp=>type_symbol.
 *         call the set method of the current environment using the unevaluated first parameter
 *         (second list element) as the symbol key and the evaluated second parameter as the value.
+          DATA(lo_params) = eval( element = element->cdr->car
+                                  environment = environment ).
+          lo_params->macro = iv_macro.
           environment->set( symbol  = lo_head->value
-                            element = eval( element = element->cdr->car
-                                            environment = environment ) ).
+                            element = lo_params ).
           result = lcl_lisp_new=>symbol( lo_head->value ).
 
 *       Function shorthand (define (id arg ... ) body ...+)
@@ -2257,19 +2258,31 @@
 
     METHOD macro_expand.
       DATA lo_lambda TYPE REF TO lcl_lisp.
+      DATA lo_args TYPE REF TO lcl_lisp.
       validate element.
 
       result = element.
       WHILE is_macro_call( element = result
                            environment = environment ).
         lo_lambda = environment->get( result->car->value ).
+        lo_args = result->cdr.
 
-*        lo_lambda->environment->parameters_to_symbols( io_args = result->cdr
-*                                                       io_pars = lo_lambda->car ).
-*        result = eval( element = lo_lambda
-*                       environment = lo_lambda->environment ).
+        lo_lambda->environment->parameters_to_symbols( io_args = lo_args             " Pointer to arguments
+                                                       io_pars = lo_lambda->car ).   " Pointer to formal parameters
+*       Quote list to avoid evaluation
+        DATA(lo_ptr) = lo_args.
+        IF lo_ptr->type EQ lcl_lisp=>type_pair.
+          DATA(lo_new) = lcl_lisp_new=>cons( io_car = lcl_lisp_new=>quote( lo_ptr->car ) ).
+          lo_args = lo_new.
+          lo_ptr = lo_ptr->cdr.
+          WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+            lo_new = lo_new->cdr = lcl_lisp_new=>cons( io_car = lcl_lisp_new=>quote( lo_ptr->car ) ).
+            lo_ptr = lo_ptr->cdr.
+          ENDWHILE.
+        ENDIF.
+
         result = eval( element = lcl_lisp_new=>cons( io_car = lo_lambda
-                                                     io_cdr = result->cdr )
+                                                     io_cdr = lo_args )
                        environment = lo_lambda->environment ).
       ENDWHILE.
     ENDMETHOD.
@@ -2538,15 +2551,9 @@
       validate io_head.
       ro_env = lcl_lisp_environment=>new( io_head->environment ).
 
-      IF io_head->macro EQ abap_true.
-        ro_env->parameters_to_symbols( io_args = io_args           " Pointer to arguments
-                                       io_pars = io_head->car ).   " Pointer to formal parameters
-
-      ELSE.
-        ro_env->parameters_to_symbols( io_args = evaluate_parameters( io_list = io_args           " Pointer to arguments
-                                                                      environment = environment )
-                                       io_pars = io_head->car ).   " Pointer to formal parameters
-      ENDIF.
+      ro_env->parameters_to_symbols( io_args = evaluate_parameters( io_list = io_args           " Pointer to arguments
+                                                                    environment = environment )
+                                     io_pars = io_head->car ).   " Pointer to formal parameters
     ENDMETHOD.
 
     METHOD extract_arguments.
@@ -5934,12 +5941,18 @@
 *       IF identifier = nil.
 *         throw( |AB-GET: Key required to read table| ).
 *       ENDIF.
-*
+
 *       ASSIGN element->data->* TO <tab>.
 *       CREATE DATA line LIKE LINE OF <tab>.
 *       ASSIGN line->* TO <wa>.
 *
-*       READ TABLE <tab> FROM <wa> REFERENCE INTO rdata.
+*       READ TABLE <tab> FROM <wa> REFERENCE INTO rdata
+*  example:
+*        WITH TABLE KEY ('CARRID') = 'SQ'
+*                       ('CONNID') = '0002'
+*                       ('FLDATE') = '20170915'
+*                       ('BOOKID') = '00000002'.
+*
 *       CHECK sy-subrc NE 0.
 *       throw( |AB-GET: No entry at key| ).
     ENDMETHOD.                    "get_table_row_with_key
@@ -6697,8 +6710,8 @@
           ro_elem->integer = value.
         WHEN lcl_lisp=>type_real.
           ro_elem->real = value.
-*         WHEN type_abap_data OR type_abap_table.
-*           ro_elem->data = ref.
+        WHEN lcl_lisp=>type_abap_data OR lcl_lisp=>type_abap_table.
+           ro_elem->data = REF #( value ).
         WHEN OTHERS.
           ro_elem->value = value.
       ENDCASE.

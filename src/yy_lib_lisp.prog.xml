@@ -15,6 +15,7 @@
    <TPOOL>
     <item>
      <ID>R</ID>
+     <ENTRY>ABAP Scheme</ENTRY>
      <LENGTH>18</LENGTH>
     </item>
    </TPOOL>

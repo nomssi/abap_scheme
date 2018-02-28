@@ -9,14 +9,14 @@
     <SUBC>I</SUBC>
     <APPL>*</APPL>
     <RSTAT>K</RSTAT>
-    <RLOAD>D</RLOAD>
+    <RLOAD>E</RLOAD>
     <UCCHECK>X</UCCHECK>
    </PROGDIR>
    <TPOOL>
     <item>
      <ID>R</ID>
-     <ENTRY>Include YY_LISP_IDE</ENTRY>
-     <LENGTH>19</LENGTH>
+     <ENTRY>ABAP Scheme Workbench</ENTRY>
+     <LENGTH>21</LENGTH>
     </item>
    </TPOOL>
    <I18N_TPOOL>
