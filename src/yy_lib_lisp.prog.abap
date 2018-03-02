@@ -2269,6 +2269,7 @@
     METHOD macro_expand.
       DATA lo_lambda TYPE REF TO lcl_lisp.
       DATA lo_args TYPE REF TO lcl_lisp.
+      DATA lo_env TYPE REF TO lcl_lisp_environment.
       validate element.
 
       result = element.
@@ -2276,24 +2277,14 @@
                            environment = environment ).
         lo_lambda = environment->get( result->car->value ).
         lo_args = result->cdr.
+        lo_env = lo_lambda->environment.
 
-        lo_lambda->environment->parameters_to_symbols( io_args = lo_args             " Pointer to arguments
-                                                       io_pars = lo_lambda->car ).   " Pointer to formal parameters
-*       Quote list to avoid evaluation
-        DATA(lo_ptr) = lo_args.
-        IF lo_ptr->type EQ lcl_lisp=>type_pair.
-          DATA(lo_new) = lcl_lisp_new=>cons( io_car = lcl_lisp_new=>quote( lo_ptr->car ) ).
-          lo_args = lo_new.
-          lo_ptr = lo_ptr->cdr.
-          WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
-            lo_new = lo_new->cdr = lcl_lisp_new=>cons( io_car = lcl_lisp_new=>quote( lo_ptr->car ) ).
-            lo_ptr = lo_ptr->cdr.
-          ENDWHILE.
-        ENDIF.
+        lo_env->parameters_to_symbols( io_args = lo_args             " Pointer to argument
+                                       io_pars = lo_lambda->car ).   " Pointer to formal parameters
 
         result = eval( element = lcl_lisp_new=>cons( io_car = lo_lambda
                                                      io_cdr = lo_args )
-                       environment = lo_lambda->environment ).
+                       environment = lo_env ).
       ENDWHILE.
     ENDMETHOD.
 
@@ -2570,13 +2561,20 @@
 *    ENDMETHOD.
 
     METHOD lambda_environment.
+      DATA lo_args TYPE REF TO lcl_lisp.
 *     The function (LAMBDA) receives its own local environment in which to execute,
 *     where parameters become symbols that are mapped to the corresponding arguments
       validate io_head.
       ro_env = lcl_lisp_environment=>new( io_head->environment ).
 
-      ro_env->parameters_to_symbols( io_args = evaluate_parameters( io_list = io_args           " Pointer to arguments
-                                                                    environment = environment )
+      IF io_head->macro EQ abap_true.
+        lo_args = io_args.
+      ELSE.
+        lo_args = evaluate_parameters( io_list = io_args           " Pointer to arguments
+                                       environment = environment ).
+      ENDIF.
+
+      ro_env->parameters_to_symbols( io_args = lo_args
                                      io_pars = io_head->car ).   " Pointer to formal parameters
     ENDMETHOD.
 
