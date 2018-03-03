@@ -1196,7 +1196,6 @@
       proc_set_cdr,         ##called
       proc_car,             ##called
       proc_cdr,             ##called
-      proc_cons,            ##called
 
       proc_caar,             ##called
       proc_cadr,             ##called
@@ -1210,14 +1209,18 @@
       proc_assv,     ##called
       proc_assoc,    ##called
 
+*     Constructor
+      proc_cons,           ##called
+      proc_list            ##called,
       proc_make_list       ##called,
+      proc_iota,           ##called
+      proc_list_copy       ##called,
+
       proc_list_tail       ##called,
       proc_list_ref        ##called,
-      proc_list_copy       ##called,
       proc_list_to_vector  ##called,
 
       proc_length    ##called,
-      proc_list      ##called,
       proc_nilp      ##called.
 
 * Native functions:
@@ -1324,7 +1327,6 @@
       proc_string_append,    ##called
       proc_string_to_list,   ##called
       proc_string_to_symbol, ##called
-      proc_iota,             ##called
 
 * Continuation
       proc_call_cc,          ##called
@@ -2294,12 +2296,11 @@
         TRY.
           environment->find( lv_name ).
           ADD 1 TO gensym_counter.
-          EXIT.
         CATCH lcx_lisp_exception.
-          ADD 1 TO gensym_counter.
+          result = lcl_lisp_new=>symbol( lv_name ).
+          RETURN.
         ENDTRY.
       ENDDO.
-      result = lcl_lisp_new=>symbol( lv_name ).
     ENDMETHOD.
 
     METHOD re_assign_symbol.
