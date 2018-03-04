@@ -1409,16 +1409,15 @@
         RETURNING VALUE(result) TYPE flag
         RAISING   lcx_lisp_exception.
 
-      METHODS macro_expand
+      METHODS syntax_expand
         IMPORTING element       TYPE REF TO lcl_lisp
                   environment   TYPE REF TO lcl_lisp_environment
         RETURNING VALUE(result) TYPE  REF TO lcl_lisp
         RAISING   lcx_lisp_exception.
 
-      METHODS generate_symbol
-        IMPORTING environment   TYPE REF TO lcl_lisp_environment
-        RETURNING VALUE(result) TYPE  REF TO lcl_lisp
-        RAISING   lcx_lisp_exception.
+      METHODS generate_symbol IMPORTING list TYPE REF TO lcl_lisp
+                              RETURNING VALUE(result) TYPE  REF TO lcl_lisp
+                              RAISING   lcx_lisp_exception.
 
 *----  ABAP Integration support functions; mapping -----
       METHODS:
@@ -2268,7 +2267,7 @@
       ENDTRY.
     ENDMETHOD.
 
-    METHOD macro_expand.
+    METHOD syntax_expand.
       DATA lo_lambda TYPE REF TO lcl_lisp.
       DATA lo_args TYPE REF TO lcl_lisp.
       DATA lo_env TYPE REF TO lcl_lisp_environment.
@@ -2291,16 +2290,29 @@
     ENDMETHOD.
 
     METHOD generate_symbol.
-      DO.
-        DATA(lv_name) = |_0as{ gensym_counter }|.
-        TRY.
-          environment->find( lv_name ).
-          ADD 1 TO gensym_counter.
-        CATCH lcx_lisp_exception.
-          result = lcl_lisp_new=>symbol( lv_name ).
-          RETURN.
-        ENDTRY.
-      ENDDO.
+      DATA lv_index TYPE i.
+      DATA lv_suffix TYPE string VALUE 'G0as'.
+      DATA lv_counter TYPE i.
+      DATA lo_opt TYPE REF TO lcl_lisp.
+
+      ADD 1 TO gensym_counter.
+      lv_counter = lv_index = gensym_counter.
+
+      IF list NE nil AND list->car IS BOUND.
+        lo_opt = list->car.
+      ENDIF.
+
+      IF lo_opt IS BOUND AND lo_opt->type EQ lcl_lisp=>type_integer AND lo_opt->integer GE 0.
+        lv_counter = lo_opt->integer.
+      ENDIF.
+
+      IF lo_opt IS BOUND AND lo_opt->type EQ lcl_lisp=>type_string.
+        lv_suffix = lo_opt->value.
+      ENDIF.
+
+      DATA(lv_name) = |#:{ lv_suffix }{ lv_counter }|.
+      result = lcl_lisp_new=>symbol( lv_name ).
+      result->integer = lv_index.   " uninterned symbols have integer > 0
     ENDMETHOD.
 
     METHOD re_assign_symbol.
@@ -2966,8 +2978,8 @@
 
           WHEN OTHERS.
             IF lo_elem->type EQ lcl_lisp=>type_pair.
-              lo_elem = macro_expand( element = lo_elem
-                                      environment = lo_env ).
+              lo_elem = syntax_expand( element = lo_elem
+                                       environment = lo_env ).
             ENDIF.
 
 *           Evaluate element
@@ -3275,11 +3287,11 @@
                   WHEN 'macroexpand'.
 *                   for debugging
                     validate lr_tail->car.
-                    result = macro_expand( element = lr_tail->car
-                                           environment = lo_env ).
+                    result = syntax_expand( element = lr_tail->car
+                                            environment = lo_env ).
 
                   WHEN 'gensym'.
-                    result = generate_symbol( lo_env ).
+                    result = generate_symbol( lr_tail ).
 
                   WHEN c_eval_unquote
                     OR c_eval_unquote_splicing.
@@ -4465,7 +4477,8 @@
             ENDIF.
 
           WHEN lcl_lisp=>type_symbol OR lcl_lisp=>type_string.
-            IF lo_ref->value = lo_ptr->cdr->car->value.
+            IF lo_ref->value = lo_ptr->cdr->car->value
+              AND lo_ref->integer = lo_ptr->cdr->car->integer.  " for uninterned symbols
               result = true.
             ELSE.
               result = false.
@@ -6416,8 +6429,8 @@
         WHEN lcl_lisp=>type_symbol OR lcl_lisp=>type_string.
 * obj1 and obj2 are both symbols and are the same symbol according to the symbol=? procedure (section 6.5).
 * obj1 and obj2 are both characters and are the same character according to the char=? procedure (section 6.6).
-          CHECK value = b->value.
-
+          CHECK value = b->value
+              AND integer = b->integer.  " for uninterned symbols
         WHEN lcl_lisp=>type_pair OR lcl_lisp=>type_lambda.
 * obj1 and obj2 are procedures whose location tags are equal (section 4.1.4).
           CHECK car EQ b->car AND cdr EQ b->cdr
@@ -6639,7 +6652,9 @@
         WHEN type_hash.
           str = '<hash>'.
         WHEN type_vector.
-          str = '<vector>'.
+          DATA lo_vec TYPE REF TO lcl_lisp_vector.
+          lo_vec ?= me.
+          str = |#{ lo_vec->to_list( )->to_string( ) }|.
         WHEN type_port.
           str = '<port>'.
 *--------------------------------------------------------------------*
@@ -6665,8 +6680,9 @@
           CASE me.
             WHEN lcl_lisp=>new_line.
               str = |\n|.
-            WHEN lcl_lisp=>eof_object
-              OR nil.
+            WHEN lcl_lisp=>eof_object.
+              str = '<eof>'.
+            WHEN nil.
               str = space.
             WHEN OTHERS.
               str = value.
