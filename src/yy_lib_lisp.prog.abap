@@ -1069,8 +1069,8 @@
                                parameter      TYPE flag DEFAULT abap_false
                      RETURNING VALUE(element) TYPE REF TO lcl_lisp.
 
-      METHODS parameters_to_symbols IMPORTING io_pars       TYPE REF TO lcl_lisp
-                                              io_args       TYPE REF TO lcl_lisp
+      METHODS parameters_to_symbols IMPORTING io_pars TYPE REF TO lcl_lisp
+                                              io_args TYPE REF TO lcl_lisp
                                     RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
 *     Reference to outer (parent) environment:
@@ -1415,7 +1415,7 @@
         RETURNING VALUE(result) TYPE  REF TO lcl_lisp
         RAISING   lcx_lisp_exception.
 
-      METHODS generate_symbol IMPORTING list TYPE REF TO lcl_lisp
+      METHODS generate_symbol IMPORTING list          TYPE REF TO lcl_lisp
                               RETURNING VALUE(result) TYPE  REF TO lcl_lisp
                               RAISING   lcx_lisp_exception.
 
@@ -6490,7 +6490,11 @@
           DATA(lo_b) = io_elem.
 
           WHILE lo_a->type EQ lcl_lisp=>type_pair AND lo_b->type EQ lcl_lisp=>type_pair.
-            IF lo_a->car->is_equal( lo_b->car ) EQ false.
+            IF lo_a->car EQ lo_a AND lo_b->car EQ lo_b.
+*             Circular list
+              result = true.
+              RETURN.
+            ELSEIF lo_a->car->is_equal( lo_b->car ) EQ false.
               RETURN.
             ENDIF.
             lo_slow = lo_slow->cdr.
@@ -6575,6 +6579,21 @@
           ENDIF.
         ENDIF.
 
+        IF lo_fast IS BOUND AND lo_fast NE nil.
+          lo_fast = lo_fast->cdr.
+
+          IF lo_fast IS BOUND AND lo_fast NE nil.
+            lo_fast = lo_fast->cdr.
+
+            IF lo_elem = lo_fast.
+*             Circular list
+              ADD 1 TO lv_shared.
+              lv_str = lv_str && | . #{ lv_shared }#|.
+              EXIT.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+
         IF lv_skip EQ abap_false.
           lv_str = lv_str && COND string( WHEN lo_elem->type NE type_pair     " If item is not a cons cell
                                           THEN | . { lo_elem->to_string( ) }|      " indicate with dot notation:
@@ -6582,18 +6601,6 @@
         ENDIF.
 
         lo_elem = lo_elem->cdr.
-
-        CHECK lo_fast IS BOUND AND lo_fast NE nil.
-        lo_fast = lo_fast->cdr.
-
-        CHECK lo_fast IS BOUND AND lo_fast NE nil.
-        lo_fast = lo_fast->cdr.
-
-        CHECK lo_elem = lo_fast.
-*       Circular list
-        ADD 1 TO lv_shared.
-        lv_str = lv_str && | . #{ lv_shared }#|.
-        EXIT.
 
       ENDWHILE.
 
@@ -6753,7 +6760,7 @@
         WHEN lcl_lisp=>type_real.
           ro_elem->real = value.
         WHEN lcl_lisp=>type_abap_data OR lcl_lisp=>type_abap_table.
-           ro_elem->data = REF #( value ).
+          ro_elem->data = REF #( value ).
         WHEN OTHERS.
           ro_elem->value = value.
       ENDCASE.
