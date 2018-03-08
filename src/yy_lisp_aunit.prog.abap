@@ -1180,9 +1180,9 @@
 
      METHOD char_to_integer_3.
        code_test( code = '(char->integer #\A)'
-*                  expected = '65' ).
+                  expected = '65' ).
 *                  expected = '577' ).
-                  expected = '262145' ).
+*                  expected = '262145' ).
      ENDMETHOD.
 
      METHOD integer_to_char_1.
@@ -1191,7 +1191,7 @@
      ENDMETHOD.
 
      METHOD integer_to_char_2.
-       code_test( code = '(integer->char 3)'
+       code_test( code = '(char->integer (integer->char 3))'
                   expected = '3' ).
      ENDMETHOD.
 
