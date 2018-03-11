@@ -1600,22 +1600,22 @@
      METHOD math_division_1.
 *   Test division
        code_test( code = '(/ 2)'
-                  expected = '0.5' ).
+                  expected = '1/2' ).
      ENDMETHOD.                    "math_division_1
 
      METHOD math_division_2.
        code_test( code =  '(/ 10)'
-                  expected = '0.1' ).
+                  expected = '1/10' ).
      ENDMETHOD.                    "math_division_2
 
      METHOD math_division_3.
        code_test( code =  '(/ 5 10)'
-                  expected = '0.5' ).
+                  expected = '1/2' ).
      ENDMETHOD.                    "math_division_3
 
      METHOD math_division_4.
-       code_test_f( code =  '(/ 11 12 13)'
-                    expected = '0.07051282051282051282051282051282052' ).
+       code_test( code =  '(/ 11 12 13)'
+                  expected = '11/156' ).
      ENDMETHOD.                    "math_division_4
 
      METHOD math_division_5.

@@ -381,7 +381,7 @@ CLASS lcl_ide DEFINITION INHERITING FROM lcl_lisp_buffered_port CREATE PRIVATE.
       free_controls,
       user_command IMPORTING iv_code        TYPE syucomm
                    RETURNING VALUE(rv_flag) TYPE flag.
-    METHODS view_table IMPORTING element TYPE REF TO lcl_lisp.
+    METHODS view_table IMPORTING element TYPE REF TO lcl_lisp_table.
     METHODS welcome RETURNING VALUE(text) TYPE string.
     METHODS console_header RETURNING VALUE(text) TYPE string.
 
@@ -602,7 +602,7 @@ CLASS lcl_ide IMPLEMENTATION.
   METHOD display.
     CASE element->type.
       WHEN lcl_lisp=>type_abap_table.
-        view_table( element ).
+        view_table( CAST lcl_lisp_table( element ) ).
 
       WHEN OTHERS.
         super->display( element ).
@@ -646,12 +646,7 @@ CLASS lcl_ide IMPLEMENTATION.
   ENDMETHOD.                    "evaluate
 
   METHOD validate.
-    TRY.
-        DATA(response) = mo_int->eval_repl( mi_source->to_string( ) ).
-      CATCH cx_root INTO DATA(lx_root).
-        response = lx_root->get_text( ).
-    ENDTRY.
-    mi_source->update_status( response ).
+    mi_source->update_status( mo_int->validate_source( mi_source->to_string( ) ) ).
   ENDMETHOD.
 
   METHOD trace.
@@ -1339,9 +1334,9 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
       WHEN lcl_lisp=>type_null.
         rv_node = space.
       WHEN lcl_lisp=>type_real.
-        rv_node = |{ io_elem->real }|.
+        rv_node = |{ CAST lcl_lisp_real( io_elem )->real }|.
       WHEN lcl_lisp=>type_integer.
-        rv_node = |{ io_elem->integer }|.
+        rv_node = |{ CAST lcl_lisp_integer( io_elem )->integer }|.
       WHEN OTHERS.
         rv_node = io_elem->value.
     ENDCASE.
