@@ -3176,6 +3176,7 @@
        METHODS compa_lte_1 FOR TESTING.
        METHODS compa_lte_2 FOR TESTING.
        METHODS compa_lte_3 FOR TESTING.
+       METHODS compa_lte_4 FOR TESTING.
 
        METHODS compa_equal_1 FOR TESTING.
        METHODS compa_equal_2 FOR TESTING.
@@ -3302,6 +3303,11 @@
        code_test( code = '(< 3 1)'
                   expected = '#f' ).
      ENDMETHOD.                    "compa_lte_3
+
+     METHOD compa_lte_4.
+       code_test( code = '(< 1/12 1/3)'
+                  expected = '#t' ).
+     ENDMETHOD.                    "compa_lte_4
 
      METHOD compa_equal_1.
 *   Test equal?

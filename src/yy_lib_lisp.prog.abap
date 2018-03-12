@@ -208,10 +208,10 @@
 
         WHEN lcl_lisp=>type_rational.
           lo_rat ?= cell->car.
-          IF carry * lo_rat->denominator  &1 lo_rat->integer.
+          IF carry * lo_rat->denominator &1 lo_rat->integer.
             RETURN.
           ENDIF.
-          carry = CAST lcl_lisp_real( cell->car )->real.
+          carry = lo_rat->integer / lo_rat->denominator.
 
 *            WHEN lcl_lisp=>type_complex.
         WHEN OTHERS.
@@ -2474,22 +2474,22 @@
     METHOD evaluate_parameters.
 *     This routine is called very, very often!
       DATA lo_arg TYPE REF TO lcl_lisp.
+      DATA lo_new TYPE REF TO lcl_lisp.
 *     Before execution of the procedure or lambda, all parameters must be evaluated
       validate io_list.
       ro_head = nil.
-      CHECK io_list NE nil AND io_list->car NE nil.
+      CHECK io_list NE nil. " AND io_list->car NE nil.
 
       DATA(elem) = io_list.
-      IF elem->type EQ lcl_lisp=>type_pair.
-        lo_arg = ro_head = lcl_lisp_new=>cons( io_car = eval_ast( element = elem->car
-                                                                  environment = environment ) ).
-        elem = elem->cdr.
-      ENDIF.
-
 *     TO DO: check if circular list are allowed
       WHILE elem->type EQ lcl_lisp=>type_pair.
-        lo_arg = lo_arg->cdr = lcl_lisp_new=>cons( io_car = eval_ast( element = elem->car
-                                                                      environment = environment ) ).
+        lo_new = lcl_lisp_new=>cons( io_car = eval_ast( element = elem->car
+                                                        environment = environment ) ).
+        IF ro_head = nil.
+          lo_arg = ro_head = lo_new.
+        ELSE.
+          lo_arg = lo_arg->cdr = lo_new.
+        ENDIF.
         elem = elem->cdr.
       ENDWHILE.
 
@@ -6529,12 +6529,13 @@
       DATA lo_string TYPE REF TO lcl_lisp_string.
 *     sql-query
       validate: list, list->cdr.
-      lo_sql ?= list->car.
-      lo_string ?= list->cdr->car.
+
       TRY.
+          lo_string ?= list->car.
+          lo_sql ?= lcl_lisp_new=>query( value = lo_string->value ).
           result ?= lo_sql->execute( lo_string->value ).
-        CATCH cx_sql_exception.
-          throw( |SQL query| ).
+        CATCH cx_sql_exception INTO DATA(lx_error).
+          throw( |SQL query { lx_error->get_text( ) }| ).
       ENDTRY.
     ENDMETHOD.
 
