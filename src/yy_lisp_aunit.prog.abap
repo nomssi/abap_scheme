@@ -35,76 +35,6 @@
 *  THE SOFTWARE.
 
 *----------------------------------------------------------------------*
-*       CLASS lcl_output_port DEFINITION
-*----------------------------------------------------------------------*
-   CLASS lcl_output_port DEFINITION.
-     PUBLIC SECTION.
-       CLASS-METHODS new
-         RETURNING VALUE(ro_port) TYPE REF TO lcl_output_port.
-       INTERFACES lif_port.
-       ALIASES: write FOR lif_port~write,
-                read FOR lif_port~read.
-       METHODS get RETURNING VALUE(rv_text) TYPE string.
-     PRIVATE SECTION.
-       DATA print_offset TYPE i.
-       DATA buffer TYPE string.
-
-       METHODS writeln IMPORTING text TYPE string.
-       METHODS add IMPORTING text TYPE string.
-   ENDCLASS.
-
-*----------------------------------------------------------------------*
-*       CLASS lcl_output_port  IMPLEMENTATION
-*----------------------------------------------------------------------*
-   CLASS lcl_output_port IMPLEMENTATION.
-
-     METHOD new.
-       CREATE OBJECT ro_port.
-     ENDMETHOD.                    "new
-
-     METHOD get.
-       rv_text = buffer.
-     ENDMETHOD.                    "get
-
-     METHOD add.
-       buffer = buffer && text.
-     ENDMETHOD.                    "add
-
-     METHOD writeln.
-       add( |\n{ repeat( val = ` ` occ = print_offset ) }{ text }| ).
-     ENDMETHOD.                    "writeln
-
-* Write out a given element
-     METHOD write.
-       DATA lo_elem TYPE REF TO lcl_lisp.
-       CHECK element IS BOUND.
-
-       CASE element->type.
-         WHEN lcl_lisp=>type_pair.
-           writeln( `(` ).
-           lo_elem = element.
-           DO.
-             ADD 2 TO print_offset.
-             write( lo_elem->car ).
-             SUBTRACT 2 FROM print_offset.
-             IF lo_elem->cdr IS NOT BOUND OR lo_elem->cdr EQ lcl_lisp=>nil.
-               EXIT.
-             ENDIF.
-             lo_elem = lo_elem->cdr.
-           ENDDO.
-           add( ` )` ).
-         WHEN lcl_lisp=>type_number OR lcl_lisp=>type_symbol.
-           add( ` ` && element->value ).
-       ENDCASE.
-     ENDMETHOD.                    "write
-
-     METHOD read.
-       rv_input = iv_input.
-     ENDMETHOD.
-
-   ENDCLASS.                    "lcl_console IMPLEMENTATION
-
-*----------------------------------------------------------------------*
 *       CLASS ltc_interpreter DEFINITION
 *----------------------------------------------------------------------*
 *
@@ -112,8 +42,8 @@
    CLASS ltc_interpreter DEFINITION FOR TESTING
      RISK LEVEL HARMLESS DURATION SHORT.
      PROTECTED SECTION.
-       "    DATA code TYPE string.
        DATA mo_int TYPE REF TO lcl_lisp_interpreter.
+       DATA mo_port TYPE REF TO lcl_lisp_buffered_port.
 *   Initialize Lisp interpreter
        METHODS test IMPORTING title    TYPE string
                               code     TYPE string
@@ -134,9 +64,13 @@
 
        METHODS riff_shuffle_code RETURNING VALUE(code) TYPE string.
 
+       METHODS new_interpreter.
      PRIVATE SECTION.
        METHODS setup.
        METHODS teardown.
+
+       METHODS closing_1 FOR TESTING.
+       METHODS closing_2 FOR TESTING.
 
 *   Stability tests - No Dump should occur
        METHODS stability_1 FOR TESTING.
@@ -161,8 +95,18 @@
 *----------------------------------------------------------------------*
    CLASS ltc_interpreter IMPLEMENTATION.
 
+     METHOD new_interpreter.
+       CREATE OBJECT mo_port
+         EXPORTING iv_input  = abap_false
+                   iv_output = abap_true
+                   iv_error  = abap_true
+                   iv_string = abap_false.
+       mo_int = lcl_lisp_interpreter=>new( io_port = mo_port
+                                           ii_log = mo_port ).
+     ENDMETHOD.
+
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -205,6 +149,16 @@
                expected = expected
                title = 'CODE' ).
      ENDMETHOD.                    "code_test_f
+
+     METHOD closing_1.
+       code_test( code = '( + 1'
+                  expected = |Parse: missing a ) to close expression| ).
+     ENDMETHOD.
+
+     METHOD closing_2.
+       code_test( code = '(let ([x 3)] (* x x))'
+                  expected = |Parse: a ) found while ] expected| ).
+     ENDMETHOD.
 
      METHOD stability_1.
        code_test( code = 'a'
@@ -273,14 +227,13 @@
    CLASS ltc_parse DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
-       DATA output TYPE REF TO lcl_output_port.
-
        METHODS setup.
        METHODS teardown.
        METHODS parse IMPORTING code TYPE string.
        METHODS parse_test IMPORTING code     TYPE string
                                     expected TYPE string
                                     level    TYPE aunit_level DEFAULT if_aunit_constants=>critical.
+       METHODS delimiter FOR TESTING.
        METHODS empty FOR TESTING.
        METHODS lambda FOR TESTING.
        METHODS lambda_comments FOR TESTING.
@@ -295,12 +248,10 @@
    CLASS ltc_parse IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT output.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
-       FREE output.
        FREE mo_int.
      ENDMETHOD.                    "teardown
 
@@ -313,19 +264,25 @@
          act = lines( elements )
          msg = |No evaluated element from first expression| ).
 
-       READ TABLE elements INDEX 1 INTO element.
-       output->write( element ).
+       LOOP AT elements INTO element.
+         mo_port->write( element ).
+       ENDLOOP.
      ENDMETHOD.                    "parse
 
 * Test parsing of a given piece of code and write out result
      METHOD parse_test.
        parse( code ).
-       test( actual = output->get( )
+       test( actual = mo_port->flush( )
              code = code
              expected = expected
              title = 'PARSE'
              level = level ).
      ENDMETHOD.                    "parse_test
+
+     METHOD delimiter.
+       parse_test( code = 'list' && cl_abap_char_utilities=>horizontal_tab && |; return|
+                   expected = |list| ).
+     ENDMETHOD.                    "lambda
 
      METHOD empty.
        parse_test( code = ''
@@ -334,26 +291,23 @@
 
      METHOD lambda.
        parse_test( code = '(define a(lambda()20))'
-                   expected = |\n( define a\n  ( lambda  ) )| ).
+                   expected = |( define a ( lambda { c_lisp_nil } 20 ) )| ).
      ENDMETHOD.                    "lambda
 
      METHOD lambda_comments.
        parse_test( code = |;; Comments\n| &
                           |(define a(lambda()20)) ; comments|
-                   expected = |\n( define a\n  ( lambda  ) )| ).
+                   expected = |( define a ( lambda { c_lisp_nil } 20 ) )| ).
      ENDMETHOD.                    "lambda
 
      METHOD riff_shuffle.
        parse_test( code = riff_shuffle_code( )
                    expected =
-   |\n( define riff-shuffle\n  ( lambda\n    ( deck )\n    ( begin\n      ( define take\n        ( lambda| &
-   |\n          ( n seq )\n          ( if\n            ( <= n  )\n            ( quote )\n            ( cons| &
-   |\n              ( car seq )\n              ( take\n                ( - n  )\n                ( cdr seq ) ) ) ) ) )| &
-   |\n      ( define drop\n        ( lambda\n          ( n seq )\n          ( if\n            ( <= n  ) seq| &
-   |\n            ( drop\n              ( - n  )\n              ( cdr seq ) ) ) ) )\n      ( define mid\n| &
-   |        ( lambda\n          ( seq )\n          ( /\n            ( length seq )  ) ) )\n      (\n| &
-   |        ( combine append )\n        ( take\n          ( mid deck ) deck )\n        ( drop| &
-   |\n          ( mid deck ) deck ) ) ) ) )|
+   |( define riff-shuffle ( lambda ( deck ) ( begin ( define take ( lambda| &
+   | ( n seq ) ( if ( <= n 0 ) ' { c_lisp_nil } ( cons ( car seq ) ( take ( - n 1 ) ( cdr seq ) ) ) ) ) )| &
+   | ( define drop ( lambda ( n seq ) ( if ( <= n 0 ) seq| &
+   | ( drop ( - n 1 ) ( cdr seq ) ) ) ) ) ( define mid ( lambda ( seq ) ( / ( length seq ) 2 ) ) )| &
+   | ( ( combine append ) ( take ( mid deck ) deck ) ( drop ( mid deck ) deck ) ) ) ) )|
              ).
      ENDMETHOD.                    "riff_shuffle
 
@@ -391,6 +345,7 @@
 
        METHODS do_1 FOR TESTING.
        METHODS do_2 FOR TESTING.
+       METHODS do_3 FOR TESTING.
 
        METHODS named_let_1 FOR TESTING.
        METHODS named_let_2 FOR TESTING.
@@ -404,6 +359,10 @@
 
        METHODS letrec_star_0 FOR TESTING.
        METHODS values_0 FOR TESTING.
+
+       METHODS call_cc_0 FOR TESTING.
+       METHODS call_cc_1 FOR TESTING.
+       METHODS call_cc_values FOR TESTING.
 
        METHODS is_symbol_true_1 FOR TESTING.
        METHODS is_symbol_true_2 FOR TESTING.
@@ -420,7 +379,10 @@
        METHODS is_procedure_true FOR TESTING.
        METHODS is_procedure_true_1 FOR TESTING.
        METHODS is_procedure_true_2 FOR TESTING.
+       METHODS is_procedure_true_3 FOR TESTING.
+       METHODS is_procedure_true_4 FOR TESTING.
        METHODS is_procedure_false FOR TESTING.
+       METHODS is_procedure_false_1 FOR TESTING.
 
        METHODS is_string_true FOR TESTING.
        METHODS is_string_false FOR TESTING.
@@ -435,6 +397,8 @@
        METHODS list_is_boolean_2 FOR TESTING.
        METHODS list_is_boolean_3 FOR TESTING.
        METHODS list_is_boolean_4 FOR TESTING.
+       METHODS list_is_boolean_5 FOR TESTING.
+       METHODS list_is_boolean_6 FOR TESTING.
 
    ENDCLASS.                    "ltc_basic DEFINITION
 
@@ -448,6 +412,48 @@
        METHODS char_1 FOR TESTING.
        METHODS char_2 FOR TESTING.
        METHODS char_3 FOR TESTING.
+       METHODS len_1 FOR TESTING.
+       METHODS symbol_to_string_1 FOR TESTING.
+       METHODS input_string_1 FOR TESTING.
+       METHODS output_string_1 FOR TESTING.
+
+       METHODS char_alphabetic_1 FOR TESTING.
+       METHODS char_alphabetic_2 FOR TESTING.
+       METHODS char_alphabetic_3 FOR TESTING.
+
+       METHODS char_numeric_1 FOR TESTING.
+       METHODS char_numeric_2 FOR TESTING.
+       METHODS char_numeric_3 FOR TESTING.
+
+       METHODS char_whitespace_1 FOR TESTING.
+       METHODS char_whitespace_2 FOR TESTING.
+       METHODS char_whitespace_3 FOR TESTING.
+
+       METHODS char_upper_case_1 FOR TESTING.
+       METHODS char_upper_case_2 FOR TESTING.
+       METHODS char_upper_case_3 FOR TESTING.
+
+       METHODS char_lower_case_1 FOR TESTING.
+       METHODS char_lower_case_2 FOR TESTING.
+       METHODS char_lower_case_3 FOR TESTING.
+
+       METHODS digit_value_1 FOR TESTING.
+       METHODS digit_value_2 FOR TESTING.
+       METHODS digit_value_3 FOR TESTING.
+       METHODS digit_value_4 FOR TESTING.
+       METHODS digit_value_5 FOR TESTING.
+
+       METHODS char_to_integer_1 FOR TESTING.
+       METHODS char_to_integer_2 FOR TESTING.
+       METHODS char_to_integer_3 FOR TESTING.
+
+       METHODS integer_to_char_1 FOR TESTING.
+       METHODS integer_to_char_2 FOR TESTING.
+
+       METHODS char_upcase_1 FOR TESTING.
+
+       METHODS char_downcase_1 FOR TESTING.
+
    ENDCLASS.
 
    CLASS ltc_conditionals DEFINITION INHERITING FROM ltc_interpreter
@@ -518,6 +524,26 @@
 
    ENDCLASS.
 
+   CLASS ltc_macro DEFINITION INHERITING FROM ltc_interpreter
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PRIVATE SECTION.
+
+       METHODS setup.
+       METHODS teardown.
+
+       METHODS macro_1 FOR TESTING.
+       METHODS macro_2 FOR TESTING.
+
+       METHODS macro_one FOR TESTING.
+       METHODS macro_two FOR TESTING.
+
+       METHODS macro_unless_1 FOR TESTING.
+       METHODS macro_unless_2 FOR TESTING.
+
+       METHODS macro_eval_1 FOR TESTING.
+
+   ENDCLASS.
+
 *----------------------------------------------------------------------*
 *       CLASS ltc_basic IMPLEMENTATION
 *----------------------------------------------------------------------*
@@ -526,7 +552,7 @@
    CLASS ltc_basic IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -633,6 +659,14 @@
                          |    (sum 0  (+ sum (car x))))| &
                          |((null? x) sum)))|
                   expected = '25' ).
+     ENDMETHOD.
+
+     METHOD do_3.
+       code_test( code = |(let ((x '(1 3)))| &
+                         |  (do ((x x (cdr x))| &
+                         |    (sum 0  (+ sum (car x))))| &
+                         |((null? x) )))|              " Do without a body
+                  expected = c_lisp_nil ).                  " unspecified
      ENDMETHOD.
 
      METHOD named_let_1.
@@ -761,6 +795,44 @@
 *                  expected = |8/3 2.28942848510666 36/19| ).
      ENDMETHOD.
 
+     METHOD call_cc_0.
+       code_test( code = |(call-with-current-continuation | &
+                         |  (lambda (exit)           | &
+                         |    (for-each (lambda (x)  | &
+                         |       (if (negative? x)   | &
+                         |         (exit x)))        | &
+                         |      '(54 0 37 -3 245 19))| &
+                         |  #t))|
+                  expected = '-3' ).
+     ENDMETHOD.
+
+     METHOD call_cc_1.
+       code_test( code = |(define list-length                              | &
+                         |  (lambda (obj)                                  | &
+                         |    (call-with-current-continuation              | &
+                         |       (lambda (return)                          | &
+                         |         (letrec ((r                             | &
+                         |                   (lambda (obj)                 | &
+                         |                     (cond ((null? obj) 0)       | &
+                         |                           ((pair? obj)          | &
+                         |                             (+ (r (cdr obj)) 1))| &
+                         |                           (else (return #f))))))| &
+                         |          (r obj)))))) |
+                  expected = 'list-length' ).
+
+       code_test( code = |(list-length '(1 2 3 4))|
+                  expected = '4' ).
+       code_test( code = |(list-length '(a b . c))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD call_cc_values.
+       code_test( code = |(define (values . things)                 | &
+                         |  (call-with-current-continuation          | &
+                         |     (lambda (cont) (apply cont things)))) |
+                  expected = 'values' ).
+     ENDMETHOD.
+
      METHOD is_symbol_true_1.
        code_test( code = |(define x 5)|
                   expected = 'x' ).
@@ -837,6 +909,21 @@
                   expected = '#f' ).
      ENDMETHOD.
 
+     METHOD is_procedure_true_3.
+       code_test( code = |(procedure? apply)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_procedure_true_4.
+       code_test( code = |(procedure? map)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_procedure_false_1.
+       code_test( code = |(procedure? define)|
+                  expected = '#f' ).
+     ENDMETHOD.
+
      METHOD is_procedure_false.
        code_test( code = |(define x 5)|
                   expected = 'x' ).
@@ -887,17 +974,17 @@
 
      METHOD list_is_boolean_1.
        code_test( code = |(boolean=? '())|
-                  expected = '#f' ).
+                  expected = |Eval: boolean=? missing boolean argument in { c_lisp_nil }| ).
      ENDMETHOD.
 
      METHOD list_is_boolean_2.
        code_test( code = |(boolean=? '(#t #f))|
-                  expected = '#f' ).
+                  expected = 'Eval: boolean=? missing boolean argument in ( #t #f )' ).
      ENDMETHOD.
 
      METHOD list_is_boolean_3.
        code_test( code = |(boolean=? #t #f)|
-                  expected = '#t' ).
+                  expected = '#f' ).
      ENDMETHOD.
 
      METHOD list_is_boolean_4.
@@ -905,12 +992,28 @@
                   expected = '#f' ).
      ENDMETHOD.
 
+     METHOD list_is_boolean_5.
+       code_test( code = |(boolean=? #t 1)|
+                  expected = 'Eval: boolean=? wrong argument 1' ).
+     ENDMETHOD.
+
+     METHOD list_is_boolean_6.
+       code_test( code = |(boolean=? #f #f #f)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
    ENDCLASS.                    "ltc_basic IMPLEMENTATION
 
    CLASS ltc_string IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       CREATE OBJECT mo_port
+         EXPORTING iv_input  = abap_false
+                   iv_output = abap_true
+                   iv_error  = abap_true
+                   iv_string = abap_true.
+       mo_int = lcl_lisp_interpreter=>new( io_port = mo_port
+                                           ii_log = mo_port ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -929,7 +1032,177 @@
 
      METHOD char_3.
        code_test( code = '#\aA'
-                  expected = 'Eval: Symbol A is unbound' ).
+                  expected = 'Parse: unknown char #\aA found' ).
+     ENDMETHOD.
+
+     METHOD len_1.
+       code_test( code = '(string-length "Abd#\aA")'
+                  expected = '7' ).
+     ENDMETHOD.
+
+     METHOD symbol_to_string_1.
+       code_test( code = |(symbol->string 'mysymbol)|
+                  expected = '"mysymbol"' ).
+     ENDMETHOD.
+
+     METHOD input_string_1.
+       code_test( code = | (define p (open-input-string "(a . (b . (c . ()))) 34"))|
+                  expected = 'p' ).
+       code_test( code = | (input-port? p)|
+                  expected = '#t' ).
+       code_test( code = | (read p)|
+                  expected = '( a b c )' ).
+       code_test( code = | (read p)|
+                  expected = '34' ).
+       code_test( code = | (eof-object? (peek-char p))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD output_string_1.
+       code_test( code = |(let ((q (open-output-string))| &
+                         |      (x '(a b c)))| &
+                         |  (write (car x) q)| &
+                         |  (write (cdr x) q)| &
+                         |  (get-output-string q))|
+                  expected = '"a( b c )"' ).
+     ENDMETHOD.
+
+
+     METHOD char_alphabetic_1.
+       code_test( code = '(char-alphabetic? #\A)'
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD char_alphabetic_2.
+       code_test( code = '(char-alphabetic? #\1)'
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD char_alphabetic_3.
+       code_test( code = '(char-alphabetic? "Not a char")'
+                  expected = 'Eval: "Not a char" is not a char in char-alphabetic?' ).
+     ENDMETHOD.
+
+     METHOD char_numeric_1.
+       code_test( code = '(char-numeric? #\p)'
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD char_numeric_2.
+       code_test( code = '(char-numeric? #\1)'
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD char_numeric_3.
+       code_test( code = '(char-numeric? "Not a char")'
+                  expected = 'Eval: "Not a char" is not a char in char-numeric?' ).
+     ENDMETHOD.
+
+     METHOD char_whitespace_1.
+       code_test( code = '(char-whitespace? #\1)'
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD char_whitespace_2.
+       code_test( code = '(char-whitespace? #\space)'
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD char_whitespace_3.
+       code_test( code = '(char-whitespace? "Not a char")'
+                  expected = 'Eval: "Not a char" is not a char in char-whitespace?' ).
+     ENDMETHOD.
+
+     METHOD char_upper_case_1.
+       code_test( code = '(char-upper-case? #\1)'
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD char_upper_case_2.
+       code_test( code = '(char-upper-case? #\C)'
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD char_upper_case_3.
+       code_test( code = '(char-upper-case? "Not a char")'
+                  expected = 'Eval: "Not a char" is not a char in char-upper-case?' ).
+     ENDMETHOD.
+
+     METHOD char_lower_case_1.
+       code_test( code = '(char-lower-case? #\1)'
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD char_lower_case_2.
+       code_test( code = '(char-lower-case? #\c)'
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD char_lower_case_3.
+       code_test( code = '(char-lower-case? "Not a char")'
+                  expected = 'Eval: "Not a char" is not a char in char-lower-case?' ).
+     ENDMETHOD.
+
+     METHOD digit_value_1.
+       code_test( code = '(digit-value #\3)'
+                  expected = '3' ).
+     ENDMETHOD.
+
+     METHOD digit_value_2.
+       code_test( code = '(digit-value #\x0EA)'
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD digit_value_3.
+       code_test( code = '(digit-value "Not a char")'
+                  expected = 'Eval: "Not a char" is not a char in digit-value' ).
+     ENDMETHOD.
+
+     METHOD digit_value_4.
+       code_test( code = '(digit-value #\x0664)'
+                  expected = '4' ).
+     ENDMETHOD.
+
+     METHOD digit_value_5.
+       code_test( code = '(digit-value #\x0AE6)'
+                  expected = '0' ).
+     ENDMETHOD.
+
+     METHOD char_to_integer_1.
+       code_test( code = '(char->integer #\3)'
+                  expected = '51' ).
+     ENDMETHOD.
+
+     METHOD char_to_integer_2.
+       code_test( code = '(char->integer #\a)'
+                  expected = '97' ).
+     ENDMETHOD.
+
+     METHOD char_to_integer_3.
+       code_test( code = '(char->integer #\A)'
+                  expected = '65' ).
+*                  expected = '577' ).
+*                  expected = '262145' ).
+     ENDMETHOD.
+
+     METHOD integer_to_char_1.
+       code_test( code = '(integer->char #\a)'
+                  expected = 'Eval: "a" is not an integer in integer->char' ).
+     ENDMETHOD.
+
+     METHOD integer_to_char_2.
+       code_test( code = '(char->integer (integer->char 3))'
+                  expected = '3' ).
+     ENDMETHOD.
+
+     METHOD char_upcase_1.
+       code_test( code = '(char-upcase #\a)'
+                  expected = '"A"' ).
+     ENDMETHOD.
+
+     METHOD char_downcase_1.
+       code_test( code = '(char-downcase #\B)'
+                  expected = '"b"' ).
      ENDMETHOD.
 
    ENDCLASS.
@@ -937,7 +1210,7 @@
    CLASS ltc_conditionals IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -1044,7 +1317,7 @@
        code_test( code = |(case (car '(c d))| &
                          |      ((a) 'a)| &
                          |      ((b) 'b))|
-                  expected = 'nil' ).  " unspecified
+                  expected = c_lisp_nil ).  " unspecified
      ENDMETHOD.
 
      METHOD case_3.
@@ -1099,14 +1372,14 @@
        code_test( code = |(when (= 1 1.0)| &
                          |(display "1")| &
                          |(display "2"))|
-                  expected = '"2"' ).  " prints "12", returns "2"
+                  expected = '1 2 "2"' ).  " prints "12", returns "2"
      ENDMETHOD.
 
      METHOD unless_1.
        code_test( code = |(unless (= 1 1.0)| &
                          |(display "1")| &
                          |(display "2"))|
-                  expected = 'nil' ).  " prints nothing
+                  expected = c_lisp_nil ).  " prints nothing
      ENDMETHOD.
 
    ENDCLASS.
@@ -1140,7 +1413,7 @@
    CLASS ltc_functional_tests IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -1201,6 +1474,7 @@
 
        METHODS math_addition FOR TESTING.
 
+       METHODS math_mult_0 FOR TESTING.
        METHODS math_mult_1 FOR TESTING.
        METHODS math_mult_2 FOR TESTING.
        METHODS math_mult_3 FOR TESTING.
@@ -1208,11 +1482,13 @@
        METHODS math_subtract_1 FOR TESTING.
        METHODS math_subtract_2 FOR TESTING.
        METHODS math_subtract_3 FOR TESTING.
+       METHODS math_subtract_4 FOR TESTING.
 
        METHODS math_division_1 FOR TESTING.
        METHODS math_division_2 FOR TESTING.
        METHODS math_division_3 FOR TESTING.
        METHODS math_division_4 FOR TESTING.
+       METHODS math_division_5 FOR TESTING.
 
        METHODS math_sin FOR TESTING.
        METHODS math_cos FOR TESTING.
@@ -1246,6 +1522,8 @@
        METHODS math_modulo FOR TESTING.
        METHODS math_random FOR TESTING.
 
+       METHODS math_div_test_1 FOR TESTING.
+
        METHODS math_min_0 FOR TESTING.
        METHODS math_min_1 FOR TESTING.
        METHODS math_min_2 FOR TESTING.
@@ -1266,7 +1544,7 @@
    CLASS ltc_math IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -1278,8 +1556,13 @@
                   expected = '71' ).
      ENDMETHOD.                    "math_addition
 
-     METHOD math_mult_1.
+     METHOD math_mult_0.
 *   Test multiplication
+       code_test( code = '(*)'
+                  expected = '1' ).
+     ENDMETHOD.                    "math_mult_0
+
+     METHOD math_mult_1.
        code_test( code = '(* 22)'
                   expected = '22' ).
      ENDMETHOD.                    "math_mult_1
@@ -1309,26 +1592,36 @@
                   expected = '0' ).
      ENDMETHOD.                    "math_subtract_3
 
+     METHOD math_subtract_4.
+       code_test( code = '(-)'
+                  expected = 'Eval: no number in [-]' ).
+     ENDMETHOD.                    "math_subtract_4
+
      METHOD math_division_1.
 *   Test division
        code_test( code = '(/ 2)'
-                  expected = '0.5' ).
+                  expected = '1/2' ).
      ENDMETHOD.                    "math_division_1
 
      METHOD math_division_2.
        code_test( code =  '(/ 10)'
-                  expected = '0.1' ).
+                  expected = '1/10' ).
      ENDMETHOD.                    "math_division_2
 
      METHOD math_division_3.
        code_test( code =  '(/ 5 10)'
-                  expected = '0.5' ).
+                  expected = '1/2' ).
      ENDMETHOD.                    "math_division_3
 
      METHOD math_division_4.
-       code_test_f( code =  '(/ 11 12 13)'
-                    expected = '0.07051282051282051282051282051282052' ).
+       code_test( code =  '(/ 11 12 13)'
+                  expected = '11/156' ).
      ENDMETHOD.                    "math_division_4
+
+     METHOD math_division_5.
+       code_test( code = '(/)'
+                  expected = 'Eval: no number in [/]' ).
+     ENDMETHOD.
 
      METHOD math_sin.
        code_test( code =  '(sin 0)'
@@ -1475,6 +1768,21 @@
                   expected = '-8' ).
      ENDMETHOD.                    "math_remainder
 
+     METHOD math_div_test_1.
+       code_test( code =  |(define (divtest n1 n2)| &
+                          |  (= n1 (+ (* n2 (quotient n1 n2))| &
+                          | (remainder n1 n2))))|
+                  expected = 'divtest' ).
+       code_test( code =  '(divtest 238 9)'
+                  expected = '#t' ).
+       code_test( code =  '(divtest -238 9)'
+                  expected = '#t' ).
+       code_test( code =  '(divtest 238 -9)'
+                  expected = '#t' ).
+       code_test( code =  '(divtest -238 -9)'
+                  expected = '#t' ).
+     ENDMETHOD.
+
      METHOD math_modulo.
        code_test( code =  '(modulo 5 4)'
                   expected = '1' ).
@@ -1487,26 +1795,21 @@
      ENDMETHOD.                    "math_modulo
 
      METHOD math_random.
-       DATA lx_rnd TYPE REF TO cx_abap_random.
-       DATA lx_conv TYPE REF TO cx_sy_conversion_overflow.
-
        code_test( code =  '(random 0)'
                   expected = '0' ).
        code_test( code =  '(begin (define a (random 1)) (or (= a 0) (= a 1)) )'
                   expected = '#t' ).
        code_test( code =  '(random -5 4)'
                   expected = 'Eval: ( -5 4 ) Parameter mismatch' ).
-       CREATE OBJECT lx_rnd
-         EXPORTING textid = '68D40B4034D28D24E10000000A114BF5'.
-       code_test( code =  '(random -4)'
-                  expected = |Eval: { lx_rnd->get_text( ) }| ). " Invalid interval boundaries
+*       code_test( code =  '(random -4)'
+*                  expected = |Eval: { NEW cx_abap_random( textid = '68D40B4034D28D24E10000000A114BF5' )->get_text( ) }| ). " Invalid interval boundaries
        code_test( code =  '(< (random 10) 11)'
                   expected = '#t' ).
-       CREATE OBJECT lx_conv
-         EXPORTING textid = '5E429A39EE412B43E10000000A11447B'
-                   value = '100000000000000'.
        code_test( code =  '(random 100000000000000)'
-                  expected = |Eval: { lx_conv->get_text( ) }| ). "Overflow converting from &
+                  expected = |Eval: 100000000000000 is not an integer in [random]| ). "Overflow converting from &
+*       code_test( code =  '(random 100000000000000)'
+*                  expected = |Eval: { NEW cx_sy_conversion_overflow( textid = '5E429A39EE412B43E10000000A11447B'
+*                                                                     value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
      ENDMETHOD.                    "math_modulo
 
      METHOD math_min_0.
@@ -1643,6 +1946,8 @@
        METHODS list_cons_with_list FOR TESTING.
        METHODS list_cons_two_elems FOR TESTING.
 
+       METHODS list_copy_1 FOR TESTING.
+
        METHODS code_count.
        METHODS list_count_1 FOR TESTING.
        METHODS list_count_2 FOR TESTING.
@@ -1669,6 +1974,10 @@
 
        METHODS list_tail FOR TESTING.
 
+       METHODS iota_1 FOR TESTING.
+       METHODS iota_2 FOR TESTING.
+       METHODS iota_3 FOR TESTING.
+
        METHODS list_caar_1 FOR TESTING.
        METHODS list_caar_2 FOR TESTING.
        METHODS list_caar_3 FOR TESTING.
@@ -1688,6 +1997,20 @@
        METHODS list_cddr_3 FOR TESTING.
        METHODS list_cddr_4 FOR TESTING.
        METHODS list_cddr_5 FOR TESTING.
+
+       METHODS list_shared_1 FOR TESTING.
+
+       METHODS make_string_1      FOR TESTING.
+       METHODS make_string_2      FOR TESTING.
+       METHODS string_to_list_1   FOR TESTING.
+       METHODS string_to_list_2   FOR TESTING.
+       METHODS string_to_list_3   FOR TESTING.
+       METHODS list_to_string_1   FOR TESTING.
+       METHODS string_to_number_1 FOR TESTING.
+       METHODS string_to_number_2 FOR TESTING.
+       METHODS number_to_string_1 FOR TESTING.
+       METHODS string_append_1    FOR TESTING.
+
    ENDCLASS.                    "ltc_list DEFINITION
 
 *----------------------------------------------------------------------*
@@ -1698,7 +2021,7 @@
    CLASS ltc_list IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -1745,12 +2068,12 @@
      METHOD list_nil_1.
 *  Test list
        code_test( code = '(list ())'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.                    "list_nil_1
 
      METHOD list_nil_2.
        code_test( code = '(list nil)'
-                  expected = '( nil )' ).
+                  expected = |( { c_lisp_nil } )| ).
      ENDMETHOD.                    "list_nil_2
 
      METHOD list_test_1.
@@ -1827,7 +2150,7 @@
 
      METHOD list_append_arg_0.
        code_test( code = '(append)'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.
 
      METHOD list_append_arg_1.
@@ -1906,9 +2229,9 @@
      ENDMETHOD.
 
      METHOD list_member_3.
-*      Racket also complains here - what is the correct way to do it?
-*       code_test( code = |(member 7 '((1 3) (2 5) (3 7) (4 8)) (lambda (x y) (= x (cadr y))))|
-*                  expected = '( ( 3 7 ) ( 4 8 ) )' ).
+*      This is the normal behavior in other Scheme
+       code_test( code = |(member 7 '((1 3) (2 5) (3 7) (4 8)) (lambda (x y) (= x (cadr y))))|
+                  expected = '( ( 3 7 ) ( 4 8 ) )' ).
      ENDMETHOD.
 
      METHOD list_member_4.
@@ -2006,7 +2329,7 @@
 
      METHOD list_car_5.
        code_test( code = '(car ''())'
-                  expected = 'Eval: car: nil is not a pair' ).
+                  expected = |Eval: car: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.
 
      METHOD list_cdr_1.
@@ -2026,7 +2349,7 @@
 
      METHOD list_cdr_4.
        code_test( code = |(cdr '())|
-                  expected = 'Eval: cdr: nil is not a pair' ).
+                  expected = |Eval: cdr: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.                    "list_cdr_1
 
      METHOD list_car_car_cdr.
@@ -2036,7 +2359,7 @@
 
      METHOD list_car_nil.
        code_test( code = '(car nil)'
-                  expected = 'Eval: car: nil is not a pair' ).
+                  expected = |Eval: car: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.                    "list_car_nil
 
      METHOD list_car_list.
@@ -2051,7 +2374,7 @@
 
      METHOD list_caar_2.
        code_test( code = |(caar '())|
-                  expected = 'Eval: caar: nil is not a pair' ).
+                  expected = |Eval: caar: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.
 
      METHOD list_caar_3.
@@ -2061,7 +2384,7 @@
 
      METHOD list_cadr_1.
        code_test( code = |(cadr '())|
-                  expected = 'Eval: cadr: nil is not a pair' ).
+                  expected = |Eval: cadr: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.
 
      METHOD list_cadr_2.
@@ -2076,7 +2399,7 @@
 
      METHOD list_cadr_4.
        code_test( code = |(cadr '((1)))|
-                  expected = 'Eval: cadr: nil is not a pair' ).
+                  expected = |Eval: cadr: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.
 
      METHOD list_cdar_1.
@@ -2086,7 +2409,7 @@
 
      METHOD list_cdar_2.
        code_test( code = |(cdar '())|
-                  expected = 'Eval: cdar: nil is not a pair' ).
+                  expected = |Eval: cdar: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.
 
      METHOD list_cdar_3.
@@ -2096,32 +2419,39 @@
 
      METHOD list_cdar_4.
        code_test( code = |(cdar '((c) 2))|
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.
 
      METHOD list_cddr_1.
        code_test( code = |(cddr '())|
-                  expected = 'Eval: cddr: nil is not a pair' ).
+                  expected = |Eval: cddr: { c_lisp_nil } is not a pair| ).
      ENDMETHOD.
 
      METHOD list_cddr_2.
        code_test( code = |(cddr '(1  2))|
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.
 
      METHOD list_cddr_3.
        code_test( code = |(cddr '(1 (2 6)))|
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.
 
      METHOD list_cddr_4.
        code_test( code = |(cddr '(1 (2)))|
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.
 
      METHOD list_cddr_5.
        code_test( code = |(cddr '(1 2 6))|
                   expected = '( 6 )' ).
+     ENDMETHOD.
+
+     METHOD list_shared_1.
+       code_test( code = |(let ((x (list 'a 'b 'c)))| &
+                         |  (set-cdr! (cddr x) x)| &
+                         |  x)|
+                  expected = '#0 = ( a b c . #0# )' ).
      ENDMETHOD.
 
      METHOD list_cons_two_lists.
@@ -2144,6 +2474,19 @@
        code_test( code = '(cons 2 3)'
                   expected = '( 2 . 3 )' ).
      ENDMETHOD.                    "list_cons_two_elems
+
+     METHOD list_copy_1.
+       code_test( code = |(define a '(1 8 2 8)) ; a may be immutable|
+                  expected = 'a' ).
+       code_test( code = |(define b (list-copy a))|
+                  expected = 'b' ).
+       code_test( code = |(set-car! b 3) ; b is mutable|
+                  expected = c_lisp_nil ).
+       code_test( code = |a|
+                  expected = '( 1 8 2 8 )' ).
+       code_test( code = |b|
+                  expected = '( 3 8 2 8 )' ).
+     ENDMETHOD.
 
      METHOD code_count.
        code_test( code = |(define first car)|
@@ -2239,6 +2582,21 @@
                   expected = '( c d )' ).
      ENDMETHOD.
 
+     METHOD iota_1.
+       code_test( code = |(iota 3)|
+                  expected = '( 0 1 2 )' ).
+     ENDMETHOD.
+
+     METHOD iota_2.
+       code_test( code = |(iota 5 2)|
+                  expected = '( 2 3 4 5 6 )' ).
+     ENDMETHOD.
+
+     METHOD iota_3.
+       code_test( code = |(iota 4 2 -1)|
+                  expected = '( 2 1 0 -1 )' ).
+     ENDMETHOD.
+
      METHOD list_ref.
        code_test( code = |(list-ref '(40 30 11 9) 1)|
                   expected = '30' ).
@@ -2254,6 +2612,55 @@
                   expected = '( 2 )' ).
      ENDMETHOD.
 
+     METHOD make_string_1.
+       code_test( code = |(make-string 3 "a")|
+                  expected = 'Eval: "a" is not a char in make-string' ).
+     ENDMETHOD.
+
+     METHOD make_string_2.
+       code_test( code = '(make-string 3 #\a)'
+                  expected = '"aaa"' ).
+     ENDMETHOD.
+
+     METHOD string_to_list_1.
+       code_test( code = |(string->list "Aali")|
+                  expected = '( "A" "a" "l" "i" )' ).
+     ENDMETHOD.
+
+     METHOD string_to_list_2.
+       code_test( code = |(string->list "Aali" 1)|
+                  expected = '( "a" "l" "i" )' ).
+     ENDMETHOD.
+
+     METHOD string_to_list_3.
+       code_test( code = |(string->list "Aali" 2 3)|
+                  expected = '( "l" )' ).
+     ENDMETHOD.
+
+     METHOD list_to_string_1.
+       code_test( code = '(list->string `( #\A #\a #\l #\i ))'
+                  expected = '"Aali"' ).
+     ENDMETHOD.
+
+     METHOD string_to_number_1.
+       code_test( code = |(string->number '( 13 ))|
+                  expected = 'Eval: ( 13 ) is not a string in string->number' ).
+     ENDMETHOD.
+
+     METHOD string_to_number_2.
+       code_test( code = |(string->number "42")|
+                  expected = '42' ).
+     ENDMETHOD.
+
+     METHOD number_to_string_1.
+       code_test( code = |(number->string '21)|
+                  expected = '"21"' ).
+     ENDMETHOD.
+
+     METHOD string_append_1.
+       code_test( code = |(string-append "ABAP" "Scheme" "Lisp")|
+                  expected = '"ABAPSchemeLisp"' ).
+     ENDMETHOD.
    ENDCLASS.                    "ltc_list IMPLEMENTATION
 
 *----------------------------------------------------------------------*
@@ -2297,7 +2704,7 @@
    CLASS ltc_vector IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -2391,7 +2798,7 @@
 
      METHOD vector_to_list_3.
        code_test( code = |(vector->list (vector)) |
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.
 
      METHOD vector_to_list_4.
@@ -2441,7 +2848,7 @@
    CLASS ltc_library_function IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -2519,7 +2926,7 @@
    CLASS ltc_higher_order IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -2650,7 +3057,7 @@
 
      METHOD apply_6.
        code_test( code = |(apply (lambda (x y . z) (vector x y z)) '(1 2))|
-                  expected = |#( 1 2 nil )| ).
+                  expected = |#( 1 2 { c_lisp_nil } )| ).
      ENDMETHOD.
 
      METHOD apply_7.
@@ -2721,7 +3128,7 @@
 
      METHOD map_7.
        code_test( code = |(map car '())|
-                  expected = |nil| ).
+                  expected = c_lisp_nil ).
      ENDMETHOD.
 
      METHOD for_each_1.
@@ -2736,7 +3143,7 @@
 
      METHOD for_each_3.
        code_test( code = |(for-each even? '())|
-                  expected = 'nil' ).   " #f, unspecified
+                  expected = c_lisp_nil ).   " #f, unspecified
      ENDMETHOD.
 
      METHOD for_each_4.
@@ -2769,10 +3176,18 @@
        METHODS compa_lte_1 FOR TESTING.
        METHODS compa_lte_2 FOR TESTING.
        METHODS compa_lte_3 FOR TESTING.
+       METHODS compa_lte_4 FOR TESTING.
 
        METHODS compa_equal_1 FOR TESTING.
        METHODS compa_equal_2 FOR TESTING.
        METHODS compa_equal_3 FOR TESTING.
+       METHODS compa_equal_4 FOR TESTING.
+       METHODS compa_equal_5 FOR TESTING.
+       METHODS compa_equal_6 FOR TESTING.
+       METHODS compa_equal_7 FOR TESTING.
+       METHODS compa_equal_8 FOR TESTING.
+       METHODS compa_equal_9 FOR TESTING.
+       METHODS compa_equal_10 FOR TESTING.
 
        METHODS compa_if_1 FOR TESTING.
        METHODS compa_if_2 FOR TESTING.
@@ -2804,6 +3219,21 @@
        METHODS compa_null_2 FOR TESTING.
 
        METHODS compa_string FOR TESTING.
+
+       METHODS comp_eqv_1 FOR TESTING.
+       METHODS comp_eqv_2 FOR TESTING.
+       METHODS comp_eqv_3 FOR TESTING.
+       METHODS comp_eqv_4 FOR TESTING.
+       METHODS comp_eqv_5 FOR TESTING.
+       METHODS comp_eqv_6 FOR TESTING.
+       METHODS comp_eqv_7 FOR TESTING.
+       METHODS comp_eqv_8 FOR TESTING.
+       METHODS comp_eqv_9 FOR TESTING.
+       METHODS comp_eqv_10 FOR TESTING.
+       METHODS comp_eqv_11 FOR TESTING.
+       METHODS comp_eqv_12 FOR TESTING.
+       METHODS comp_eqv_13 FOR TESTING.
+       METHODS comp_eqv_14 FOR TESTING.
    ENDCLASS.                    "ltc_comparison DEFINITION
 
 *----------------------------------------------------------------------*
@@ -2814,7 +3244,7 @@
    CLASS ltc_comparison IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -2874,6 +3304,11 @@
                   expected = '#f' ).
      ENDMETHOD.                    "compa_lte_3
 
+     METHOD compa_lte_4.
+       code_test( code = '(< 1/12 1/3)'
+                  expected = '#t' ).
+     ENDMETHOD.                    "compa_lte_4
+
      METHOD compa_equal_1.
 *   Test equal?
        code_test( code = '(equal? 22 23)'
@@ -2889,6 +3324,45 @@
        code_test( code = '(equal? (list 21) (list 21))'
                   expected = '#t' ).
      ENDMETHOD.                    "compa_equal_3
+
+     METHOD compa_equal_4.
+       code_test( code = |(equal? (make-vector 5 'a)| &
+                         |        (make-vector 5 'a))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_equal_5.
+       code_test( code = |(equal? 'a 'a)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_equal_6.
+       code_test( code = |(equal? '(a) '(a))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_equal_7.
+       code_test( code = |(equal? '(a (b) c)| &
+                         |        '(a (b) c))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_equal_8.
+       code_test( code = |(equal? "abc" "abc")|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_equal_9.
+       code_test( code = |(equal? '#1=(a b . #1#)| &
+                         |        '#2=(a b a b . #2#))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compa_equal_10.
+       code_test( code = |(equal? (lambda (x) x)| &
+                         |        (lambda (y) y))|
+                  expected = '#f' ).   " unspecified
+     ENDMETHOD.
 
      METHOD compa_if_1.
 *   Test IF
@@ -3022,8 +3496,97 @@
        code_test( code = '(define str "A string")'
                   expected = 'str' ).
        code_test( code = '(< str "The string")'
-                  expected = 'Eval: A string is not a number [<]' ).
+                  expected = 'Eval: "A string" is not a number in [<]' ).
      ENDMETHOD.                    "compa_string
+
+     METHOD comp_eqv_1.
+       code_test( code = |(eqv? 'a 'a)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_2.
+       code_test( code = |(eqv? 'a 'b)|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_3.
+       code_test( code = |(eqv? 2 2)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_4.
+*       code_test( code = |(eqv? 2 2.0)|
+*                  expected = '#f' ). " #f  but we do not have inexact numbers yet
+     ENDMETHOD.
+
+     METHOD comp_eqv_5.
+       code_test( code = |(eqv? '() '())|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_6.
+       code_test( code = |(eqv? 100000000 100000000)|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_7.
+*       code_test( code = |(eqv? 0.0 +nan.0)|
+*                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_8.
+       code_test( code = |(eqv? (cons 1 2) (cons 1 2))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_9.
+       code_test( code = |(eqv? (lambda () 1) (lambda () 2))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_10.
+       code_test( code = |(let ((p (lambda (x) x)))| &
+                         |(eqv? p p))|
+                  expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_11.
+       code_test( code = |(eqv? #f 'nil)|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_12.
+       code_test( code = |(define gen-counter | &
+                         | (lambda () | &
+                         |   (let ((n 0)) | &
+                         |     (lambda () (set! n (+ n 1)) n))))|
+                  expected = 'gen-counter' ).
+       code_test( code = |(let ((g (gen-counter))) | &
+                         |  (eqv? g g))|
+                  expected = '#t' ).
+       code_test( code = |(eqv? (gen-counter) (gen-counter))|
+                  expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD comp_eqv_13.
+       code_test( code = |(define gen-loser | &
+                         | (lambda () | &
+                         |   (let ((n 0)) | &
+                         |     (lambda () (set! n (+ n 1)) 27))))|
+                  expected = 'gen-loser' ).
+       code_test( code = |(let ((g (gen-loser))) | &
+                         |  (eqv? g g))|
+                  expected = '#t' ).
+       code_test( code = |(eqv? (gen-loser) (gen-loser))|
+                  expected = '#f' ).  " unspecfied
+     ENDMETHOD.
+
+     METHOD comp_eqv_14.
+       code_test( code = |(letrec ((f (lambda () (if (eqv? f g) 'f 'both)))| &
+                         |         (g (lambda () (if (eqv? f g) 'g 'both))))| &
+                         | (eqv? f g))|
+                  expected = '#f' ).
+     ENDMETHOD.
 
    ENDCLASS.                    "ltc_comparison IMPLEMENTATION
 
@@ -3056,7 +3619,7 @@
    CLASS ltc_basic_functions IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -3133,7 +3696,7 @@
    CLASS ltc_hash_element IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -3151,11 +3714,11 @@
        code_test( code = '(hash-get h1 ''kennel)'
                   expected = '( dog cat hedgehog )' ).
        code_test( code = '(hash-remove h1 ''kennel)'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = '(hash-get h1 ''sparrow)'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = '(hash-insert h1 ''sparrow "whoosh")'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = '(hash-get h1 ''sparrow)'
                   expected = '"whoosh"' ).
        code_test( code = '(hash-keys h1)'
@@ -3189,7 +3752,7 @@
    CLASS ltc_abap_integration IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -3200,7 +3763,7 @@
        code_test( code = '(define mandt (ab-data "MANDT"))'
                   expected = 'mandt' ).
        code_test( code = '(ab-set-value mandt "000")'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = 'mandt'
                   expected = '<ABAP Data>' ).
      ENDMETHOD.                    "abap_data
@@ -3209,7 +3772,7 @@
        code_test( code = '(define t005g (ab-data "T005G"))'
                   expected = 't005g' ).
        code_test( code = '(ab-set t005g "LAND1" "ZA")'  " Set field "LAND1" to "ZA"
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = '(ab-get t005g "LAND1")'       " Return the value of field "LAND1"
                   expected = '"ZA"' ).
      ENDMETHOD.                    "abap_data
@@ -3218,7 +3781,7 @@
        code_test( code = '(define t005g (ab-data "T005G"))'
                   expected = 't005g' ).
        code_test( code = '(ab-set-value t005g ''("000" "ZA" "ABC" "JHB"))'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = '(ab-get-value t005g)'
                   expected = '( "000" "ZA" "ABC" "JHB" )' ).
        code_test( code = '(ab-get t005g "LAND1")'
@@ -3262,7 +3825,7 @@
    CLASS ltc_abap_function_module IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -3295,7 +3858,7 @@
        code_test( code = '(define f2 (ab-function "TH_TEST_RFC"))'
                   expected = 'f2' ).
        code_test( code = '(ab-set f2 "TEXT_IN" "Calling from ABAP Lisp")'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = '(f2)'
                   expected = '<ABAP function module TH_TEST_RFC>' ).
        code_test( code = '(ab-get f2 "TEXT_OUT")'
@@ -3331,7 +3894,7 @@
        code_test( code = '(define f3 (ab-function "BAPI_USER_GET_DETAIL"))'
                   expected = 'f3' ).
        code_test( code = '(ab-set f3 "USERNAME" (ab-get ab-sy "UNAME"))'
-                  expected = 'nil' ).
+                  expected = c_lisp_nil ).
        code_test( code = '(f3)'
                   expected = '<ABAP function module BAPI_USER_GET_DETAIL>' ).
        code_test( code = '(define profiles (ab-get f3 "PROFILES"))'
@@ -3350,7 +3913,7 @@
    CLASS ltc_quote IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_int.
+       new_interpreter( ).
      ENDMETHOD.                    "setup
 
      METHOD teardown.
@@ -3416,3 +3979,73 @@
      ENDMETHOD.
 
    ENDCLASS.
+
+   CLASS ltc_macro IMPLEMENTATION.
+
+     METHOD setup.
+       new_interpreter( ).
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
+
+     METHOD macro_1.
+       code_test( code = '(define-macro (let1 var val . body)' &
+                         '`(let ((,var ,val)) ,@body ) )'
+                  expected = 'let1' ).
+       code_test( code = '(let1 foo (+ 2 3)' &
+                         '  (* foo foo))'
+                  expected = '25' ).
+     ENDMETHOD.
+
+     METHOD macro_2.
+       code_test( code = '(define-macro (let1 var val . body)' &
+                         '`(let ((,var ,val)) ,@body ) )'
+                  expected = 'let1' ).
+       code_test( code = '(macroexpand (let1 foo (+ 2 3) (* foo foo)) )'
+                  expected = '( let ( ( foo ( + 2 3 ) ) ) ( * foo foo ) )' ).
+     ENDMETHOD.
+
+     METHOD macro_one.
+       code_test( code = '(define-macro one (lambda () 1))'
+                  expected = 'one' ).
+       code_test( code = '(one)'
+                  expected = '1' ).
+     ENDMETHOD.
+
+     METHOD macro_two.
+       code_test( code = '(define-macro two (lambda () 2))'
+                  expected = 'two' ).
+       code_test( code = '(two)'
+                  expected = '2' ).
+     ENDMETHOD.
+
+     METHOD macro_unless_1.
+       code_test( code = '(define-macro my-unless (lambda (pred a b) `(if ,pred ,b ,a)))'
+                  expected = 'my-unless' ).
+       code_test( code = '(my-unless #f 7 8)'
+                  expected = '7' ).
+       code_test( code = '(my-unless #t 7 8)'
+                  expected = '8' ).
+     ENDMETHOD.
+
+     METHOD macro_unless_2.
+       code_test( code = '(define-macro my-unless (lambda (pred a b) `(if (not ,pred) ,a ,b)))'
+                  expected = 'my-unless' ).
+       code_test( code = '(my-unless #f 7 8)'
+                  expected = '7' ).
+       code_test( code = '(my-unless #t 7 8)'
+                  expected = '8' ).
+       code_test( code = '(macroexpand (my-unless 2 3 4))'
+                  expected = '( if ( not 2 ) 3 4 )' ).
+     ENDMETHOD.
+
+     METHOD macro_eval_1.
+       code_test( code = |(define-macro identity (lambda (x) x))|
+                  expected = 'identity' ).
+       code_test( code = |(let* ((a 123)) (identity a))|
+                  expected = '123' ).
+     ENDMETHOD.
+
+  ENDCLASS.

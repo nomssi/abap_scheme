@@ -3,32 +3,44 @@
 *&---------------------------------------------------------------------*
 
 CONSTANTS:
-  c_lisp_input    TYPE string VALUE 'ABAP Lisp Input',
-  c_lisp_untitled TYPE string VALUE 'Untitled'.
+  c_lisp_untitled   TYPE programm VALUE 'Untitled',
+* enable if you uploaded LISP config files or also change c_source_type to 'LISP'
+* check: https://github.com/nomssi/abap_scheme/blob/master/editor/README.md
+  c_new_abap_editor TYPE flag VALUE abap_false,
+  c_source_type     TYPE string VALUE 'LISP'.
+
 CONSTANTS:
   c_lisp_ast_view TYPE cl_abap_browser=>title VALUE 'ABAP Lisp S-Expression Viewer'.
 
 DATA g_ok_code TYPE syucomm.
 
-*----------------------------------------------------------------------*
-*       CLASS lcl_stack DEFINITION
-*----------------------------------------------------------------------*
-*
-*----------------------------------------------------------------------*
+TYPES: BEGIN OF ts_settings,
+         stack      TYPE string_table,
+         new_editor TYPE flag,
+       END OF ts_settings.
+
 CLASS lcl_stack DEFINITION.
   PUBLIC SECTION.
     TYPES tv_data TYPE string.
+
+    METHODS previous RETURNING VALUE(rv_data) TYPE tv_data.
+    METHODS next RETURNING VALUE(rv_data) TYPE tv_data.
+
     METHODS push IMPORTING iv_key TYPE tv_data.
-    METHODS pop RETURNING value(rv_data) TYPE tv_data.
-    METHODS empty RETURNING value(rv_flag) TYPE xsdboolean.
+    "METHODS pop RETURNING VALUE(rv_data) TYPE tv_data.
+    "METHODS empty RETURNING VALUE(rv_flag) TYPE xsdboolean.
+
+    METHODS serialize RETURNING VALUE(rt_string) TYPE string_table.
+    METHODS deserialize IMPORTING it_string      TYPE string_table.
   PROTECTED SECTION.
     TYPES: BEGIN OF ts_node,
              data TYPE tv_data,
              next TYPE REF TO data,
+             prev TYPE REF TO data,
            END OF ts_node.
 
     DATA mr_top TYPE REF TO ts_node.
-ENDCLASS.                    "lcl_stack DEFINITION
+ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_container DEFINITION
@@ -50,60 +62,124 @@ CLASS lcl_container DEFINITION.
     DATA mo_right TYPE REF TO cl_gui_container.
 ENDCLASS.                    "lcl_container DEFINITION
 
+INTERFACE lif_source_editor.
+  METHODS clear.
+  METHODS push_text.
+  METHODS previous.
+  METHODS next.
+  METHODS to_string RETURNING VALUE(rv_text) TYPE string.
+  METHODS update_status IMPORTING iv_string TYPE string.
+  METHODS setup IMPORTING is_settings TYPE ts_settings.
+
+  METHODS set_focus.
+  METHODS free RETURNING VALUE(rt_string) TYPE string_table.
+ENDINTERFACE.
+
+CLASS lcl_source DEFINITION INHERITING FROM cl_gui_sourceedit.
+  PUBLIC SECTION.
+    METHODS constructor IMPORTING io_container TYPE REF TO cl_gui_container
+                                  iv_read_only TYPE flag DEFAULT abap_false
+                                  iv_toolbar   TYPE flag DEFAULT abap_false.
+    INTERFACES lif_source_editor.
+  PRIVATE SECTION.
+    DATA mo_stack TYPE REF TO lcl_stack.
+ENDCLASS.
+
 *----------------------------------------------------------------------*
 *       CLASS lcl_editor DEFINITION
 *----------------------------------------------------------------------*
 CLASS lcl_editor DEFINITION INHERITING FROM cl_gui_textedit.
   PUBLIC SECTION.
-    CONSTANTS c_comments_string TYPE char01 VALUE ';'.
+    CONSTANTS: c_comments_string TYPE char01 VALUE ';',
+               c_max_line_count TYPE i VALUE 10000.
 
     METHODS constructor IMPORTING io_container TYPE REF TO cl_gui_container
                                   iv_read_only TYPE flag DEFAULT abap_true
                                   iv_toolbar   TYPE flag DEFAULT abap_false.
     METHODS append_source IMPORTING iv_text TYPE string.
 
-    METHODS push_text.
-    METHODS pop_text RETURNING value(code) TYPE string.
-    METHODS to_string RETURNING value(rv_text) TYPE string.
-    METHODS update_status IMPORTING iv_string TYPE string.
+    INTERFACES lif_source_editor.
+
     METHODS append_string IMPORTING iv_text TYPE string.
   PRIVATE SECTION.
     DATA mv_counter TYPE i.
     DATA mo_stack TYPE REF TO lcl_stack.
 
     METHODS format_input IMPORTING code           TYPE string
-                         RETURNING value(rv_text) TYPE string.
+                         RETURNING VALUE(rv_text) TYPE string.
 ENDCLASS.                    "lcl_editor DEFINITION
 
-*----------------------------------------------------------------------*
-*       CLASS lcl_stack IMPLEMENTATION
-*----------------------------------------------------------------------*
-*
-*----------------------------------------------------------------------*
 CLASS lcl_stack IMPLEMENTATION.
 
   METHOD push.
-    DATA lr_node TYPE REF TO ts_node.
+    DATA lo_node TYPE REF TO ts_node.
+    DATA lo_last TYPE REF TO ts_node.
+    DATA lr_old_top TYPE REF TO ts_node.
 
-    CREATE DATA lr_node.
-    lr_node->data = iv_key.
-    lr_node->next = mr_top.
+    IF mr_top IS BOUND.
+      lo_last = mr_top.
+      CREATE DATA mr_top.
+      mr_top->data = iv_key.
+      mr_top->prev = lo_last->prev.
+      mr_top->next = lo_last.
+      IF lo_last->prev IS BOUND.
+        lo_node ?= lo_last->prev.
+        lo_node->next = mr_top.
+      ENDIF.
+      lo_last->prev = mr_top.
+    ELSE.
+      lr_old_top = mr_top.
+      CREATE DATA mr_top.
+      mr_top->data = iv_key.
+      mr_top->next = lr_old_top.
+    ENDIF.
+  ENDMETHOD.
 
-    mr_top = lr_node.
-  ENDMETHOD.                    "push
+*  METHOD pop.
+*    CLEAR rv_data.
+*    CHECK mr_top IS BOUND.
+*    rv_data = mr_top->data.
+*    mr_top ?= mr_top->next.
+*  ENDMETHOD.
 
-  METHOD pop.
+  METHOD previous.
     CLEAR rv_data.
     CHECK mr_top IS BOUND.
     rv_data = mr_top->data.
+    CHECK mr_top->next IS BOUND.
     mr_top ?= mr_top->next.
-  ENDMETHOD.                    "pop
+  ENDMETHOD.
 
-  METHOD empty.
-    rv_flag = boolc( mr_top IS NOT BOUND ).
-  ENDMETHOD.                    "empty
+  METHOD next.
+    CLEAR rv_data.
+    CHECK mr_top IS BOUND AND mr_top->prev IS BOUND.
+    mr_top ?= mr_top->prev.
+    rv_data = mr_top->data.
+  ENDMETHOD.
 
-ENDCLASS.                    "lcl_stack IMPLEMENTATION
+*  METHOD empty.
+*    rv_flag = xsdbool( mr_top IS NOT BOUND ).
+*  ENDMETHOD.
+
+  METHOD deserialize.
+    DATA lv_string TYPE string.
+    LOOP AT it_string INTO lv_string.
+      push( lv_string ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD serialize.
+    DATA lr_node TYPE REF TO ts_node.
+
+    CLEAR rt_string.
+    lr_node = mr_top.
+    WHILE lr_node IS BOUND.
+      APPEND lr_node->data TO rt_string.
+      lr_node ?= lr_node->next.
+    ENDWHILE.
+  ENDMETHOD.
+
+ENDCLASS.
 
 TYPES tv_scale TYPE perct.
 CONSTANTS c_default_scale TYPE tv_scale VALUE '0.9'.
@@ -118,20 +194,15 @@ TYPES: BEGIN OF ts_diagram_config,
          display_source TYPE flag,
        END OF ts_diagram_config.
 
-*----------------------------------------------------------------------*
-*       CLASS lcl_file_name DEFINITION
-*----------------------------------------------------------------------*
-*
-*----------------------------------------------------------------------*
 CLASS lcl_file_name DEFINITION.
   PUBLIC SECTION.
     CLASS-METHODS new IMPORTING iv_mode        TYPE char01
-                      RETURNING value(ro_file) TYPE REF TO lcl_file_name.
+                      RETURNING VALUE(ro_file) TYPE REF TO lcl_file_name.
     METHODS constructor IMPORTING iv_mode TYPE char01.
-    METHODS dialog RETURNING value(rv_user_action) TYPE i.
-    METHODS get_prefix RETURNING value(rv_name) TYPE string
+    METHODS dialog RETURNING VALUE(rv_user_action) TYPE i.
+    METHODS get_prefix RETURNING VALUE(rv_name) TYPE string
                        RAISING   cx_dynamic_check.
-    METHODS get_fullpath RETURNING value(rv_name) TYPE string.
+    METHODS get_fullpath RETURNING VALUE(rv_name) TYPE string.
   PROTECTED SECTION.
     TYPES: BEGIN OF ts_fullpath,
              title  TYPE string,
@@ -141,7 +212,7 @@ CLASS lcl_file_name DEFINITION.
              filter TYPE string,
            END OF ts_fullpath.
     DATA ms_file TYPE ts_fullpath.
-ENDCLASS.                    "lcl_file_name DEFINITION
+ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_plant_uml DEFINITION
@@ -149,47 +220,42 @@ ENDCLASS.                    "lcl_file_name DEFINITION
 CLASS lcl_plant_uml DEFINITION.
   PUBLIC SECTION.
     CONSTANTS c_plantuml_server TYPE string
-      VALUE 'http://www.plantuml.com/plantuml/img/'  ##no_text.
+      VALUE 'http://www.plantuml.com/plantuml/img/'  ##NO_TEXT.
 
     METHODS constructor IMPORTING iv_diagram TYPE string.
     METHODS to_url IMPORTING iv_base_url   TYPE string DEFAULT c_plantuml_server
-                   RETURNING value(rv_url) TYPE string
+                   RETURNING VALUE(rv_url) TYPE string
                    RAISING   cx_dynamic_check.
     METHODS output IMPORTING is_cfg TYPE ts_diagram_config RAISING cx_dynamic_check.
   PROTECTED SECTION.
     TYPES tv_base64 TYPE c LENGTH 65.
     CONSTANTS:
-      c_standard TYPE tv_base64 VALUE 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='  ##no_text,
-      c_plantuml TYPE tv_base64 VALUE '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_0' ##no_text.
+      c_standard TYPE tv_base64 VALUE 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='  ##NO_TEXT,
+      c_plantuml TYPE tv_base64 VALUE '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_0' ##NO_TEXT.
     DATA mv_diagram TYPE string.
 
     METHODS to_xstring IMPORTING iv_string         TYPE string
-                       RETURNING value(rv_xstring) TYPE xstring
+                       RETURNING VALUE(rv_xstring) TYPE xstring
                        RAISING   cx_dynamic_check.
     METHODS source IMPORTING iv_display_source TYPE flag
-                   RETURNING value(rv_source)  TYPE string.
+                   RETURNING VALUE(rv_source)  TYPE string.
 
     METHODS png_file_name IMPORTING io_name        TYPE REF TO lcl_file_name
                                     is_cfg         TYPE ts_diagram_config
-                          RETURNING value(rv_name) TYPE string.
+                          RETURNING VALUE(rv_name) TYPE string.
 
     METHODS parameter_string IMPORTING io_name         TYPE REF TO lcl_file_name
                                        is_cfg          TYPE ts_diagram_config
-                             RETURNING value(rv_param) TYPE string.
+                             RETURNING VALUE(rv_param) TYPE string.
     METHODS show_html IMPORTING iv_html TYPE string
                                 iv_size TYPE string DEFAULT cl_abap_browser=>xlarge
                       RAISING   cx_dynamic_check.
     METHODS to_png IMPORTING io_name        TYPE REF TO lcl_file_name
                              is_cfg         TYPE ts_diagram_config
-                   RETURNING value(rv_name) TYPE string.
+                   RETURNING VALUE(rv_name) TYPE string.
 
 ENDCLASS.                    "lcl_plant_uml DEFINITION
 
-*----------------------------------------------------------------------*
-*       CLASS lcl_file DEFINITION
-*----------------------------------------------------------------------*
-*
-*----------------------------------------------------------------------*
 CLASS lcl_file DEFINITION CREATE PRIVATE.
   PUBLIC SECTION.
     CONSTANTS:
@@ -199,24 +265,14 @@ CLASS lcl_file DEFINITION CREATE PRIVATE.
     CLASS-METHODS download
       IMPORTING iv_data         TYPE xstring
                 io_name         TYPE REF TO lcl_file_name
-      RETURNING value(rv_subrc) TYPE sysubrc.
+      RETURNING VALUE(rv_subrc) TYPE sysubrc.
 ENDCLASS.                    "lcl_file DEFINITION
 
-*----------------------------------------------------------------------*
-*       CLASS lcl_file_name_dummy DEFINITION
-*----------------------------------------------------------------------*
-*
-*----------------------------------------------------------------------*
 CLASS lcl_file_name_dummy DEFINITION INHERITING FROM lcl_file_name.
   PUBLIC SECTION.
     METHODS dialog REDEFINITION.
-ENDCLASS.                    "lcl_file_name_dummy DEFINITION
+ENDCLASS.
 
-*----------------------------------------------------------------------*
-*       CLASS lcl_configuration DEFINITION
-*----------------------------------------------------------------------*
-*
-*----------------------------------------------------------------------*
 CLASS lcl_configuration DEFINITION CREATE PRIVATE.
   PUBLIC SECTION.
     CONSTANTS:
@@ -227,11 +283,11 @@ CLASS lcl_configuration DEFINITION CREATE PRIVATE.
       c_mode_exe TYPE char01 VALUE 'E'.
 
     CLASS-METHODS:
-      get RETURNING value(rs_cfg) TYPE ts_diagram_config,
+      get RETURNING VALUE(rs_cfg) TYPE ts_diagram_config,
       query,
       class_constructor.
   PRIVATE SECTION.
-    CONSTANTS c_registry_java_base_key TYPE string VALUE 'SOFTWARE\JavaSoft\Java Runtime Environment'  ##no_text.
+    CONSTANTS c_registry_java_base_key TYPE string VALUE 'SOFTWARE\JavaSoft\Java Runtime Environment'  ##NO_TEXT.
     TYPES: BEGIN OF ts_param,
              local_path     TYPE localfile,
              java_jar       TYPE localfile,
@@ -242,7 +298,7 @@ CLASS lcl_configuration DEFINITION CREATE PRIVATE.
              scale          TYPE perct,
              display_source TYPE flag,
            END OF ts_param.
-    METHODS get_attributes RETURNING value(rt_attr) TYPE sci_atttab.
+    METHODS get_attributes RETURNING VALUE(rt_attr) TYPE sci_atttab.
     METHODS to_radiobutton.
     METHODS from_radiobutton.
     CLASS-DATA gs_cfg TYPE ts_param.
@@ -250,12 +306,12 @@ CLASS lcl_configuration DEFINITION CREATE PRIVATE.
           mv_mode_exe TYPE flag,
           mv_mode_txt TYPE flag.
     METHODS dialog.
-    CLASS-METHODS get_java_path RETURNING value(rv_fullpath) TYPE string.
+    CLASS-METHODS get_java_path RETURNING VALUE(rv_fullpath) TYPE string.
     CLASS-METHODS get_registry_value IMPORTING iv_key          TYPE string
                                                iv_value        TYPE string
                                      EXPORTING ev_subrc        TYPE sysubrc
-                                               ev_value TYPE string.
-ENDCLASS.                    "lcl_configuration DEFINITION
+                                               rv_value TYPE string.
+ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       INTERFACE lif_unit_test IMPLEMENTATION
@@ -263,18 +319,13 @@ ENDCLASS.                    "lcl_configuration DEFINITION
 INTERFACE lif_unit_test.
 ENDINTERFACE.                    "lif_unit_test IMPLEMENTATION
 
-*----------------------------------------------------------------------*
-*       CLASS lcl_dot_diagram DEFINITION
-*----------------------------------------------------------------------*
-*
-*----------------------------------------------------------------------*
 CLASS lcl_dot_diagram DEFINITION.
   PUBLIC SECTION.
     CLASS-METHODS new IMPORTING is_config     TYPE ts_diagram_config
-                      RETURNING value(ro_dot) TYPE REF TO lcl_dot_diagram.
+                      RETURNING VALUE(ro_dot) TYPE REF TO lcl_dot_diagram.
 
     METHODS generate IMPORTING it_elem           TYPE lcl_parser=>tt_element
-                     RETURNING value(rv_diagram) TYPE string.
+                     RETURNING VALUE(rv_diagram) TYPE string.
   PRIVATE SECTION.
     CONSTANTS c_start TYPE flag VALUE abap_true.
 
@@ -283,19 +334,19 @@ CLASS lcl_dot_diagram DEFINITION.
     METHODS footer.
     METHODS node IMPORTING elem      TYPE REF TO lcl_lisp.
     METHODS add IMPORTING iv_code TYPE string.
-    METHODS get RETURNING value(rv_dot) TYPE string.
+    METHODS get RETURNING VALUE(rv_dot) TYPE string.
     METHODS get_object_id IMPORTING io_ref        TYPE REF TO object
-                          RETURNING value(rv_oid) TYPE i.
+                          RETURNING VALUE(rv_oid) TYPE i.
     METHODS print IMPORTING io_elem        TYPE REF TO lcl_lisp
-                  RETURNING value(rv_node) TYPE string.
+                  RETURNING VALUE(rv_node) TYPE string.
     METHODS detach.
 
-ENDCLASS.                    "lcl_dot_diagram DEFINITION
+ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_ide DEFINITION
 *----------------------------------------------------------------------*
-CLASS lcl_ide DEFINITION CREATE PRIVATE.
+CLASS lcl_ide DEFINITION INHERITING FROM lcl_lisp_buffered_port CREATE PRIVATE.
   PUBLIC SECTION.
     DATA mv_title TYPE string VALUE c_lisp_untitled READ-ONLY.
 
@@ -305,29 +356,28 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
       free,
       pbo,
       pai IMPORTING iv_code        TYPE syucomm
-          RETURNING value(rv_flag) TYPE flag.
+          RETURNING VALUE(rv_flag) TYPE flag.
     METHODS first_output.
-
-    INTERFACES lif_port.
+    METHODS read REDEFINITION.
+    METHODS display REDEFINITION.
   PRIVATE SECTION.
     CLASS-DATA go_ide TYPE REF TO lcl_ide.
 
+    DATA ms_settings TYPE ts_settings.
     DATA mv_first TYPE flag VALUE abap_true.
     DATA mo_cont TYPE REF TO lcl_container.
     DATA mo_int TYPE REF TO lcl_lisp_profiler. "The Lisp interpreter
 
-    DATA mo_source TYPE REF TO lcl_editor.
+    DATA mi_source TYPE REF TO lif_source_editor.
     DATA mo_output TYPE REF TO lcl_editor.
     DATA mo_log TYPE REF TO lcl_editor.
     DATA mo_console TYPE REF TO lcl_editor.
     DATA mo_alv TYPE REF TO cl_salv_table.
 
-    DATA print_offset TYPE i.
-    DATA buffer TYPE string.
-
     METHODS:
       constructor,
       evaluate,
+      validate,
       trace,
       refresh,
       show_docu,
@@ -335,17 +385,20 @@ CLASS lcl_ide DEFINITION CREATE PRIVATE.
       graph_config,
       free_controls,
       user_command IMPORTING iv_code        TYPE syucomm
-                   RETURNING value(rv_flag) TYPE flag.
-    METHODS welcome RETURNING value(text) TYPE string.
-    METHODS console_header RETURNING value(text) TYPE string.
+                   RETURNING VALUE(rv_flag) TYPE flag.
+    METHODS view_table IMPORTING element TYPE REF TO lcl_lisp_table.
+    METHODS welcome RETURNING VALUE(text) TYPE string.
+    METHODS console_header RETURNING VALUE(text) TYPE string.
 
-    METHODS flush RETURNING value(rv_text) TYPE string.
-
-    METHODS writeln IMPORTING text TYPE string.
-    METHODS add IMPORTING text TYPE string.
-
+    METHODS new_source_editor IMPORTING io_cont          TYPE REF TO cl_gui_container
+                              RETURNING VALUE(ri_source) TYPE REF TO lif_source_editor.
     METHODS previous.
     METHODS next.
+
+    METHODS read_settings.
+    METHODS save_settings.
+    METHODS post_settings IMPORTING handle TYPE REF TO zcl_lisp_area
+                          RAISING   cx_shm_error cx_dynamic_check.
 
 ENDCLASS.                    "lcl_ide DEFINITION
 
@@ -355,14 +408,14 @@ ENDCLASS.                    "lcl_ide DEFINITION
 CLASS lcl_ide IMPLEMENTATION.
 
   METHOD constructor.
+    super->constructor( iv_input = abap_true
+                        iv_output = abap_true
+                        iv_string = abap_false ).
+    read_settings( ).
+    "VALUE #( stack = serialize( )
     CREATE OBJECT:
       mo_cont,
 
-      mo_source
-        EXPORTING
-          io_container = mo_cont->mo_input
-          iv_read_only = abap_false
-          iv_toolbar = abap_true,
       mo_output
         EXPORTING
           io_container = mo_cont->mo_output
@@ -373,12 +426,112 @@ CLASS lcl_ide IMPLEMENTATION.
       mo_console
         EXPORTING
           io_container = mo_cont->mo_console.
+
+    mi_source = new_source_editor( mo_cont->mo_input ).
     refresh( ).
   ENDMETHOD.                    "constructor
 
+  METHOD read_settings.
+    DATA params TYPE REF TO zcl_lisp_shm_root.
+    DATA: handle TYPE REF TO zcl_lisp_area,
+          exc    TYPE REF TO cx_root.
+
+    TRY.
+
+        TRY.
+           handle = zcl_lisp_area=>attach_for_read( ).
+        CATCH cx_shm_no_active_version.
+          WAIT UP TO 1 SECONDS.
+          handle = zcl_lisp_area=>attach_for_read( ).
+        ENDTRY.
+
+        params = handle->root.
+        ms_settings = params->load( ).
+        handle->detach( ).
+      CATCH cx_shm_attach_error INTO exc.
+
+        TRY.
+            post_settings( zcl_lisp_area=>attach_for_write( ) ).
+          CATCH cx_shm_error cx_dynamic_check INTO exc.
+            MESSAGE exc TYPE 'S'.
+        ENDTRY.
+
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD save_settings.
+    DATA handle TYPE REF TO zcl_lisp_area.
+    DATA params TYPE REF TO zcl_lisp_shm_root.
+    DATA exc    TYPE REF TO cx_root.
+
+    TRY.
+        TRY.
+            handle = zcl_lisp_area=>attach_for_update( ).
+          CATCH cx_shm_no_active_version.
+            WAIT UP TO 1 SECONDS.
+            handle = zcl_lisp_area=>attach_for_update( ).
+        ENDTRY.
+
+        params ?= handle->get_root( ).
+        IF params IS NOT BOUND.
+          post_settings( handle ).
+        ELSE.
+          params->save( ms_settings ).
+          handle->detach_commit( ).
+        ENDIF.
+      CATCH cx_shm_error cx_dynamic_check INTO exc.
+        MESSAGE exc TYPE 'S'.
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD post_settings.
+    DATA params TYPE REF TO zcl_lisp_shm_root.
+
+    CREATE OBJECT params AREA HANDLE handle.
+    params->save( ms_settings ).
+
+    handle->set_root( params ).
+    handle->detach_commit( ).
+  ENDMETHOD.
+
+  METHOD new_source_editor.
+    DATA gui_support TYPE boolean.
+*   Check for frontend support for the new ABAP Editor
+    cl_gui_frontend_services=>check_gui_support(
+      EXPORTING
+        component            = 'abapeditor'                 "#EC NOTEXT
+        feature_name         = 'ab4'                        "#EC NOTEXT
+      RECEIVING
+        result               = gui_support
+      EXCEPTIONS
+        cntl_error           = 1
+        error_no_gui         = 2
+        wrong_parameter      = 3
+        not_supported_by_gui = 4
+        unknown_error        = 5
+        OTHERS               = 6 ).
+    IF sy-subrc NE 0 OR gui_support NE abap_true OR c_new_abap_editor NE abap_true.
+      CREATE OBJECT ri_source TYPE lcl_editor
+        EXPORTING
+          io_container = io_cont
+          iv_read_only = abap_false
+          iv_toolbar   = abap_true.
+
+    ELSE.
+      CREATE OBJECT ri_source TYPE lcl_source
+        EXPORTING
+          io_container = io_cont
+          iv_read_only = abap_false
+          iv_toolbar   = abap_true.
+    ENDIF.
+    ri_source->setup( ms_settings ).
+
+  ENDMETHOD.
+
   METHOD init.
     RETURN.
-  ENDMETHOD.                    "init
+  ENDMETHOD.
 
   METHOD main.
     CREATE OBJECT go_ide.
@@ -386,16 +539,16 @@ CLASS lcl_ide IMPLEMENTATION.
   ENDMETHOD.                    "main
 
   METHOD refresh.
-    mo_source->delete_text( ).
+    mi_source->clear( ).
     mo_output->delete_text( ).
     mo_log->delete_text( ).
-    CREATE OBJECT mo_int   " LISP Interpreter
-      EXPORTING
-        ii_port = me.
+    CREATE OBJECT mo_int
+      EXPORTING io_port = me  " LISP Interpreter
+                ii_log = me.
   ENDMETHOD.                    "refresh
 
   METHOD show_docu.
-    CONSTANTS c_url TYPE string VALUE `https://github.com/nomssi/abap_scheme/wiki`  ##no_text.
+    CONSTANTS c_url TYPE string VALUE `https://github.com/nomssi/abap_scheme/wiki`  ##NO_TEXT.
     cl_abap_browser=>show_url( title = `ABAP Scheme Wiki`
                                url = c_url
                                modal = abap_false
@@ -403,123 +556,77 @@ CLASS lcl_ide IMPLEMENTATION.
                                context_menu = abap_true
                                 "size = ms_cfg-browser_size
                                ).
-  ENDMETHOD.                    "show_docu
+  ENDMETHOD.
 
   METHOD graphics.
-    DATA code TYPE string.
+    DATA lx_root TYPE REF TO cx_root.
     DATA ls_cfg TYPE ts_diagram_config.
-    DATA lt_elem TYPE lcl_parser=>tt_element.
     DATA lo_uml TYPE REF TO lcl_plant_uml.
+    DATA lo_dot TYPE REF TO lcl_dot_diagram.
+    DATA lv_diagram TYPE string.
+
+    DATA lt_elem TYPE lcl_parser=>tt_element.
+    DATA code TYPE string.
     TRY.
         ls_cfg = lcl_configuration=>get( ).
 
-        code = mo_source->to_string( ).
+        code = mi_source->to_string( ).
         CHECK code IS NOT INITIAL.
 
         lt_elem = mo_int->parse( code ).
+        lo_dot = lcl_dot_diagram=>new( is_config = ls_cfg ).
+        lv_diagram = lo_dot->generate( it_elem = lt_elem ).
 
         CREATE OBJECT lo_uml
-          EXPORTING iv_diagram = lcl_dot_diagram=>new( is_config = ls_cfg )->generate( it_elem = lt_elem ).
+          EXPORTING iv_diagram = lv_diagram.
         lo_uml->output( ls_cfg ).
-      CATCH cx_dynamic_check.                           "#EC NO_HANDLER
+
+      CATCH cx_root INTO lx_root.
+        mi_source->update_status( lx_root->get_text( ) ).
     ENDTRY.
-  ENDMETHOD.                    "graphics
+  ENDMETHOD.
 
   METHOD graph_config.
     lcl_configuration=>query( ).
-  ENDMETHOD.                    "graph_config
+  ENDMETHOD.
 
-  METHOD lif_port~read.
-    DATA lt_fields TYPE STANDARD TABLE OF sval.
-    DATA ls_fields TYPE sval.
-    DATA lv_user_response TYPE flag.
-
-    rv_input = iv_input.
-    CHECK iv_input IS INITIAL.
-    ls_fields-tabname = 'ABDBG'.     " Text: Input Line
-    ls_fields-fieldname = 'LTEXT'.
-    ls_fields-field_obl = 'X'.
-    APPEND ls_fields TO lt_fields.
-
-    CALL FUNCTION 'POPUP_GET_VALUES'
-      EXPORTING
-        popup_title  = c_lisp_input
-        start_column = '45'
-        start_row    = '11'
-      IMPORTING
-        returncode   = lv_user_response
-      TABLES
-        fields       = lt_fields
-      EXCEPTIONS
-        OTHERS       = 2.
-
-    CHECK sy-subrc EQ 0 AND lv_user_response NE 'A'.
-    READ TABLE lt_fields INDEX 1 INTO ls_fields.
-    CHECK sy-subrc EQ 0.
-
-    rv_input = ls_fields-value.
+  METHOD read.
+    rv_input = super->read( ).
     mo_console->append_string( rv_input && |\n| ).
-  ENDMETHOD.                    "lif_port~read
+  ENDMETHOD.
 
-  METHOD lif_port~write.
+  METHOD view_table.
     DATA lx_error TYPE REF TO cx_root.
-    DATA lo_elem TYPE REF TO lcl_lisp.
-
     FIELD-SYMBOLS <lt_table> TYPE STANDARD TABLE.
 
+    CHECK element->type EQ lcl_lisp=>type_abap_table.
+    TRY.
+        ASSIGN element->data->* TO <lt_table>.
+        cl_salv_table=>factory(
+          EXPORTING r_container    = mo_cont->mo_alv
+          IMPORTING r_salv_table   = mo_alv
+          CHANGING  t_table        = <lt_table> ).
+
+        mo_alv->get_functions( )->set_all( abap_true ).
+        mo_alv->display( ).
+
+      CATCH cx_root INTO lx_error.
+        lcl_lisp=>throw( lx_error->get_text( ) ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD display.
+    DATA lo_table TYPE REF TO lcl_lisp_table.
     CASE element->type.
       WHEN lcl_lisp=>type_abap_table.
-        TRY.
-            ASSIGN element->data->* TO <lt_table>.
-            cl_salv_table=>factory(
-              EXPORTING r_container    = mo_cont->mo_alv
-              IMPORTING r_salv_table   = mo_alv
-              CHANGING  t_table        = <lt_table> ).
-
-            mo_alv->get_functions( )->set_all( abap_true ).
-            mo_alv->display( ).
-
-          CATCH cx_root INTO lx_error.
-            lcl_lisp=>throw( lx_error->get_text( ) ).
-        ENDTRY.
-
-      WHEN lcl_lisp=>type_pair.
-        writeln( `(` ).
-        lo_elem = element.
-        DO.
-          ADD 2 TO print_offset.
-          lif_port~write( lo_elem->car ).
-          SUBTRACT 2 FROM print_offset.
-          IF lo_elem->cdr IS NOT BOUND OR lo_elem->cdr EQ lcl_lisp=>nil.
-            EXIT.
-          ENDIF.
-          lo_elem = lo_elem->cdr.
-        ENDDO.
-        add( ` )` ).
-        mo_console->append_string( flush( ) ).
+        lo_table ?= element.
+        view_table( lo_table ).
 
       WHEN OTHERS.
-        TRY.
-            add( element->write( ) ).
-            mo_console->append_string( flush( ) ).
-          CATCH cx_root INTO lx_error.
-            mo_console->append_string( lx_error->get_text( ) ).
-        ENDTRY.
+        super->display( element ).
+        mo_console->append_string( flush( ) ).
     ENDCASE.
-  ENDMETHOD.                    "lif_console~write
-
-  METHOD flush.
-    rv_text = buffer.
-    CLEAR buffer.
-  ENDMETHOD.                    "get
-
-  METHOD add.
-    buffer = buffer && text.
-  ENDMETHOD.                    "add
-
-  METHOD writeln.
-    add( |\\n{ repeat( val = ` ` occ = print_offset ) }{ text }| ).
-  ENDMETHOD.                    "writeln
+  ENDMETHOD.
 
   METHOD welcome.
     text = |==> Welcome to ABAP List Processing!\n|.
@@ -527,12 +634,12 @@ CLASS lcl_ide IMPLEMENTATION.
 
   METHOD console_header.
     text = |==> ABAP Lisp -- Console { sy-uname } -- { sy-datlo DATE = ENVIRONMENT } { sy-uzeit TIME = ENVIRONMENT }\n|.
-  ENDMETHOD.                    "console_header
+  ENDMETHOD.
 
   METHOD first_output.
     CHECK mv_first EQ abap_true.
     CLEAR mv_first.
-    cl_gui_textedit=>set_focus( mo_source ).
+    mi_source->set_focus( ).
     mo_log->append_string( |{ welcome( ) }\n| ).
     mo_console->append_string( console_header( ) ).
   ENDMETHOD.                    "first_output
@@ -541,25 +648,27 @@ CLASS lcl_ide IMPLEMENTATION.
     DATA code TYPE string.
     DATA response TYPE string.
     DATA lx_root TYPE REF TO cx_root.
-
     TRY.
-        code = mo_source->to_string( ).
+        code = mi_source->to_string( ).
         response = mo_int->eval_repl( code ).
 
         mo_output->append_source( code ).
         mo_console->append_source( response ).
 
-        mo_source->push_text( ).
-        mo_source->update_status( |[ { mo_int->runtime } µs ] { response }| ).
-
+        mi_source->push_text( ).
+        mi_source->update_status( |[ { mo_int->runtime } µs ] { response }| ).
 
       CATCH cx_root INTO lx_root.
         response = lx_root->get_text( ).
-        mo_source->update_status( |{ response }| ).
+        mi_source->update_status( response ).
     ENDTRY.
 
     mo_log->append_string( |{ code }\n=> { response }\n| ).
   ENDMETHOD.                    "evaluate
+
+  METHOD validate.
+    mi_source->update_status( mo_int->validate_source( mi_source->to_string( ) ) ).
+  ENDMETHOD.
 
   METHOD trace.
     TYPES: BEGIN OF ts_header,
@@ -567,28 +676,26 @@ CLASS lcl_ide IMPLEMENTATION.
              time TYPE syuzeit,
            END OF ts_header.
     DATA header TYPE ts_header.
-
     header-user = sy-uname.
     header-time = sy-uzeit.
-
     gv_lisp_trace = abap_true.
-    "cl_demo_output=>begin_section( `ABAP LISP Workbench` ).
-    "cl_demo_output=>write( header ).
+    lcl_demo_output=>begin_section( `ABAP LISP Workbench` ).
+    lcl_demo_output=>write( header ).
     " cl_demo_output=>set_mode( cl_demo_output=>text_mode  ).
 
-    "cl_demo_output=>begin_section( `Scheme Code` ).
-    "cl_demo_output=>write( mo_source->to_string( ) ).
+    lcl_demo_output=>begin_section( `Scheme Code` ).
+    lcl_demo_output=>write( mi_source->to_string( ) ).
 
-    "cl_demo_output=>begin_section( `Trace Output` ).
+    lcl_demo_output=>begin_section( `Trace Output` ).
 
 *   Run
     evaluate( ).
 
     gv_lisp_trace = abap_false.
 
-    "cl_demo_output=>display( ).
+    lcl_demo_output=>display( ).
 
-  ENDMETHOD.                    "trace
+  ENDMETHOD.
 
   METHOD free.
     go_ide->free_controls( ).
@@ -599,13 +706,14 @@ CLASS lcl_ide IMPLEMENTATION.
     mo_console->free( ).
     mo_log->free( ).
     mo_output->free( ).
-    mo_source->free( ).
+    ms_settings-stack = mi_source->free( ).
     mo_cont->free_controls( ).
+    save_settings( ).
   ENDMETHOD.                    "free_controls
 
   METHOD pbo.
     SET PF-STATUS 'STATUS_100'.
-    SET TITLEBAR  'TITLE_100' WITH go_ide->mv_title.
+    SET TITLEBAR 'TITLE_100' WITH go_ide->mv_title.
     go_ide->first_output( ).
   ENDMETHOD.                    "pbo
 
@@ -621,6 +729,8 @@ CLASS lcl_ide IMPLEMENTATION.
         evaluate( ).
       WHEN 'TRACE'.
         trace( ).
+      WHEN 'VALIDATE'.
+        validate( ).
       WHEN 'CLEAR'.
         refresh( ).
       WHEN 'PREV'.
@@ -641,12 +751,12 @@ CLASS lcl_ide IMPLEMENTATION.
   ENDMETHOD.                    "user_command
 
   METHOD previous.
-    mo_source->pop_text( ).
-  ENDMETHOD.                    "previous
+    mi_source->previous( ).
+  ENDMETHOD.
 
   METHOD next.
-    mo_source->push_text( ).
-  ENDMETHOD.                    "next
+    mi_source->next( ).
+  ENDMETHOD.
 
 ENDCLASS.                    "lcl_ide IMPLEMENTATION
 
@@ -681,12 +791,11 @@ CLASS lcl_container IMPLEMENTATION.
   METHOD constructor.
 *   Splitter Container
     CREATE OBJECT mo_splitter_h
-      EXPORTING
-        link_dynnr = '0100'
-        link_repid = sy-repid
-        parent     = cl_gui_container=>screen0
-        rows       = 1
-        columns    = 2.
+      EXPORTING link_dynnr = '0100'
+                link_repid = sy-repid
+                parent     = cl_gui_container=>screen0
+                rows       = 1
+                columns    = 2.
     mo_splitter_h->set_border( border = cl_gui_cfw=>false ).
 
     mo_splitter_h->set_column_mode( mode = mo_splitter_h->mode_absolute ).
@@ -697,10 +806,9 @@ CLASS lcl_container IMPLEMENTATION.
     mo_right = mo_splitter_h->get_container( row = 1
                                               column = 2 ).
     CREATE OBJECT mo_splitter_v_h
-      EXPORTING
-        parent  = mo_right
-        rows    = 2
-        columns = 1.
+      EXPORTING parent  = mo_right
+                          rows    = 2
+                          columns = 1.
     mo_splitter_v_h->set_border( border = cl_gui_cfw=>false ).
     mo_splitter_v_h->set_row_mode( mode = mo_splitter_v_h->mode_relative ).
 
@@ -708,10 +816,9 @@ CLASS lcl_container IMPLEMENTATION.
     mo_console = mo_alv = mo_splitter_v_h->get_container( row = 2 column = 1 ).
 
     CREATE OBJECT mo_splitter_v
-      EXPORTING
-        parent  = mo_left
-        rows    = 2
-        columns = 1.
+      EXPORTING parent  = mo_left
+                rows    = 2
+                columns = 1.
     mo_splitter_v->set_border( border = cl_gui_cfw=>false ).
     mo_splitter_v->set_row_mode( mode = mo_splitter_v->mode_relative ).
 
@@ -744,11 +851,10 @@ CLASS lcl_editor IMPLEMENTATION.
     super->constructor( io_container ).
     set_comments_string( c_comments_string ).
     set_highlight_comments_mode( ).
-
     IF iv_toolbar EQ abap_true.
       set_toolbar_mode( 1 ).
     ELSE.
-      set_toolbar_mode(  0 ).
+      set_toolbar_mode( 0 ).
     ENDIF.
     cl_gui_cfw=>flush( ).
 
@@ -760,13 +866,18 @@ CLASS lcl_editor IMPLEMENTATION.
     ENDIF.
     set_statusbar_mode( mode ).
 *   Work around to avoid NO DATA dump on first read
-    delete_text( ).
+    lif_source_editor~clear( ).
     CREATE OBJECT mo_stack.
   ENDMETHOD.                    "constructor
 
-  METHOD append_string.
-    set_textstream( |{ to_string( ) }{ iv_text }| ).
+  METHOD lif_source_editor~clear.
+    delete_text( ).
   ENDMETHOD.                    "append_string
+
+  METHOD append_string.
+    set_textstream( |{ lif_source_editor~to_string( ) }{ iv_text }| ).
+    go_to_line( c_max_line_count ).
+  ENDMETHOD.
 
   METHOD format_input.
     ADD 1 TO mv_counter.
@@ -777,41 +888,198 @@ CLASS lcl_editor IMPLEMENTATION.
     append_string( format_input( iv_text ) ).
   ENDMETHOD.                    "append_string
 
-  METHOD to_string.
-    get_textstream( IMPORTING text = rv_text ).
+  METHOD lif_source_editor~to_string.
+    get_textstream( IMPORTING text = rv_text
+                    EXCEPTIONS OTHERS = 1 ).
+    CHECK sy-subrc EQ 0.
     cl_gui_cfw=>flush( ).
   ENDMETHOD.                    "to_string
 
-  METHOD update_status.
-    DATA lv_text TYPE char72.
-
-    lv_text = iv_string.
-    set_status_text( lv_text ).
+  METHOD lif_source_editor~update_status.
+    DATA lv_char72 TYPE char72.
+    lv_char72 = iv_string.
+    set_status_text( lv_char72 ).
   ENDMETHOD.                    "update_status
 
-  METHOD push_text.
+  METHOD lif_source_editor~push_text.
     DATA code TYPE string.
-
-    code = to_string( ).
+    code = lif_source_editor~to_string( ).
     CHECK code NE space.
     mo_stack->push( code ).
-    delete_text( ).
-  ENDMETHOD.                    "push_text
+    lif_source_editor~clear( ).
+  ENDMETHOD.
 
-  METHOD pop_text.
-    CHECK mo_stack->empty( ) EQ abap_false.
-    code = mo_stack->pop( ).
-    delete_text( ).
-    append_string( code ).
-  ENDMETHOD.                    "pop_text
+*  METHOD lif_source_editor~pop_text.
+*    CHECK mo_stack->empty( ) EQ abap_false.
+*    code = mo_stack->pop( ).
+*    lif_source_editor~clear( ).
+*    append_string( code ).
+*  ENDMETHOD.
+
+  METHOD lif_source_editor~previous.
+    lif_source_editor~clear( ).
+    append_string( mo_stack->previous( ) ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~next.
+    lif_source_editor~clear( ).
+    append_string( mo_stack->next( ) ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~set_focus.
+    set_focus( EXPORTING control = me
+               EXCEPTIONS OTHERS = 0 ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~free.
+    free( ).
+    rt_string = mo_stack->serialize( ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~setup.
+    mo_stack->deserialize( is_settings-stack ).
+  ENDMETHOD.
 
 ENDCLASS.                    "lcl_editor IMPLEMENTATION
 
-*----------------------------------------------------------------------*
-*       CLASS lcl_plant_uml IMPLEMENTATION
-*----------------------------------------------------------------------*
+CLASS lcl_source IMPLEMENTATION.
+
+  METHOD constructor.
+    DATA mode TYPE i.
+    DATA exception_name TYPE string.
+
+    io_container->set_visible( abap_true ).
+    super->constructor(
+      EXPORTING
+        parent = io_container
+        max_number_chars = '255'
+      EXCEPTIONS
+        error_cntl_create      = 1
+        error_dp_create        = 2
+        gui_type_not_supported = 3
+        error_cntl_init        = 4 ).
+
+    IF sy-subrc NE 0.
+      CASE sy-subrc.
+        WHEN 1.
+          exception_name = 'ERROR_CNTL_CREATE'.
+        WHEN 2.
+          exception_name = 'ERROR_DP_CREATE'.
+        WHEN 3.
+          exception_name = 'GUI_TYPE_NOT_SUPPORTED'.
+        WHEN 4.
+          exception_name = 'ERROR_CNTL_INIT'.
+      ENDCASE.
+      RAISE EXCEPTION TYPE cx_coverage_api_adapter.
+*        EXPORTING
+*          textid = exception_name.
+    ENDIF.
+
+    set_source_type( c_source_type ).
+    IF iv_toolbar EQ abap_true.
+      set_toolbar_mode( 1 ).
+    ELSE.
+      set_toolbar_mode( 0 ).
+    ENDIF.
+    cl_gui_cfw=>flush( ).
+
+    IF iv_read_only EQ abap_true.
+      set_readonly_mode( cl_gui_textedit=>true ).
+      mode = 0.
+    ELSE.
+      mode = 1.
+    ENDIF.
+    set_statusbar_mode( mode ).
+    set_actual_name( c_lisp_untitled ).
+    upload_properties( EXCEPTIONS OTHERS = 1 ).
+    IF sy-subrc <> 0.
+*      MESSAGE e215(ed).
+    ENDIF.
+    create_document( ).
+
+*    register_event_context_menu( register      = 1
+*                                 local_entries = 1 ).
+
+*    SET HANDLER on_context_menu FOR me.
+*    SET HANDLER on_context_menu_selected FOR me.
+
+*   Work around to avoid NO DATA dump on first read
+    lif_source_editor~clear( ).
+
+    CREATE OBJECT mo_stack.
+  ENDMETHOD.                    "constructor
+
+  METHOD lif_source_editor~set_focus.
+    set_focus( EXPORTING control = me
+               EXCEPTIONS OTHERS = 0 ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~free.
+    free( ).
+    rt_string = mo_stack->serialize( ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~setup.
+    mo_stack->deserialize( is_settings-stack ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~to_string.
+    DATA lt_text TYPE STANDARD TABLE OF string.
+
+    get_text( IMPORTING table = lt_text
+              EXCEPTIONS OTHERS = 0 ).
+    "cl_gui_cfw=>flush( ).
+    rv_text = concat_lines_of( table = lt_text sep = |\n| ).
+  ENDMETHOD.                    "to_string
+
+  METHOD lif_source_editor~update_status.
+    MESSAGE iv_string TYPE 'S'.
+  ENDMETHOD.                    "update_status
+
+  METHOD lif_source_editor~clear.
+    DATA lt_text TYPE STANDARD TABLE OF string.
+
+    set_text( EXPORTING table = lt_text
+              EXCEPTIONS OTHERS = 0 ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~push_text.
+    DATA code TYPE string.
+    code = lif_source_editor~to_string( ).
+    CHECK code NE space.
+    mo_stack->push( code ).
+    lif_source_editor~clear( ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~previous.
+    DATA lt_text TYPE STANDARD TABLE OF string.
+
+    APPEND mo_stack->previous( ) TO lt_text.
+    set_text( EXPORTING table = lt_text
+              EXCEPTIONS OTHERS = 0 ).
+  ENDMETHOD.
+
+  METHOD lif_source_editor~next.
+    DATA lt_text TYPE STANDARD TABLE OF string.
+
+    APPEND mo_stack->next( ) TO lt_text.
+    set_text( EXPORTING table = lt_text
+              EXCEPTIONS OTHERS = 0 ).
+  ENDMETHOD.
+
+*  METHOD lif_source_editor~pop_text.
+*    DATA lt_text TYPE STANDARD TABLE OF string.
 *
-*----------------------------------------------------------------------*
+*    CHECK mo_stack->empty( ) EQ abap_false.
+*    code = mo_stack->pop( ).
+**    clear( ).
+*    APPEND code TO lt_text.
+*    set_text( EXPORTING table = lt_text
+*              EXCEPTIONS OTHERS = 0 ).
+*  ENDMETHOD.
+
+ENDCLASS.
+
 CLASS lcl_plant_uml IMPLEMENTATION.
 
   METHOD constructor.
@@ -822,14 +1090,14 @@ CLASS lcl_plant_uml IMPLEMENTATION.
     CLEAR rv_source.
     CHECK iv_display_source EQ abap_true.
     rv_source = |<p>{ mv_diagram }</p>|.
-  ENDMETHOD.                    "source
+  ENDMETHOD.
 
   METHOD show_html.
     cl_abap_browser=>show_html( title = c_lisp_ast_view
                                 html_string = iv_html
                                 size = iv_size
                                 context_menu = abap_true ).
-  ENDMETHOD.                    "show_html
+  ENDMETHOD.
 
   METHOD output.
     DATA lo_name TYPE REF TO lcl_file_name.
@@ -871,7 +1139,6 @@ CLASS lcl_plant_uml IMPLEMENTATION.
 
   METHOD to_xstring.
     DATA lo_conv TYPE REF TO cl_abap_conv_out_ce.
-
     lo_conv = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
     lo_conv->convert( EXPORTING data = iv_string
                       IMPORTING buffer = rv_xstring ).
@@ -879,7 +1146,7 @@ CLASS lcl_plant_uml IMPLEMENTATION.
 
   METHOD parameter_string.
     rv_param = |-jar { is_cfg-java_jar } -o { is_cfg-local_path } "{ io_name->get_fullpath( ) }"|.
-  ENDMETHOD.                    "parameter_string
+  ENDMETHOD.
 
   METHOD png_file_name.
     TRY.
@@ -887,7 +1154,7 @@ CLASS lcl_plant_uml IMPLEMENTATION.
       CATCH cx_dynamic_check.
         CLEAR rv_name.
     ENDTRY.
-  ENDMETHOD.                    "png_file_name
+  ENDMETHOD.
 
   METHOD to_png.
     CLEAR rv_name.
@@ -900,27 +1167,22 @@ CLASS lcl_plant_uml IMPLEMENTATION.
     CHECK sy-subrc EQ 0.
     rv_name = png_file_name( io_name = io_name
                              is_cfg = is_cfg ).
-  ENDMETHOD.                    "to_png
+  ENDMETHOD.
 
-ENDCLASS.                    "lcl_plant_uml IMPLEMENTATION
+ENDCLASS.
 
-*----------------------------------------------------------------------*
-*       CLASS lcl_configuration IMPLEMENTATION
-*----------------------------------------------------------------------*
-*
-*----------------------------------------------------------------------*
 CLASS lcl_configuration IMPLEMENTATION.
 
   METHOD class_constructor.
     gs_cfg-java_appl = get_java_path( ).
     gs_cfg-local_path = `C:\Temp\Dokumente\UML\`.                           " PlantUML jar file and output path
     gs_cfg-java_jar = `C:\Temp\Dokumente\UML\plantuml.jar`.
-    gs_cfg-server_url = `http://www.plantuml.com/plantuml/img/` ##no_text.  " PlantUML server URL
+    gs_cfg-server_url = `http://www.plantuml.com/plantuml/img/` ##NO_TEXT.  " PlantUML server URL
     gs_cfg-output_mode = c_mode_url.
     gs_cfg-skip_dialog = space.
     gs_cfg-scale = c_default_scale.
     gs_cfg-display_source = abap_false.
-  ENDMETHOD.                    "class_constructor
+  ENDMETHOD.
 
   METHOD get_registry_value.
     cl_gui_frontend_services=>registry_get_value(
@@ -929,11 +1191,11 @@ CLASS lcl_configuration IMPLEMENTATION.
         key   = iv_key
         value = iv_value
       IMPORTING
-        reg_value = ev_value
+        reg_value = rv_value
       EXCEPTIONS
         OTHERS               = 5 ).
     ev_subrc = sy-subrc.
-  ENDMETHOD.                    "get_registry_value
+  ENDMETHOD.
 
   METHOD get_java_path.
 *   Windows: Local Java installation
@@ -943,16 +1205,16 @@ CLASS lcl_configuration IMPLEMENTATION.
     rv_fullpath = `C:\Windows\System32\java`.   " Default
     get_registry_value( EXPORTING iv_key = c_registry_java_base_key
                                   iv_value = 'CurrentVersion'
-                       IMPORTING ev_subrc = lv_subrc
-                                 ev_value = lv_path ).
+                        IMPORTING ev_subrc = lv_subrc
+                                  rv_value = lv_path ).
     CHECK lv_subrc EQ 0.
     get_registry_value( EXPORTING iv_key = |{ c_registry_java_base_key }\\{ lv_path }|
                                   iv_value = 'JavaHome'
                         IMPORTING ev_subrc = lv_subrc
-                                  ev_value = lv_path ).
+                                  rv_value = lv_path ).
     CHECK lv_subrc EQ 0.
     rv_fullpath = |{ lv_path }\\bin\\java|.
-  ENDMETHOD.                    "get_java_path
+  ENDMETHOD.
 
   METHOD get_attributes.
     DATA ls_attr TYPE sci_attent.
@@ -996,34 +1258,33 @@ CLASS lcl_configuration IMPLEMENTATION.
     ELSEIF mv_mode_txt EQ abap_true.
       gs_cfg-output_mode = c_mode_txt.
     ENDIF.
-  ENDMETHOD.                    "from_radiobutton
+  ENDMETHOD.
 
   METHOD get.
     MOVE-CORRESPONDING gs_cfg TO rs_cfg.
-  ENDMETHOD.                    "get
+  ENDMETHOD.
 
   METHOD query.
     DATA lo_cfg TYPE REF TO lcl_configuration.
     CREATE OBJECT lo_cfg.
     lo_cfg->dialog( ).
-  ENDMETHOD.                    "query
+  ENDMETHOD.
 
   METHOD dialog.
     DATA lv_repid TYPE sychar30.
-
     lv_repid = sy-repid.
     to_radiobutton( ).
     "CHECK gs_cfg-skip_dialog EQ abap_false.
     CHECK cl_ci_query_attributes=>generic(
-        p_name       = lv_repid                              " unique screen ID
+        p_name       = lv_repid                    " unique screen ID
         p_title      = 'Class Diagram Parameters'            " Screen title
         p_attributes = get_attributes( )                     " Screen fields
         p_display    = abap_false                            " Edit / Display only
        ) EQ abap_false.   " Do not cancel
     from_radiobutton( ).
-  ENDMETHOD.                    "dialog
+  ENDMETHOD.
 
-ENDCLASS.                    "lcl_configuration IMPLEMENTATION
+ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_file IMPLEMENTATION
@@ -1036,51 +1297,42 @@ CLASS lcl_file IMPLEMENTATION.
 
     rv_subrc = cl_uml_utilities=>save_xml_local( xml = iv_data
                                                  filename = io_name->get_fullpath( ) ).
-  ENDMETHOD.                    "download
+  ENDMETHOD.
 
 ENDCLASS.                    "lcl_file IMPLEMENTATION
 
-*----------------------------------------------------------------------*
-*       CLASS lcl_file_name IMPLEMENTATION
-*----------------------------------------------------------------------*
-*
-*----------------------------------------------------------------------*
 CLASS lcl_file_name IMPLEMENTATION.
 
   METHOD new.
     CASE iv_mode.
       WHEN lcl_configuration=>c_mode_aut.
         CREATE OBJECT ro_file TYPE lcl_file_name_dummy
-          EXPORTING
-            iv_mode = iv_mode.
+          EXPORTING iv_mode = iv_mode.
       WHEN OTHERS.
         CREATE OBJECT ro_file TYPE lcl_file_name
-          EXPORTING
-            iv_mode = iv_mode.
+          EXPORTING iv_mode = iv_mode.
     ENDCASE.
-  ENDMETHOD.                    "new
+  ENDMETHOD.
 
   METHOD constructor.
     CASE iv_mode.
       WHEN lcl_configuration=>c_mode_txt.
-        CLEAR ms_file.
         ms_file-title = |Save UML text source|.
         ms_file-ext = |.txt|.
       WHEN OTHERS.
-        CLEAR ms_file.
         ms_file-title = |Save As...|.
         ms_file-ext = |.txt|.
     ENDCASE.
-  ENDMETHOD.                    "constructor
+  ENDMETHOD.
 
   METHOD get_prefix.
     rv_name = shift_right( val = ms_file-name
                            places = strlen( ms_file-ext ) ).
-  ENDMETHOD.                    "get_prefix
+  ENDMETHOD.
 
   METHOD get_fullpath.
     rv_name = ms_file-path.
-  ENDMETHOD.                    "get_fullpath
+  ENDMETHOD.
 
   METHOD dialog.
     DATA lv_path TYPE string ##needed.
@@ -1101,43 +1353,32 @@ CLASS lcl_file_name IMPLEMENTATION.
 *   file_encoding =
       EXCEPTIONS
         OTHERS = 0 ).
-  ENDMETHOD.                    "dialog
+  ENDMETHOD.
 
-ENDCLASS.                    "lcl_file_name IMPLEMENTATION
+ENDCLASS.
 
-*----------------------------------------------------------------------*
-*       CLASS lcl_file_name_dummy IMPLEMENTATION
-*----------------------------------------------------------------------*
-*
-*----------------------------------------------------------------------*
 CLASS lcl_file_name_dummy IMPLEMENTATION.
 
   METHOD dialog.
     ms_file-path = |test.txt|.
     rv_user_action = cl_gui_frontend_services=>action_cancel.
-  ENDMETHOD.                    "dialog
+  ENDMETHOD.
 
-ENDCLASS.                    "lcl_file_name_dummy IMPLEMENTATION
+ENDCLASS.
 
-*----------------------------------------------------------------------*
-*       CLASS lcl_dot_diagram IMPLEMENTATION
-*----------------------------------------------------------------------*
-*
-*----------------------------------------------------------------------*
 CLASS lcl_dot_diagram IMPLEMENTATION.
 
   METHOD generate.
     DATA lo_elem TYPE REF TO lcl_lisp.
-
     LOOP AT it_elem INTO lo_elem.
       node( elem = lo_elem ).
     ENDLOOP.
     rv_diagram = get( ).
-  ENDMETHOD.                    "generate
+  ENDMETHOD.
 
   METHOD add.
     mv_diagram = mv_diagram && iv_code.
-  ENDMETHOD.                    "add
+  ENDMETHOD.
 
   METHOD header.
     add( |@startuml\n| ).
@@ -1152,17 +1393,23 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
         rv_node = get_object_id( io_elem ).
       WHEN lcl_lisp=>type_null.
         rv_node = space.
-      WHEN lcl_lisp=>type_number.
-        rv_node = |{ io_elem->number }|.
+      WHEN lcl_lisp=>type_real.
+        DATA lo_real TYPE REF TO lcl_lisp_real.
+        lo_real ?= io_elem.
+        rv_node = |{ lo_real->real }|.
+      WHEN lcl_lisp=>type_integer.
+        DATA lo_int TYPE REF TO lcl_lisp_integer.
+        lo_int ?= io_elem.
+        rv_node = |{ lo_int->integer }|.
       WHEN OTHERS.
         rv_node = io_elem->value.
     ENDCASE.
-  ENDMETHOD.                    "print
+  ENDMETHOD.
 
   METHOD detach.
     CHECK c_start EQ abap_true.
     add( |detach\n| ).
-  ENDMETHOD.                    "detach
+  ENDMETHOD.
 
   METHOD node.
     CASE elem->type.
@@ -1186,6 +1433,7 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
 
       WHEN lcl_lisp=>type_null.
 *      do nothing
+        add( |  :; \n| ).
 
       WHEN lcl_lisp=>type_symbol.
         add( |  :{ print( elem ) }; \n| ).
@@ -1209,13 +1457,13 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
   METHOD get.
     footer( ).
     rv_dot = mv_diagram.
-  ENDMETHOD.                    "get
+  ENDMETHOD.
 
   METHOD get_object_id.
 *   Get object ID - internal call
-    CALL 'OBJMGR_GET_INFO' ID 'OPNAME' FIELD 'GET_OBJID'
+    CALL 'OBJMGR_GET_INFO' ID 'OPNAME' FIELD 'GET_OBJID'  "#EC CI_CCALL
                            ID 'OBJID'  FIELD rv_oid
                            ID 'OBJ'    FIELD io_ref.
-  ENDMETHOD.                    "get_object_id
+  ENDMETHOD.
 
-ENDCLASS.                    "lcl_dot_diagram IMPLEMENTATION
+ENDCLASS.

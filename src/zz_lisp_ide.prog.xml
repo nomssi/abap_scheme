@@ -193,6 +193,20 @@
       <PATH>A</PATH>
      </RSMPE_FUNT>
      <RSMPE_FUNT>
+      <CODE>VALIDATE</CODE>
+      <TEXTNO>001</TEXTNO>
+      <TEXT_TYPE>S</TEXT_TYPE>
+      <FUN_TEXT>Eval with Trace</FUN_TEXT>
+     </RSMPE_FUNT>
+     <RSMPE_FUNT>
+      <CODE>VALIDATE</CODE>
+      <TEXTNO>002</TEXTNO>
+      <TEXT_TYPE>S</TEXT_TYPE>
+      <FUN_TEXT>Check Syntax</FUN_TEXT>
+      <ICON_TEXT>Help on..</ICON_TEXT>
+      <PATH>C</PATH>
+     </RSMPE_FUNT>
+     <RSMPE_FUNT>
       <CODE>WIKI</CODE>
       <TEXTNO>001</TEXTNO>
       <TEXT_TYPE>S</TEXT_TYPE>
@@ -221,37 +235,44 @@
      <RSMPE_MEN>
       <CODE>000001</CODE>
       <NO>03</NO>
-      <REF_TYPE>S</REF_TYPE>
+      <REF_TYPE>F</REF_TYPE>
+      <REF_CODE>VALIDATE</REF_CODE>
+      <REF_NO>002</REF_NO>
      </RSMPE_MEN>
      <RSMPE_MEN>
       <CODE>000001</CODE>
       <NO>04</NO>
+      <REF_TYPE>S</REF_TYPE>
+     </RSMPE_MEN>
+     <RSMPE_MEN>
+      <CODE>000001</CODE>
+      <NO>05</NO>
       <REF_TYPE>F</REF_TYPE>
       <REF_CODE>GRAPH</REF_CODE>
       <REF_NO>001</REF_NO>
      </RSMPE_MEN>
      <RSMPE_MEN>
       <CODE>000001</CODE>
-      <NO>05</NO>
+      <NO>06</NO>
       <REF_TYPE>F</REF_TYPE>
       <REF_CODE>GRPHCFG</REF_CODE>
       <REF_NO>001</REF_NO>
      </RSMPE_MEN>
      <RSMPE_MEN>
       <CODE>000001</CODE>
-      <NO>06</NO>
+      <NO>07</NO>
       <REF_TYPE>S</REF_TYPE>
      </RSMPE_MEN>
      <RSMPE_MEN>
       <CODE>000001</CODE>
-      <NO>07</NO>
+      <NO>08</NO>
       <REF_TYPE>F</REF_TYPE>
       <REF_CODE>CLEAR</REF_CODE>
       <REF_NO>001</REF_NO>
      </RSMPE_MEN>
      <RSMPE_MEN>
       <CODE>000001</CODE>
-      <NO>08</NO>
+      <NO>09</NO>
       <REF_TYPE>F</REF_TYPE>
       <REF_CODE>EXIT</REF_CODE>
       <REF_NO>001</REF_NO>
@@ -427,6 +448,10 @@
      <RSMPE_STAF>
       <STATUS>STATUS_100</STATUS>
       <FUNCTION>TRACE</FUNCTION>
+     </RSMPE_STAF>
+     <RSMPE_STAF>
+      <STATUS>STATUS_100</STATUS>
+      <FUNCTION>VALIDATE</FUNCTION>
      </RSMPE_STAF>
      <RSMPE_STAF>
       <STATUS>STATUS_100</STATUS>
