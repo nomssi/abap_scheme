@@ -166,9 +166,11 @@
     cell = &2.
     CASE cell->type.
       WHEN lcl_lisp=>type_integer.
-        &1 = CAST lcl_lisp_integer( cell )->integer.
+        lo_int ?= cell.
+        &1 = lo_int->integer.
       WHEN lcl_lisp=>type_real.
-        &1 = CAST lcl_lisp_real( cell )->real.
+        lo_real ?= cell.
+        &1 = lo_real->real.
       WHEN lcl_lisp=>type_rational.
         lo_rat ?= cell.
         &1 = lo_rat->integer / lo_rat->denominator.
@@ -184,6 +186,8 @@
     DATA carry TYPE tv_real.
     DATA cell TYPE REF TO lcl_lisp.
     DATA lo_rat TYPE REF TO lcl_lisp_rational.
+    DATA lo_int TYPE REF TO lcl_lisp_integer.
+    DATA lo_real TYPE REF TO lcl_lisp_real.
 
     result = false.
     validate list.
@@ -195,16 +199,18 @@
 
       CASE cell->car->type.
         WHEN lcl_lisp=>type_integer.
-          IF carry &1 CAST lcl_lisp_integer( cell->car )->integer.
+          lo_int ?= cell->car.
+          IF carry &1 lo_int->integer.
             RETURN.
           ENDIF.
-          carry = CAST lcl_lisp_integer( cell->car )->integer.
+          carry = lo_int->integer.
 
         WHEN lcl_lisp=>type_real.
-          IF carry &1 CAST lcl_lisp_real( cell->car )->real.
+          lo_real ?= cell->car.
+          IF carry &1 lo_real->real.
             RETURN.
           ENDIF.
-          carry = CAST lcl_lisp_real( cell->car )->real.
+          carry = lo_real->real.
 
         WHEN lcl_lisp=>type_rational.
           lo_rat ?= cell->car.
@@ -226,6 +232,8 @@
     DATA carry TYPE tv_real.
     DATA cell TYPE REF TO lcl_lisp.
     DATA lo_rat TYPE REF TO lcl_lisp_rational.
+    DATA lo_int TYPE REF TO lcl_lisp_integer.
+    DATA lo_real TYPE REF TO lcl_lisp_real.
 
     result = false.
     validate list.
@@ -262,6 +270,8 @@
     DATA carry TYPE tv_real.
     DATA cell TYPE REF TO lcl_lisp.
     DATA lo_rat TYPE REF TO lcl_lisp_rational.
+    DATA lo_int TYPE REF TO lcl_lisp_integer.
+    DATA lo_real TYPE REF TO lcl_lisp_real.
 
     result = nil.
     validate list.
@@ -277,6 +287,8 @@
     DATA carry TYPE f.
     DATA cell TYPE REF TO lcl_lisp.
     DATA lo_rat TYPE REF TO lcl_lisp_rational.
+    DATA lo_int TYPE REF TO lcl_lisp_integer.
+    DATA lo_real TYPE REF TO lcl_lisp_real.
 
     result = nil.
     validate list.
@@ -1521,6 +1533,12 @@
       proc_abap_function_call. ##called
 
     PROTECTED SECTION.
+      METHODS define_syntax
+        IMPORTING element       TYPE REF TO lcl_lisp
+                  environment   TYPE REF TO lcl_lisp_environment
+        RETURNING VALUE(result) TYPE  REF TO lcl_lisp
+        RAISING   lcx_lisp_exception.
+
       METHODS assign_symbol
         IMPORTING element       TYPE REF TO lcl_lisp
                   environment   TYPE REF TO lcl_lisp_environment
@@ -2111,7 +2129,7 @@
       env->define_value( symbol = 'set!'            type = lcl_lisp=>type_syntax value   = 'set!' ).
 
       env->define_value( symbol = 'define-macro'    type = lcl_lisp=>type_syntax value   = 'define-macro' ).
-      env->define_value( symbol = 'define-syntax'   type = lcl_lisp=>type_syntax value   = 'define-macro' ).
+      env->define_value( symbol = 'define-syntax'   type = lcl_lisp=>type_syntax value   = 'define-syntax' ).
       env->define_value( symbol = 'macroexpand'     type = lcl_lisp=>type_syntax value   = 'macroexpand' ).
       env->define_value( symbol = 'gensym'          type = lcl_lisp=>type_syntax value   = 'gensym' ).
 
@@ -2387,6 +2405,13 @@
           throw( |{ lo_head->to_string( ) } cannot be a variable identifier| ).
       ENDCASE.
     ENDMETHOD.                    "assign_symbol
+
+    METHOD define_syntax.
+*
+      result = assign_symbol( element = element
+                              environment = environment
+                              iv_macro = abap_true ).
+    ENDMETHOD.
 
     METHOD is_macro_call.
 *     returns true if element is a list that contains a symbol as the first element and that symbol refers to a function
@@ -3219,6 +3244,10 @@
                     result = assign_symbol( element = lr_tail
                                             environment = lo_env
                                             iv_macro = abap_true ).
+
+                  WHEN 'define-syntax'.
+                    result = define_syntax( element = lr_tail
+                                            environment = lo_env ).
 
                   WHEN 'set!'.                        " Re-Assign symbol
                     result = re_assign_symbol( element     = lr_tail
@@ -4792,7 +4821,9 @@
 **********************************************************************
     METHOD proc_eql.
       DATA lv_real TYPE tv_real.
+      DATA lv_int TYPE tv_int.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_rat_2 TYPE REF TO lcl_lisp_rational.
 
       validate: list, list->car, list->cdr.
 
@@ -4803,9 +4834,10 @@
                          lo_ptr->cdr->car '[=]'.
         CASE lo_ptr->car->type.
           WHEN lcl_lisp=>type_integer.
+            lv_int = CAST lcl_lisp_integer( lo_ptr->car )->integer.
             CASE lo_ptr->cdr->car->type.
               WHEN lcl_lisp=>type_integer.
-                IF CAST lcl_lisp_integer( lo_ptr->car )->integer = CAST lcl_lisp_integer( lo_ptr->cdr->car )->integer.
+                IF lv_int = CAST lcl_lisp_integer( lo_ptr->cdr->car )->integer.
                   result = true.
                 ELSE.
                   result = false.
@@ -4814,7 +4846,7 @@
 
               WHEN lcl_lisp=>type_real.
                 lv_real = CAST lcl_lisp_real( lo_ptr->cdr->car )->real.
-                IF CAST lcl_lisp_integer( lo_ptr->car )->integer = trunc( lv_real ) AND frac( lv_real ) EQ 0.
+                IF lv_int = trunc( lv_real ) AND frac( lv_real ) EQ 0.
                   result = true.
                 ELSE.
                   result = false.
@@ -4823,7 +4855,7 @@
 
               WHEN lcl_lisp=>type_rational.
                 lo_rat ?= lo_ptr->cdr->car.
-                IF CAST lcl_lisp_integer( lo_ptr->car )->integer = lo_rat->integer AND lo_rat->denominator EQ 1.
+                IF lv_int = lo_rat->integer AND lo_rat->denominator EQ 1.
                   result = true.
                 ELSE.
                   result = false.
@@ -4834,9 +4866,9 @@
             ENDCASE.
 
           WHEN lcl_lisp=>type_real.
+            lv_real = CAST lcl_lisp_real( lo_ptr->car )->real.
             CASE lo_ptr->cdr->car->type.
               WHEN lcl_lisp=>type_integer.
-                lv_real = CAST lcl_lisp_real( lo_ptr->car )->real.
                 IF trunc( lv_real ) = CAST lcl_lisp_integer( lo_ptr->cdr->car )->integer AND frac( lv_real ) EQ 0.
                   result = true.
                 ELSE.
@@ -4845,7 +4877,7 @@
                 ENDIF.
 
               WHEN lcl_lisp=>type_real.
-                IF CAST lcl_lisp_real( lo_ptr->car )->real = CAST lcl_lisp_real( lo_ptr->cdr->car )->real.
+                IF lv_real = CAST lcl_lisp_real( lo_ptr->cdr->car )->real.
                   result = true.
                 ELSE.
                   result = false.
@@ -4854,7 +4886,7 @@
 
               WHEN lcl_lisp=>type_rational.
                 lo_rat ?= lo_ptr->cdr->car.
-                lv_real = CAST lcl_lisp_real( lo_ptr->car )->real * lo_rat->denominator.
+                lv_real = lv_real * lo_rat->denominator.
 
                 IF trunc( lv_real ) = lo_rat->integer AND frac( lv_real ) EQ 0.
                   result = true.
@@ -4867,7 +4899,39 @@
             ENDCASE.
 
           WHEN lcl_lisp=>type_rational.
-*            TO DO
+            lo_rat = CAST lcl_lisp_rational( lo_ptr->car ).
+            CASE lo_ptr->cdr->car->type.
+              WHEN lcl_lisp=>type_integer.
+                IF lo_rat->integer = CAST lcl_lisp_integer( lo_ptr->cdr->car )->integer
+                  AND lo_rat->denominator EQ 1.
+                  result = true.
+                ELSE.
+                  result = false.
+                  EXIT.
+                ENDIF.
+
+              WHEN lcl_lisp=>type_real.
+                lv_real = ( CAST lcl_lisp_real( lo_ptr->cdr->car )->real ) * lo_rat->denominator.
+
+                IF lo_rat->integer = trunc( lv_real ) AND frac( lv_real ) EQ 0.
+                  result = true.
+                ELSE.
+                  result = false.
+                  EXIT.
+                ENDIF.
+
+              WHEN lcl_lisp=>type_rational.
+                lo_rat_2 ?= lo_ptr->cdr->car.
+                IF lo_rat->integer = lo_rat_2->integer
+                  AND lo_rat->denominator EQ lo_rat_2->denominator.
+                  result = true.
+                ELSE.
+                  result = false.
+                  EXIT.
+                ENDIF.
+
+*              WHEN lcl_lisp=>type_complex.
+            ENDCASE.
 
 *          WHEN lcl_lisp=>type_complex.
         ENDCASE.
@@ -4882,7 +4946,7 @@
       result = nil.
       DATA(lo_ptr) = list.
       DATA(lo_ref) = lo_ptr->car.
-      WHILE lo_ptr->cdr NE nil.
+      IF lo_ptr->cdr NE nil.
         IF lo_ref->type NE lo_ptr->cdr->car->type.
           result = false.
           EXIT.
@@ -4933,7 +4997,7 @@
         ENDCASE.
 
         lo_ptr = lo_ptr->cdr.
-      ENDWHILE.
+      ENDIF.
     ENDMETHOD.                    "proc_eq
 
     METHOD proc_equal.
@@ -5209,6 +5273,8 @@
       DATA carry TYPE f.
       DATA cell TYPE REF TO lcl_lisp.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       validate list.
@@ -5224,6 +5290,8 @@
       DATA carry TYPE f.
       DATA cell TYPE REF TO lcl_lisp.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       validate list.
@@ -5239,6 +5307,8 @@
       DATA carry TYPE f.
       DATA cell TYPE REF TO lcl_lisp.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       validate list.
@@ -5255,6 +5325,8 @@
       DATA exp1 TYPE tv_real.
       DATA cell TYPE REF TO lcl_lisp.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       validate: list, list->cdr.
@@ -5296,6 +5368,8 @@
       DATA carry TYPE tv_real.
       DATA cell TYPE REF TO lcl_lisp.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       validate list.
@@ -5312,6 +5386,8 @@
       DATA denominator TYPE tv_real.
       DATA cell TYPE REF TO lcl_lisp.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       validate: list, list->cdr.
@@ -5329,6 +5405,8 @@
       DATA denominator TYPE tv_real.
       DATA cell TYPE REF TO lcl_lisp.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       validate: list, list->cdr.
@@ -5347,6 +5425,8 @@
       DATA mod TYPE tv_real.
       DATA cell TYPE REF TO lcl_lisp.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       validate: list, list->cdr.
@@ -5683,6 +5763,9 @@
       DATA cell TYPE REF TO lcl_lisp.
       DATA lo_ptr TYPE REF TO lcl_lisp.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+
       DATA carry TYPE tv_real.
       DATA lv_max TYPE tv_real.
 
@@ -5702,6 +5785,9 @@
       DATA cell TYPE REF TO lcl_lisp.
       DATA lo_ptr TYPE REF TO lcl_lisp.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+
       DATA carry TYPE tv_real.
       DATA lv_min TYPE tv_real.
 
@@ -7282,29 +7368,30 @@
   CLASS lcl_lisp_new IMPLEMENTATION.
 
     METHOD elem.
-      DATA lo_data TYPE REF TO lcl_lisp_data.
-
       CASE type.
         WHEN lcl_lisp=>type_integer.
-          ro_elem = NEW lcl_lisp_integer( ).
-          ro_elem->type = type.
-          CAST lcl_lisp_integer( ro_elem )->integer = value.
+          ro_elem ?= integer( value ).
+
         WHEN lcl_lisp=>type_real.
-          ro_elem = NEW lcl_lisp_integer( ).
-          ro_elem->type = type.
-          CAST lcl_lisp_real( ro_elem )->real = value.
+          ro_elem ?= real( value ).
+
+        WHEN lcl_lisp=>type_string.
+          ro_elem ?= string( value ).
+
+        WHEN lcl_lisp=>type_char.
+          ro_elem ?= char( value ).
+
+        WHEN lcl_lisp=>type_boolean.
+          ro_elem ?= boolean( value ).
+
         WHEN lcl_lisp=>type_abap_data.
-          lo_data = NEW lcl_lisp_data( ).
-          lo_data->type = lcl_lisp=>type_abap_data.
-          lo_data->data = REF #( value ).
-          ro_elem ?= lo_data.
+          ro_elem ?= data( value ).
+
         WHEN lcl_lisp=>type_abap_table.
-          lo_data = NEW lcl_lisp_table( ).
-          lo_data->type = lcl_lisp=>type_abap_table.
-          lo_data->data = REF #( value ).
-          ro_elem ?= lo_data.
+          ro_elem ?= table( value ).
+
         WHEN OTHERS.
-          ro_elem = NEW lcl_lisp( ).
+          CREATE OBJECT ro_elem.
           ro_elem->type = type.
           ro_elem->value = value.
       ENDCASE.
@@ -7378,7 +7465,7 @@
     METHOD number.
       DATA lv_int TYPE tv_int.
       TRY.
-          lv_int = EXACT tv_int( value ).
+          MOVE EXACT value TO lv_int.
           ro_elem = integer( lv_int ).
         CATCH cx_sy_conversion_error.
           ro_elem = real( value ).
@@ -7427,8 +7514,8 @@
           split value at lcl_parser=>c_lisp_slash into lv_nummer lv_denom.
           if sy-subrc EQ 0 and lv_denom NE space.
             TRY.
-                ro_elem = NEW lcl_lisp_rational( nummer = CONV tv_int( lv_nummer )
-                                                 denom = CONV tv_int( lv_denom ) ).
+                ro_elem = rational( nummer = CONV tv_int( lv_nummer )
+                                    denom = CONV tv_int( lv_denom ) ).
                 RETURN.
               CATCH cx_sy_conversion_no_number.
             ENDTRY.

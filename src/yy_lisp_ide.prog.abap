@@ -355,6 +355,10 @@ CLASS lcl_ide DEFINITION INHERITING FROM lcl_lisp_buffered_port CREATE PRIVATE.
     METHODS first_output.
     METHODS read REDEFINITION.
     METHODS display REDEFINITION.
+
+    CLASS-METHODS sexpr_viewer IMPORTING it_elem TYPE lcl_parser=>tt_element
+                               RAISING cx_dynamic_check.
+
   PRIVATE SECTION.
     CLASS-DATA go_ide TYPE REF TO lcl_ide.
 
@@ -394,7 +398,6 @@ CLASS lcl_ide DEFINITION INHERITING FROM lcl_lisp_buffered_port CREATE PRIVATE.
     METHODS save_settings.
     METHODS post_settings IMPORTING handle TYPE REF TO zcl_lisp_area
                           RAISING   cx_shm_error cx_dynamic_check.
-
 ENDCLASS.                    "lcl_ide DEFINITION
 
 *----------------------------------------------------------------------*
@@ -556,18 +559,21 @@ CLASS lcl_ide IMPLEMENTATION.
   METHOD graphics.
     DATA lx_root TYPE REF TO cx_root.
     TRY.
-        DATA(ls_cfg) = lcl_configuration=>get( ).
-
         DATA(code) = mi_source->to_string( ).
         CHECK code IS NOT INITIAL.
 
-        DATA(lt_elem) = mo_int->parse( code ).
+        sexpr_viewer( mo_int->parse( code ) ).
 
-        NEW lcl_plant_uml( lcl_dot_diagram=>new( is_config = ls_cfg
-                              )->generate( it_elem = lt_elem ) )->output( ls_cfg ).
       CATCH cx_root INTO lx_root.
         mi_source->update_status( lx_root->get_text( ) ).
     ENDTRY.
+  ENDMETHOD.
+
+  METHOD sexpr_viewer.
+    DATA(ls_cfg) = lcl_configuration=>get( ).
+
+    NEW lcl_plant_uml( lcl_dot_diagram=>new( is_config = ls_cfg
+                          )->generate( it_elem = it_elem ) )->output( ls_cfg ).
   ENDMETHOD.
 
   METHOD graph_config.
