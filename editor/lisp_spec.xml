@@ -84,6 +84,8 @@
 		<TextType id="59" name="Scheme Syntax" ImageIdx="13" bold="0" italic="0" underline="0" clr="139" bkclr="-1">
 			<Keywords>
 				<Keyword text="define"/>
+				<Keyword text="define-syntax"/>
+				<Keyword text="define-macro"/>
 				<Keyword text="lambda"/>
 				<Keyword text="and"/>
 				<Keyword text="or"/>
@@ -91,6 +93,8 @@
 				<Keyword text="cond"/>
 				<Keyword text="set!"/>
 				<Keyword text="letrec"/>
+				<Keyword text="letrec*"/>
+				<Keyword text="let"/>
 				<Keyword text="let*"/>
 				<Keyword text="begin"/>
 				<Keyword text="quasiquote"/>
@@ -116,6 +120,9 @@
 				<Keyword text="read"/>
 				<Keyword text="nil"/>
 				<Keyword text="+"/>
+				<Keyword text="-"/>
+				<Keyword text="*"/>
+				<Keyword text="/"/>												
 				<Keyword text="append"/>
 				<Keyword text="append!"/>
 				<Keyword text="list"/>
@@ -138,6 +145,8 @@
 				<Keyword text="null?"/>
 				<Keyword text="boolean?"/>
 				<Keyword text="string?"/>
+				<Keyword text="char?"/>
+				<Keyword text="port?"/>								
 				<Keyword text="string=?"/>
 				<Keyword text="boolean=?"/>				
 				<Keyword text="procedure?"/>
@@ -149,11 +158,17 @@
 				<Keyword text="hash?"/>
 				<Keyword text="number?"/>
 				<Keyword text="integer?"/>
+				<Keyword text="complex?"/>
+				<Keyword text="real?"/>
+				<Keyword text="rational?"/>												
+				<Keyword text="exact?"/>
+				<Keyword text="inexact?"/>
 				<Keyword text="vector?"/>
 				<Keyword text="list?"/>
 				<Keyword text="alist?"/>
 				<Keyword text="procedure?"/>
 				<Keyword text="symbol?"/>
+				<Keyword text="eof-object?"/>
 
 				<Keyword text="write-string"/>
 				<Keyword text="number->string"/>
@@ -168,6 +183,7 @@
 				<Keyword text="string-length"/>
 				<Keyword text="string-ref"/>
 				<Keyword text="string-set!"/>
+
 				<Keyword text="make-list"/>
 				<Keyword text="list-tail"/>
 				<Keyword text="list-ref"/>
@@ -189,11 +205,13 @@
 				<Keyword text="first"/>
 				<Keyword text="rest"/>
 
+				<Keyword text="set-car!"/>
+				<Keyword text="set-cdr!"/>
+
 				<Keyword text="input-port?"/>
 				<Keyword text="output-port?"/>
 				<Keyword text="textual-port?"/>
 				<Keyword text="binary-port?"/>
-				<Keyword text="port?"/>
 				<Keyword text="input-port-open?"/>
 				<Keyword text="output-port-open?"/>
 				<Keyword text="current-input-port"/>				
@@ -208,6 +226,21 @@
 				<Keyword text="peek-char"/>
 				<Keyword text="char-ready?"/>
 				<Keyword text="parameterize"/>			
+      
+                <Keyword text="char-alphabetic?"/>
+                <Keyword text="char-numeric?"/>
+                <Keyword text="char-whitespace?"/>
+				<Keyword text="char-upper-case?"/>
+				<Keyword text="char-lower-case?"/>
+				<Keyword text="char-upcase"/>
+				<Keyword text="char-downcase"/>
+				<Keyword text="char-foldcase"/>
+
+				<Keyword text="digit-value"/>			
+				<Keyword text="char->integer"/>	  
+				<Keyword text="integer->char"/>			
+				<Keyword text="char-upcase"/>
+				<Keyword text="char-downcase"/>
 
 				<Keyword text="type"/>
 				<Keyword text="abs"/>
@@ -244,6 +277,12 @@
 				<Keyword text="ab-get"/>
 				<Keyword text="ab-set"/>
 				<Keyword text="ab-sy"/>
+
+				<Keyword text="call-with-current-continuation"/>
+				<Keyword text="call/cc"/>				
+				<Keyword text="sql-query"/>
+				<Keyword text="define-query"/>
+
 			</Keywords>
 		</TextType>
 		<TextType id="32" name="Numbers" dstyle="0" dbkclr="0" bold="0" italic="0" underline="0" clr="16750899" bkclr="-1"/>
@@ -259,6 +298,7 @@
 			<FirstChar/>
 			<Conditions>
 				<Condition start="&quot;" end="&quot;"/>
+				<Condition start="\&quot;" end="&quot;"/>
 			</Conditions>
 		</TextType>
 		<TextType id="40" name="Syntactical error" dstyle="1" dbkclr="0" clr="255" bkclr="-1"/>
@@ -290,3 +330,4 @@
 		</TextType>
 	</COLORSYNTAX>
 </XMLConfigSettings>
+
