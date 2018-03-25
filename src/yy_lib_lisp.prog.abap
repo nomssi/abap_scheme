@@ -488,7 +488,7 @@
     CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
     PROTECTED SECTION.
-      METHODS constructor IMPORTING value TYPE any
+      METHODS constructor IMPORTING value      TYPE any
                                     iv_mutable TYPE flag.
   ENDCLASS.
 
@@ -509,15 +509,15 @@
       METHODS is_exact RETURNING VALUE(result) TYPE REF TO lcl_lisp.
   ENDCLASS.
 
-CLASS lcl_lisp_number IMPLEMENTATION.
+  CLASS lcl_lisp_number IMPLEMENTATION.
 
-  METHOD is_exact.
-    result = false.
-    CHECK exact EQ abap_true.
-    result = true.
-  ENDMETHOD.
+    METHOD is_exact.
+      result = false.
+      CHECK exact EQ abap_true.
+      result = true.
+    ENDMETHOD.
 
-ENDCLASS.
+  ENDCLASS.
 
   CLASS lcl_lisp_integer DEFINITION INHERITING FROM lcl_lisp_number
     CREATE PROTECTED FRIENDS lcl_lisp_new.
@@ -603,16 +603,16 @@ ENDCLASS.
       METHODS constructor IMPORTING value TYPE any.
   ENDCLASS.
 
-CLASS lcl_lisp_real IMPLEMENTATION.
+  CLASS lcl_lisp_real IMPLEMENTATION.
 
-  METHOD constructor.
-    super->constructor( ).
-    type = lcl_lisp=>type_real.
-    real = value.
-    exact = abap_false.
-  ENDMETHOD.
+    METHOD constructor.
+      super->constructor( ).
+      type = lcl_lisp=>type_real.
+      real = value.
+      exact = abap_false.
+    ENDMETHOD.
 
-ENDCLASS.
+  ENDCLASS.
 
   CLASS lcl_lisp_pair DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
@@ -1324,7 +1324,7 @@ ENDCLASS.
 
     PRIVATE SECTION.
       TYPES: BEGIN OF ts_label,
-               datum TYPE string,
+               datum   TYPE string,
                element TYPE REF TO lcl_lisp,
              END OF ts_label.
       TYPES tt_labels TYPE SORTED TABLE OF ts_label WITH UNIQUE KEY datum.
@@ -1344,7 +1344,7 @@ ENDCLASS.
         next_char RAISING lcx_lisp_exception,
         peek_char RETURNING VALUE(rv_char) TYPE char1,
         peek_bytevector RETURNING VALUE(rv_flag) TYPE flag,
-        peek_label EXPORTING ev_label TYPE string
+        peek_label EXPORTING ev_label        TYPE string
                    RETURNING VALUE(rv_found) TYPE flag,
         skip_whitespace
           RETURNING VALUE(rv_has_next) TYPE flag
@@ -1352,7 +1352,7 @@ ENDCLASS.
         parse_list IMPORTING delim         TYPE char01 DEFAULT c_open_paren
                    RETURNING VALUE(result) TYPE REF TO lcl_lisp
                    RAISING   lcx_lisp_exception,
-        parse_token IMPORTING iv_literal TYPE flag DEFAULT abap_false
+        parse_token IMPORTING iv_literal     TYPE flag DEFAULT abap_false
                     RETURNING VALUE(element) TYPE REF TO lcl_lisp
                     RAISING   lcx_lisp_exception.
       METHODS match_string CHANGING cv_val TYPE string.
@@ -1463,11 +1463,11 @@ ENDCLASS.
       proc_is_list         ##called,
       proc_is_pair         ##called,
       proc_is_boolean      ##called,
-      proc_list_is_boolean ##called,
-      proc_is_vector       ##called,
-      proc_is_alist        ##called,
-      proc_is_exact        ##called,
-      proc_is_inexact      ##called,
+      proc_boolean_list_is_equal ##called,
+      proc_is_vector             ##called,
+      proc_is_alist              ##called,
+      proc_is_exact              ##called,
+      proc_is_inexact            ##called,
 
 * Math
       proc_abs,      ##called
@@ -1528,23 +1528,23 @@ ENDCLASS.
       proc_char_upcase        ##called,
       proc_char_downcase      ##called,
 
-      proc_string            ##called,
-      proc_make_string,      ##called
-      proc_num_to_string,    ##called
-      proc_list_to_string,   ##called
-      proc_symbol_to_string, ##called
-      proc_list_is_string,   ##called
-      proc_string_length,    ##called
-      proc_substring,        ##called
-      proc_string_to_num,    ##called
-      proc_string_ref,       ##called
-      proc_string_set,       ##called
-      proc_string_append,    ##called
-      proc_string_to_list,   ##called
-      proc_string_to_symbol, ##called
+      proc_string                ##called,
+      proc_make_string,          ##called
+      proc_num_to_string,        ##called
+      proc_list_to_string,       ##called
+      proc_symbol_to_string,     ##called
+      proc_string_list_is_equal, ##called
+      proc_string_length,        ##called
+      proc_string_copy,          ##called
+      proc_string_to_num,        ##called
+      proc_string_ref,           ##called
+      proc_string_set,           ##called
+      proc_string_append,        ##called
+      proc_string_to_list,       ##called
+      proc_string_to_symbol,     ##called
 
 * Continuation
-      proc_call_cc,          ##called
+      proc_call_cc,              ##called
 * Not in the spec: Just adding it anyway
       proc_random,       ##called
       proc_eq,           ##called
@@ -2388,8 +2388,8 @@ ENDCLASS.
       env->define_value( symbol = 'procedure?'  type = lcl_lisp=>type_native value = 'PROC_IS_PROCEDURE' ).
       env->define_value( symbol = 'symbol?'     type = lcl_lisp=>type_native value = 'PROC_IS_SYMBOL' ).
       env->define_value( symbol = 'port?'       type = lcl_lisp=>type_native value = 'PROC_IS_PORT' ).
-      env->define_value( symbol = 'boolean=?'   type = lcl_lisp=>type_native value = 'PROC_LIST_IS_BOOLEAN' ).
-      env->define_value( symbol = 'string=?'    type = lcl_lisp=>type_native value = 'PROC_LIST_IS_STRING' ).
+      env->define_value( symbol = 'boolean=?'   type = lcl_lisp=>type_native value = 'PROC_BOOLEAN_LIST_IS_EQUAL' ).
+      env->define_value( symbol = 'string=?'    type = lcl_lisp=>type_native value = 'PROC_STRING_LIST_IS_EQUAL' ).
       env->define_value( symbol = 'exact?'      type = lcl_lisp=>type_native value = 'PROC_IS_EXACT' ).
       env->define_value( symbol = 'inexact?'    type = lcl_lisp=>type_native value = 'PROC_IS_INEXACT' ).
 
@@ -2418,6 +2418,8 @@ ENDCLASS.
       env->define_value( symbol = 'string->symbol' type = lcl_lisp=>type_native value = 'PROC_STRING_TO_SYMBOL' ).
       env->define_value( symbol = 'string-append'  type = lcl_lisp=>type_native value = 'PROC_STRING_APPEND' ).
       env->define_value( symbol = 'string-length'  type = lcl_lisp=>type_native value = 'PROC_STRING_LENGTH' ).
+      env->define_value( symbol = 'string-copy'    type = lcl_lisp=>type_native value = 'PROC_STRING_COPY' ).
+      env->define_value( symbol = 'substring'      type = lcl_lisp=>type_native value = 'PROC_STRING_COPY' ).
       env->define_value( symbol = 'string-ref'     type = lcl_lisp=>type_native value = 'PROC_STRING_REF' ).
       env->define_value( symbol = 'string-set!'    type = lcl_lisp=>type_native value = 'PROC_STRING_SET' ).
 *     Math
@@ -5313,7 +5315,7 @@ ENDCLASS.
       result = true.
     ENDMETHOD.                    "proc_is_list
 
-    METHOD proc_list_is_boolean.
+    METHOD proc_boolean_list_is_equal.
       DATA lo_test TYPE REF TO lcl_lisp.
       DATA lo_arg TYPE REF TO lcl_lisp.
 
@@ -5597,18 +5599,22 @@ ENDCLASS.
     ENDMETHOD.                    "proc_random
 
     METHOD proc_is_exact.
+      DATA lo_number TYPE REF TO lcl_lisp_number.
       validate list.
       validate_number list->car `exact?`.
+      lo_number ?= list->car.
       result = false.
-      CHECK list->car->type EQ lcl_lisp=>type_integer.
+      CHECK lo_number->exact EQ abap_true.
       result = true.
     ENDMETHOD.
 
     METHOD proc_is_inexact.
+      DATA lo_number TYPE REF TO lcl_lisp_number.
       validate list.
       validate_number list->car `inexact?`.
+      lo_number ?= list->car.
       result = false.
-      CHECK list->car->type EQ lcl_lisp=>type_real.
+      CHECK lo_number->exact EQ abap_false.
       result = true.
     ENDMETHOD.
 
@@ -5758,17 +5764,34 @@ ENDCLASS.
       ENDDO.
     ENDMETHOD.
 
-    METHOD proc_list_is_string.
+    METHOD proc_string_list_is_equal.
+      DATA lo_test TYPE REF TO lcl_lisp.
+      DATA lo_arg TYPE REF TO lcl_lisp.
+
       validate list.
 
       result = false.
+      lo_arg = list.
 
-      DATA(lo_arg) = list.
+      lo_test = nil.
+      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+        lo_test = lo_arg->car.
+        lo_arg = lo_arg->cdr.
+      ENDIF.
+      IF lo_test EQ nil.
+        throw( |string=? missing string argument in { lo_arg->car->to_string( ) }| ).
+      ENDIF.
 
       WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+        IF lo_arg->car NE lo_test.
+          RETURN.
+        ENDIF.
         lo_arg = lo_arg->cdr.
       ENDWHILE.
 
+      IF lo_arg NE nil.
+        throw( |string=? wrong argument { lo_arg->car->to_string( ) }| ).
+      ENDIF.
       CHECK lo_arg = nil.
       result = true.
     ENDMETHOD.
@@ -5780,25 +5803,37 @@ ENDCLASS.
       result = lcl_lisp_new=>integer( strlen( list->car->value ) ).
     ENDMETHOD.
 
-    METHOD proc_substring.
+    METHOD proc_string_copy.
       DATA lv_start TYPE sytabix.
       DATA lv_len TYPE sytabix.
       DATA lv_end TYPE sytabix.
+
       DATA lv_text TYPE string.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
 
-      validate: list, list->cdr, list->cdr->cdr.
-      validate_string list->car 'substring'.
-      validate_index list->cdr->car 'substring'.
-      validate_integer list->cdr->cdr->car 'substring'.
+      validate list.
+      validate_string list->car 'string-copy'.
+      validate list->cdr.
 
-      lo_int ?=  list->cdr->car.
-      lv_start = lo_int->integer.
-      lo_int ?=  list->cdr->cdr->car.
-      lv_end = lo_int->integer.
-      lv_len = lv_end - lv_start + 1.
-      "lv_text = list->car->value+lv_start(lv_len).
-      lv_text = substring( val = list->car->value off = lv_start len = lv_len ).
+      IF list->cdr EQ nil.
+        lv_text = list->car->value.
+      ELSE.
+        validate_integer list->cdr->car 'string-copy start'.
+        lo_int ?= list->cdr->car.
+        lv_start = lo_int->integer.
+
+        validate list->cdr->cdr.
+        IF list->cdr->cdr NE nil.
+          validate_integer list->cdr->cdr->car 'string-copy end'.
+          lo_int ?= list->cdr->cdr->car.
+          lv_len = lo_int->integer - lv_start.
+          lv_text = list->car->value+lv_start(lv_len).
+        ELSE.
+          lv_text = list->car->value+lv_start.
+        ENDIF.
+      ENDIF.
+
+      "      lv_text = substring( val = list->car->value off = lv_start len = lv_len ).
 
       result = lcl_lisp_new=>string( lv_text ).
     ENDMETHOD.
@@ -7549,7 +7584,7 @@ ENDCLASS.
       ENDCASE.
     ENDMETHOD.
 
-ENDCLASS.                    "lcl_lisp IMPLEMENTATION
+  ENDCLASS.                    "lcl_lisp IMPLEMENTATION
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp_iterator IMPLEMENTATION

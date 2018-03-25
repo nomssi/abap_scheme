@@ -419,6 +419,8 @@
        METHODS string_set_1 FOR TESTING.
        METHODS string_set_2 FOR TESTING.
 
+       METHODS compare_string_list FOR TESTING.
+
        METHODS symbol_to_string FOR TESTING.
        METHODS input_string_1 FOR TESTING.
        METHODS output_string_1 FOR TESTING.
@@ -1085,6 +1087,13 @@
      METHOD symbol_to_string.
        scheme( code = |(symbol->string 'mysymbol)|
                expected = '"mysymbol"' ).
+     ENDMETHOD.
+
+     METHOD compare_string_list.
+       scheme( code = |(string=? "Apple" "apple")|
+               expected = '#f' ).
+       scheme( code = |(string=? "a" "as" "a")|
+               expected = '#f' ).
      ENDMETHOD.
 
      METHOD input_string_1.
@@ -3237,6 +3246,14 @@
        METHODS compa_lte_3 FOR TESTING.
        METHODS compa_lte_4 FOR TESTING.
 
+       METHODS exact_1 FOR TESTING.
+       METHODS exact_2 FOR TESTING.
+       METHODS exact_3 FOR TESTING.
+
+       METHODS inexact_1 FOR TESTING.
+       METHODS inexact_2 FOR TESTING.
+       METHODS inexact_3 FOR TESTING.
+
        METHODS compa_equal_1 FOR TESTING.
        METHODS compa_equal_2 FOR TESTING.
        METHODS compa_equal_3 FOR TESTING.
@@ -3364,6 +3381,36 @@
        scheme( code = '(< 1/12 1/3)'
                expected = '#t' ).
      ENDMETHOD.                    "compa_lte_4
+
+     METHOD exact_1.
+       scheme( code = '(exact? 22)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD exact_2.
+       scheme( code = '(exact? 1/3)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD exact_3.
+       scheme( code = '(exact? 0.333)'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD inexact_1.
+       scheme( code = '(inexact? 0.5)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD inexact_2.
+       scheme( code = '(inexact? (/ 10 3))'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD inexact_3.
+       scheme( code = '(inexact? (/ 10 3.1))'
+               expected = '#t' ).
+     ENDMETHOD.
 
      METHOD compa_equal_1.
 *   Test equal?
