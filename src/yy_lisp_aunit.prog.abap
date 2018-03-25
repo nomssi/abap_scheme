@@ -275,30 +275,30 @@
        parse( code ).
        assert_code( actual = mo_port->flush( )
                     code = code
-                 expected = expected
+                    expected = expected
                     title = 'PARSE'
                     level = level ).
      ENDMETHOD.                    "assert_parse
 
      METHOD delimiter.
        assert_parse( code = 'list' && cl_abap_char_utilities=>horizontal_tab && |; return|
-                expected = |list| ).
+                     expected = |list| ).
      ENDMETHOD.                    "lambda
 
      METHOD empty.
        assert_parse( code = ''
-                expected = || ).
+                     expected = || ).
      ENDMETHOD.                    "lambda
 
      METHOD lambda.
        assert_parse( code = '(define a(lambda()20))'
-                  expected = |( define a ( lambda { c_lisp_nil } 20 ) )| ).
+                     expected = |( define a ( lambda { c_lisp_nil } 20 ) )| ).
      ENDMETHOD.                    "lambda
 
      METHOD lambda_comments.
        assert_parse( code = |;; Comments\n| &
                             |(define a(lambda()20)) ; comments|
-                  expected = |( define a ( lambda { c_lisp_nil } 20 ) )| ).
+                     expected = |( define a ( lambda { c_lisp_nil } 20 ) )| ).
      ENDMETHOD.                    "lambda
 
      METHOD riff_shuffle.
@@ -414,6 +414,11 @@
        METHODS char_single FOR TESTING.
        METHODS char_unknown FOR TESTING.
        METHODS string_len FOR TESTING.
+
+       METHODS string_set_0 FOR TESTING.
+       METHODS string_set_1 FOR TESTING.
+       METHODS string_set_2 FOR TESTING.
+
        METHODS symbol_to_string FOR TESTING.
        METHODS input_string_1 FOR TESTING.
        METHODS output_string_1 FOR TESTING.
@@ -442,7 +447,6 @@
        METHODS digit_value_2 FOR TESTING.
        METHODS digit_value_3 FOR TESTING.
        METHODS digit_value_4 FOR TESTING.
-       METHODS digit_value_5 FOR TESTING.
 
        METHODS char_to_integer_1 FOR TESTING.
        METHODS char_to_integer_2 FOR TESTING.
@@ -512,10 +516,10 @@
 
        METHODS quasiquote_1 FOR TESTING.
        METHODS quasiquote_2 FOR TESTING.
-       METHODS quasiquote_3 FOR TESTING.
-       METHODS quasiquote_4 FOR TESTING.
-       METHODS quasiquote_5 FOR TESTING.
-       METHODS quasiquote_6 FOR TESTING.
+       METHODS quasiquote_splicing_3 FOR TESTING.
+       METHODS quasiquote_splicing_4 FOR TESTING.
+       METHODS quasiquote_splicing_5 FOR TESTING.
+       METHODS quasiquote_splicing_6 FOR TESTING.
 
        METHODS quasiquote_7 FOR TESTING.
        METHODS quasiquote_8 FOR TESTING.
@@ -544,6 +548,17 @@
        METHODS macro_unless_2 FOR TESTING.
 
        METHODS macro_eval_1 FOR TESTING.
+
+   ENDCLASS.
+
+   CLASS ltc_query DEFINITION INHERITING FROM ltc_interpreter
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PRIVATE SECTION.
+
+       METHODS setup.
+       METHODS teardown.
+
+       METHODS select_1 FOR TESTING.
 
    ENDCLASS.
 
@@ -1044,6 +1059,29 @@
                expected = '7' ).
      ENDMETHOD.
 
+     METHOD string_set_0.
+       scheme( code = '(define s (string #\A #\p #\p #\l #\e))'
+               expected = 's' ).
+       scheme( code = '(string-set! s 4 #\y)'
+               expected = '"Apply"' ).
+     ENDMETHOD.
+
+     METHOD string_set_1.
+       scheme( code = '(define (f) (make-string 3 #\*)) '
+               expected = 'f' ).
+       scheme( code = '(define (g) "***")'
+               expected = 'g' ).
+       scheme( code = '(string-set! (f) 0 #\?)'
+               expected = '"?**"' ).  " <-- unspecified
+       scheme( code = '(string-set! (g) 0 #\?)'
+               expected = 'Eval: constant in string-set! cannot be changed' ).
+     ENDMETHOD.
+
+     METHOD string_set_2.
+       scheme( code = |(string-set! (symbol->string 'immutable)| && ' 0 #\?)'
+               expected = 'Eval: constant in string-set! cannot be changed' ).
+     ENDMETHOD.
+
      METHOD symbol_to_string.
        scheme( code = |(symbol->string 'mysymbol)|
                expected = '"mysymbol"' ).
@@ -1165,9 +1203,6 @@
      METHOD digit_value_4.
        scheme( code = '(digit-value #\x0664)'
                expected = '4' ).
-     ENDMETHOD.
-
-     METHOD digit_value_5.
        scheme( code = '(digit-value #\x0AE6)'
                expected = '0' ).
      ENDMETHOD.
@@ -2070,9 +2105,9 @@
      ENDMETHOD.
 
      METHOD list_nil_1.
-*  Test list
+*      changed to allow nil without quote
        scheme( code = '(list ())'
-               expected = c_lisp_nil ).
+               expected = |( { c_lisp_nil } )| ).
      ENDMETHOD.                    "list_nil_1
 
      METHOD list_nil_2.
@@ -2838,10 +2873,14 @@
    CLASS ltc_library_function DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
+*      merge with LTC_MATH?
        METHODS setup.
        METHODS teardown.
 
        METHODS abs_1 FOR TESTING.
+
+       METHODS gcd_1 FOR TESTING.
+       METHODS lcm_1 FOR TESTING.
    ENDCLASS.                    "ltc_library_function DEFINITION
 
 *----------------------------------------------------------------------*
@@ -2872,6 +2911,22 @@
        scheme( code = |(abs 0)|
                expected = |0| ).
      ENDMETHOD.                    "abs
+
+     METHOD gcd_1.
+       scheme( code = |(gcd)|
+               expected = |0| ).
+       scheme( code = |(gcd 32 -36)|
+               expected = |4| ).
+     ENDMETHOD.
+
+     METHOD lcm_1.
+       scheme( code = |(lcm)|
+               expected = |1| ).
+       scheme( code = |(lcm 32 -36)|
+               expected = |288| ).
+*       scheme( code = |(lcm 32.0 -36)|
+*               expected = |288.0| ).   " inexact
+     ENDMETHOD.
 
    ENDCLASS.                    "ltc_library_function IMPLEMENTATION
 
@@ -3214,13 +3269,10 @@
        METHODS compa_is_eq_11 FOR TESTING.
        METHODS compa_is_eq_12 FOR TESTING.
 
-       METHODS compa_nil_1 FOR TESTING.
-       METHODS compa_nil_2 FOR TESTING.
-       METHODS compa_nil_3 FOR TESTING.
-       METHODS compa_nil_4 FOR TESTING.
-
        METHODS compa_null_1 FOR TESTING.
        METHODS compa_null_2 FOR TESTING.
+       METHODS compa_null_3 FOR TESTING.
+       METHODS compa_null_4 FOR TESTING.
 
        METHODS compa_string FOR TESTING.
 
@@ -3331,7 +3383,7 @@
 
      METHOD compa_equal_4.
        scheme( code = |(equal? (make-vector 5 'a)| &
-                         |        (make-vector 5 'a))|
+                      |        (make-vector 5 'a))|
                expected = '#t' ).
      ENDMETHOD.
 
@@ -3347,7 +3399,7 @@
 
      METHOD compa_equal_7.
        scheme( code = |(equal? '(a (b) c)| &
-                         |        '(a (b) c))|
+                      |        '(a (b) c))|
                expected = '#t' ).
      ENDMETHOD.
 
@@ -3358,13 +3410,13 @@
 
      METHOD compa_equal_9.
        scheme( code = |(equal? '#1=(a b . #1#)| &
-                         |        '#2=(a b a b . #2#))|
+                      |        '#2=(a b a b . #2#))|
                expected = '#t' ).
      ENDMETHOD.
 
      METHOD compa_equal_10.
        scheme( code = |(equal? (lambda (x) x)| &
-                         |        (lambda (y) y))|
+                      |        (lambda (y) y))|
                expected = '#f' ).   " unspecified
      ENDMETHOD.
 
@@ -3448,53 +3500,51 @@
 
      METHOD compa_is_eq_10.
        scheme( code = |(let ((n (+ 2 3)))| &
-                         |  (let ((x '(a))) | &
-                         | (eq? x x)))|
+                      |  (let ((x '(a))) | &
+                      | (eq? x x)))|
                expected = '#t' ).
      ENDMETHOD.
 
      METHOD compa_is_eq_11.
        scheme( code = |(let ((x '#()))| &
-                         |  (eq? x x))|
+                      |  (eq? x x))|
                expected = '#t' ).
      ENDMETHOD.
 
      METHOD compa_is_eq_12.
        scheme( code = |(let ((p (lambda (x) x)))| &
-                         |  (eq? p p))|
+                      |  (eq? p p))|
                expected = '#t' ).
      ENDMETHOD.
 
-     METHOD compa_nil_1.
-*      Test nil?
-       scheme( code = '(nil? ())'
-               expected = 'Eval: Incorrect input' ).
-     ENDMETHOD.                    "compa_nil_1
-
-     METHOD compa_nil_2.
-       scheme( code = '(nil? nil)'
-               expected = '#t' ).
-     ENDMETHOD.                    "compa_nil_2
-
-     METHOD compa_nil_3.
-       scheme( code = '(nil? (cdr (list 1)))'
-               expected = '#t' ).
-     ENDMETHOD.                    "compa_nil_3
-
-     METHOD compa_nil_4.
-       scheme( code = '(nil? (cdr (list 1 2)))'
-               expected = '#f' ).
-     ENDMETHOD.                    "compa_nil_4
-
      METHOD compa_null_1.
+*      changed to allow nil without quote
+       scheme( code = '(nil? ())'
+               expected = '#t' ).
        scheme( code = '(null? ())'
-               expected = 'Eval: Incorrect input' ).
+               expected = '#t' ).
      ENDMETHOD.                    "compa_nil_1
 
      METHOD compa_null_2.
        scheme( code = |(null? '())|
                expected = '#t' ).
+       scheme( code = '(nil? nil)'
+               expected = '#t' ).
      ENDMETHOD.                    "compa_nil_2
+
+     METHOD compa_null_3.
+       scheme( code = '(null? (cdr (list 1)))'
+               expected = '#t' ).
+       scheme( code = '(nil? (cdr (list 1)))'
+               expected = '#t' ).
+     ENDMETHOD.                    "compa_nil_3
+
+     METHOD compa_null_4.
+       scheme( code = '(null? (cdr (list 1 2)))'
+               expected = '#f' ).
+       scheme( code = '(nil? (cdr (list 1 2)))'
+               expected = '#f' ).
+     ENDMETHOD.                    "compa_nil_4
 
      METHOD compa_string.
        scheme( code = '(define str "A string")'
@@ -3550,7 +3600,7 @@
 
      METHOD comp_eqv_10.
        scheme( code = |(let ((p (lambda (x) x)))| &
-                         |(eqv? p p))|
+                      |(eqv? p p))|
                expected = '#t' ).
      ENDMETHOD.
 
@@ -3561,9 +3611,9 @@
 
      METHOD comp_eqv_12.
        scheme( code = |(define gen-counter | &
-                         | (lambda () | &
-                         |   (let ((n 0)) | &
-                         |     (lambda () (set! n (+ n 1)) n))))|
+                      | (lambda () | &
+                      |   (let ((n 0)) | &
+                      |     (lambda () (set! n (+ n 1)) n))))|
                expected = 'gen-counter' ).
        scheme( code = |(let ((g (gen-counter))) | &
                          |  (eqv? g g))|
@@ -3574,9 +3624,9 @@
 
      METHOD comp_eqv_13.
        scheme( code = |(define gen-loser | &
-                         | (lambda () | &
-                         |   (let ((n 0)) | &
-                         |     (lambda () (set! n (+ n 1)) 27))))|
+                      | (lambda () | &
+                      |   (let ((n 0)) | &
+                      |     (lambda () (set! n (+ n 1)) 27))))|
                expected = 'gen-loser' ).
        scheme( code = |(let ((g (gen-loser))) | &
                          |  (eqv? g g))|
@@ -3587,8 +3637,8 @@
 
      METHOD comp_eqv_14.
        scheme( code = |(letrec ((f (lambda () (if (eqv? f g) 'f 'both)))| &
-                         |         (g (lambda () (if (eqv? f g) 'g 'both))))| &
-                         | (eqv? f g))|
+                      |         (g (lambda () (if (eqv? f g) 'g 'both))))| &
+                      | (eqv? f g))|
                expected = '#f' ).
      ENDMETHOD.
 
@@ -3934,22 +3984,22 @@
                expected = |( list a ' a )| ).
      ENDMETHOD.
 
-     METHOD quasiquote_3.
+     METHOD quasiquote_splicing_3.
        scheme( code = |`(a ,(+ 1 2) ,@(map abs '(4 -5 6)) b)|
                expected = '( a 3 4 5 6 b )' ).
      ENDMETHOD.
 
-     METHOD quasiquote_4.
+     METHOD quasiquote_splicing_4.
        scheme( code = |`(( foo ,(- 10 3)) ,@(cdr '(c)) . ,(car '(cons)))|
                expected = '( ( foo 7 ) . cons )' ).
      ENDMETHOD.
 
-     METHOD quasiquote_5.
+     METHOD quasiquote_splicing_5.
        scheme( code = |`#(10 5 ,(sqrt 4) ,@(map sqrt '(16 9)) 8)|
                expected = '#( 10 5 2 4 3 8 )' ).
      ENDMETHOD.
 
-     METHOD quasiquote_6.
+     METHOD quasiquote_splicing_6.
        scheme( code = |(let ((foo '(foo bar)) (@baz 'baz))| &
                          |`(list ,@foo , @baz))|
                expected = '( list foo bar baz )' ).
@@ -4001,15 +4051,18 @@
 *            (let loop ()
 *              (if x
 *               (begin body ... (loop)))))))
-       scheme( code = '(define-macro (while x . body)' &
+       scheme( code = '(define-macro (while _ . ...)' &
                       ' (let ((loop (gensym)))' &
                       '   `(let ,loop ()' &
-                      '      (if ,x '     &
-                      '          (begin ,@body (,loop))))))'
+                      '      (if ,_ '     &
+                      '          (begin ,@... (,loop))))))'
                expected = 'while' ).
-       scheme( code = '(define x 1)' &
-                      '(while (< x 10)' &
+       scheme( code = '(define x 1)'
+               expected = 'x' ).
+       scheme( code = '(while (< x 10)' &
                       '   (set! x (+ x 1)))'
+               expected = '#f' ).
+       scheme( code = 'x'
                expected = '10' ).
      ENDMETHOD.
 
@@ -4069,6 +4122,23 @@
                expected = 'identity' ).
        scheme( code = |(let* ((a 123)) (identity a))|
                expected = '123' ).
+     ENDMETHOD.
+
+   ENDCLASS.
+
+   CLASS ltc_query IMPLEMENTATION.
+
+     METHOD setup.
+       new_interpreter( ).
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
+
+     METHOD select_1.
+       scheme( code = |(sql-query "SELECT * FROM USR01 WHERE BNAME = 'DEVELOPER' ")|
+               expected = '<ABAP Query Result Set>' ).
      ENDMETHOD.
 
    ENDCLASS.

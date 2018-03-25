@@ -195,35 +195,35 @@
 
     cell = list->cdr.
     WHILE cell->type EQ lcl_lisp=>type_pair.
-      validate cell->car.
+    validate cell->car.
 
-      CASE cell->car->type.
-        WHEN lcl_lisp=>type_integer.
-          lo_int ?= cell->car.
-          IF carry &1 lo_int->integer.
-            RETURN.
-          ENDIF.
-          carry = lo_int->integer.
+    CASE cell->car->type.
+    WHEN lcl_lisp=>type_integer.
+    lo_int ?= cell->car.
+    IF carry &1 lo_int->integer.
+    RETURN.
+    ENDIF.
+    carry = lo_int->integer.
 
-        WHEN lcl_lisp=>type_real.
-          lo_real ?= cell->car.
-          IF carry &1 lo_real->real.
-            RETURN.
-          ENDIF.
-          carry = lo_real->real.
+    WHEN lcl_lisp=>type_real.
+    lo_real ?= cell->car.
+    IF carry &1 lo_real->real.
+    RETURN.
+    ENDIF.
+    carry = lo_real->real.
 
-        WHEN lcl_lisp=>type_rational.
-          lo_rat ?= cell->car.
-          IF carry * lo_rat->denominator &1 lo_rat->integer.
-            RETURN.
-          ENDIF.
-          carry = lo_rat->integer / lo_rat->denominator.
+    WHEN lcl_lisp=>type_rational.
+    lo_rat ?= cell->car.
+    IF carry * lo_rat->denominator &1 lo_rat->integer.
+    RETURN.
+    ENDIF.
+    carry = lo_rat->integer / lo_rat->denominator.
 
 *            WHEN lcl_lisp=>type_complex.
-        WHEN OTHERS.
-          throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
-      ENDCASE.
-      cell = cell->cdr.
+    WHEN OTHERS.
+    throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
+    ENDCASE.
+    cell = cell->cdr.
     ENDWHILE.
     result = true.
   END-OF-DEFINITION.
@@ -240,7 +240,7 @@
     get_number carry list->car &2.
 
     IF sign( carry ) NE &1.
-      RETURN.
+    RETURN.
     ENDIF.
     result = true.
   END-OF-DEFINITION.
@@ -276,9 +276,9 @@
     result = nil.
     validate list.
     TRY.
-        get_number carry list->car &2.
-        _is_last_param list.
-        result = lcl_lisp_new=>real( &1( carry ) ).
+    get_number carry list->car &2.
+    _is_last_param list.
+    result = lcl_lisp_new=>real( &1( carry ) ).
     _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -293,9 +293,9 @@
     result = nil.
     validate list.
     TRY.
-        get_number carry list->car &2.
-        _is_last_param list.
-        result = lcl_lisp_new=>real( &1( carry ) ).
+    get_number carry list->car &2.
+    _is_last_param list.
+    result = lcl_lisp_new=>real( &1( carry ) ).
     _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -435,7 +435,6 @@
       METHODS to_text RETURNING VALUE(str) TYPE string
                       RAISING   lcx_lisp_exception.
 *     Utilities
-      METHODS rest RETURNING VALUE(ro_cdr) TYPE REF TO lcl_lisp.
       METHODS new_iterator RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_iterator
                            RAISING   lcx_lisp_exception.
 
@@ -450,6 +449,8 @@
                        RAISING   lcx_lisp_exception.
 
       METHODS is_procedure RETURNING VALUE(result) TYPE REF TO lcl_lisp.
+
+      METHODS is_number RETURNING VALUE(result) TYPE REF TO lcl_lisp.
 
       METHODS error_not_a_pair IMPORTING context TYPE string DEFAULT space
                                RAISING   lcx_lisp_exception.
@@ -483,36 +484,80 @@
     PUBLIC SECTION.
   ENDCLASS.
 
-  CLASS lcl_lisp_string DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
+  CLASS lcl_lisp_string DEFINITION INHERITING FROM lcl_lisp
+    CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
     PROTECTED SECTION.
+      METHODS constructor IMPORTING value TYPE any
+                                    iv_mutable TYPE flag.
   ENDCLASS.
 
-  CLASS lcl_lisp_integer DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
+  CLASS lcl_lisp_string IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( ).
+      type = type_string.
+      me->value = value.
+      mutable = iv_mutable.
+    ENDMETHOD.
+
+  ENDCLASS.
+
+  CLASS lcl_lisp_number DEFINITION INHERITING FROM lcl_lisp ABSTRACT.
+    PUBLIC SECTION.
+      DATA exact TYPE flag READ-ONLY.
+      METHODS is_exact RETURNING VALUE(result) TYPE REF TO lcl_lisp.
+  ENDCLASS.
+
+CLASS lcl_lisp_number IMPLEMENTATION.
+
+  METHOD is_exact.
+    result = false.
+    CHECK exact EQ abap_true.
+    result = true.
+  ENDMETHOD.
+
+ENDCLASS.
+
+  CLASS lcl_lisp_integer DEFINITION INHERITING FROM lcl_lisp_number
+    CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
       DATA integer TYPE tv_int READ-ONLY.
+    PROTECTED SECTION.
+      METHODS constructor IMPORTING value TYPE any.
   ENDCLASS.
 
-  CLASS lcl_lisp_rational DEFINITION INHERITING FROM lcl_lisp_integer FRIENDS lcl_lisp_new.
+  CLASS lcl_lisp_rational DEFINITION INHERITING FROM lcl_lisp_integer
+    CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
       DATA denominator TYPE tv_int READ-ONLY.
+      METHODS to_string REDEFINITION.
+      CLASS-METHODS gcd IMPORTING n             TYPE numeric
+                                  d             TYPE numeric
+                        RETURNING VALUE(result) TYPE tv_int
+                        RAISING   lcx_lisp_exception.
+    PROTECTED SECTION.
       METHODS constructor IMPORTING nummer TYPE tv_int
                                     denom  TYPE tv_int.
-      METHODS to_string REDEFINITION.
-      CLASS-METHODS gcd IMPORTING n             TYPE tv_int
-                                  d             TYPE tv_int
-                        RETURNING VALUE(result) TYPE tv_int
-                        RAISING lcx_lisp_exception.
-    PROTECTED SECTION.
       METHODS normalize RAISING lcx_lisp_exception.
+  ENDCLASS.
+
+  CLASS lcl_lisp_integer IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( ).
+      type = lcl_lisp=>type_integer.
+      integer = value.
+      exact = abap_true.
+    ENDMETHOD.
+
   ENDCLASS.
 
   CLASS lcl_lisp_rational IMPLEMENTATION.
 
     METHOD constructor.
-      super->constructor( ).
+      super->constructor( nummer ).
       type = type_rational.
-      integer = nummer.
       denominator = denom.
       normalize( ).
     ENDMETHOD.
@@ -526,6 +571,7 @@
                      d = denominator ).
       integer = trunc( integer / g ).
       denominator = trunc( denominator / g ).
+      exact = xsdbool( denominator NE 0 ).
     ENDMETHOD.
 
     METHOD gcd.
@@ -549,10 +595,24 @@
 
   ENDCLASS.
 
-  CLASS lcl_lisp_real DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
+  CLASS lcl_lisp_real DEFINITION INHERITING FROM lcl_lisp_number
+    CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
       DATA real TYPE tv_real READ-ONLY.
+    PROTECTED SECTION.
+      METHODS constructor IMPORTING value TYPE any.
   ENDCLASS.
+
+CLASS lcl_lisp_real IMPLEMENTATION.
+
+  METHOD constructor.
+    super->constructor( ).
+    type = lcl_lisp=>type_real.
+    real = value.
+    exact = abap_false.
+  ENDMETHOD.
+
+ENDCLASS.
 
   CLASS lcl_lisp_pair DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
@@ -682,10 +742,10 @@
                             RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS integer IMPORTING value          TYPE any
                             RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_integer.
-      CLASS-METHODS rational IMPORTING nummer TYPE tv_int
-                                       denom  TYPE tv_int
+      CLASS-METHODS rational IMPORTING nummer         TYPE tv_int
+                                       denom          TYPE tv_int
                              RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_integer
-                             RAISING lcx_lisp_exception.
+                             RAISING   lcx_lisp_exception.
 
       CLASS-METHODS real IMPORTING value          TYPE any
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_real.
@@ -693,6 +753,7 @@
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
 
       CLASS-METHODS string IMPORTING value          TYPE any
+                                     iv_mutable     TYPE flag DEFAULT abap_true
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_string.
       CLASS-METHODS char IMPORTING value          TYPE any
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_char.
@@ -709,6 +770,7 @@
 
       CLASS-METHODS elem IMPORTING type           TYPE lcl_lisp=>tv_type
                                    value          TYPE any OPTIONAL
+                                   parameter      TYPE flag DEFAULT abap_false
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS data IMPORTING ref            TYPE REF TO data OPTIONAL
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_data.
@@ -1232,6 +1294,7 @@
         c_lisp_dot    TYPE char1 VALUE '.',
         c_open_paren  TYPE char1 VALUE '(',
         c_close_paren TYPE char1 VALUE ')',
+        c_lisp_equal  TYPE char1 VALUE '=',
         c_lisp_x      TYPE char1 VALUE 'x'.
       CONSTANTS:
         c_escape_char    TYPE char1 VALUE '\',
@@ -1255,15 +1318,23 @@
               RETURNING VALUE(elements) TYPE tt_element
               RAISING   lcx_lisp_exception,
         read_from IMPORTING ii_port        TYPE REF TO lif_input_port
+
                   RETURNING VALUE(element) TYPE REF TO lcl_lisp
                   RAISING   lcx_lisp_exception.
 
     PRIVATE SECTION.
+      TYPES: BEGIN OF ts_label,
+               datum TYPE string,
+               element TYPE REF TO lcl_lisp,
+             END OF ts_label.
+      TYPES tt_labels TYPE SORTED TABLE OF ts_label WITH UNIQUE KEY datum.
+
       TYPES tv_text13 TYPE c LENGTH 13.
       DATA code TYPE string.
       DATA length TYPE i.
       DATA index TYPE i.
       DATA char TYPE char1.
+      DATA mt_labels TYPE tt_labels.
 
       DATA mv_eol TYPE char1.
       DATA mv_whitespace TYPE char07. " Case sensitive
@@ -1272,13 +1343,17 @@
       METHODS:
         next_char RAISING lcx_lisp_exception,
         peek_char RETURNING VALUE(rv_char) TYPE char1,
+        peek_bytevector RETURNING VALUE(rv_flag) TYPE flag,
+        peek_label EXPORTING ev_label TYPE string
+                   RETURNING VALUE(rv_found) TYPE flag,
         skip_whitespace
           RETURNING VALUE(rv_has_next) TYPE flag
           RAISING   lcx_lisp_exception,
         parse_list IMPORTING delim         TYPE char01 DEFAULT c_open_paren
                    RETURNING VALUE(result) TYPE REF TO lcl_lisp
                    RAISING   lcx_lisp_exception,
-        parse_token RETURNING VALUE(element) TYPE REF TO lcl_lisp
+        parse_token IMPORTING iv_literal TYPE flag DEFAULT abap_false
+                    RETURNING VALUE(element) TYPE REF TO lcl_lisp
                     RAISING   lcx_lisp_exception.
       METHODS match_string CHANGING cv_val TYPE string.
       METHODS match_atom CHANGING cv_val TYPE string.
@@ -1429,6 +1504,8 @@
       proc_modulo,       ##called
       proc_max,          ##called
       proc_min,          ##called
+      proc_gcd,          ##called
+      proc_lcm,          ##called
 * Formating
       proc_newline           ##called,
       proc_write             ##called,
@@ -1857,11 +1934,31 @@
       ENDIF.
     ENDMETHOD.
 
+    METHOD peek_bytevector.
+      CONSTANTS c_prefix TYPE char03 VALUE 'u8('.
+      DATA lv_token TYPE string.
+
+      DATA(lv_idx) = index.
+      rv_flag = abap_false.
+      DO 3 TIMES.  " length( 'u8(' ) = 3
+        lv_idx = lv_idx + 1.
+
+        IF lv_idx < length.
+          lv_token = lv_token && code+lv_idx(1).
+        ELSE.
+          RETURN.
+        ENDIF.
+      ENDDO.
+      CHECK lv_token EQ c_prefix.
+      rv_flag = abap_true.
+    ENDMETHOD.
+
     METHOD parse.
 *     Entry point for parsing code. This is not thread-safe, but as an ABAP
 *     process does not have the concept of threads, we are safe :-)
       code = iv_code.
       length = strlen( code ).
+      CLEAR mt_labels.
       IF length = 0.
         APPEND lcl_lisp=>nil TO elements.
         RETURN.
@@ -1876,6 +1973,7 @@
           APPEND parse_token( ) TO elements.
         ENDIF.
       ENDWHILE.
+
     ENDMETHOD.                    "parse
 
     METHOD read_from.
@@ -1973,6 +2071,24 @@
       next_char( ).                 "Skip past closing quote
     ENDMETHOD.                    "match_string
 
+    METHOD peek_label.
+      rv_found = abap_false.
+      CLEAR ev_label.
+
+      DATA(lv_idx) = index.
+      WHILE lv_idx < length.
+        lv_idx = lv_idx + 1.
+        DATA(lv_char) = code+lv_idx(1).
+        IF lv_char CO '0123456789'.
+          ev_label = |{ ev_label }{ lv_char }|.
+        ELSEIF lv_char = c_lisp_equal AND ev_label IS NOT INITIAL.
+          rv_found = abap_true.
+        ELSE.
+          RETURN.
+        ENDIF.
+      ENDWHILE.
+    ENDMETHOD.
+
     METHOD match_atom.              " run_to_delimiter.
       WHILE index < length.
         cv_val = |{ cv_val }{ char }|.
@@ -2000,7 +2116,7 @@
 * ' is just a shortcut for QUOTE, so we wrap the consecutive element in a list starting with the quote symbol
 * so that when it is evaluated later, it returns the quote elements unmodified
           next_char( ).            " Skip past single quote
-          element = lcl_lisp_new=>quote( parse_token( ) ).
+          element = lcl_lisp_new=>quote( parse_token( iv_literal = abap_true ) ).
           RETURN.
 
         WHEN c_lisp_backquote.     " Quasiquote, TO DO
@@ -2024,7 +2140,8 @@
 
         WHEN c_text_quote.
           match_string( CHANGING cv_val = sval ).
-          element = lcl_lisp_new=>string( sval ).
+          element = lcl_lisp_new=>string( value = sval
+                                          iv_mutable = abap_false ).
           RETURN.
 
         WHEN c_lisp_hash.
@@ -2079,7 +2196,36 @@
               RETURN.
 
             WHEN OTHERS.
-              " Others
+*             Boolean #t #f
+              "will be handled in match_atom( )
+
+*              IF peek_bytevector( ).
+**               Bytevector constant #u8( ... )
+*
+*              ENDIF.
+
+*             Notation for numbers #e (exact) #i (inexact) #b (binary) #o (octal) #d (decimal) #x (hexadecimal)
+*             further, instead of exp:  s (short), f (single), d (double), l (long)
+*             positive infinity, negative infinity -inf / -inf.0, NaN +nan.0, positive zero, negative zero
+
+*             Referencing other literal data #<n>= #<n>#
+              DATA lv_label TYPE string.
+              IF peek_label( IMPORTING ev_label = lv_label ).
+
+                next_char( ).                 " Skip past hash
+                WHILE index < length AND char CO '0123456789'.
+                  next_char( ).
+                ENDWHILE.
+                next_char( ).                 "Skip past closing =
+
+                element = parse_token( ).
+
+*               Now Add: (set! |#{ lv_label }#| element)
+                INSERT VALUE #( datum = |#{ lv_label }#|
+                                element = element ) INTO TABLE mt_labels.
+                RETURN.
+              ENDIF.
+
           ENDCASE.
 
       ENDCASE.
@@ -2304,6 +2450,8 @@
       env->define_value( symbol = 'random'    type = lcl_lisp=>type_native value = 'PROC_RANDOM' ).
       env->define_value( symbol = 'max'       type = lcl_lisp=>type_native value = 'PROC_MAX' ).
       env->define_value( symbol = 'min'       type = lcl_lisp=>type_native value = 'PROC_MIN' ).
+      env->define_value( symbol = 'gcd'       type = lcl_lisp=>type_native value = 'PROC_GCD' ).
+      env->define_value( symbol = 'lcm'       type = lcl_lisp=>type_native value = 'PROC_LCM' ).
 
       env->define_value( symbol = 'zero?'     type = lcl_lisp=>type_native value = 'PROC_IS_ZERO' ).
       env->define_value( symbol = 'positive?' type = lcl_lisp=>type_native value = 'PROC_IS_POSITIVE' ).
@@ -4425,8 +4573,8 @@
               res_nummer = res_nummer &1 ( lo_int->integer * res_denom ).
               lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                 d = res_denom ).
-              res_nummer = res_nummer div lv_gcd.
-              res_denom = res_denom div lv_gcd.
+              res_nummer = res_nummer DIV lv_gcd.
+              res_denom = res_denom DIV lv_gcd.
 
             WHEN lcl_lisp=>type_integer.
               res_int = res_int &1 lo_int->integer.
@@ -4469,8 +4617,8 @@
               res_denom = res_denom * lo_rat->denominator.
               lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                 d = res_denom ).
-              res_nummer = res_nummer div lv_gcd.
-              res_denom = res_denom div lv_gcd.
+              res_nummer = res_nummer DIV lv_gcd.
+              res_denom = res_denom DIV lv_gcd.
 
 
             WHEN lcl_lisp=>type_integer.
@@ -4479,8 +4627,8 @@
 
               lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                 d = res_denom ).
-              res_nummer = res_nummer div lv_gcd.
-              res_denom = res_denom div lv_gcd.
+              res_nummer = res_nummer DIV lv_gcd.
+              res_denom = res_denom DIV lv_gcd.
               lv_type = lcl_lisp=>type_rational.
 
             WHEN OTHERS.
@@ -4549,8 +4697,8 @@
                 res_nummer = res_nummer * lo_int->integer.
                 lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                   d = res_denom ).
-                res_nummer = res_nummer div lv_gcd.
-                res_denom = res_denom div lv_gcd.
+                res_nummer = res_nummer DIV lv_gcd.
+                res_denom = res_denom DIV lv_gcd.
 
               WHEN lcl_lisp=>type_integer.
                 res_int = res_int * lo_int->integer.
@@ -4593,8 +4741,8 @@
                 res_denom = res_denom * lo_rat->denominator.
                 lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                   d = res_denom ).
-                res_nummer = res_nummer div lv_gcd.
-                res_denom = res_denom div lv_gcd.
+                res_nummer = res_nummer DIV lv_gcd.
+                res_denom = res_denom DIV lv_gcd.
 
               WHEN lcl_lisp=>type_integer.
                 res_nummer = res_int * lo_rat->integer.
@@ -4602,8 +4750,8 @@
 
                 lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                   d = res_denom ).
-                res_nummer = res_nummer div lv_gcd.
-                res_denom = res_denom div lv_gcd.
+                res_nummer = res_nummer DIV lv_gcd.
+                res_denom = res_denom DIV lv_gcd.
                 lv_type = lcl_lisp=>type_rational.
 
               WHEN OTHERS.
@@ -4698,8 +4846,8 @@
                       res_denom = res_denom * lo_int->integer.
                       lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                         d = res_denom ).
-                      res_nummer = res_nummer div lv_gcd.
-                      res_denom = res_denom div lv_gcd.
+                      res_nummer = res_nummer DIV lv_gcd.
+                      res_denom = res_denom DIV lv_gcd.
 
                     WHEN lcl_lisp=>type_integer.
                       res_nummer = res_int.
@@ -4745,8 +4893,8 @@
                       res_denom = res_denom * lo_rat->integer.
                       lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                         d = res_denom ).
-                      res_nummer = res_nummer div lv_gcd.
-                      res_denom = res_denom div lv_gcd.
+                      res_nummer = res_nummer DIV lv_gcd.
+                      res_denom = res_denom DIV lv_gcd.
 
                     WHEN lcl_lisp=>type_integer.
                       res_nummer = res_int * lo_rat->denominator.
@@ -5098,20 +5246,12 @@
 
     METHOD proc_is_integer.
       _is_type integer.
-    ENDMETHOD.                    "proc_is_number
+    ENDMETHOD.                    "proc_is_integer
 
     METHOD proc_is_number. " argument in list->car
       result = false.
       CHECK list IS BOUND AND list->car IS BOUND.
-      CASE list->car->type.
-        WHEN lcl_lisp=>type_integer
-          OR lcl_lisp=>type_rational
-          OR lcl_lisp=>type_real
-          OR lcl_lisp=>type_complex.
-          result = true.
-        WHEN OTHERS.
-          result = false.
-      ENDCASE.
+      result = list->car->is_number( ).
     ENDMETHOD.                    "proc_is_integer
 
     METHOD proc_is_complex.
@@ -5681,29 +5821,40 @@
 
     METHOD proc_string_set.
       DATA lv_index TYPE sytabix.
-      DATA lv_len TYPE sytabix.
       DATA lv_char TYPE c LENGTH 1.
-      DATA lv_text TYPE string.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_char TYPE REF TO lcl_lisp_char.
+      DATA lo_string TYPE REF TO lcl_lisp_string.
+
+      DATA lv_len TYPE sytabix.
+      DATA lv_text TYPE string.
 
       validate: list, list->cdr, list->cdr->cdr.
       validate_string list->car 'string-set!'.
       validate_index list->cdr->car 'string-set!'.
       validate_char list->cdr->cdr->car 'string-set!'.
 
+      lo_char ?= list->cdr->cdr->car.
+      lv_char = lo_char->value(1).
+
       lo_int ?= list->cdr->car.
       lv_index = lo_int->integer.
-      lv_char = list->cdr->cdr->car->value(1).
 
-      CLEAR lv_index.
+      lo_string ?= list->car.
+      validate_mutable lo_string `in string-set!`.
+*     lo_string->value+lv_index(1) = lv_char.  "Not allowed so split in (left, new char, right)
+
+*     left part
       IF lv_index GT 0.
-        lv_len = lv_index - 1.
-        lv_text = list->car->value+0(lv_len).
+        lv_len = lv_index.
+        lv_text = lo_string->value+0(lv_len).
       ENDIF.
+*     compose with new char and right part
       lv_index = lv_index + 1.
-      lv_text = lv_text && lv_char && list->car->value+lv_index.
-      list->car->value = lv_text.
-      result = list->car.
+      lv_text = lv_text && lv_char && lo_string->value+lv_index.
+
+      lo_string->value = lv_text.
+      result = lo_string.
     ENDMETHOD.
 
     METHOD proc_list_to_string.
@@ -5727,7 +5878,8 @@
       validate: list, list->car.
 
       IF list->car->type = lcl_lisp=>type_symbol.
-        result = lcl_lisp_new=>string( list->car->value ).
+        result = lcl_lisp_new=>string( value = list->car->value
+                                       iv_mutable = abap_false ).
       ELSE.
         throw( |{ list->car->to_string( ) } is not a symbol| ).
       ENDIF.
@@ -5801,6 +5953,58 @@
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
       result = lcl_lisp_new=>number( lv_min ).
+    ENDMETHOD.
+
+    METHOD proc_gcd.
+*     non-negative greatest common divisor of the arguments
+      DATA cell TYPE REF TO lcl_lisp.
+      DATA lo_ptr TYPE REF TO lcl_lisp.
+      DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+
+      DATA carry TYPE tv_real.
+      DATA lv_gcd TYPE tv_real VALUE 0.
+
+      validate list.
+      IF list NE nil.
+
+        get_number lv_gcd list->car '[gcd]'.
+
+        lo_ptr = list->cdr.
+        WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+          get_number carry lo_ptr->car '[gcd]'.
+          lv_gcd = lcl_lisp_rational=>gcd( n = carry d = lv_gcd ).
+          lo_ptr = lo_ptr->cdr.
+        ENDWHILE.
+      ENDIF.
+      result = lcl_lisp_new=>number( lv_gcd ).
+    ENDMETHOD.
+
+    METHOD proc_lcm.
+*     non-negative least common multiple of the arguments
+      DATA cell TYPE REF TO lcl_lisp.
+      DATA lo_ptr TYPE REF TO lcl_lisp.
+      DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+
+      DATA carry TYPE tv_real.
+      DATA lv_lcm TYPE tv_real VALUE 1.
+
+      validate list.
+      IF list NE nil.
+
+        get_number lv_lcm list->car '[lcm]'.
+
+        lo_ptr = list->cdr.
+        WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+          get_number carry lo_ptr->car '[lcm]'.
+          lv_lcm = lv_lcm * carry / lcl_lisp_rational=>gcd( n = carry d = lv_lcm ).
+          lo_ptr = lo_ptr->cdr.
+        ENDWHILE.
+      ENDIF.
+      result = lcl_lisp_new=>number( abs( lv_lcm ) ).
     ENDMETHOD.
 
     METHOD proc_is_textual_port.
@@ -6842,8 +7046,8 @@
 
     METHOD define_value.
       element = lcl_lisp_new=>elem( type = type
-                                    value = value ).
-      element->parameter_object = parameter.
+                                    value = value
+                                    parameter = parameter ).
       set( symbol = symbol
            element = element ).
     ENDMETHOD.                    "define_cell
@@ -6986,10 +7190,6 @@
       eof_object = lcl_lisp_new=>char( c_lisp_eof ).
     ENDMETHOD.
 
-    METHOD rest.
-      ro_cdr = COND #( WHEN cdr IS BOUND THEN cdr ELSE nil ).
-    ENDMETHOD.                    "rest
-
     METHOD is_equivalent. "eqv?
       validate io_elem.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
@@ -7054,18 +7254,6 @@
           CHECK me = b.
       ENDCASE.
       result = true.
-    ENDMETHOD.
-
-    METHOD is_procedure.
-      CASE type.
-        WHEN type_lambda
-          OR type_native
-          OR type_primitive
-          OR type_abap_function.  " really?
-          result = true.
-        WHEN OTHERS.
-          result = false.
-      ENDCASE.
     ENDMETHOD.
 
     METHOD is_equal. "equal?
@@ -7298,6 +7486,10 @@
           str = |<ABAP Data>|.
         WHEN type_abap_table.
           str = |<ABAP Table>|.
+        WHEN type_abap_query.
+          str = |<ABAP Query>|.
+        WHEN type_abap_sql_set.
+          str = |<ABAP Query Result Set>|.
       ENDCASE.
     ENDMETHOD.                    "to_string
 
@@ -7333,7 +7525,31 @@
           area    = c_area_eval.
     ENDMETHOD.                    "eval_err
 
-  ENDCLASS.                    "lcl_lisp IMPLEMENTATION
+    METHOD is_procedure.
+      CASE type.
+        WHEN type_lambda
+          OR type_native
+          OR type_primitive
+          OR type_abap_function.  " really?
+          result = true.
+        WHEN OTHERS.
+          result = false.
+      ENDCASE.
+    ENDMETHOD.
+
+    METHOD is_number.
+      CASE type.
+        WHEN type_integer
+          OR type_rational
+          OR type_real
+          OR type_complex.
+          result = true.
+        WHEN OTHERS.
+          result = false.
+      ENDCASE.
+    ENDMETHOD.
+
+ENDCLASS.                    "lcl_lisp IMPLEMENTATION
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp_iterator IMPLEMENTATION
@@ -7395,12 +7611,12 @@
           ro_elem->type = type.
           ro_elem->value = value.
       ENDCASE.
+      ro_elem->parameter_object = parameter.
     ENDMETHOD.
 
     METHOD string.
-      ro_elem = NEW lcl_lisp_string( ).
-      ro_elem->type = lcl_lisp=>type_string.
-      ro_elem->value = value.
+      ro_elem = NEW lcl_lisp_string( value = value
+                                     iv_mutable = iv_mutable ).
     ENDMETHOD.
 
     METHOD char.
@@ -7451,15 +7667,11 @@
     ENDMETHOD.
 
     METHOD integer.
-      ro_elem = NEW lcl_lisp_integer( ).
-      ro_elem->type = lcl_lisp=>type_integer.
-      ro_elem->integer = value.
+      ro_elem = NEW lcl_lisp_integer( value ).
     ENDMETHOD.
 
     METHOD real.
-      ro_elem = NEW lcl_lisp_real( ).
-      ro_elem->type = lcl_lisp=>type_real.
-      ro_elem->real = value.
+      ro_elem = NEW lcl_lisp_real( value ).
     ENDMETHOD.
 
     METHOD number.
@@ -7511,8 +7723,8 @@
 *         preserve the original value and let the ABAP kernel do the heavy lifting later on)
           DATA lv_nummer TYPE string.
           DATA lv_denom TYPE string.
-          split value at lcl_parser=>c_lisp_slash into lv_nummer lv_denom.
-          if sy-subrc EQ 0 and lv_denom NE space.
+          SPLIT value AT lcl_parser=>c_lisp_slash INTO lv_nummer lv_denom.
+          IF sy-subrc EQ 0 AND lv_denom NE space.
             TRY.
                 ro_elem = rational( nummer = CONV tv_int( lv_nummer )
                                     denom = CONV tv_int( lv_denom ) ).
