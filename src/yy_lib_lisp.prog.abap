@@ -505,8 +505,10 @@
 
   CLASS lcl_lisp_number DEFINITION INHERITING FROM lcl_lisp ABSTRACT.
     PUBLIC SECTION.
-      DATA exact TYPE flag READ-ONLY.
       METHODS is_exact RETURNING VALUE(result) TYPE REF TO lcl_lisp.
+      METHODS is_inexact RETURNING VALUE(result) TYPE REF TO lcl_lisp.
+    PROTECTED SECTION.
+      DATA exact TYPE flag.
   ENDCLASS.
 
   CLASS lcl_lisp_number IMPLEMENTATION.
@@ -515,6 +517,12 @@
       result = false.
       CHECK exact EQ abap_true.
       result = true.
+    ENDMETHOD.
+
+    METHOD is_inexact.
+      result = true.
+      CHECK exact EQ abap_true.
+      result = false.
     ENDMETHOD.
 
   ENDCLASS.
@@ -4651,8 +4659,13 @@
           result = lcl_lisp_new=>integer( res_int ).
 
         WHEN lcl_lisp=>type_rational.
-          result = lcl_lisp_new=>rational( nummer = res_nummer
-                                           denom = res_denom ).
+          IF res_denom EQ 1.
+            result = lcl_lisp_new=>integer( res_nummer ).
+          ELSE.
+            result = lcl_lisp_new=>rational( nummer = res_nummer
+                                             denom = res_denom ).
+          ENDIF.
+
         WHEN lcl_lisp=>type_real.
           result = lcl_lisp_new=>real( res_real ).
 
@@ -5603,9 +5616,7 @@
       validate list.
       validate_number list->car `exact?`.
       lo_number ?= list->car.
-      result = false.
-      CHECK lo_number->exact EQ abap_true.
-      result = true.
+      result = lo_number->is_exact( ).
     ENDMETHOD.
 
     METHOD proc_is_inexact.
@@ -5613,9 +5624,7 @@
       validate list.
       validate_number list->car `inexact?`.
       lo_number ?= list->car.
-      result = false.
-      CHECK lo_number->exact EQ abap_false.
-      result = true.
+      result = lo_number->is_inexact( ).
     ENDMETHOD.
 
     METHOD proc_num_to_string.
