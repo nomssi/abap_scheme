@@ -1509,6 +1509,130 @@
 
    ENDCLASS.                    "ltc_functional_tests IMPLEMENTATION
 
+   CLASS ltc_numbers DEFINITION INHERITING FROM ltc_interpreter
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PRIVATE SECTION.
+       METHODS setup.
+       METHODS teardown.
+
+       METHODS is_complex FOR TESTING.
+       METHODS is_real FOR TESTING.
+       METHODS is_rational FOR TESTING.
+       METHODS is_integer FOR TESTING.
+
+       METHODS gcd_1 FOR TESTING.
+       METHODS lcm_1 FOR TESTING.
+
+       METHODS exact_1 FOR TESTING.
+       METHODS exact_2 FOR TESTING.
+       METHODS exact_3 FOR TESTING.
+       METHODS exact_4 FOR TESTING.
+       METHODS exact_5 FOR TESTING.
+
+       METHODS inexact_1 FOR TESTING.
+       METHODS inexact_2 FOR TESTING.
+       METHODS inexact_3 FOR TESTING.
+       METHODS inexact_4 FOR TESTING.
+   ENDCLASS.
+
+   CLASS ltc_numbers IMPLEMENTATION.
+
+     METHOD setup.
+       new_interpreter( ).
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.
+
+     METHOD is_complex.
+       scheme( code = '(complex? 3)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_real.
+*      ;(real? #e1e10)
+       scheme( code = '(real? 3)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_rational.
+       scheme( code = '(rational? 6/10)'
+               expected = '#t' ).
+       scheme( code = '(rational? 6/3)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_integer.
+       scheme( code = '(integer? 3.0)'
+               expected = '#t' ).
+       scheme( code = '(integer? 8/4)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD gcd_1.
+       scheme( code = |(gcd)|
+               expected = |0| ).
+       scheme( code = |(gcd 32 -36)|
+               expected = |4| ).
+     ENDMETHOD.
+
+     METHOD lcm_1.
+       scheme( code = |(lcm)|
+               expected = |1| ).
+       scheme( code = |(lcm 32 -36)|
+               expected = |288| ).
+*       scheme( code = |(lcm 32.0 -36)|
+*               expected = |288.0| ).   " inexact
+     ENDMETHOD.
+
+     METHOD exact_1.
+       scheme( code = '(exact? 22)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD exact_2.
+       scheme( code = '(exact? 1/3)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD exact_3.
+       scheme( code = '(exact? 0.333)'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD exact_4.
+       scheme( code = '(exact? 3.0)'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD exact_5.
+       scheme( code = '(exact? #e3.0)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD inexact_1.
+       scheme( code = '(inexact? 0.5)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD inexact_2.
+       scheme( code = '(inexact? (/ 10 3))'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD inexact_3.
+       scheme( code = '(inexact? (/ 10 3.1))'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD inexact_4.
+       scheme( code = '(inexact? 3.)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+   ENDCLASS.
+
 *----------------------------------------------------------------------*
 *       CLASS ltc_math DEFINITION
 *----------------------------------------------------------------------*
@@ -2617,7 +2741,7 @@
 
      METHOD list_make_list.
        scheme( code = '(make-list 5)'
-               expected = '( nil nil nil nil nil )' ).
+               expected = |( { c_lisp_nil } { c_lisp_nil } { c_lisp_nil } { c_lisp_nil } { c_lisp_nil } )| ).
      ENDMETHOD.
 
      METHOD list_make_list_2.
@@ -2887,9 +3011,6 @@
        METHODS teardown.
 
        METHODS abs_1 FOR TESTING.
-
-       METHODS gcd_1 FOR TESTING.
-       METHODS lcm_1 FOR TESTING.
    ENDCLASS.                    "ltc_library_function DEFINITION
 
 *----------------------------------------------------------------------*
@@ -2920,22 +3041,6 @@
        scheme( code = |(abs 0)|
                expected = |0| ).
      ENDMETHOD.                    "abs
-
-     METHOD gcd_1.
-       scheme( code = |(gcd)|
-               expected = |0| ).
-       scheme( code = |(gcd 32 -36)|
-               expected = |4| ).
-     ENDMETHOD.
-
-     METHOD lcm_1.
-       scheme( code = |(lcm)|
-               expected = |1| ).
-       scheme( code = |(lcm 32 -36)|
-               expected = |288| ).
-*       scheme( code = |(lcm 32.0 -36)|
-*               expected = |288.0| ).   " inexact
-     ENDMETHOD.
 
    ENDCLASS.                    "ltc_library_function IMPLEMENTATION
 
@@ -3246,14 +3351,6 @@
        METHODS compa_lte_3 FOR TESTING.
        METHODS compa_lte_4 FOR TESTING.
 
-       METHODS exact_1 FOR TESTING.
-       METHODS exact_2 FOR TESTING.
-       METHODS exact_3 FOR TESTING.
-
-       METHODS inexact_1 FOR TESTING.
-       METHODS inexact_2 FOR TESTING.
-       METHODS inexact_3 FOR TESTING.
-
        METHODS compa_equal_1 FOR TESTING.
        METHODS compa_equal_2 FOR TESTING.
        METHODS compa_equal_3 FOR TESTING.
@@ -3381,36 +3478,6 @@
        scheme( code = '(< 1/12 1/3)'
                expected = '#t' ).
      ENDMETHOD.                    "compa_lte_4
-
-     METHOD exact_1.
-       scheme( code = '(exact? 22)'
-               expected = '#t' ).
-     ENDMETHOD.
-
-     METHOD exact_2.
-       scheme( code = '(exact? 1/3)'
-               expected = '#t' ).
-     ENDMETHOD.
-
-     METHOD exact_3.
-       scheme( code = '(exact? 0.333)'
-               expected = '#f' ).
-     ENDMETHOD.
-
-     METHOD inexact_1.
-       scheme( code = '(inexact? 0.5)'
-               expected = '#t' ).
-     ENDMETHOD.
-
-     METHOD inexact_2.
-       scheme( code = '(inexact? (/ 10 3))'
-               expected = '#f' ).
-     ENDMETHOD.
-
-     METHOD inexact_3.
-       scheme( code = '(inexact? (/ 10 3.1))'
-               expected = '#t' ).
-     ENDMETHOD.
 
      METHOD compa_equal_1.
 *   Test equal?

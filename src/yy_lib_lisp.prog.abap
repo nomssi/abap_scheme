@@ -8,7 +8,7 @@
 *&---------------------------------------------------------------------*
 *& MIT License (see below)
 *& Martin Ceronio, martin.ceronio@infosize.co.za June 2015
-*& Jacques Nomssi Nzali, www.informatik-dv.com Sept. 2015 to Jan. 2018
+*& Jacques Nomssi Nzali, www.informatik-dv.com March 2018
 *&---------------------------------------------------------------------*
 *  The MIT License (MIT)
 *
@@ -38,7 +38,7 @@
   CONSTANTS:
     c_lisp_input     TYPE string VALUE 'ABAP Lisp Input',
     c_lisp_eof       TYPE x LENGTH 2 VALUE 'FFFF', " we do not expect this in source code
-    c_lisp_nil       TYPE string VALUE 'nil',
+    c_lisp_nil       TYPE string VALUE '''()',
     c_expr_separator TYPE string VALUE ` `.   " multiple expression output
   CONSTANTS:
     c_error_message         TYPE string VALUE 'Error in processing',
@@ -219,7 +219,7 @@
     ENDIF.
     carry = lo_rat->integer / lo_rat->denominator.
 
-*            WHEN lcl_lisp=>type_complex.
+*                  WHEN lcl_lisp=>type_complex.
     WHEN OTHERS.
     throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
     ENDCASE.
@@ -261,7 +261,7 @@
   END-OF-DEFINITION.
 
   DEFINE _catch_arithmetic_error.
-    CATCH cx_sy_arithmetic_error INTO DATA(lx_error).
+    CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
       throw( lx_error->get_text( ) ).
   END-OF-DEFINITION.
 
@@ -466,14 +466,35 @@
                                           ev_str  TYPE string.
   ENDCLASS.                    "lcl_lisp DEFINITION
 
-  CLASS lcl_lisp_char DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
+  CLASS lcl_lisp_char DEFINITION INHERITING FROM lcl_lisp
+    CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
+      CLASS-METHODS new IMPORTING value          TYPE any
+                        RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_char.
+    PROTECTED SECTION.
       TYPES: BEGIN OF ts_char,
                char TYPE c LENGTH 1,
                elem TYPE REF TO lcl_lisp_char,
              END OF ts_char.
-      CLASS-DATA char_table TYPE HASHED TABLE OF ts_char WITH UNIQUE KEY char READ-ONLY.
-    PROTECTED SECTION.
+      CLASS-DATA char_table TYPE HASHED TABLE OF ts_char WITH UNIQUE KEY char.
+
+      METHODS constructor IMPORTING value TYPE any.
+  ENDCLASS.
+
+  CLASS lcl_lisp_char IMPLEMENTATION.
+
+    METHOD new.
+      ro_elem = VALUE #( char_table[ char = value ]-elem DEFAULT NEW lcl_lisp_char( value ) ).
+    ENDMETHOD.
+
+    METHOD constructor.
+      super->constructor( ).
+      type = lcl_lisp=>type_char.
+      me->value = value.
+      INSERT VALUE #( char = value
+                      elem = me ) INTO TABLE char_table.
+    ENDMETHOD.
+
   ENDCLASS.
 
   CLASS lcl_lisp_null DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
@@ -538,6 +559,10 @@
   CLASS lcl_lisp_rational DEFINITION INHERITING FROM lcl_lisp_integer
     CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
+      CLASS-METHODS new IMPORTING nummer        TYPE tv_int
+                                  denom         TYPE tv_int
+                        RETURNING VALUE(result) TYPE REF TO lcl_lisp_integer.
+
       DATA denominator TYPE tv_int READ-ONLY.
       METHODS to_string REDEFINITION.
       CLASS-METHODS gcd IMPORTING n             TYPE numeric
@@ -562,6 +587,19 @@
   ENDCLASS.
 
   CLASS lcl_lisp_rational IMPLEMENTATION.
+
+    METHOD new.
+      DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      CREATE OBJECT lo_rat
+        EXPORTING
+          nummer = nummer
+          denom  = denom.
+      IF lo_rat->denominator EQ 1.
+        result = NEW lcl_lisp_integer( lo_rat->integer ).
+      ELSE.
+        result = lo_rat.
+      ENDIF.
+    ENDMETHOD.
 
     METHOD constructor.
       super->constructor( nummer ).
@@ -740,7 +778,7 @@
 
   CLASS lcl_lisp_new DEFINITION.
     PUBLIC SECTION.
-      CLASS-METHODS atom IMPORTING value          TYPE any
+      CLASS-METHODS atom IMPORTING value          TYPE string
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS null RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS symbol IMPORTING value          TYPE any
@@ -758,7 +796,15 @@
       CLASS-METHODS real IMPORTING value          TYPE any
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_real.
       CLASS-METHODS number IMPORTING value          TYPE any
-                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
+                           RAISING   cx_sy_conversion_no_number.
+
+      CLASS-METHODS octal IMPORTING value          TYPE any
+                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
+                          RAISING   cx_sy_conversion_no_number.
+      CLASS-METHODS hex IMPORTING value          TYPE any
+                        RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
+                        RAISING   cx_sy_conversion_no_number.
 
       CLASS-METHODS string IMPORTING value          TYPE any
                                      iv_mutable     TYPE flag DEFAULT abap_true
@@ -1306,7 +1352,6 @@
         c_lisp_x      TYPE char1 VALUE 'x'.
       CONSTANTS:
         c_escape_char    TYPE char1 VALUE '\',
-        c_lisp_slash     TYPE char1 VALUE '/',
         c_text_quote     TYPE char1 VALUE '"',
         c_lisp_quote     TYPE char1 VALUE '''', "LISP single quote = QUOTE
         c_lisp_backquote TYPE char1 VALUE '`',  " backquote = quasiquote
@@ -1319,6 +1364,12 @@
         c_close_curly    TYPE char1 VALUE '}',
         c_open_bracket   TYPE char1 VALUE '[',
         c_close_bracket  TYPE char1 VALUE ']'.
+      CONSTANTS:
+        c_number_exact   TYPE c VALUE 'e',
+        c_number_inexact TYPE c VALUE 'i',
+        c_number_octal   TYPE c VALUE 'o',
+        c_number_decimal TYPE c VALUE 'd',
+        c_number_hex     TYPE c VALUE 'x'.
 
       METHODS:
         constructor,
@@ -2203,6 +2254,44 @@
 
               RETURN.
 
+*           Notation for numbers #e (exact) #i (inexact) #b (binary) #o (octal) #d (decimal) #x (hexadecimal)
+*           further, instead of exp:  s (short), f (single), d (double), l (long)
+*           positive infinity, negative infinity -inf / -inf.0, NaN +nan.0, positive zero, negative zero
+            WHEN c_number_exact.   "#e (exact)
+              next_char( ).      " skip #
+              next_char( ).      " skip e
+              match_atom( CHANGING cv_val = sval ).
+              element = lcl_lisp_new=>number( sval ).
+              RETURN.
+
+            WHEN c_number_inexact. "#i (inexact)
+              next_char( ).      " skip #
+              next_char( ).      " skip i
+              match_atom( CHANGING cv_val = sval ).
+              element = lcl_lisp_new=>real( sval ).
+              RETURN.
+
+            WHEN c_number_octal.   "#o (octal)
+              next_char( ).      " skip #
+              next_char( ).      " skip o
+              match_atom( CHANGING cv_val = sval ).
+              element = lcl_lisp_new=>octal( sval ).
+              RETURN.
+
+            WHEN c_number_decimal. "#d (decimal)
+              next_char( ).      " skip #
+              next_char( ).      " skip d
+              match_atom( CHANGING cv_val = sval ).
+              element = lcl_lisp_new=>number( sval ).
+              RETURN.
+
+            WHEN c_number_hex. "#x (hexadecimal)
+              next_char( ).      " skip #
+              next_char( ).      " skip x
+              match_atom( CHANGING cv_val = sval ).
+              element = lcl_lisp_new=>hex( sval ).
+              RETURN.
+
             WHEN OTHERS.
 *             Boolean #t #f
               "will be handled in match_atom( )
@@ -2211,10 +2300,6 @@
 **               Bytevector constant #u8( ... )
 *
 *              ENDIF.
-
-*             Notation for numbers #e (exact) #i (inexact) #b (binary) #o (octal) #d (decimal) #x (hexadecimal)
-*             further, instead of exp:  s (short), f (single), d (double), l (long)
-*             positive infinity, negative infinity -inf / -inf.0, NaN +nan.0, positive zero, negative zero
 
 *             Referencing other literal data #<n>= #<n>#
               DATA lv_label TYPE string.
@@ -2239,10 +2324,7 @@
       ENDCASE.
 *     Others
       match_atom( CHANGING cv_val = sval ).
-      element = COND #( WHEN sval IS INITIAL
-                        THEN lcl_lisp=>nil
-                        ELSE lcl_lisp_new=>atom( sval ) ).
-
+      element = lcl_lisp_new=>atom( sval ).
     ENDMETHOD.                    "parse_token
 
   ENDCLASS.                    "lcl_parser IMPLEMENTATION
@@ -5259,10 +5341,6 @@
       _is_type hash.
     ENDMETHOD.                    "proc_is_hash
 
-    METHOD proc_is_integer.
-      _is_type integer.
-    ENDMETHOD.                    "proc_is_integer
-
     METHOD proc_is_number. " argument in list->car
       result = false.
       CHECK list IS BOUND AND list->car IS BOUND.
@@ -5270,16 +5348,38 @@
     ENDMETHOD.                    "proc_is_integer
 
     METHOD proc_is_complex.
-      _is_type complex.
+      result = false.
+      CHECK list IS BOUND AND list->car IS BOUND.
+      result = list->car->is_number( ).
+*      _is_type complex.
     ENDMETHOD.
 
     METHOD proc_is_real.
-      _is_type real.
+      result = false.
+      CHECK list IS BOUND AND list->car IS BOUND.
+      CASE list->car->type.
+        WHEN lcl_lisp=>type_real
+          OR lcl_lisp=>type_rational
+          OR lcl_lisp=>type_integer.
+          result = true.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_is_rational.
-      _is_type rational.
+      result = false.
+      CHECK list IS BOUND AND list->car IS BOUND.
+      CASE list->car->type.
+        WHEN lcl_lisp=>type_rational
+          OR lcl_lisp=>type_integer.
+          result = true.
+      ENDCASE.
     ENDMETHOD.
+
+    METHOD proc_is_integer.
+      result = false.
+      CHECK list->car IS BOUND AND list->car->type EQ lcl_lisp=>type_integer.
+      result = true.
+    ENDMETHOD.                    "proc_is_integer
 
     METHOD proc_is_symbol.
       _is_type symbol.
@@ -7293,7 +7393,7 @@
             AND lo_lambda->macro EQ lo_l_b->macro AND lo_lambda->environment = b->environment.
 
         WHEN OTHERS.
-* obj1 and obj2 are pairs, vectors, bytevectors, records, or strings that denote the same location  in the store (section 3.4).
+* obj1 and obj2 are pairs, vectors, bytevectors, records, or strings that denote the same location in the store (section 3.4).
 
           CHECK me = b.
       ENDCASE.
@@ -7498,6 +7598,7 @@
           lv_real = lo_int->integer.
           str = lv_real.
           str = condense( str ).
+
         WHEN type_real.
           str = condense( CAST lcl_lisp_real( me )->real ).
 *        WHEN type_rational.
@@ -7539,20 +7640,17 @@
 
     METHOD to_text.
       CASE type.
-        WHEN type_string
-          OR type_char.
+        WHEN type_string OR type_char.
           CASE me.
             WHEN lcl_lisp=>new_line.
               str = |\n|.
             WHEN lcl_lisp=>eof_object.
               str = '<eof>'.
-            WHEN nil.
-              str = space.
             WHEN OTHERS.
               str = value.
           ENDCASE.
         WHEN type_null.
-          str = |'()|.
+          str = space.
         WHEN OTHERS.
           str = to_string( ).
       ENDCASE.
@@ -7658,22 +7756,34 @@
       ro_elem->parameter_object = parameter.
     ENDMETHOD.
 
+    METHOD atom.
+      CASE value.
+        WHEN space.
+          ro_elem = lcl_lisp=>nil.  " or EOF_OBJECT?
+
+        WHEN lcl_lisp=>true->value.
+          ro_elem = lcl_lisp=>true.
+
+        WHEN lcl_lisp=>false->value.
+          ro_elem = lcl_lisp=>false.
+
+        WHEN OTHERS.
+          TRY.
+              ro_elem = number( value ).
+            CATCH cx_sy_conversion_no_number.
+*             otherwise treat it as a symbol
+              ro_elem = symbol( value ).
+          ENDTRY.
+      ENDCASE.
+    ENDMETHOD.                    "new_atom
+
     METHOD string.
       ro_elem = NEW lcl_lisp_string( value = value
                                      iv_mutable = iv_mutable ).
     ENDMETHOD.
 
     METHOD char.
-      READ TABLE lcl_lisp_char=>char_table INTO DATA(ls_char) WITH TABLE KEY char = value.
-      IF sy-subrc EQ 0.
-        ro_elem = ls_char-elem.
-      ELSE.
-        ro_elem = NEW lcl_lisp_char( ).
-        ro_elem->type = lcl_lisp=>type_char.
-        ro_elem->value = value.
-        INSERT VALUE #( char = value
-                        elem = ro_elem ) INTO TABLE lcl_lisp_char=>char_table.
-      ENDIF.
+      ro_elem = lcl_lisp_char=>new( value ).
     ENDMETHOD.
 
     METHOD charx.
@@ -7707,7 +7817,7 @@
     METHOD null.
       ro_elem = NEW lcl_lisp_null( ).
       ro_elem->type = lcl_lisp=>type_null.
-      ro_elem->value = 'nil'.
+      ro_elem->value = c_lisp_nil.
     ENDMETHOD.
 
     METHOD integer.
@@ -7719,13 +7829,62 @@
     ENDMETHOD.
 
     METHOD number.
+      CONSTANTS c_lisp_slash TYPE char1 VALUE '/'.
+      DATA lv_nummer_str TYPE string.
+      DATA lv_denom_str TYPE string.
+      DATA lv_denom TYPE tv_int.
       DATA lv_int TYPE tv_int.
+      DATA lv_real TYPE tv_real.
+
       TRY.
-          MOVE EXACT value TO lv_int.
-          ro_elem = integer( lv_int ).
+*         Check whether the token can be converted to a float,
+*         to cover all manner of number formats, including scientific
+          lv_real = value.
+
+          TRY.
+              lv_nummer_str = value.
+              IF NOT contains( val = lv_nummer_str sub = '.' ).
+                MOVE EXACT value TO lv_int.
+                ro_elem = integer( lv_int ).
+                RETURN.
+              ENDIF.
+            CATCH cx_sy_conversion_error.
+          ENDTRY.
+
+          ro_elem = real( lv_real ).
+          RETURN.
+
         CATCH cx_sy_conversion_error.
-          ro_elem = real( value ).
+
+          SPLIT value AT c_lisp_slash INTO lv_nummer_str lv_denom_str.
+          IF sy-subrc EQ 0 AND lv_denom_str IS NOT INITIAL.
+            MOVE EXACT lv_nummer_str TO lv_int.
+            MOVE EXACT lv_denom_str TO lv_denom.
+            ro_elem = rational( nummer = lv_int
+                                denom = lv_denom ).
+            RETURN.
+          ENDIF.
+
       ENDTRY.
+
+      RAISE EXCEPTION TYPE cx_sy_conversion_no_number.
+
+    ENDMETHOD.
+
+    METHOD hex.
+      DATA xtext TYPE string.
+      DATA lv_hex TYPE tv_int.
+
+      lv_hex = xtext.
+      ro_elem = integer( lv_hex ).
+    ENDMETHOD.
+
+    METHOD octal.
+      DATA xtext TYPE string.
+      DATA lv_hex TYPE tv_int.
+
+      lv_hex = xtext.
+      ro_elem = integer( lv_hex ).
     ENDMETHOD.
 
     METHOD port.
@@ -7749,41 +7908,9 @@
     ENDMETHOD.
 
     METHOD rational.
-      ro_elem = NEW lcl_lisp_rational( nummer = nummer
-                                       denom = denom ).
+      ro_elem = lcl_lisp_rational=>new( nummer = nummer
+                                        denom = denom ).
     ENDMETHOD.
-
-    METHOD atom.
-      CASE value.
-        WHEN lcl_lisp=>true->value.
-          ro_elem = lcl_lisp=>true.
-
-        WHEN lcl_lisp=>false->value.
-          ro_elem = lcl_lisp=>false.
-
-        WHEN OTHERS.
-*         Check whether the token can be converted to a float, to cover all manner of number formats,
-*         including scientific, otherwise treat it as a symbol (but we still store it as a string to
-*         preserve the original value and let the ABAP kernel do the heavy lifting later on)
-          DATA lv_nummer TYPE string.
-          DATA lv_denom TYPE string.
-          SPLIT value AT lcl_parser=>c_lisp_slash INTO lv_nummer lv_denom.
-          IF sy-subrc EQ 0 AND lv_denom NE space.
-            TRY.
-                ro_elem = rational( nummer = CONV tv_int( lv_nummer )
-                                    denom = CONV tv_int( lv_denom ) ).
-                RETURN.
-              CATCH cx_sy_conversion_no_number.
-            ENDTRY.
-          ENDIF.
-          TRY.
-              DATA(lv_real) = CONV tv_real( value ).
-              ro_elem = number( value ).
-            CATCH cx_sy_conversion_no_number.
-              ro_elem = symbol( value ).
-          ENDTRY.
-      ENDCASE.
-    ENDMETHOD.                    "new_atom
 
     METHOD data.
       ro_elem = NEW lcl_lisp_data( ).
