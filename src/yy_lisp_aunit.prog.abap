@@ -1533,6 +1533,11 @@
        METHODS inexact_2 FOR TESTING.
        METHODS inexact_3 FOR TESTING.
        METHODS inexact_4 FOR TESTING.
+
+       METHODS binary_1 FOR TESTING.
+       METHODS octal_1 FOR TESTING.
+       METHODS hexadecimal_1 FOR TESTING.
+
    ENDCLASS.
 
    CLASS ltc_numbers IMPLEMENTATION.
@@ -1630,6 +1635,42 @@
        scheme( code = '(inexact? 3.)'
                expected = '#t' ).
      ENDMETHOD.
+
+     METHOD binary_1.
+       scheme( code = '(eq? #b101001 #o51)'
+               expected = '#t' ).
+       scheme( code = '(eq? #b1010111100 #o1274)'
+               expected = '#t' ).
+       scheme( code = '(eq? #b11100.01001 #o34.22)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD octal_1.
+       scheme( code = '#o175'
+               expected = '125' ).
+       scheme( code = '#o1604'
+               expected = '900' ).
+       scheme( code = '#o764'
+               expected = '500' ).
+       scheme( code = '#o65'
+               expected = '53' ).
+       scheme( code = '#o0.124'
+               expected = '0.1640625' ).
+       scheme( code = '(eq? #o1057 #b001000101111)'
+               expected = '#t' ).
+
+     ENDMETHOD.
+
+     METHOD hexadecimal_1.
+       scheme( code = '(eq? #o1057 #x22F)'
+               expected = '#t' ).
+       scheme( code = '(eq? #b0011111110100101 #o037645)'
+               expected = '#t' ).
+
+       scheme( code = '#b100101'
+               expected = '37' ).
+     ENDMETHOD.
+
 
    ENDCLASS.
 
@@ -2044,6 +2085,7 @@
        METHODS is_list_5 FOR TESTING.
        METHODS is_list_6 FOR TESTING.
        METHODS is_list_7 FOR TESTING.
+       METHODS is_list_8 FOR TESTING.
 
        METHODS list_nil_1 FOR TESTING.
        METHODS list_nil_2 FOR TESTING.
@@ -2098,6 +2140,7 @@
        METHODS list_assoc_0 FOR TESTING.
        METHODS list_assoc_1 FOR TESTING.
        METHODS list_assoc_2 FOR TESTING.
+       METHODS list_assoc_3 FOR TESTING.
 
 *   CAR & CDR test
        METHODS list_car_1 FOR TESTING.
@@ -2234,6 +2277,15 @@
 
      METHOD is_list_7.
        scheme( code = |(list? '(a . b))|
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD is_list_8.
+*      By deﬁnition, all lists have ﬁnite length and are terminated by the empty list.
+*      A circular list is not a list
+       scheme( code = |(let ((x (list 'a)))| &
+                      |   (set-cdr! x x)| &
+                      | (list? x))|
                expected = '#f' ).
      ENDMETHOD.
 
@@ -2474,6 +2526,11 @@
 
      METHOD list_assoc_2.
        scheme( code = |(assoc 2.0 '((1 1) (2 4) (3 9)))|
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD list_assoc_3.
+       scheme( code = |(assoc 2.0 '((1 1) (2 4) (3 9)) =)|
                expected = '( 2 4 )' ).
      ENDMETHOD.
 

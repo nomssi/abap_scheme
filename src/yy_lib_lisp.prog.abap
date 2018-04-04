@@ -62,6 +62,7 @@
     c_eval_unquote_splicing TYPE string VALUE 'unquote-splicing'.
 
   TYPES tv_int TYPE i.            " integer data type, use int8 if available
+  TYPES tv_index TYPE tv_int.
   TYPES tv_real TYPE decfloat34.  " real data type
   TYPES tv_xword TYPE x LENGTH 2.
 
@@ -445,6 +446,7 @@
       METHODS is_equal IMPORTING io_elem       TYPE REF TO lcl_lisp
                                  comp          TYPE REF TO lcl_lisp DEFAULT nil
                                  interpreter   TYPE REF TO lcl_lisp_interpreter OPTIONAL
+                                 environment   TYPE REF TO lcl_lisp_environment OPTIONAL
                        RETURNING VALUE(result) TYPE REF TO lcl_lisp
                        RAISING   lcx_lisp_exception.
 
@@ -748,8 +750,8 @@
     PROTECTED SECTION.
 *     input is always buffered
       DATA last_input TYPE string.
-      DATA last_index TYPE sytabix.
-      DATA last_len TYPE sytabix.
+      DATA last_index TYPE tv_index.
+      DATA last_len TYPE tv_index.
 
       METHODS read_block.
   ENDCLASS.
@@ -796,15 +798,29 @@
       CLASS-METHODS real IMPORTING value          TYPE any
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_real.
       CLASS-METHODS number IMPORTING value          TYPE any
+                                     iv_exact       TYPE flag OPTIONAL
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                            RAISING   cx_sy_conversion_no_number.
 
+      CLASS-METHODS binary_integer IMPORTING value         TYPE csequence
+                                   RETURNING VALUE(rv_int) TYPE tv_int
+                                   RAISING   cx_sy_conversion_no_number.
+      CLASS-METHODS binary IMPORTING value          TYPE any
+                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
+                           RAISING   cx_sy_conversion_no_number.
       CLASS-METHODS octal IMPORTING value          TYPE any
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                           RAISING   cx_sy_conversion_no_number.
+      CLASS-METHODS octal_integer IMPORTING value         TYPE csequence
+                                  RETURNING VALUE(rv_int) TYPE tv_int
+                                  RAISING   cx_sy_conversion_no_number.
+
       CLASS-METHODS hex IMPORTING value          TYPE any
                         RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                         RAISING   cx_sy_conversion_no_number.
+      CLASS-METHODS hex_integer IMPORTING value         TYPE csequence
+                                RETURNING VALUE(rv_int) TYPE tv_int
+                                RAISING   cx_sy_conversion_no_number.
 
       CLASS-METHODS string IMPORTING value          TYPE any
                                      iv_mutable     TYPE flag DEFAULT abap_true
@@ -1164,7 +1180,7 @@
     CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
 
-      CLASS-METHODS init IMPORTING size             TYPE sytabix
+      CLASS-METHODS init IMPORTING size             TYPE tv_index
                                    io_fill          TYPE REF TO lcl_lisp DEFAULT nil
                                    iv_mutable       TYPE flag DEFAULT abap_true
                          RETURNING VALUE(ro_vector) TYPE REF TO lcl_lisp_vector
@@ -1178,17 +1194,17 @@
       METHODS to_list         RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                               RAISING   lcx_lisp_exception.
 
-      METHODS set IMPORTING index         TYPE sytabix
+      METHODS set IMPORTING index         TYPE tv_index
                             io_elem       TYPE REF TO lcl_lisp
                   RETURNING VALUE(result) TYPE REF TO lcl_lisp_vector
                   RAISING   lcx_lisp_exception.
 
-      METHODS get IMPORTING index          TYPE sytabix
+      METHODS get IMPORTING index          TYPE tv_index
                   RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                   RAISING   lcx_lisp_exception.
 
-      METHODS get_list IMPORTING from           TYPE sytabix DEFAULT 0
-                                 to             TYPE sytabix OPTIONAL
+      METHODS get_list IMPORTING from           TYPE tv_index DEFAULT 0
+                                 to             TYPE tv_index OPTIONAL
                        RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                        RAISING   lcx_lisp_exception.
 
@@ -1368,6 +1384,7 @@
         c_number_exact   TYPE c VALUE 'e',
         c_number_inexact TYPE c VALUE 'i',
         c_number_octal   TYPE c VALUE 'o',
+        c_number_binary  TYPE c VALUE 'b',
         c_number_decimal TYPE c VALUE 'd',
         c_number_hex     TYPE c VALUE 'x'.
 
@@ -1511,6 +1528,7 @@
 
       proc_is_number       ##called,
       proc_is_integer      ##called,
+      proc_is_exact_integer      ##called,
       proc_is_rational     ##called,
       proc_is_real         ##called,
       proc_is_complex      ##called,
@@ -1865,7 +1883,7 @@
                       RETURNING VALUE(result) TYPE REF TO lcl_lisp.
 
       METHODS quasiquote IMPORTING exp           TYPE REF TO lcl_lisp
-                                   nesting       TYPE sytabix
+                                   nesting       TYPE tv_index
                                    environment   TYPE REF TO lcl_lisp_environment
                          RETURNING VALUE(result) TYPE REF TO lcl_lisp
                          RAISING   lcx_lisp_exception.  " ?
@@ -1879,7 +1897,7 @@
                           RAISING   lcx_lisp_exception.
 
       METHODS list_tail IMPORTING list          TYPE REF TO lcl_lisp
-                                  k             TYPE sytabix
+                                  k             TYPE tv_index
                                   area          TYPE string
                         RETURNING VALUE(result) TYPE REF TO lcl_lisp
                         RAISING   lcx_lisp_exception.
@@ -1888,6 +1906,13 @@
                                   environment   TYPE REF TO lcl_lisp_environment
                         RETURNING VALUE(result) TYPE REF TO lcl_lisp_vector
                         RAISING   lcx_lisp_exception.
+
+      METHODS get_equal_params IMPORTING io_list    TYPE REF TO lcl_lisp
+                               EXPORTING eo_sublist TYPE REF TO lcl_lisp
+                                         eo_compare TYPE REF TO lcl_lisp
+                                         eo_key     TYPE REF TO lcl_lisp
+                               RAISING   lcx_lisp_exception.
+
   ENDCLASS.                    "lcl_lisp_interpreter DEFINITION
 
 *----------------------------------------------------------------------*
@@ -2258,17 +2283,19 @@
 *           further, instead of exp:  s (short), f (single), d (double), l (long)
 *           positive infinity, negative infinity -inf / -inf.0, NaN +nan.0, positive zero, negative zero
             WHEN c_number_exact.   "#e (exact)
-              next_char( ).      " skip #
-              next_char( ).      " skip e
+              next_char( ).        " skip #
+              next_char( ).        " skip e
               match_atom( CHANGING cv_val = sval ).
-              element = lcl_lisp_new=>number( sval ).
+              element = lcl_lisp_new=>number( value = sval
+                                              iv_exact = abap_true ).
               RETURN.
 
             WHEN c_number_inexact. "#i (inexact)
               next_char( ).      " skip #
               next_char( ).      " skip i
               match_atom( CHANGING cv_val = sval ).
-              element = lcl_lisp_new=>real( sval ).
+              element = lcl_lisp_new=>number( value = sval
+                                              iv_exact = abap_false ).
               RETURN.
 
             WHEN c_number_octal.   "#o (octal)
@@ -2276,6 +2303,13 @@
               next_char( ).      " skip o
               match_atom( CHANGING cv_val = sval ).
               element = lcl_lisp_new=>octal( sval ).
+              RETURN.
+
+            WHEN c_number_binary.   "#b (octal)
+              next_char( ).      " skip #
+              next_char( ).      " skip b
+              match_atom( CHANGING cv_val = sval ).
+              element = lcl_lisp_new=>binary( sval ).
               RETURN.
 
             WHEN c_number_decimal. "#d (decimal)
@@ -2466,6 +2500,7 @@
       env->define_value( symbol = 'char?'       type = lcl_lisp=>type_native value = 'PROC_IS_CHAR' ).
       env->define_value( symbol = 'hash?'       type = lcl_lisp=>type_native value = 'PROC_IS_HASH' ).
       env->define_value( symbol = 'number?'     type = lcl_lisp=>type_native value = 'PROC_IS_NUMBER' ).
+      env->define_value( symbol = 'exact-integer?'    type = lcl_lisp=>type_native value = 'PROC_IS_EXACT_INTEGER' ).
       env->define_value( symbol = 'integer?'    type = lcl_lisp=>type_native value = 'PROC_IS_INTEGER' ).
       env->define_value( symbol = 'complex?'    type = lcl_lisp=>type_native value = 'PROC_IS_COMPLEX' ).
       env->define_value( symbol = 'real?'       type = lcl_lisp=>type_native value = 'PROC_IS_REAL' ).
@@ -2692,7 +2727,7 @@
     ENDMETHOD.
 
     METHOD generate_symbol.
-      DATA lv_index TYPE i.
+      DATA lv_index TYPE tv_index.
       DATA lv_suffix TYPE string VALUE 'G0as'.
       DATA lv_counter TYPE i.
       DATA lo_opt TYPE REF TO lcl_lisp.
@@ -3759,7 +3794,7 @@
 *              << TEST
 
                       WHEN OTHERS.
-                        throw( |Cannot evaluate { lo_proc->to_string( ) } - not a procedure| ).
+                        throw( |attempt to apply { lo_proc->to_string( ) } - not a procedure| ).
 
                     ENDCASE.
 
@@ -4527,19 +4562,26 @@
 *      list->error_not_a_list( ).
     ENDMETHOD.
 
+    METHOD get_equal_params.
+      validate: io_list, io_list->car, io_list->cdr.
+
+      eo_sublist = io_list->cdr->car.
+      eo_key = io_list->car.
+      eo_compare = io_list->cdr->cdr.
+    ENDMETHOD.
+
     METHOD proc_member.
-      validate: list, list->car, list->cdr.
-
       result = false.
-
-      DATA(lo_sublist) = list->cdr->car.
-      DATA(lo_compare) = list->cdr->cdr.
-      DATA(lo_item) = list->car.
+      get_equal_params( EXPORTING io_list = list
+                        IMPORTING eo_sublist = DATA(lo_sublist)
+                                  eo_compare = DATA(lo_compare)
+                                  eo_key = DATA(lo_key) ).
 
       WHILE lo_sublist->type EQ lcl_lisp=>type_pair.
-        IF lo_item->is_equal( io_elem = lo_sublist->car
-                              comp = lo_compare
-                              interpreter = me ) NE false.
+        IF lo_key->is_equal( io_elem = lo_sublist->car
+                             comp = lo_compare
+                             interpreter = me
+                             environment = env ) NE false.
           result = lo_sublist.
           RETURN.
         ENDIF.
@@ -4550,19 +4592,19 @@
     ENDMETHOD.
 
     METHOD proc_assoc.
-      validate: list, list->car, list->cdr.
 
       result = false.
-
-      DATA(lo_sublist) = list->cdr->car.
-      DATA(lo_compare) = list->cdr->cdr.
-      DATA(lo_key) = list->car.
+      get_equal_params( EXPORTING io_list = list
+                        IMPORTING eo_sublist = DATA(lo_sublist)
+                                  eo_compare = DATA(lo_compare)
+                                  eo_key = DATA(lo_key) ).
 
       WHILE lo_sublist->type EQ lcl_lisp=>type_pair.
         DATA(lo_pair) = lo_sublist->car.
         IF lo_key->is_equal( io_elem = lo_pair->car
                              comp = lo_compare
-                             interpreter = me ) NE false.
+                             interpreter = me
+                             environment = env ) NE false.
           result = lo_pair.
           RETURN.
         ENDIF.
@@ -5345,7 +5387,7 @@
       result = false.
       CHECK list IS BOUND AND list->car IS BOUND.
       result = list->car->is_number( ).
-    ENDMETHOD.                    "proc_is_integer
+    ENDMETHOD.                    "proc_is_number
 
     METHOD proc_is_complex.
       result = false.
@@ -5355,6 +5397,7 @@
     ENDMETHOD.
 
     METHOD proc_is_real.
+*     If z is a complex number, then (real? z) is true if and only if (zero? (imag-part z)) is true.
       result = false.
       CHECK list IS BOUND AND list->car IS BOUND.
       CASE list->car->type.
@@ -5375,10 +5418,48 @@
       ENDCASE.
     ENDMETHOD.
 
-    METHOD proc_is_integer.
+    METHOD proc_is_exact_integer.
+      validate list.
+      DATA lo_rat TYPE REF TO lcl_lisp_rational.
+*     (exact-integer? z) procedure
+*     Returns #t if z is both exact and an integer; otherwise returns #f.
+*      (exact-integer? 32)   => #t
+*      (exact-integer? 32.0) => #f
+*      (exact-integer? 32/5) => #f
       result = false.
-      CHECK list->car IS BOUND AND list->car->type EQ lcl_lisp=>type_integer.
-      result = true.
+      CHECK list->car IS BOUND.
+      CASE list->car->type.
+        WHEN lcl_lisp=>type_integer.
+          result = true.
+        WHEN lcl_lisp=>type_rational.
+          lo_rat ?= list->car.
+          CHECK lo_rat->denominator EQ 1.
+          result = true.
+      ENDCASE.
+    ENDMETHOD.
+
+    METHOD proc_is_integer.
+      validate list.
+*     If x is an inexact real number, then (integer? x) is true if and only if (= x (round x)).
+      DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+      DATA lv_real TYPE tv_real.
+
+      result = false.
+      CHECK list->car IS BOUND.
+      CASE list->car->type.
+        WHEN lcl_lisp=>type_integer.
+          result = true.
+        WHEN lcl_lisp=>type_rational.
+          lo_rat ?= list->car.
+          CHECK lo_rat->denominator EQ 1.
+          result = true.
+        WHEN lcl_lisp=>type_real.
+          lo_real ?= list->car.
+          lv_real = lo_real->real.
+          CHECK trunc( lv_real ) EQ lv_real.
+          result = true.
+      ENDCASE.
     ENDMETHOD.                    "proc_is_integer
 
     METHOD proc_is_symbol.
@@ -5388,7 +5469,7 @@
     METHOD proc_is_pair. " argument in list->car
       validate list.
       _is_type pair.
-    ENDMETHOD.                    "proc_is_list
+    ENDMETHOD.                    "proc_is_pair
 
     METHOD proc_is_boolean. " argument in list->car
       validate list.
@@ -5419,7 +5500,8 @@
         lo_ptr = lo_ptr->cdr.
         CHECK lo_ptr = lo_slow.
 *       If fast pointer eventually equals slow pointer, then we must be stuck in a circular list.
-        result = true.
+*       By deﬁnition, all lists have ﬁnite length and are terminated by the empty list,
+*       so a circular list is not a list
         RETURN.
       ENDWHILE.
 
@@ -5705,7 +5787,8 @@
       _is_last_param list.
       TRY.
           DATA(lo_rnd) = cl_abap_random=>create( cl_abap_random=>seed( ) ).
-          result = lcl_lisp_new=>number( lo_rnd->intinrange( high = CAST lcl_lisp_integer( list->car )->integer ) ).
+          DATA(lv_high) = CONV i( CAST lcl_lisp_integer( list->car )->integer ).
+          result = lcl_lisp_new=>number( lo_rnd->intinrange( high = lv_high ) ).
         CATCH cx_dynamic_check INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
       ENDTRY.
@@ -5734,9 +5817,45 @@
     ENDMETHOD.
 
     METHOD proc_string_to_num.
+      DATA lv_radix TYPE i VALUE 10.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+
       validate list.
       validate_string list->car `string->number`.
-      result = lcl_lisp_new=>number( list->car->value ).
+*     Optional radix
+      validate list->cdr.
+      IF list->cdr NE nil.
+        validate_integer list->cdr `string->number`.
+        lo_int ?= list->cdr.
+        lv_radix = lo_int->integer.
+      ENDIF.
+      CASE lv_radix.
+        WHEN 2.
+          TRY.
+              result = lcl_lisp_new=>binary( list->car->value ).
+            CATCH lcx_lisp_exception.
+              result = false.
+          ENDTRY.
+        WHEN 8.
+          TRY.
+              result = lcl_lisp_new=>octal( list->car->value ).
+            CATCH lcx_lisp_exception.
+              result = false.
+            ENDTRY.
+        WHEN 10.
+          TRY.
+              result = lcl_lisp_new=>number( list->car->value ).
+            CATCH lcx_lisp_exception.
+              result = false.
+          ENDTRY.
+        WHEN 16.
+          TRY.
+              result = lcl_lisp_new=>hex( list->car->value ).
+            CATCH lcx_lisp_exception.
+          ENDTRY.
+        WHEN OTHERS.
+          throw( lo_int->to_string( ) && ` must be 2, 8, 10 or 16 in string->number (radix)` ).
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_newline.
@@ -5809,7 +5928,7 @@
     ENDMETHOD.
 
     METHOD proc_make_string.
-      DATA lv_len TYPE sytabix.
+      DATA lv_len TYPE tv_index.
       DATA lv_char TYPE c LENGTH 1.
       DATA lv_text TYPE string.
 
@@ -5831,9 +5950,9 @@
 
     METHOD proc_string_to_list.
       DATA lv_char TYPE c LENGTH 1.
-      DATA lv_start TYPE sytabix.
-      DATA lv_len TYPE sytabix.
-      DATA lv_len_1 TYPE sytabix.
+      DATA lv_start TYPE tv_index.
+      DATA lv_len TYPE tv_index.
+      DATA lv_len_1 TYPE tv_index.
       DATA lv_text TYPE string.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
 
@@ -5913,9 +6032,9 @@
     ENDMETHOD.
 
     METHOD proc_string_copy.
-      DATA lv_start TYPE sytabix.
-      DATA lv_len TYPE sytabix.
-      DATA lv_end TYPE sytabix.
+      DATA lv_start TYPE tv_index.
+      DATA lv_len TYPE tv_index.
+      DATA lv_end TYPE tv_index.
 
       DATA lv_text TYPE string.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
@@ -5948,7 +6067,7 @@
     ENDMETHOD.
 
     METHOD proc_string_ref.
-      DATA lv_index TYPE sytabix.
+      DATA lv_index TYPE tv_index.
       DATA lv_char TYPE c LENGTH 1.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
 
@@ -5964,13 +6083,13 @@
     ENDMETHOD.
 
     METHOD proc_string_set.
-      DATA lv_index TYPE sytabix.
+      DATA lv_index TYPE tv_index.
       DATA lv_char TYPE c LENGTH 1.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_char TYPE REF TO lcl_lisp_char.
       DATA lo_string TYPE REF TO lcl_lisp_string.
 
-      DATA lv_len TYPE sytabix.
+      DATA lv_len TYPE tv_index.
       DATA lv_text TYPE string.
 
       validate: list, list->cdr, list->cdr->cdr.
@@ -7409,12 +7528,16 @@
 
       IF comp NE nil.
         DATA(lo_lambda) = comp->car.
+        DATA(lo_env) = lo_lambda->environment.
+        IF lo_env IS NOT BOUND.
+          lo_env = environment.
+        ENDIF.
         DATA(lo_head) = lcl_lisp_new=>list3( io_first = lo_lambda
                                              io_second = lcl_lisp_new=>quote( me )
                                              io_third = lcl_lisp_new=>quote( io_elem ) ).
 
         result = interpreter->eval( element = lo_head
-                                    environment = lo_lambda->environment ).
+                                    environment = lo_env ).
         RETURN.
       ENDIF.
 
@@ -7841,9 +7964,14 @@
 *         to cover all manner of number formats, including scientific
           lv_real = value.
 
+          IF iv_exact IS SUPPLIED AND iv_exact EQ abap_false.
+            ro_elem = real( lv_real ).
+            RETURN.
+          ENDIF.
+
           TRY.
               lv_nummer_str = value.
-              IF NOT contains( val = lv_nummer_str sub = '.' ).
+              IF NOT contains( val = lv_nummer_str sub = '.' ) OR iv_exact EQ abap_true.
                 MOVE EXACT value TO lv_int.
                 ro_elem = integer( lv_int ).
                 RETURN.
@@ -7871,20 +7999,163 @@
 
     ENDMETHOD.
 
-    METHOD hex.
-      DATA xtext TYPE string.
-      DATA lv_hex TYPE tv_int.
+    METHOD hex_integer.
+      DATA lv_text TYPE string VALUE '0000000000000000'. " 2x8 = 16
+      DATA lv_len TYPE tv_int.
+      DATA lv_hex TYPE x LENGTH 8.
 
-      lv_hex = xtext.
-      ro_elem = integer( lv_hex ).
+      lv_len = 16 - strlen( value ).
+      IF lv_len GT 0.
+        lv_text = lv_text+0(lv_len) && value.
+      ELSE.
+        lv_text = value.
+      ENDIF.
+      IF lv_text CO '0123456789abcdefABCDEF'.
+        lv_hex = lv_text.
+        rv_int = lv_hex.
+      ELSE.
+        RAISE EXCEPTION TYPE lcx_lisp_exception
+          EXPORTING
+            message = `Invalid hexadecimal number`
+            area    = 'Radix'.
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD hex.
+      DATA lv_text TYPE string.
+
+      DATA lv_trunc_str TYPE string.
+      DATA lv_decimal_str TYPE string.
+      DATA lv_int TYPE tv_int.
+      DATA lv_exp TYPE tv_int.
+      DATA lv_dec TYPE tv_int.
+      DATA lv_real TYPE tv_real.
+
+      lv_text = value.
+      SPLIT lv_text AT lcl_parser=>c_lisp_dot INTO lv_trunc_str lv_decimal_str.
+
+      lv_int = hex_integer( lv_trunc_str ).
+      IF lv_decimal_str IS INITIAL.
+        ro_elem = integer( lv_int ).
+      ELSE.
+        lv_dec = hex_integer( lv_decimal_str ).
+        lv_real = lv_int.
+        IF lv_dec EQ 0.
+          ro_elem = real( lv_real ).
+        ELSE.
+          lv_exp = strlen( lv_decimal_str ).
+          ro_elem = real( lv_real + lv_dec / ipow( base = 16 exp = lv_exp ) ).
+        ENDIF.
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD octal_integer.
+      DATA lv_text TYPE string.
+      DATA lv_index TYPE sytabix.
+      DATA lv_size TYPE sytabix.
+      DATA lv_char TYPE char01.
+      DATA lv_radix TYPE i VALUE 1.
+
+      CLEAR rv_int.
+      lv_text = value.
+      IF lv_text CN '01234567'.
+        RAISE EXCEPTION TYPE lcx_lisp_exception
+          EXPORTING
+            message = `Invalid octal number`
+            area    = 'Radix'.
+      ENDIF.
+
+      lv_index = lv_size = strlen( lv_text ).
+      DO lv_size TIMES.
+        SUBTRACT 1 FROM lv_index.
+        lv_char = lv_text+lv_index(1).
+
+        rv_int = rv_int + lv_char * lv_radix.
+        lv_radix = lv_radix * 8.
+      ENDDO.
     ENDMETHOD.
 
     METHOD octal.
-      DATA xtext TYPE string.
-      DATA lv_hex TYPE tv_int.
+      DATA lv_text TYPE string.
 
-      lv_hex = xtext.
-      ro_elem = integer( lv_hex ).
+      DATA lv_trunc_str TYPE string.
+      DATA lv_decimal_str TYPE string.
+      DATA lv_int TYPE tv_int.
+      DATA lv_exp TYPE tv_int.
+      DATA lv_real TYPE tv_real.
+      DATA lv_dec TYPE tv_int.
+
+      lv_text = value.
+      SPLIT lv_text AT lcl_parser=>c_lisp_dot INTO lv_trunc_str lv_decimal_str.
+
+      lv_int = octal_integer( lv_trunc_str ).
+      IF lv_decimal_str IS INITIAL.
+        ro_elem = integer( lv_int ).
+      ELSE.
+        lv_dec = octal_integer( lv_decimal_str ).
+        lv_real = lv_int.
+        IF lv_dec EQ 0.
+          ro_elem = real( lv_real ).
+        ELSE.
+          lv_exp = strlen( lv_decimal_str ).
+          ro_elem = real( lv_real + lv_dec / ipow( base = 8 exp = lv_exp ) ).
+        ENDIF.
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD binary_integer.
+      DATA lv_text TYPE string.
+      DATA lv_int TYPE tv_int.
+      DATA lv_index TYPE sytabix.
+      DATA lv_char TYPE char01.
+      DATA lv_size TYPE sytabix.
+      DATA lv_radix TYPE i VALUE 1.
+
+      lv_text = value.
+      IF lv_text CN '01'.
+        RAISE EXCEPTION TYPE lcx_lisp_exception
+          EXPORTING
+            message = `Invalid binary number`
+            area    = 'Radix'.
+      ENDIF.
+
+      lv_index = lv_size = strlen( lv_text ).
+      DO lv_size TIMES.
+        SUBTRACT 1 FROM lv_index.
+
+        IF lv_text+lv_index(1) EQ '1'.
+          rv_int = rv_int + lv_radix.
+        ENDIF.
+        lv_radix = lv_radix * 2.
+      ENDDO.
+    ENDMETHOD.
+
+    METHOD binary.
+      DATA lv_text TYPE string.
+
+      DATA lv_trunc_str TYPE string.
+      DATA lv_decimal_str TYPE string.
+      DATA lv_int TYPE tv_int.
+      DATA lv_exp TYPE tv_int.
+      DATA lv_real TYPE tv_real.
+      DATA lv_dec TYPE tv_int.
+
+      lv_text = value.
+      SPLIT lv_text AT lcl_parser=>c_lisp_dot INTO lv_trunc_str lv_decimal_str.
+
+      lv_int = binary_integer( lv_trunc_str ).
+      IF lv_decimal_str IS INITIAL.
+        ro_elem = integer( lv_int ).
+      ELSE.
+        lv_dec = binary_integer( lv_decimal_str ).
+        lv_real = lv_int.
+        IF lv_dec EQ 0.
+          ro_elem = real( lv_real ).
+        ELSE.
+          lv_exp = strlen( lv_decimal_str ).
+          ro_elem = real( lv_real + lv_dec / ipow( base = 2 exp = lv_exp ) ).
+        ENDIF.
+      ENDIF.
     ENDMETHOD.
 
     METHOD port.
@@ -8148,7 +8419,7 @@
     ENDMETHOD.
 
     METHOD get_list.
-      DATA lv_end TYPE sytabix.
+      DATA lv_end TYPE tv_index.
 
       DATA(lv_start) = from + 1.         " start is Inclusive
 
