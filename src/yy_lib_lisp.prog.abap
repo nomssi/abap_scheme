@@ -61,7 +61,7 @@
     c_eval_unquote          TYPE string VALUE 'unquote',
     c_eval_unquote_splicing TYPE string VALUE 'unquote-splicing'.
 
-  TYPES tv_int TYPE i.            " integer data type, use int8 if available
+  TYPES tv_int TYPE i.         " integer data type, use int8 if available
   TYPES tv_index TYPE tv_int.
   TYPES tv_real TYPE decfloat34.  " real data type
   TYPES tv_xword TYPE x LENGTH 2.
@@ -356,17 +356,18 @@
         type_rational TYPE tv_type VALUE 'r',
         type_string   TYPE tv_type VALUE '"'.
       CONSTANTS:
-        type_boolean   TYPE tv_type VALUE 'b',
-        type_char      TYPE tv_type VALUE 'c',
-        type_null      TYPE tv_type VALUE '0',
-        type_pair      TYPE tv_type VALUE 'C',
-        type_lambda    TYPE tv_type VALUE 'λ',
-        type_native    TYPE tv_type VALUE 'n',
-        type_primitive TYPE tv_type VALUE 'I',
-        type_syntax    TYPE tv_type VALUE 'y',
-        type_hash      TYPE tv_type VALUE 'h',
-        type_vector    TYPE tv_type VALUE 'v',
-        type_port      TYPE tv_type VALUE 'o'.
+        type_boolean    TYPE tv_type VALUE 'b',
+        type_char       TYPE tv_type VALUE 'c',
+        type_null       TYPE tv_type VALUE '0',
+        type_pair       TYPE tv_type VALUE 'C',
+        type_lambda     TYPE tv_type VALUE 'λ',
+        type_native     TYPE tv_type VALUE 'n',
+        type_primitive  TYPE tv_type VALUE 'I',
+        type_syntax     TYPE tv_type VALUE 'y',
+        type_hash       TYPE tv_type VALUE 'h',
+        type_vector     TYPE tv_type VALUE 'v',
+        type_bytevector TYPE tv_type VALUE '8',
+        type_port       TYPE tv_type VALUE 'o'.
 *      Types for ABAP integration:
       CONSTANTS:
         type_abap_data     TYPE tv_type VALUE 'D',
@@ -530,8 +531,7 @@
     PUBLIC SECTION.
       METHODS is_exact RETURNING VALUE(result) TYPE REF TO lcl_lisp.
       METHODS is_inexact RETURNING VALUE(result) TYPE REF TO lcl_lisp.
-    PROTECTED SECTION.
-      DATA exact TYPE flag.
+      DATA exact TYPE flag READ-ONLY.
   ENDCLASS.
 
   CLASS lcl_lisp_number IMPLEMENTATION.
@@ -674,7 +674,20 @@
 
   CLASS lcl_lisp_symbol DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
+      METHODS constructor IMPORTING value TYPE any
+                                    index TYPE tv_int.
       DATA index TYPE tv_int READ-ONLY.
+  ENDCLASS.
+
+  CLASS lcl_lisp_symbol IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( ).
+      type = type_symbol.
+      me->index = index.
+      me->value = value.
+    ENDMETHOD.
+
   ENDCLASS.
 
   CLASS lcl_lisp_data DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
@@ -797,6 +810,7 @@
 
       CLASS-METHODS real IMPORTING value          TYPE any
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_real.
+
       CLASS-METHODS number IMPORTING value          TYPE any
                                      iv_exact       TYPE flag OPTIONAL
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
@@ -1526,12 +1540,13 @@
       proc_eqv       ##called,
       proc_not       ##called,
 
-      proc_is_number       ##called,
-      proc_is_integer      ##called,
-      proc_is_exact_integer      ##called,
-      proc_is_rational     ##called,
-      proc_is_real         ##called,
-      proc_is_complex      ##called,
+      proc_is_number        ##called,
+      proc_is_integer       ##called,
+      proc_is_exact_integer ##called,
+      proc_is_rational      ##called,
+      proc_is_real          ##called,
+      proc_is_complex       ##called,
+
       proc_is_string       ##called,
       proc_is_char         ##called,
       proc_is_symbol       ##called,
@@ -1543,8 +1558,11 @@
       proc_boolean_list_is_equal ##called,
       proc_is_vector             ##called,
       proc_is_alist              ##called,
+
       proc_is_exact              ##called,
       proc_is_inexact            ##called,
+      proc_to_exact              ##called,
+      proc_to_inexact            ##called,
 
 * Math
       proc_abs,      ##called
@@ -2532,6 +2550,8 @@
 
       env->define_value( symbol = 'string->number' type = lcl_lisp=>type_native value = 'PROC_STRING_TO_NUM' ).
       env->define_value( symbol = 'make-string'    type = lcl_lisp=>type_native value = 'PROC_MAKE_STRING' ).
+      env->define_value( symbol = 'exact'          type = lcl_lisp=>type_native value = 'PROC_TO_EXACT' ).
+      env->define_value( symbol = 'inexact'        type = lcl_lisp=>type_native value = 'PROC_TO_INEXACT' ).
 
       env->define_value( symbol = 'number->string' type = lcl_lisp=>type_native value = 'PROC_NUM_TO_STRING' ).
       env->define_value( symbol = 'string->number' type = lcl_lisp=>type_native value = 'PROC_STRING_TO_NUM' ).
@@ -5810,6 +5830,68 @@
       result = lo_number->is_inexact( ).
     ENDMETHOD.
 
+    METHOD proc_to_exact.
+      DATA lo_number TYPE REF TO lcl_lisp_number.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+      DATA lv_denom TYPE tv_int.
+      DATA lv_nummer TYPE tv_int.
+
+      validate list.
+      validate_number list->car `exact`.
+      lo_number ?= list->car.
+      IF lo_number->exact EQ abap_true.
+        result = lo_number.
+      ELSE.
+        CASE lo_number->type.
+*          WHEN lcl_lisp=>type_rational.
+*            lo_rat ?= lo_number.
+*            result = lcl_lisp_new=>real( lo_rat->integer / lo_rat->denominator ).
+          WHEN lcl_lisp=>type_real.
+            lo_real ?= lo_number.
+            IF abs( lo_real->real ) GT 1.
+              lv_denom = trunc( cl_abap_math=>max_int4 / lo_real->real ).
+              lv_nummer = round( val = lo_real->real * lv_denom dec = 0 ).
+            ELSE.
+              lv_nummer = trunc( cl_abap_math=>max_int4 * lo_real->real ).
+              lv_denom = round( val = lv_nummer / lo_real->real dec = 0 ).
+            ENDIF.
+
+            result = lcl_lisp_new=>rational( nummer = lv_nummer
+                                             denom = lv_denom ).
+            RETURN.
+        ENDCASE.
+        throw( |no exact representation of { lo_number->to_string( ) }| ).
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD proc_to_inexact.
+      DATA lo_number TYPE REF TO lcl_lisp_number.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lv_real TYPE tv_real.
+
+      validate list.
+      validate_number list->car `inexact`.
+      lo_number ?= list->car.
+      IF lo_number->exact EQ abap_true.
+        CASE lo_number->type.
+          WHEN lcl_lisp=>type_rational.
+            lo_rat ?= lo_number.
+            lv_real = lo_rat->integer / lo_rat->denominator.
+            result = lcl_lisp_new=>real( lv_real ).
+          WHEN lcl_lisp=>type_integer.
+            lo_int ?= lo_number.
+            lv_real = lo_int->integer.
+            result = lcl_lisp_new=>real( lv_real ).
+          WHEN OTHERS.
+            throw( |no inexact representation of { lo_number->to_string( ) }| ).
+        ENDCASE.
+      ELSE.
+        result = lo_number.
+      ENDIF.
+    ENDMETHOD.
+
+
     METHOD proc_num_to_string.
       validate list.
       validate_number list->car `number->string`.
@@ -5841,7 +5923,7 @@
               result = lcl_lisp_new=>octal( list->car->value ).
             CATCH lcx_lisp_exception.
               result = false.
-            ENDTRY.
+          ENDTRY.
         WHEN 10.
           TRY.
               result = lcl_lisp_new=>number( list->car->value ).
@@ -7520,8 +7602,11 @@
     ENDMETHOD.
 
     METHOD is_equal. "equal?
-* equal? returns the same as eqv? when applied to booleans, symbols, numbers, characters, ports,
-* procedures, and the empty list. If two objects are eqv?, they must be equal? as well.
+* The equal? procedure, when applied to pairs, vectors, strings and bytevectors, recursively
+* compares them, returning #t when the unfoldings of its arguments into (possibly inﬁnite)
+* trees are equal (in the sense of equal?) as ordered trees, and #f otherwise.
+* equal? returns the same as eqv? when applied to booleans, symbols, numbers, characters,
+* ports, procedures, and the empty list. If two objects are eqv?, they must be equal? as well.
 * In all other cases, equal? may return either #t or #f.
 * Even if its arguments are circular data structures, equal? must always terminate.
       validate: io_elem.
@@ -7547,14 +7632,14 @@
 
       CASE type.
 
-        WHEN lcl_lisp=>type_lambda.
-          CHECK io_elem->car EQ io_elem->cdr.
-          result = true.
-
         WHEN lcl_lisp=>type_pair.
+          DATA(lv_circular_a) = abap_false.
           DATA(lo_a) = me.
-          DATA(lo_slow) = me.
+          DATA(lo_slow_a) = me.
+
+          DATA(lv_circular_b) = abap_false.
           DATA(lo_b) = io_elem.
+          DATA(lo_slow_b) = io_elem.
 
           WHILE lo_a->type EQ lcl_lisp=>type_pair AND lo_b->type EQ lcl_lisp=>type_pair.
             IF lo_a->car EQ lo_a AND lo_b->car EQ lo_b.
@@ -7564,8 +7649,9 @@
             ELSEIF lo_a->car->is_equal( lo_b->car ) EQ false.
               RETURN.
             ENDIF.
-            lo_slow = lo_slow->cdr.
+            lo_slow_a = lo_slow_a->cdr.
             lo_a = lo_a->cdr.
+            lo_slow_b = lo_slow_b->cdr.
             lo_b = lo_b->cdr.
             CHECK lo_a->type EQ lcl_lisp=>type_pair AND lo_b->type EQ lcl_lisp=>type_pair.
             IF lo_a->car->is_equal( lo_b->car ) EQ false.
@@ -7573,13 +7659,26 @@
             ENDIF.
             lo_a = lo_a->cdr.
             lo_b = lo_b->cdr.
-            CHECK lo_slow EQ lo_a.
+            CHECK lo_slow_a EQ lo_a AND lo_slow_b EQ lo_b.
 *           Circular list
             result = true.
             RETURN.
           ENDWHILE.
 
           result = lo_a->is_equal( lo_b ).
+
+        WHEN lcl_lisp=>type_vector.
+          DATA lo_vec TYPE REF TO lcl_lisp_vector.
+          DATA lo_elem_vec TYPE REF TO lcl_lisp_vector.
+          lo_vec ?= me.
+          lo_elem_vec ?= io_elem.
+          result = lo_vec->to_list( )->is_equal( lo_elem_vec->to_list( ) ).
+
+        WHEN lcl_lisp=>type_string.
+          CHECK me->value EQ io_elem->value.
+          result = true.
+
+"        WHEN lcl_lisp=>type_bytevector.
 
         WHEN OTHERS.
           result = is_equivalent( io_elem ).
@@ -7925,10 +8024,8 @@
     ENDMETHOD.
 
     METHOD symbol.
-      ro_elem = NEW lcl_lisp_symbol( ).
-      ro_elem->type = lcl_lisp=>type_symbol.
-      ro_elem->index = index.
-      ro_elem->value = value.
+      ro_elem = NEW lcl_lisp_symbol( value = value
+                                     index = index ).
     ENDMETHOD.
 
     METHOD boolean.
@@ -7978,6 +8075,18 @@
               ENDIF.
             CATCH cx_sy_conversion_error.
           ENDTRY.
+
+          IF contains( val = lv_nummer_str sub = '.' ) AND iv_exact EQ abap_true.
+            DATA lv_int_str TYPE string.
+            DATA lv_dec_str TYPE string.
+            SPLIT lv_nummer_str AT lcl_parser=>c_lisp_dot INTO lv_int_str lv_dec_str.
+            lv_int_str = lv_int_str && lv_dec_str.
+            lv_int = lv_int_str.
+            lv_denom = ipow( base = 10 exp = strlen( lv_dec_str ) ).
+            ro_elem = rational( nummer = lv_int
+                                denom = lv_denom ).
+            RETURN.
+          ENDIF.
 
           ro_elem = real( lv_real ).
           RETURN.

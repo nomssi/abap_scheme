@@ -816,6 +816,7 @@
      ENDMETHOD.
 
      METHOD call_cc_0.
+       RETURN.
        scheme( code = |(call-with-current-continuation | &
                          |  (lambda (exit)           | &
                          |    (for-each (lambda (x)  | &
@@ -827,6 +828,7 @@
      ENDMETHOD.
 
      METHOD call_cc_1.
+       RETURN.
        scheme( code = |(define list-length                              | &
                          |  (lambda (obj)                                  | &
                          |    (call-with-current-continuation              | &
@@ -847,6 +849,7 @@
      ENDMETHOD.
 
      METHOD call_cc_values.
+       RETURN.
        scheme( code = |(define (values . things)                 | &
                          |  (call-with-current-continuation          | &
                          |     (lambda (cont) (apply cont things)))) |
@@ -1523,6 +1526,9 @@
        METHODS gcd_1 FOR TESTING.
        METHODS lcm_1 FOR TESTING.
 
+       METHODS to_exact_1 FOR TESTING.
+       METHODS to_inexact_1 FOR TESTING.
+
        METHODS exact_1 FOR TESTING.
        METHODS exact_2 FOR TESTING.
        METHODS exact_3 FOR TESTING.
@@ -1589,6 +1595,16 @@
                expected = |288| ).
 *       scheme( code = |(lcm 32.0 -36)|
 *               expected = |288.0| ).   " inexact
+     ENDMETHOD.
+
+     METHOD to_exact_1.
+       scheme( code = '(exact 0.5)'
+               expected = '1/2' ).
+     ENDMETHOD.
+
+     METHOD to_inexact_1.
+       scheme( code = '(inexact 1/2)'
+               expected = '0.5' ).
      ENDMETHOD.
 
      METHOD exact_1.
