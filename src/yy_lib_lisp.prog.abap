@@ -1786,6 +1786,15 @@
                         RAISING   lcx_lisp_exception.
 
     PRIVATE SECTION.
+     TYPES: BEGIN OF ts_digit,
+               zero  TYPE x LENGTH 3,
+               langu TYPE string,
+             END OF ts_digit.
+      TYPES tt_digit TYPE SORTED TABLE OF ts_digit WITH UNIQUE KEY zero.
+      DATA mt_zero TYPE tt_digit.
+
+      METHODS unicode_digit_zero RETURNING VALUE(rt_zero) TYPE tt_digit.
+
       METHODS throw IMPORTING message TYPE string
                     RAISING   lcx_lisp_exception.
 
@@ -2397,6 +2406,7 @@
       super->constructor( ).
       go_input_port = go_output_port = go_error_port = io_port.
       gi_log = ii_log.
+      mt_zero = unicode_digit_zero( ).
 
       env = lcl_lisp_environment=>new( ).
 
@@ -4213,39 +4223,29 @@
       result = lo_arg->cdr.
     ENDMETHOD.                    "proc_cdr
 
-
-* (defun list-length (x)
-*   (do ((n 0 (+ n 2))           ;Counter.
-*        (fast x (cddr fast))    ;Fast pointer: leaps by 2.
-*        (slow x (cdr slow)))    ;Slow pointer: leaps by 1.
-*       (nil)
-*     ;; If fast pointer hits the end, return the count.
-*     (when (endp fast) (return n))
-*     (when (endp (cdr fast)) (return (+ n 1)))
-*     ;; If fast pointer eventually equals slow pointer, then we must be stuck in a circular list.
-*     ;; (A deeper property is the converse: if we are stuck in a circular list, then eventually
-*     ;; the fast pointer will equal the slow pointer. That fact justifies this implementation.
-*     (when (and (eq fast slow) (> n 0)) (return nil))))
     METHOD list_length.
-      DATA lo_elem TYPE REF TO lcl_lisp.
+      DATA lo_fast TYPE REF TO lcl_lisp.
       DATA lo_slow TYPE REF TO lcl_lisp.
       validate list.
 
       result = 0.
-      lo_slow = lo_elem = list.
-*     Iterate over list to count the number of items
-      WHILE lo_elem->type EQ lcl_lisp=>type_pair.
-        ADD 1 TO result.
-        lo_elem = lo_elem->cdr.
+      lo_slow = lo_fast = list.
+*     Iterate over list
+      WHILE lo_fast->type EQ lcl_lisp=>type_pair.
+        ADD 1 TO result.  " count the number of items
+        lo_fast = lo_fast->cdr.
         lo_slow = lo_slow->cdr.
-        CHECK lo_elem->type EQ lcl_lisp=>type_pair.
-        ADD 1 TO result.
-        lo_elem = lo_elem->cdr.
-        CHECK lo_elem = lo_slow.
-*       Circular list
+
+        CHECK lo_fast->type EQ lcl_lisp=>type_pair.
+        ADD 1 TO result.  " count the number of items (using the fast pointer)
+        lo_fast = lo_fast->cdr.
+
+        CHECK lo_fast = lo_slow.           " are we stuck in a circular list?
+*       If we are stuck in a circular list, then the fast pointer will eventually
+*       be equal to the slow pointer. That fact justifies this implementation.
         RETURN.
       ENDWHILE.
-      CHECK lo_elem NE nil.
+      CHECK lo_fast NE nil.
 *     If the last item is not a cons cell, return an error
       error_no_list list `list-length`.
     ENDMETHOD.
@@ -6519,18 +6519,97 @@
 
     METHOD proc_digit_value.
       DATA lv_char TYPE char01.
-      DATA lv_int TYPE i.
+      DATA lv_int TYPE tv_int.
+      FIELD-SYMBOLS <lv_hex> TYPE x.
+      FIELD-SYMBOLS <lv_int> TYPE x.
+      DATA lv_digit TYPE ts_digit-zero.
+      DATA lv_zero TYPE i.
+      DATA ls_digit TYPE ts_digit.
+
 
       validate list.
       validate_char list->car `digit-value`.
 
       lv_char = list->car->value.
-      IF lv_char CO '0123456789'.
-        lv_int = lv_char. " conversion
-        result = lcl_lisp_new=>integer( lv_int ).
-      ELSE.
-        result = false.
+      ASSIGN lv_char TO <lv_hex> CASTING.
+      ASSIGN lv_int TO <lv_int> CASTING.
+      <lv_int> = <lv_hex>. " conversion
+      lv_digit = lv_int.
+      result = false.
+
+      LOOP AT mt_zero INTO ls_digit WHERE zero LE lv_digit.
+      ENDLOOP.
+      IF sy-subrc EQ 0.
+        lv_zero = ls_digit-zero.
+        lv_int = lv_int - lv_zero.
+        IF lv_int BETWEEN 0 AND 9.
+          result = lcl_lisp_new=>integer( lv_int ).
+        ENDIF.
       ENDIF.
+    ENDMETHOD.
+
+    METHOD unicode_digit_zero.
+*     https://www.fileformat.info/info/unicode/category/Nd/list.htm
+      rt_zero = VALUE #(
+         ( zero = '000030' )       " Default
+         ( zero = '000660' )       " ARABIC-INDIC DIGIT ZERO
+         ( zero = '0006F0' )       " EXTENDED ARABIC-INDIC DIGIT ZERO
+         ( zero = '0007C0' )       " NKO DIGIT ZERO
+         ( zero = '000966' )       " DEVANAGARI DIGIT ZERO
+         ( zero = '0009E6' )       " BENGALI DIGIT ZERO
+         ( zero = '000A66' )       " GURMUKHI DIGIT ZERO
+         ( zero = '000AE6' )       " GUJARATI DIGIT ZERO
+         ( zero = '000B66' )       " ORIYA DIGIT ZERO
+         ( zero = '000BE6' )       " TAMIL DIGIT ZERO
+         ( zero = '000C66' )       " TELUGU DIGIT ZERO
+         ( zero = '000CE6' )       " KANNADA DIGIT ZERO
+         ( zero = '000D66' )       " MALAYALAM DIGIT ZERO
+         ( zero = '000DE6' )       " SINHALA LITH DIGIT ZERO
+         ( zero = '000E50' )       " THAI DIGIT ZERO
+         ( zero = '000ED0' )       " LAO DIGIT ZERO
+         ( zero = '000F20' )       " TIBETAN DIGIT ZERO
+         ( zero = '001040' )       " MYANMAR DIGIT ZERO
+         ( zero = '001090' )       " MYANMAR SHAN DIGIT ZERO
+         ( zero = '0017E0' )       " KHMER DIGIT ZERO
+         ( zero = '001810' )       " MONGOLIAN DIGIT ZERO
+         ( zero = '001946' )       " LIMBU DIGIT ZERO
+         ( zero = '0019D0' )       " NEW TAI LUE DIGIT ZERO
+         ( zero = '001A80' )       " TAI THAM HORA DIGIT ZERO
+         ( zero = '001A90' )       " TAI THAM THAM DIGIT ZERO
+         ( zero = '001B50' )       " BALINESE DIGIT ZERO
+         ( zero = '001BB0' )       " SUNDANESE DIGIT ZERO
+         ( zero = '001C40' )       " LEPCHA DIGIT ZERO
+         ( zero = '001C50' )       " OL CHIKI DIGIT ZERO
+         ( zero = '00A620' )       " VAI DIGIT ZERO
+         ( zero = '00A8D0' )       " SAURASHTRA DIGIT ZERO
+         ( zero = '00A900' )       " KAYAH LI DIGIT ZERO
+         ( zero = '00A9D0' )       " JAVANESE DIGIT ZERO
+         ( zero = '00A9F0' )       " MYANMAR TAI LAING DIGIT ZERO
+         ( zero = '00AA50' )       " CHAM DIGIT ZERO
+         ( zero = '00ABF0' )       " MEETEI MAYEK DIGIT ZERO
+         ( zero = '00FF10' )       " FULLWIDTH DIGIT ZERO
+         ( zero = '0104A0' )       " OSMANYA DIGIT ZERO
+         ( zero = '011066' )       " BRAHMI DIGIT ZERO
+         ( zero = '0110F0' )       " SORA SOMPENG DIGIT ZERO
+         ( zero = '011136' )       " CHAKMA DIGIT ZERO
+         ( zero = '0111D0' )       " SHARADA DIGIT ZERO
+         ( zero = '0112F0' )       " KHUDAWADI DIGIT ZERO
+         ( zero = '011450' )       " NEWA DIGIT ZERO
+         ( zero = '0114D0' )       " TIRHUTA DIGIT ZERO
+         ( zero = '011650' )       " MODI DIGIT ZERO
+         ( zero = '0116C0' )       " TAKRI DIGIT ZERO
+         ( zero = '011730' )       " AHOM DIGIT ZERO
+         ( zero = '0118E0' )       " WARANG CITI DIGIT ZERO
+         ( zero = '011C50' )       " BHAIKSUKI DIGIT ZERO
+         ( zero = '011D50' )       " MASARAM GONDI DIGIT ZERO
+         ( zero = '016A60' )       " MRO DIGIT ZERO
+         ( zero = '016B50' )       " PAHAWH HMONG DIGIT ZERO
+         ( zero = '01D7CE' )       " MATHEMATICAL BOLD DIGIT ZERO
+         ( zero = '01D7D8' )       " MATHEMATICAL DOUBLE-STRUCK DIGIT ZERO
+         ( zero = '01D7E2' )       " MATHEMATICAL SANS-SERIF DIGIT ZERO
+         ( zero = '01D7EC' )       " MATHEMATICAL SANS-SERIF BOLD DIGIT ZERO
+         ( zero = '01D7F6' )       " MATHEMATICAL MONOSPACE DIGIT ZERO
+         ( zero = '01E950' ) ).    " ADLAM DIGIT ZERO
     ENDMETHOD.
 
     METHOD proc_is_char_whitespace.
