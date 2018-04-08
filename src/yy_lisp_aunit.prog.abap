@@ -542,6 +542,7 @@
 
        METHODS macro_1 FOR TESTING.
        METHODS macro_2 FOR TESTING.
+       METHODS macro_3 FOR TESTING.
 
        METHODS macro_one FOR TESTING.
        METHODS macro_two FOR TESTING.
@@ -4268,6 +4269,25 @@
                expected = 'let1' ).
        scheme( code = '(macroexpand (let1 foo (+ 2 3) (* foo foo)) )'
                expected = '( let ( ( foo ( + 2 3 ) ) ) ( * foo foo ) )' ).
+     ENDMETHOD.
+
+     METHOD macro_3.
+       scheme( code = '(define-macro for' &
+                      '(lambda (iterator start end . body)'  &
+                         '`(let loop ((,iterator ,start))' &
+                         '   (if (<= ,iterator ,end)' &
+                         '      (loop (+ ,iterator 1) (begin ,@body))))))'
+               expected = 'for' ).
+       scheme( code = '(for x 1 7' &
+                      '(define y (* x 2))' &
+                      '(display x " + " x " = " y))'
+               expected = '1 + 1 = 2' &
+                          '2 + 2 = 4' &
+                          '3 + 3 = 6' &
+                          '4 + 4 = 8' &
+                          '5 + 5 = 10' &
+                          '6 + 6 = 12'  &
+                          '7 + 7 = 14' ).
      ENDMETHOD.
 
      METHOD macro_one.

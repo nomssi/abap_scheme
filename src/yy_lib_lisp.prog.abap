@@ -728,7 +728,8 @@
 
   INTERFACE lif_output_port.
     METHODS write IMPORTING element TYPE REF TO lcl_lisp.
-    METHODS display IMPORTING element TYPE REF TO lcl_lisp.
+    METHODS display IMPORTING element TYPE REF TO lcl_lisp
+                    RAISING lcx_lisp_exception.
   ENDINTERFACE.
 
   CLASS lcl_lisp_port DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
@@ -824,17 +825,17 @@
                            RAISING   cx_sy_conversion_no_number.
       CLASS-METHODS octal IMPORTING value          TYPE any
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
-                          RAISING   cx_sy_conversion_no_number.
+                          RAISING  lcx_lisp_exception cx_sy_conversion_no_number.
       CLASS-METHODS octal_integer IMPORTING value         TYPE csequence
                                   RETURNING VALUE(rv_int) TYPE tv_int
-                                  RAISING   cx_sy_conversion_no_number.
+                                  RAISING lcx_lisp_exception  cx_sy_conversion_no_number.
 
       CLASS-METHODS hex IMPORTING value          TYPE any
                         RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
-                        RAISING   cx_sy_conversion_no_number.
+                        RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
       CLASS-METHODS hex_integer IMPORTING value         TYPE csequence
                                 RETURNING VALUE(rv_int) TYPE tv_int
-                                RAISING   cx_sy_conversion_no_number.
+                                RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
 
       CLASS-METHODS string IMPORTING value          TYPE any
                                      iv_mutable     TYPE flag DEFAULT abap_true
@@ -1771,11 +1772,13 @@
 
       METHODS write IMPORTING io_elem       TYPE REF TO lcl_lisp
                               io_arg        TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
-                    RETURNING VALUE(result) TYPE REF TO lcl_lisp.
+                    RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                    RAISING lcx_lisp_exception.
 
       METHODS display IMPORTING io_elem       TYPE REF TO lcl_lisp
                                 io_arg        TYPE REF TO lcl_lisp
-                      RETURNING VALUE(result) TYPE REF TO lcl_lisp.
+                      RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                      RAISING lcx_lisp_exception.
 
       METHODS read IMPORTING io_arg        TYPE REF TO lcl_lisp
                    RETURNING VALUE(result) TYPE REF TO lcl_lisp
