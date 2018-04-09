@@ -400,6 +400,7 @@
 
       DATA car TYPE REF TO lcl_lisp.
       DATA cdr TYPE REF TO lcl_lisp.
+      DATA mv_label TYPE string.
 
       CLASS-METHODS class_constructor.
 
@@ -450,6 +451,8 @@
                                  environment   TYPE REF TO lcl_lisp_environment OPTIONAL
                        RETURNING VALUE(result) TYPE REF TO lcl_lisp
                        RAISING   lcx_lisp_exception.
+
+      METHODS set_shared_structure RAISING lcx_lisp_exception.
 
       METHODS is_procedure RETURNING VALUE(result) TYPE REF TO lcl_lisp.
 
@@ -1227,6 +1230,7 @@
 
       METHODS to_string REDEFINITION.
       METHODS is_equal REDEFINITION.
+      METHODS set_shared_structure REDEFINITION.
 
       METHODS eval IMPORTING environment   TYPE REF TO lcl_lisp_environment
                              interpreter   TYPE REF TO lcl_lisp_interpreter
@@ -1414,18 +1418,11 @@
                   RAISING   lcx_lisp_exception.
 
     PRIVATE SECTION.
-      TYPES: BEGIN OF ts_label,
-               datum   TYPE string,
-               element TYPE REF TO lcl_lisp,
-             END OF ts_label.
-      TYPES tt_labels TYPE SORTED TABLE OF ts_label WITH UNIQUE KEY datum.
-
       TYPES tv_text13 TYPE c LENGTH 13.
       DATA code TYPE string.
       DATA length TYPE i.
       DATA index TYPE i.
       DATA char TYPE char1.
-      DATA mt_labels TYPE tt_labels.
 
       DATA mv_eol TYPE char1.
       DATA mv_whitespace TYPE char07. " Case sensitive
@@ -1435,8 +1432,10 @@
         next_char RAISING lcx_lisp_exception,
         peek_char RETURNING VALUE(rv_char) TYPE char1,
         peek_bytevector RETURNING VALUE(rv_flag) TYPE flag,
-        peek_label EXPORTING ev_label        TYPE string
+        match_label IMPORTING iv_limit        TYPE char1
+                   EXPORTING ev_label        TYPE string
                    RETURNING VALUE(rv_found) TYPE flag,
+        skip_label,
         skip_whitespace
           RETURNING VALUE(rv_has_next) TYPE flag
           RAISING   lcx_lisp_exception,
@@ -1451,6 +1450,7 @@
 
       METHODS throw IMPORTING message TYPE string
                     RAISING   lcx_lisp_exception.
+
   ENDCLASS.                    "lcl_parser DEFINITION
 
 *----------------------------------------------------------------------*
@@ -1942,7 +1942,6 @@
                                          eo_compare TYPE REF TO lcl_lisp
                                          eo_key     TYPE REF TO lcl_lisp
                                RAISING   lcx_lisp_exception.
-
   ENDCLASS.                    "lcl_lisp_interpreter DEFINITION
 
 *----------------------------------------------------------------------*
@@ -2072,9 +2071,9 @@
 *     process does not have the concept of threads, we are safe :-)
       code = iv_code.
       length = strlen( code ).
-      CLEAR mt_labels.
+
       IF length = 0.
-        APPEND lcl_lisp=>nil TO elements.
+        APPEND lcl_lisp=>eof_object TO elements.
         RETURN.
       ENDIF.
 
@@ -2185,18 +2184,31 @@
       next_char( ).                 "Skip past closing quote
     ENDMETHOD.                    "match_string
 
-    METHOD peek_label.
+    METHOD skip_label.
+*     Skip if match was successful
+      next_char( ).                 " Skip past hash
+      WHILE index < length AND char CO '0123456789'.
+        next_char( ).
+      ENDWHILE.
+      next_char( ).                 "Skip past closing iv_limit ( = or # )
+    ENDMETHOD.
+
+    METHOD match_label.
       rv_found = abap_false.
       CLEAR ev_label.
 
       DATA(lv_idx) = index.
-      WHILE lv_idx < length.
+
+      DATA(len_1) = length - 1.
+      WHILE lv_idx < len_1.
         lv_idx = lv_idx + 1.
+
         DATA(lv_char) = code+lv_idx(1).
         IF lv_char CO '0123456789'.
           ev_label = |{ ev_label }{ lv_char }|.
-        ELSEIF lv_char = c_lisp_equal AND ev_label IS NOT INITIAL.
+        ELSEIF lv_char = iv_limit AND ev_label IS NOT INITIAL.
           rv_found = abap_true.
+          skip_label( ).
         ELSE.
           RETURN.
         ENDIF.
@@ -2360,26 +2372,25 @@
 *             Boolean #t #f
               "will be handled in match_atom( )
 
-*              IF peek_bytevector( ).
+              IF peek_bytevector( ).
 **               Bytevector constant #u8( ... )
 *
-*              ENDIF.
+              ENDIF.
 
 *             Referencing other literal data #<n>= #<n>#
               DATA lv_label TYPE string.
-              IF peek_label( IMPORTING ev_label = lv_label ).
-
-                next_char( ).                 " Skip past hash
-                WHILE index < length AND char CO '0123456789'.
-                  next_char( ).
-                ENDWHILE.
-                next_char( ).                 "Skip past closing =
-
-                element = parse_token( ).
-
+              IF match_label( EXPORTING iv_limit = c_lisp_equal
+                             IMPORTING ev_label = lv_label ).
+*               New datum
 *               Now Add: (set! |#{ lv_label }#| element)
-                INSERT VALUE #( datum = |#{ lv_label }#|
-                                element = element ) INTO TABLE mt_labels.
+                element = parse_token( ).
+                element->mv_label = |#{ lv_label }#|.
+
+                RETURN.
+              ELSEIF match_label( EXPORTING iv_limit = c_lisp_hash
+                                  IMPORTING ev_label = lv_label ).
+*               Reference to datum
+                element = lcl_lisp_new=>symbol( |#{ lv_label }#| ).
                 RETURN.
               ENDIF.
 
@@ -3840,6 +3851,8 @@
             ENDCASE.
 
         ENDCASE.
+*       Circular references
+        result->set_shared_structure( ).
         trace_result result.
         RETURN.
 
@@ -7256,7 +7269,7 @@
       ENDTRY.
     ENDMETHOD.
 
-  ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
+ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp_abapfunction IMPLEMENTATION
@@ -7800,6 +7813,30 @@
       ENDIF.
     ENDMETHOD.
 
+    METHOD set_shared_structure.
+      DATA lo_vec TYPE REF TO lcl_lisp_vector.
+      DATA lo_ptr TYPE REF TO lcl_lisp.
+      DATA lo_last_pair TYPE REF TO lcl_lisp.
+      FIELD-SYMBOLS <lo_elem> TYPE REF TO lcl_lisp.
+
+      CHECK mv_label IS NOT INITIAL.
+
+      CASE type.
+        WHEN lcl_lisp=>type_pair.
+          lo_last_pair = lo_ptr = me.
+          WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+            lo_last_pair = lo_ptr.
+            lo_ptr = lo_ptr->cdr.
+          ENDWHILE.
+          IF lo_ptr->type = lcl_lisp=>type_symbol AND lo_ptr->value = mv_label.
+            lo_last_pair->cdr = me.
+          ENDIF.
+
+        WHEN OTHERS.
+          RETURN.
+      ENDCASE.
+    ENDMETHOD.
+
     METHOD list_to_string.
       DATA lv_str TYPE string.
       DATA lv_skip TYPE flag.
@@ -7877,6 +7914,7 @@
           str = |<lambda> { car->list_to_string( ) }|.
         WHEN type_null.
           str = c_lisp_nil.
+
         WHEN type_syntax
           OR type_primitive
           OR type_symbol
@@ -7892,7 +7930,14 @@
           ENDIF.
 
         WHEN type_char.
-          str = |"{ escape( val = value format = cl_abap_format=>e_html_js ) }"|.
+          CASE me.
+            WHEN lcl_lisp=>new_line.
+              str = |\n|.
+            WHEN lcl_lisp=>eof_object.
+              str = space.
+            WHEN OTHERS.
+              str = |"{ escape( val = value format = cl_abap_format=>e_html_js ) }"|.
+          ENDCASE.
 
         WHEN type_integer.
           DATA lv_real TYPE tv_real.
@@ -8697,6 +8742,25 @@
       ENDLOOP.
       result = lcl_lisp_new=>vector( it_vector = lt_vector
                                      iv_mutable = abap_true ).
+    ENDMETHOD.
+
+    METHOD set_shared_structure.
+      FIELD-SYMBOLS <lo_elem> TYPE REF TO lcl_lisp.
+
+      CHECK mv_label IS NOT INITIAL.
+
+      CASE type.
+        WHEN lcl_lisp=>type_vector.
+          LOOP AT vector ASSIGNING <lo_elem>.
+            CHECK <lo_elem>->type = type_symbol
+              AND <lo_elem>->value = mv_label.
+            <lo_elem> = me.
+            RETURN.
+          ENDLOOP.
+
+        WHEN OTHERS.
+          super->set_shared_structure( ).
+      ENDCASE.
     ENDMETHOD.
 
   ENDCLASS.
