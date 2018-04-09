@@ -1798,6 +1798,9 @@
 
       METHODS unicode_digit_zero RETURNING VALUE(rt_zero) TYPE tt_digit.
 
+      METHODS unicode_to_digit IMPORTING iv_char TYPE char01
+                               RETURNING VALUE(rv_digit) TYPE i.
+
       METHODS throw IMPORTING message TYPE string
                     RAISING   lcx_lisp_exception.
 
@@ -6525,42 +6528,54 @@
 
     METHOD proc_is_char_numeric.
       DATA lv_char TYPE char01.
+
       validate list.
       validate_char list->car `char-numeric?`.
-      result = false.
       lv_char = list->car->value.
-      CHECK lv_char CO '0123456789'.
-      result = true.
+
+      IF unicode_to_digit( lv_char ) BETWEEN 0 AND 9.
+        result = true.
+      ELSE.
+        result = false.
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD unicode_to_digit.
+      DATA lv_int TYPE tv_int.
+      FIELD-SYMBOLS <lv_hex> TYPE x.
+      FIELD-SYMBOLS <lv_int> TYPE x.
+      DATA lv_xdigit TYPE ts_digit-zero.
+      DATA lv_zero TYPE i.
+      DATA ls_digit TYPE ts_digit.
+
+      rv_digit = -1.
+
+      ASSIGN iv_char TO <lv_hex> CASTING.
+      ASSIGN lv_int TO <lv_int> CASTING.
+      <lv_int> = <lv_hex>. " conversion
+      lv_xdigit = lv_int.
+
+      LOOP AT mt_zero INTO ls_digit WHERE zero LE lv_xdigit.
+      ENDLOOP.
+      IF sy-subrc EQ 0.
+        lv_zero = ls_digit-zero.
+        rv_digit = lv_int - lv_zero.
+      ENDIF.
     ENDMETHOD.
 
     METHOD proc_digit_value.
       DATA lv_char TYPE char01.
       DATA lv_int TYPE tv_int.
-      FIELD-SYMBOLS <lv_hex> TYPE x.
-      FIELD-SYMBOLS <lv_int> TYPE x.
-      DATA lv_digit TYPE ts_digit-zero.
-      DATA lv_zero TYPE i.
-      DATA ls_digit TYPE ts_digit.
-
 
       validate list.
       validate_char list->car `digit-value`.
-
       lv_char = list->car->value.
-      ASSIGN lv_char TO <lv_hex> CASTING.
-      ASSIGN lv_int TO <lv_int> CASTING.
-      <lv_int> = <lv_hex>. " conversion
-      lv_digit = lv_int.
-      result = false.
 
-      LOOP AT mt_zero INTO ls_digit WHERE zero LE lv_digit.
-      ENDLOOP.
-      IF sy-subrc EQ 0.
-        lv_zero = ls_digit-zero.
-        lv_int = lv_int - lv_zero.
-        IF lv_int BETWEEN 0 AND 9.
-          result = lcl_lisp_new=>integer( lv_int ).
-        ENDIF.
+      lv_int = unicode_to_digit( lv_char ).
+      IF lv_int BETWEEN 0 AND 9.
+        result = lcl_lisp_new=>integer( lv_int ).
+      ELSE.
+        result = false.
       ENDIF.
     ENDMETHOD.
 
