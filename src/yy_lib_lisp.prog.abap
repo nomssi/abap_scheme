@@ -61,7 +61,7 @@
     c_eval_unquote          TYPE string VALUE 'unquote',
     c_eval_unquote_splicing TYPE string VALUE 'unquote-splicing'.
 
-  TYPES tv_int TYPE int8.         " integer data type, use int8 if available
+  TYPES tv_int TYPE i.         " integer data type, use int8 if available
   TYPES tv_index TYPE tv_int.
   TYPES tv_real TYPE decfloat34.  " real data type
   TYPES tv_xword TYPE x LENGTH 2.
@@ -1647,7 +1647,6 @@
       proc_num_to_string,        ##called
       proc_list_to_string,       ##called
       proc_symbol_to_string,     ##called
-      proc_string_list_is_equal, ##called
       proc_string_length,        ##called
       proc_string_copy,          ##called
       proc_string_to_num,        ##called
@@ -1822,6 +1821,9 @@
       METHODS char_to_integer IMPORTING io_char TYPE REF TO lcl_lisp
                               RETURNING VALUE(rv_int) TYPE tv_int
                               RAISING lcx_lisp_exception.
+
+      METHODS fold_case IMPORTING iv_string TYPE string
+                        RETURNING VALUE(rv_string) TYPE string.
 
       METHODS throw IMPORTING message TYPE string
                     RAISING   lcx_lisp_exception.
@@ -2581,7 +2583,6 @@
       env->define_value( symbol = 'symbol?'     type = lcl_lisp=>type_native value = 'PROC_IS_SYMBOL' ).
       env->define_value( symbol = 'port?'       type = lcl_lisp=>type_native value = 'PROC_IS_PORT' ).
       env->define_value( symbol = 'boolean=?'   type = lcl_lisp=>type_native value = 'PROC_BOOLEAN_LIST_IS_EQUAL' ).
-      env->define_value( symbol = 'string=?'    type = lcl_lisp=>type_native value = 'PROC_STRING_LIST_IS_EQUAL' ).
       env->define_value( symbol = 'exact?'      type = lcl_lisp=>type_native value = 'PROC_IS_EXACT' ).
       env->define_value( symbol = 'inexact?'    type = lcl_lisp=>type_native value = 'PROC_IS_INEXACT' ).
 
@@ -6134,38 +6135,6 @@
       ENDDO.
     ENDMETHOD.
 
-    METHOD proc_string_list_is_equal.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lo_test = lo_arg->car.
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |string=? missing string argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        IF lo_arg->car NE lo_test.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |string=? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
-    ENDMETHOD.
-
     METHOD proc_string_length.
       validate: list.
       validate_string list->car 'string-length'.
@@ -6893,9 +6862,11 @@
     ENDMETHOD.
 
 *----- String
+
     METHOD proc_string_list_is_eq.
       DATA lo_test TYPE REF TO lcl_lisp.
       DATA lo_arg TYPE REF TO lcl_lisp.
+      DATA lv_ref TYPE string.
 
       validate list.
 
@@ -6905,6 +6876,7 @@
       lo_test = nil.
       IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
         lo_test = lo_arg->car.
+        lv_ref = lo_test->value.
         lo_arg = lo_arg->cdr.
       ENDIF.
       IF lo_test EQ nil.
@@ -6912,7 +6884,7 @@
       ENDIF.
 
       WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        IF lo_arg->car->value NE lo_test->value.
+        IF lo_arg->car->value NE lv_ref.
           RETURN.
         ENDIF.
         lo_arg = lo_arg->cdr.
@@ -6938,7 +6910,8 @@
 
       lo_test = nil.
       IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_ref = lo_arg->car->value.
+        lo_test = lo_arg->car.
+        lv_ref = lo_test->value.
         lo_arg = lo_arg->cdr.
       ENDIF.
       IF lo_test EQ nil.
@@ -6975,7 +6948,8 @@
 
       lo_test = nil.
       IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_ref = lo_arg->car->value.
+        lo_test = lo_arg->car.
+        lv_ref = lo_test->value.
         lo_arg = lo_arg->cdr.
       ENDIF.
       IF lo_test EQ nil.
@@ -7012,7 +6986,8 @@
 
       lo_test = nil.
       IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_ref = lo_arg->car->value.
+        lo_test = lo_arg->car.
+        lv_ref = lo_test->value.
         lo_arg = lo_arg->cdr.
       ENDIF.
       IF lo_test EQ nil.
@@ -7049,7 +7024,8 @@
 
       lo_test = nil.
       IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_ref = lo_arg->car->value.
+        lo_test = lo_arg->car.
+        lv_ref = lo_test->value.
         lo_arg = lo_arg->cdr.
       ENDIF.
       IF lo_test EQ nil.
@@ -7073,6 +7049,10 @@
       result = true.
     ENDMETHOD.
 
+    METHOD fold_case.
+      rv_string = to_upper( iv_string ).
+    ENDMETHOD.
+
     METHOD proc_string_ci_list_is_eq.
       DATA lv_test TYPE string.
       DATA lo_test TYPE REF TO lcl_lisp.
@@ -7086,7 +7066,7 @@
       lo_test = nil.
       IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
         lo_test = lo_arg->car.
-        lv_test = to_upper( lo_test->value ).
+        lv_test = fold_case( lo_test->value ).
         lo_arg = lo_arg->cdr.
       ENDIF.
       IF lo_test EQ nil.
@@ -7094,7 +7074,7 @@
       ENDIF.
 
       WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        IF to_upper( lo_arg->car->value ) NE lv_test.
+        IF fold_case( lo_arg->car->value ) NE lv_test.
           RETURN.
         ENDIF.
         lo_arg = lo_arg->cdr.
@@ -7120,7 +7100,8 @@
 
       lo_test = nil.
       IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_ref = to_upper( lo_arg->car->value ).
+        lo_test = lo_arg->car.
+        lv_test = fold_case( lo_test->value ).
         lo_arg = lo_arg->cdr.
       ENDIF.
       IF lo_test EQ nil.
@@ -7128,7 +7109,7 @@
       ENDIF.
 
       WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_test = to_upper( lo_arg->car->value ).
+        lv_test = fold_case( lo_arg->car->value ).
         IF lv_ref < lv_test.
           lv_ref = lv_test.
         ELSE.
@@ -7157,7 +7138,8 @@
 
       lo_test = nil.
       IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_ref = to_upper( lo_arg->car->value ).
+        lo_test = lo_arg->car.
+        lv_test = fold_case( lo_test->value ).
         lo_arg = lo_arg->cdr.
       ENDIF.
       IF lo_test EQ nil.
@@ -7165,7 +7147,7 @@
       ENDIF.
 
       WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_test = to_upper( lo_arg->car->value ).
+        lv_test = fold_case( lo_arg->car->value ).
         IF lv_ref > lv_test.
           lv_ref = lv_test.
         ELSE.
@@ -7194,7 +7176,8 @@
 
       lo_test = nil.
       IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_ref = to_upper( lo_arg->car->value ).
+        lo_test = lo_arg->car.
+        lv_test = fold_case( lo_test->value ).
         lo_arg = lo_arg->cdr.
       ENDIF.
       IF lo_test EQ nil.
@@ -7202,7 +7185,7 @@
       ENDIF.
 
       WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_test = to_upper( lo_arg->car->value ).
+        lv_test = fold_case( lo_arg->car->value ).
         IF lv_ref <= lv_test.
           lv_ref = lv_test.
         ELSE.
@@ -7231,7 +7214,8 @@
 
       lo_test = nil.
       IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_ref = to_upper( lo_arg->car->value ).
+        lo_test = lo_arg->car.
+        lv_test = fold_case( lo_test->value ).
         lo_arg = lo_arg->cdr.
       ENDIF.
       IF lo_test EQ nil.
@@ -7239,7 +7223,7 @@
       ENDIF.
 
       WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_test = to_upper( lo_arg->car->value ).
+        lv_test = fold_case( lo_arg->car->value ).
         IF lv_ref >= lv_test.
           lv_ref = lv_test.
         ELSE.
