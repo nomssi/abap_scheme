@@ -61,7 +61,7 @@
     c_eval_unquote          TYPE string VALUE 'unquote',
     c_eval_unquote_splicing TYPE string VALUE 'unquote-splicing'.
 
-  TYPES tv_int TYPE i.         " integer data type, use int8 if available
+  TYPES tv_int TYPE int8.         " integer data type, use int8 if available
   TYPES tv_index TYPE tv_int.
   TYPES tv_real TYPE decfloat34.  " real data type
   TYPES tv_xword TYPE x LENGTH 2.
@@ -1624,6 +1624,12 @@
       proc_char_upcase        ##called,
       proc_char_downcase      ##called,
 
+      proc_char_list_is_eq    ##called,
+      proc_char_list_is_lt    ##called,
+      proc_char_list_is_gt    ##called,
+      proc_char_list_is_le    ##called,
+      proc_char_list_is_ge    ##called,
+
       proc_string                ##called,
       proc_make_string,          ##called
       proc_num_to_string,        ##called
@@ -1800,6 +1806,10 @@
 
       METHODS unicode_to_digit IMPORTING iv_char TYPE char01
                                RETURNING VALUE(rv_digit) TYPE i.
+
+      METHODS char_to_integer IMPORTING io_char TYPE REF TO lcl_lisp
+                              RETURNING VALUE(rv_int) TYPE tv_int
+                              RAISING lcx_lisp_exception.
 
       METHODS throw IMPORTING message TYPE string
                     RAISING   lcx_lisp_exception.
@@ -2679,6 +2689,12 @@
       env->define_value( symbol = 'integer->char'     type = lcl_lisp=>type_native value   = 'PROC_INTEGER_TO_CHAR' ).
       env->define_value( symbol = 'char-upcase'       type = lcl_lisp=>type_native value   = 'PROC_CHAR_UPCASE' ).
       env->define_value( symbol = 'char-downcase'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_DOWNCASE' ).
+
+      env->define_value( symbol = 'char=?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_EQ' ).
+      env->define_value( symbol = 'char<?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_LT' ).
+      env->define_value( symbol = 'char>?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_GT' ).
+      env->define_value( symbol = 'char<=?'    type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_LE' ).
+      env->define_value( symbol = 'char>=?'    type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_GE' ).
 
       env->define_value( symbol = 'sql-query'         type = lcl_lisp=>type_native value   = 'PROC_SQL_QUERY' ).
       env->define_value( symbol = 'define-query'      type = lcl_lisp=>type_native value   = 'PROC_SQL_PREPARE' ).
@@ -6671,19 +6687,203 @@
       result = true.
     ENDMETHOD.
 
-    METHOD proc_char_to_integer.
-      DATA lv_char TYPE char01.
-      FIELD-SYMBOLS <xword> TYPE x.
-      FIELD-SYMBOLS <xint> TYPE x.
-      DATA lv_int TYPE int2.
+    METHOD proc_char_list_is_eq.
+      DATA lo_test TYPE REF TO lcl_lisp.
+      DATA lo_arg TYPE REF TO lcl_lisp.
 
       validate list.
-      validate_char list->car `char->integer`.
-      lv_char = list->car->value+0(1).
+
+      result = false.
+      lo_arg = list.
+
+      lo_test = nil.
+      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+        lo_test = lo_arg->car.
+        lo_arg = lo_arg->cdr.
+      ENDIF.
+      IF lo_test EQ nil.
+        throw( |char=? missing char argument in { lo_arg->car->to_string( ) }| ).
+      ENDIF.
+
+      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+        IF lo_arg->car NE lo_test.
+          RETURN.
+        ENDIF.
+        lo_arg = lo_arg->cdr.
+      ENDWHILE.
+
+      IF lo_arg NE nil.
+        throw( |char=? wrong argument { lo_arg->car->to_string( ) }| ).
+      ENDIF.
+      CHECK lo_arg = nil.
+      result = true.
+    ENDMETHOD.
+
+    METHOD proc_char_list_is_lt.
+      DATA lo_test TYPE REF TO lcl_lisp.
+      DATA lo_arg TYPE REF TO lcl_lisp.
+      DATA lv_ref TYPE tv_int.
+      DATA lv_test TYPE tv_int.
+
+      validate list.
+
+      result = false.
+      lo_arg = list.
+
+      lo_test = nil.
+      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+        lv_ref = char_to_integer( lo_arg->car ).
+        lo_arg = lo_arg->cdr.
+      ENDIF.
+      IF lo_test EQ nil.
+        throw( |char<? missing char argument in { lo_arg->car->to_string( ) }| ).
+      ENDIF.
+
+      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+        lv_test = char_to_integer( lo_arg->car ).
+        IF lv_ref < lv_test.
+          lv_ref = lv_test.
+        ELSE.
+          RETURN.
+        ENDIF.
+        lo_arg = lo_arg->cdr.
+      ENDWHILE.
+
+      IF lo_arg NE nil.
+        throw( |char<? wrong argument { lo_arg->car->to_string( ) }| ).
+      ENDIF.
+      CHECK lo_arg = nil.
+      result = true.
+    ENDMETHOD.
+
+    METHOD proc_char_list_is_gt.
+      DATA lo_test TYPE REF TO lcl_lisp.
+      DATA lo_arg TYPE REF TO lcl_lisp.
+      DATA lv_ref TYPE tv_int.
+      DATA lv_test TYPE tv_int.
+
+      validate list.
+
+      result = false.
+      lo_arg = list.
+
+      lo_test = nil.
+      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+        lv_ref = char_to_integer( lo_arg->car ).
+        lo_arg = lo_arg->cdr.
+      ENDIF.
+      IF lo_test EQ nil.
+        throw( |char>? missing char argument in { lo_arg->car->to_string( ) }| ).
+      ENDIF.
+
+      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+        lv_test = char_to_integer( lo_arg->car ).
+        IF lv_ref > lv_test.
+          lv_ref = lv_test.
+        ELSE.
+          RETURN.
+        ENDIF.
+        lo_arg = lo_arg->cdr.
+      ENDWHILE.
+
+      IF lo_arg NE nil.
+        throw( |char>? wrong argument { lo_arg->car->to_string( ) }| ).
+      ENDIF.
+      CHECK lo_arg = nil.
+      result = true.
+    ENDMETHOD.
+
+    METHOD proc_char_list_is_le.
+      DATA lo_test TYPE REF TO lcl_lisp.
+      DATA lo_arg TYPE REF TO lcl_lisp.
+      DATA lv_ref TYPE tv_int.
+      DATA lv_test TYPE tv_int.
+
+      validate list.
+
+      result = false.
+      lo_arg = list.
+
+      lo_test = nil.
+      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+        lv_ref = char_to_integer( lo_arg->car ).
+        lo_arg = lo_arg->cdr.
+      ENDIF.
+      IF lo_test EQ nil.
+        throw( |char<=? missing char argument in { lo_arg->car->to_string( ) }| ).
+      ENDIF.
+
+      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+        lv_test = char_to_integer( lo_arg->car ).
+        IF lv_ref <= lv_test.
+          lv_ref = lv_test.
+        ELSE.
+          RETURN.
+        ENDIF.
+        lo_arg = lo_arg->cdr.
+      ENDWHILE.
+
+      IF lo_arg NE nil.
+        throw( |char<=? wrong argument { lo_arg->car->to_string( ) }| ).
+      ENDIF.
+      CHECK lo_arg = nil.
+      result = true.
+    ENDMETHOD.
+
+    METHOD proc_char_list_is_ge.
+      DATA lo_test TYPE REF TO lcl_lisp.
+      DATA lo_arg TYPE REF TO lcl_lisp.
+      DATA lv_ref TYPE tv_int.
+      DATA lv_test TYPE tv_int.
+
+      validate list.
+
+      result = false.
+      lo_arg = list.
+
+      lo_test = nil.
+      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+        lv_ref = char_to_integer( lo_arg->car ).
+        lo_arg = lo_arg->cdr.
+      ENDIF.
+      IF lo_test EQ nil.
+        throw( |char>=? missing char argument in { lo_arg->car->to_string( ) }| ).
+      ENDIF.
+
+      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+        lv_test = char_to_integer( lo_arg->car ).
+        IF lv_ref >= lv_test.
+          lv_ref = lv_test.
+        ELSE.
+          RETURN.
+        ENDIF.
+        lo_arg = lo_arg->cdr.
+      ENDWHILE.
+
+      IF lo_arg NE nil.
+        throw( |char>=? wrong argument { lo_arg->car->to_string( ) }| ).
+      ENDIF.
+      CHECK lo_arg = nil.
+      result = true.
+    ENDMETHOD.
+
+    METHOD char_to_integer.
+      FIELD-SYMBOLS <xword> TYPE x.
+      FIELD-SYMBOLS <xint> TYPE x.
+      DATA lv_char TYPE char01.
+      DATA lv_int TYPE int2.
+
+      lv_char = io_char->value+0(1).
       ASSIGN lv_char TO <xword> CASTING.
       ASSIGN lv_int TO <xint> CASTING.
       <xint> = <xword>.
-      result = lcl_lisp_new=>integer( lv_int ).
+      rv_int = lv_int.
+    ENDMETHOD.
+
+    METHOD proc_char_to_integer.
+      validate list.
+      validate_char list->car `char->integer`.
+      result = lcl_lisp_new=>integer( char_to_integer( list->car ) ).
     ENDMETHOD.
 
     METHOD proc_integer_to_char.
