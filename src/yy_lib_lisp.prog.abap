@@ -3000,7 +3000,7 @@
       eo_step = nil.
 
       DATA(lo_loop) = io_head.
-      WHILE lo_loop->type EQ lcl_lisp=>type_pair.
+      WHILE lo_loop->type EQ lcl_lisp=>type_pair AND lo_loop->car->type EQ lcl_lisp=>type_pair.
         DATA(lo_spec) = lo_loop->car.
 *       max. 3 entries
 *       <variable>
@@ -6681,563 +6681,188 @@
       result = true.
     ENDMETHOD.
 
-    METHOD proc_char_list_is_eq.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
+  DEFINE proc_string_list_compare.
+    DATA lo_test TYPE REF TO lcl_lisp.
+    DATA lo_arg TYPE REF TO lcl_lisp.
+    DATA lv_ref TYPE string.
+    DATA lv_test TYPE string.
 
-      validate list.
+    validate list.
 
-      result = false.
-      lo_arg = list.
+    result = false.
+    lo_arg = list.
 
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
-        lo_test = lo_arg->car.
-        lo_arg = lo_arg->cdr.
+    lo_test = nil.
+    IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      lo_test = lo_arg->car.
+      lv_ref = lo_test->value.
+      lo_arg = lo_arg->cdr.
+    ENDIF.
+    IF lo_test EQ nil.
+      throw( |{ &1 } missing argument in { lo_arg->car->to_string( ) }| ).
+    ENDIF.
+
+    WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      lv_test = lo_arg->car->value.
+      IF lv_ref &2 lv_test.
+        lv_ref = lv_test.
+      ELSE.
+        RETURN.
       ENDIF.
-      IF lo_test EQ nil.
-        throw( |char=? missing char argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
+      lo_arg = lo_arg->cdr.
+    ENDWHILE.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
-        IF lo_arg->car NE lo_test.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |char=? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
-    ENDMETHOD.
-
-    METHOD proc_char_list_is_lt.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-      DATA lv_ref TYPE tv_int.
-      DATA lv_test TYPE tv_int.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
-        lv_ref = char_to_integer( lo_arg->car ).
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |char<? missing char argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
-        lv_test = char_to_integer( lo_arg->car ).
-        IF lv_ref < lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |char<? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
-    ENDMETHOD.
-
-    METHOD proc_char_list_is_gt.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-      DATA lv_ref TYPE tv_int.
-      DATA lv_test TYPE tv_int.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
-        lv_ref = char_to_integer( lo_arg->car ).
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |char>? missing char argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
-        lv_test = char_to_integer( lo_arg->car ).
-        IF lv_ref > lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |char>? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
-    ENDMETHOD.
-
-    METHOD proc_char_list_is_le.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-      DATA lv_ref TYPE tv_int.
-      DATA lv_test TYPE tv_int.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
-        lv_ref = char_to_integer( lo_arg->car ).
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |char<=? missing char argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
-        lv_test = char_to_integer( lo_arg->car ).
-        IF lv_ref <= lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |char<=? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
-    ENDMETHOD.
-
-    METHOD proc_char_list_is_ge.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-      DATA lv_ref TYPE tv_int.
-      DATA lv_test TYPE tv_int.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
-        lv_ref = char_to_integer( lo_arg->car ).
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |char>=? missing char argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
-        lv_test = char_to_integer( lo_arg->car ).
-        IF lv_ref >= lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |char>=? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
-    ENDMETHOD.
-
-*----- String
-
-    METHOD proc_string_list_is_eq.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-      DATA lv_ref TYPE string.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lo_test = lo_arg->car.
-        lv_ref = lo_test->value.
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |string=? missing string argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        IF lo_arg->car->value NE lv_ref.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |string=? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
-    ENDMETHOD.
-
-    METHOD proc_string_list_is_lt.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-      DATA lv_ref TYPE string.
-      DATA lv_test TYPE string.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lo_test = lo_arg->car.
-        lv_ref = lo_test->value.
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |string<? missing string argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_test = lo_arg->car->value.
-        IF lv_ref < lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |string<? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
-    ENDMETHOD.
-
-    METHOD proc_string_list_is_gt.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-      DATA lv_ref TYPE string.
-      DATA lv_test TYPE string.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lo_test = lo_arg->car.
-        lv_ref = lo_test->value.
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |string>? missing string argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_test = lo_arg->car->value.
-        IF lv_ref > lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |string>? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
-    ENDMETHOD.
-
-    METHOD proc_string_list_is_le.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-      DATA lv_ref TYPE string.
-      DATA lv_test TYPE string.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lo_test = lo_arg->car.
-        lv_ref = lo_test->value.
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |string<=? missing string argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_test = lo_arg->car->value.
-        IF lv_ref <= lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |string<=? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
-    ENDMETHOD.
-
-    METHOD proc_string_list_is_ge.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-      DATA lv_ref TYPE string.
-      DATA lv_test TYPE string.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lo_test = lo_arg->car.
-        lv_ref = lo_test->value.
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |string>=? missing string argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_test = lo_arg->car->value.
-        IF lv_ref >= lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |string>=? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
-    ENDMETHOD.
+    IF lo_arg NE nil.
+      throw( |{ &1 } wrong argument in { lo_arg->car->to_string( ) }| ).
+    ENDIF.
+    CHECK lo_arg = nil.
+    result = true.
+  END-OF-DEFINITION.
 
     METHOD fold_case.
       rv_string = to_upper( iv_string ).
     ENDMETHOD.
 
+  DEFINE proc_string_ci_list_compare.
+    DATA lo_test TYPE REF TO lcl_lisp.
+    DATA lo_arg TYPE REF TO lcl_lisp.
+    DATA lv_ref TYPE string.
+    DATA lv_test TYPE string.
+
+    validate list.
+
+    result = false.
+    lo_arg = list.
+
+    lo_test = nil.
+    IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      lo_test = lo_arg->car.
+      lv_ref = fold_case( lo_test->value ).
+      lo_arg = lo_arg->cdr.
+    ENDIF.
+    IF lo_test EQ nil.
+      throw( |{ &1 } missing argument in { lo_arg->car->to_string( ) }| ).
+    ENDIF.
+
+    WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      lv_test = fold_case( lo_arg->car->value ).
+      IF lv_ref &2 lv_test.
+        lv_ref = lv_test.
+      ELSE.
+        RETURN.
+      ENDIF.
+      lo_arg = lo_arg->cdr.
+    ENDWHILE.
+
+    IF lo_arg NE nil.
+      throw( |{ &1 } wrong argument in { lo_arg->car->to_string( ) }| ).
+    ENDIF.
+    CHECK lo_arg = nil.
+    result = true.
+  END-OF-DEFINITION.
+
+  DEFINE proc_char_list_compare.
+    DATA lo_test TYPE REF TO lcl_lisp.
+    DATA lo_arg TYPE REF TO lcl_lisp.
+    DATA lv_ref TYPE tv_int.
+    DATA lv_test TYPE tv_int.
+
+    validate list.
+
+    result = false.
+    lo_arg = list.
+
+    lo_test = nil.
+    IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      lo_test = lo_arg->car.
+      lv_ref = char_to_integer( lo_test ).
+      lo_arg = lo_arg->cdr.
+    ENDIF.
+    IF lo_test EQ nil.
+      throw( |{ &1 } missing argument in { lo_arg->car->to_string( ) }| ).
+    ENDIF.
+
+    WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      lv_test = char_to_integer( lo_arg->car ).
+      IF lv_ref &2 lv_test.
+        lv_ref = lv_test.
+      ELSE.
+        RETURN.
+      ENDIF.
+      lo_arg = lo_arg->cdr.
+    ENDWHILE.
+
+    IF lo_arg NE nil.
+      throw( |{ &1 } wrong argument in { lo_arg->car->to_string( ) }| ).
+    ENDIF.
+    CHECK lo_arg = nil.
+    result = true.
+  END-OF-DEFINITION.
+
+*----- Char
+    METHOD proc_char_list_is_eq.
+      proc_char_list_compare `char=?` =.
+    ENDMETHOD.
+
+    METHOD proc_char_list_is_lt.
+      proc_char_list_compare `char<?` <.
+    ENDMETHOD.
+
+    METHOD proc_char_list_is_gt.
+      proc_char_list_compare `char>?` >.
+    ENDMETHOD.
+
+    METHOD proc_char_list_is_le.
+      proc_char_list_compare `char<=?` <=.
+    ENDMETHOD.
+
+    METHOD proc_char_list_is_ge.
+      proc_char_list_compare `char>=?` >=.
+    ENDMETHOD.
+
+*----- String
+    METHOD proc_string_list_is_eq.
+      proc_string_list_compare `string=?` =.
+    ENDMETHOD.
+
+    METHOD proc_string_list_is_lt.
+      proc_string_list_compare `string<?` <.
+    ENDMETHOD.
+
+    METHOD proc_string_list_is_gt.
+      proc_string_list_compare `string>?` >.
+    ENDMETHOD.
+
+    METHOD proc_string_list_is_le.
+      proc_string_list_compare `string<=?` <=.
+    ENDMETHOD.
+
+    METHOD proc_string_list_is_ge.
+      proc_string_list_compare `string>=?` >=.
+    ENDMETHOD.
+
+*----- String CI
+
     METHOD proc_string_ci_list_is_eq.
-      DATA lv_test TYPE string.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lo_test = lo_arg->car.
-        lv_test = fold_case( lo_test->value ).
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |string-ci=? missing string argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        IF fold_case( lo_arg->car->value ) NE lv_test.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |string-ci=? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
+      proc_string_ci_list_compare `string-ci=?` =.
     ENDMETHOD.
 
     METHOD proc_string_ci_list_is_lt.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-      DATA lv_ref TYPE string.
-      DATA lv_test TYPE string.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lo_test = lo_arg->car.
-        lv_test = fold_case( lo_test->value ).
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |string-ci<? missing string argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_test = fold_case( lo_arg->car->value ).
-        IF lv_ref < lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |string-ci<? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
+      proc_string_ci_list_compare `string-ci<?` <.
     ENDMETHOD.
 
     METHOD proc_string_ci_list_is_gt.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-      DATA lv_ref TYPE string.
-      DATA lv_test TYPE string.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lo_test = lo_arg->car.
-        lv_test = fold_case( lo_test->value ).
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |string-ci>? missing string argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_test = fold_case( lo_arg->car->value ).
-        IF lv_ref > lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |string-ci>? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
+      proc_string_ci_list_compare `string-ci>?` >.
     ENDMETHOD.
 
     METHOD proc_string_ci_list_is_le.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-      DATA lv_ref TYPE string.
-      DATA lv_test TYPE string.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lo_test = lo_arg->car.
-        lv_test = fold_case( lo_test->value ).
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |string-ci<=? missing string argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_test = fold_case( lo_arg->car->value ).
-        IF lv_ref <= lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |string-ci<=? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
+      proc_string_ci_list_compare `string-ci<=?` <=.
     ENDMETHOD.
 
     METHOD proc_string_ci_list_is_ge.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-      DATA lv_ref TYPE string.
-      DATA lv_test TYPE string.
-
-      validate list.
-
-      result = false.
-      lo_arg = list.
-
-      lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lo_test = lo_arg->car.
-        lv_test = fold_case( lo_test->value ).
-        lo_arg = lo_arg->cdr.
-      ENDIF.
-      IF lo_test EQ nil.
-        throw( |string-ci>=? missing string argument in { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-        lv_test = fold_case( lo_arg->car->value ).
-        IF lv_ref >= lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
-      ENDWHILE.
-
-      IF lo_arg NE nil.
-        throw( |string-ci>=? wrong argument { lo_arg->car->to_string( ) }| ).
-      ENDIF.
-      CHECK lo_arg = nil.
-      result = true.
+      proc_string_ci_list_compare `string-ci>=?` >=.
     ENDMETHOD.
+
 *--- End string
 
     METHOD char_to_integer.

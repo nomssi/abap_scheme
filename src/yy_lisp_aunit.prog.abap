@@ -354,6 +354,7 @@
        METHODS do_1 FOR TESTING.
        METHODS do_2 FOR TESTING.
        METHODS do_3 FOR TESTING.
+       METHODS do_4 FOR TESTING.
 
        METHODS named_let_1 FOR TESTING.
        METHODS named_let_2 FOR TESTING.
@@ -426,7 +427,17 @@
        METHODS string_set_1 FOR TESTING.
        METHODS string_set_2 FOR TESTING.
 
-       METHODS compare_string_list FOR TESTING.
+       METHODS compare_string_list_eq FOR TESTING.
+       METHODS compare_string_list_lt FOR TESTING.
+       METHODS compare_string_list_gt FOR TESTING.
+       METHODS compare_string_list_le FOR TESTING.
+       METHODS compare_string_list_ge FOR TESTING.
+
+       METHODS compare_string_ci_list_eq FOR TESTING.
+       METHODS compare_string_ci_list_lt FOR TESTING.
+       METHODS compare_string_ci_list_gt FOR TESTING.
+       METHODS compare_string_ci_list_le FOR TESTING.
+       METHODS compare_string_ci_list_ge FOR TESTING.
 
        METHODS symbol_to_string FOR TESTING.
        METHODS input_string_1 FOR TESTING.
@@ -697,6 +708,15 @@
                          |    (sum 0  (+ sum (car x))))| &
                          |((null? x) )))|              " Do without a body
                expected = c_lisp_nil ).                  " unspecified
+     ENDMETHOD.
+
+     METHOD do_4.
+       scheme( code = |(define lst '())| &
+                      |  (do (num (read))| &
+                      |      (i 1 (+ 1 i))| &
+                      |      ((= i 9) (display lst )| &
+                      |       (append num lst)) ))|
+               expected = 'Eval: Symbol i is unbound' ).                  " should not dump!
      ENDMETHOD.
 
      METHOD named_let_1.
@@ -1102,10 +1122,73 @@
                expected = '"mysymbol"' ).
      ENDMETHOD.
 
-     METHOD compare_string_list.
+     METHOD compare_string_list_eq.
        scheme( code = |(string=? "Apple" "apple")|
                expected = '#f' ).
        scheme( code = |(string=? "a" "as" "a")|
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD compare_string_list_lt.
+       scheme( code = |(string<? "Apple" "Cap")|
+               expected = '#t' ).
+       scheme( code = |(string<? "a" "bas" "bas")|
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD compare_string_list_gt.
+       scheme( code = |(string>? "Tapple" "Mapple" "Apple" )|
+               expected = '#t' ).
+       scheme( code = |(string>? "tza" "tas" "zca")|
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD compare_string_list_le.
+       scheme( code = |(string<=? "Apple" "Cap" "Cap")|
+               expected = '#t' ).
+       scheme( code = |(string<=? "a" "bsa" "bsa" "bas")|
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD compare_string_list_ge.
+       scheme( code = |(string>=? "Tapple" "Mapple" "Apple" "Apple"  )|
+               expected = '#t' ).
+       scheme( code = |(string>=? "tza" "tzas" "zca")|
+               expected = '#f' ).
+     ENDMETHOD.
+
+    METHOD compare_string_ci_list_eq.
+       scheme( code = |(string-ci=? "Apple" "apple")|
+               expected = '#t' ).
+       scheme( code = |(string-ci=? "a" "as" "a")|
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD compare_string_ci_list_lt.
+       scheme( code = |(string-ci<? "apple" "CAP")|
+               expected = '#t' ).
+       scheme( code = |(string-ci<? "BAS" "a" "baz")|
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD compare_string_ci_list_gt.
+       scheme( code = |(string-ci>? "Tapple" "MAPPLE" "Apple" )|
+               expected = '#t' ).
+       scheme( code = |(string-ci>? "tza" "tas" "zca")|
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD compare_string_ci_list_le.
+       scheme( code = |(string-ci<=? "Apple" "Cap" "CAP")|
+               expected = '#t' ).
+       scheme( code = |(string-ci<=? "a" "BSA" "bsa" "bas")|
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD compare_string_ci_list_ge.
+       scheme( code = |(string-ci>=? "Tapple" "Mapple" "APPLE" "Apple"  )|
+               expected = '#t' ).
+       scheme( code = |(string-ci>=? "tza" "tzas" "zca")|
                expected = '#f' ).
      ENDMETHOD.
 
