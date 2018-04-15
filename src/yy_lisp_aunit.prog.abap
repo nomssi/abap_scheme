@@ -195,12 +195,12 @@
 
      METHOD basic_string_esc_double_quote.
        scheme( code = '"string value with \" escaped double quote"'
-               expected = '"string value with \\\" escaped double quote"' ).
+               expected = '"string value with \" escaped double quote"' ).
      ENDMETHOD.                    "basic_string_esc_double_quote
 
      METHOD basic_string_quot_esc_dbl_quot.
        scheme( code = '(quote "string value with \" escaped double quote")'
-               expected = '"string value with \\\" escaped double quote"' ).
+               expected = '"string value with \" escaped double quote"' ).
      ENDMETHOD.                    "basic_string_quot_esc_dbl_quot
 
      METHOD basic_multiple_expr.
@@ -422,6 +422,7 @@
        METHODS char_single FOR TESTING.
        METHODS char_unknown FOR TESTING.
        METHODS string_len FOR TESTING.
+       METHODS string_delim FOR TESTING.
 
        METHODS string_set_0 FOR TESTING.
        METHODS string_set_1 FOR TESTING.
@@ -1092,6 +1093,11 @@
      METHOD string_len.
        scheme( code = '(string-length "Abd#\aA")'
                expected = '7' ).
+     ENDMETHOD.
+
+     METHOD string_delim.
+       scheme( code = '"Benjamin \"Bugsy\" Siegel"'
+               expected = '"Benjamin \"Bugsy\" Siegel"' ).
      ENDMETHOD.
 
      METHOD string_set_0.

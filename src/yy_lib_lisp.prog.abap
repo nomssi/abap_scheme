@@ -2203,10 +2203,11 @@
 
       next_char( ).                 " Skip past opening quote
       WHILE index < length AND NOT ( char = c_text_quote AND pchar NE c_escape_char ).
-*         cv_val = |{ cv_val }{ char }|.
-        CONCATENATE cv_val char INTO cv_val RESPECTING BLANKS.
+*       cv_val = |{ cv_val }{ char }|.
         pchar = char.
         next_char( ).
+        CHECK NOT ( char = c_text_quote AND pchar EQ c_escape_char ).
+        CONCATENATE cv_val pchar INTO cv_val RESPECTING BLANKS.
       ENDWHILE.
       next_char( ).                 "Skip past closing quote
     ENDMETHOD.                    "match_string
