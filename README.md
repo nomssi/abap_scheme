@@ -49,11 +49,11 @@ we concatenate the following Scheme expression in a string variable `code` and e
 
     (let 
     ; Define local fields
-         (PLAAB (ab-data "GS_MDPS-PLAAB" ))
+        ((PLAAB (ab-data "GS_MDPS-PLAAB" ))
          (DELKZ (ab-data "GS_MDPS-DELKZ" ))
          (LIFNR (ab-data "GS_MDPS-LIFNR" ))
-         (PLUMI (ab-data "GS_MDPS-PLUMI" ))
-      (and (= PLAAB '02') (= DELKZ 'BB') (> LIFNR '') (= PLUMI '-')) )
+         (PLUMI (ab-data "GS_MDPS-PLUMI" )))
+      (and (= PLAAB '02') (= DELKZ 'BB') (> LIFNR '') (= PLUMI '-')) ))
 
 The result on the expression either `#t` or `#f`.
 
@@ -65,7 +65,7 @@ The result on the expression either `#t` or `#f`.
                   (ab-get f3 "PROFILES")  ) )                   ; return table PROFILES
         ) )
      (let ((profile (ab-get profiles 1)) )         ; read table PROFILES index 1 INTO profile 
-                (ab-get profile "BAPIPROF" )  )    ; read field profile-bapiprof
+                (ab-get profile "BAPIPROF" )  ) )  ; read field profile-bapiprof
 
 #### Optional: Console Interface
 
