@@ -199,30 +199,30 @@
     _validate cell->car.
 
     CASE cell->car->type.
-    WHEN lcl_lisp=>type_integer.
-    lo_int ?= cell->car.
-    IF carry &1 lo_int->integer.
-    RETURN.
-    ENDIF.
-    carry = lo_int->integer.
+      WHEN lcl_lisp=>type_integer.
+        lo_int ?= cell->car.
+        IF carry &1 lo_int->integer.
+          RETURN.
+        ENDIF.
+        carry = lo_int->integer.
 
-    WHEN lcl_lisp=>type_real.
-    lo_real ?= cell->car.
-    IF carry &1 lo_real->real.
-    RETURN.
-    ENDIF.
-    carry = lo_real->real.
+      WHEN lcl_lisp=>type_real.
+        lo_real ?= cell->car.
+        IF carry &1 lo_real->real.
+          RETURN.
+        ENDIF.
+        carry = lo_real->real.
 
-    WHEN lcl_lisp=>type_rational.
-    lo_rat ?= cell->car.
-    IF carry * lo_rat->denominator &1 lo_rat->integer.
-    RETURN.
-    ENDIF.
-    carry = lo_rat->integer / lo_rat->denominator.
+      WHEN lcl_lisp=>type_rational.
+        lo_rat ?= cell->car.
+        IF carry * lo_rat->denominator &1 lo_rat->integer.
+          RETURN.
+         ENDIF.
+         carry = lo_rat->integer / lo_rat->denominator.
 
-*                  WHEN lcl_lisp=>type_complex.
-    WHEN OTHERS.
-    throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
+*     WHEN lcl_lisp=>type_complex.
+      WHEN OTHERS.
+        throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
     ENDCASE.
     cell = cell->cdr.
     ENDWHILE.
@@ -241,7 +241,7 @@
     _get_number carry list->car &2.
 
     IF sign( carry ) NE &1.
-    RETURN.
+      RETURN.
     ENDIF.
     result = true.
   END-OF-DEFINITION.
@@ -277,9 +277,9 @@
     result = nil.
     _validate list.
     TRY.
-    _get_number carry list->car &2.
-    _is_last_param list.
-    result = lcl_lisp_new=>real( &1( carry ) ).
+      _get_number carry list->car &2.
+      _is_last_param list.
+      result = lcl_lisp_new=>real( &1( carry ) ).
     _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -294,9 +294,9 @@
     result = nil.
     _validate list.
     TRY.
-    _get_number carry list->car &2.
-    _is_last_param list.
-    result = lcl_lisp_new=>real( &1( carry ) ).
+      _get_number carry list->car &2.
+      _is_last_param list.
+      result = lcl_lisp_new=>real( &1( carry ) ).
     _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -1829,11 +1829,14 @@
                               RETURNING VALUE(rv_int) TYPE tv_int
                               RAISING lcx_lisp_exception.
 
-      METHODS fold_case IMPORTING iv_string TYPE string
+      METHODS fold_case IMPORTING element TYPE REF TO lcl_lisp
                         RETURNING VALUE(rv_string) TYPE string.
 
-      METHODS char_fold_case_to_integer IMPORTING io_char TYPE REF TO lcl_lisp
+      METHODS char_fold_case_to_integer IMPORTING element TYPE REF TO lcl_lisp
                                         RETURNING VALUE(rv_int) TYPE tv_int.
+
+      METHODS char_case_identity IMPORTING element TYPE REF TO lcl_lisp
+                                 RETURNING VALUE(rv_string) TYPE string.
 
       METHODS throw IMPORTING message TYPE string
                     RAISING   lcx_lisp_exception.
@@ -6761,29 +6764,62 @@
       result = true.
     ENDMETHOD.
 
-  DEFINE _proc_string_list_compare.
+    METHOD fold_case.
+      rv_string = to_upper( element->value ).
+    ENDMETHOD.
+
+    METHOD char_case_identity.
+      rv_string = element->value.
+    ENDMETHOD.
+
+    DEFINE _char01_to_integer.
+      FIELD-SYMBOLS <xword> TYPE x.
+      FIELD-SYMBOLS <xint> TYPE x.
+      DATA lv_int TYPE int2.
+
+      ASSIGN &1 TO <xword> CASTING.
+      ASSIGN lv_int TO <xint> CASTING.
+      <xint> = <xword>.
+      &2 = lv_int.
+    END-OF-DEFINITION.
+
+    METHOD char_to_integer.
+      DATA lv_char TYPE char01.
+
+      lv_char = io_char->value+0(1).
+      _char01_to_integer lv_char rv_int.
+    ENDMETHOD.
+
+    METHOD char_fold_case_to_integer.
+      DATA lv_char TYPE char01.
+
+      lv_char = to_upper( element->value+0(1) ).
+      _char01_to_integer lv_char rv_int.
+    ENDMETHOD.
+
+  DEFINE _proc_list_compare.
     DATA lo_test TYPE REF TO lcl_lisp.
     DATA lo_arg TYPE REF TO lcl_lisp.
-    DATA lv_ref TYPE string.
-    DATA lv_test TYPE string.
+    DATA lv_ref TYPE &4.
+    DATA lv_test TYPE &4.
 
     _validate list.
 
     result = false.
+    lo_arg = list.
 
     lo_test = nil.
-    lo_arg = list.
-    IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+    IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>&5.
       lo_test = lo_arg->car.
-      lv_ref = lo_test->value.
+      lv_ref = &3( lo_test ).
       lo_arg = lo_arg->cdr.
     ENDIF.
     IF lo_test EQ nil OR lo_arg EQ nil.
       throw( |{ &1 } missing argument| ).
     ENDIF.
 
-    WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-      lv_test = lo_arg->car->value.
+    WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>&5.
+      lv_test = &3( lo_arg->car ).
       IF lv_ref &2 lv_test.
         lv_ref = lv_test.
       ELSE.
@@ -6799,122 +6835,20 @@
     result = true.
   END-OF-DEFINITION.
 
-    METHOD fold_case.
-      rv_string = to_upper( iv_string ).
-    ENDMETHOD.
+  DEFINE _proc_string_list_compare.
+    _proc_list_compare &1 &2 char_case_identity string type_string.
+  END-OF-DEFINITION.
 
   DEFINE _proc_string_ci_list_compare.
-    DATA lo_test TYPE REF TO lcl_lisp.
-    DATA lo_arg TYPE REF TO lcl_lisp.
-    DATA lv_ref TYPE string.
-    DATA lv_test TYPE string.
-
-    _validate list.
-
-    result = false.
-    lo_arg = list.
-
-    lo_test = nil.
-    IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-      lo_test = lo_arg->car.
-      lv_ref = fold_case( lo_test->value ).
-      lo_arg = lo_arg->cdr.
-    ENDIF.
-    IF lo_test EQ nil OR lo_arg EQ nil.
-      throw( |{ &1 } missing argument| ).
-    ENDIF.
-
-    WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
-      lv_test = fold_case( lo_arg->car->value ).
-      IF lv_ref &2 lv_test.
-        lv_ref = lv_test.
-      ELSE.
-        RETURN.
-      ENDIF.
-      lo_arg = lo_arg->cdr.
-    ENDWHILE.
-
-    IF lo_arg NE nil.
-      throw( |{ &1 } wrong argument in { lo_arg->car->to_string( ) }| ).
-    ENDIF.
-    CHECK lo_arg = nil.
-    result = true.
+    _proc_list_compare &1 &2 fold_case string type_string.
   END-OF-DEFINITION.
 
   DEFINE _proc_char_list_compare.
-    DATA lo_test TYPE REF TO lcl_lisp.
-    DATA lo_arg TYPE REF TO lcl_lisp.
-    DATA lv_ref TYPE tv_int.
-    DATA lv_test TYPE tv_int.
-
-    _validate list.
-
-    result = false.
-    lo_arg = list.
-
-    lo_test = nil.
-    IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
-      lo_test = lo_arg->car.
-      lv_ref = char_to_integer( lo_test ).
-      lo_arg = lo_arg->cdr.
-    ENDIF.
-    IF lo_test EQ nil OR lo_arg EQ nil.
-      throw( |{ &1 } missing argument| ).
-    ENDIF.
-
-    WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
-      lv_test = char_to_integer( lo_arg->car ).
-      IF lv_ref &2 lv_test.
-        lv_ref = lv_test.
-      ELSE.
-        RETURN.
-      ENDIF.
-      lo_arg = lo_arg->cdr.
-    ENDWHILE.
-
-    IF lo_arg NE nil.
-      throw( |{ &1 } wrong argument in { lo_arg->car->to_string( ) }| ).
-    ENDIF.
-    CHECK lo_arg = nil.
-    result = true.
+    _proc_list_compare &1 &2 char_to_integer tv_int type_char.
   END-OF-DEFINITION.
 
   DEFINE _proc_char_ci_list_compare.
-    DATA lo_test TYPE REF TO lcl_lisp.
-    DATA lo_arg TYPE REF TO lcl_lisp.
-    DATA lv_ref TYPE tv_int.
-    DATA lv_test TYPE tv_int.
-
-    _validate list.
-
-    result = false.
-    lo_arg = list.
-
-    lo_test = nil.
-    IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
-      lo_test = lo_arg->car.
-      lv_ref = char_fold_case_to_integer( lo_test ).
-      lo_arg = lo_arg->cdr.
-    ENDIF.
-    IF lo_test EQ nil OR lo_arg EQ nil.
-      throw( |{ &1 } missing argument| ).
-    ENDIF.
-
-    WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
-      lv_test = char_fold_case_to_integer( lo_arg->car ).
-      IF lv_ref &2 lv_test.
-        lv_ref = lv_test.
-      ELSE.
-        RETURN.
-      ENDIF.
-      lo_arg = lo_arg->cdr.
-    ENDWHILE.
-
-    IF lo_arg NE nil.
-      throw( |{ &1 } wrong argument in { lo_arg->car->to_string( ) }| ).
-    ENDIF.
-    CHECK lo_arg = nil.
-    result = true.
+    _proc_list_compare &1 &2 char_fold_case_to_integer tv_int type_char.
   END-OF-DEFINITION.
 
 *----- Char
@@ -7002,30 +6936,6 @@
     ENDMETHOD.
 
 *--- End string
-    DEFINE _char01_to_integer.
-      FIELD-SYMBOLS <xword> TYPE x.
-      FIELD-SYMBOLS <xint> TYPE x.
-      DATA lv_int TYPE int2.
-
-      ASSIGN &1 TO <xword> CASTING.
-      ASSIGN lv_int TO <xint> CASTING.
-      <xint> = <xword>.
-      &2 = lv_int.
-    END-OF-DEFINITION.
-
-    METHOD char_to_integer.
-      DATA lv_char TYPE char01.
-
-      lv_char = io_char->value+0(1).
-      _char01_to_integer lv_char rv_int.
-    ENDMETHOD.
-
-    METHOD char_fold_case_to_integer.
-      DATA lv_char TYPE char01.
-
-      lv_char = to_upper( io_char->value+0(1) ).
-      _char01_to_integer lv_char rv_int.
-    ENDMETHOD.
 
     METHOD proc_char_to_integer.
       _validate list.
@@ -7815,7 +7725,7 @@ ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
     ENDMETHOD.
 
     METHOD get.
-**     Clever but probably expensive TRY / CATCH. This logic is use very often
+**     Clever but probably expensive TRY / CATCH. This logic is called often
 *      TRY.
 *          cell = VALUE #( map[ symbol = symbol ]-value DEFAULT outer->get( symbol ) ).
 *        CATCH cx_root.
