@@ -142,7 +142,7 @@
      METHOD scheme.
        assert_code( code = code
                     actual = mo_int->eval_source( code )
-                 expected = expected
+                    expected = expected
                     title = 'CODE'
                     level = level ).
      ENDMETHOD.                    "code_test
@@ -152,7 +152,7 @@
        lv_result = mo_int->eval_source( code ).
        test_f( code = code
                actual = lv_result
-            expected = expected
+               expected = expected
                title = 'CODE' ).
      ENDMETHOD.                    "code_test_f
 
@@ -418,11 +418,18 @@
        METHODS setup.
        METHODS teardown.
 
+       METHODS char_ci_eq FOR TESTING.
+       METHODS char_ci_lt FOR TESTING.
+       METHODS char_ci_gt FOR TESTING.
+       METHODS char_ci_le FOR TESTING.
+       METHODS char_ci_ge FOR TESTING.
+
        METHODS char_in_list FOR TESTING.
        METHODS char_single FOR TESTING.
        METHODS char_unknown FOR TESTING.
        METHODS string_len FOR TESTING.
        METHODS string_delim FOR TESTING.
+       METHODS string_parse FOR TESTING.
 
        METHODS string_set_0 FOR TESTING.
        METHODS string_set_1 FOR TESTING.
@@ -1080,6 +1087,51 @@
                expected = '( "A" "a" )' ).
      ENDMETHOD.
 
+     METHOD char_ci_eq.
+       scheme( code = `(char-ci=? #\A #\a)`
+               expected = '#t' ).
+       scheme( code = `(char-ci=? #\A #\b)`
+               expected = '#f' ).
+       scheme( code = `(char-ci=? #\A)`
+               expected = 'Eval: char-ci=? missing argument' ).
+     ENDMETHOD.
+
+     METHOD char_ci_lt.
+       scheme( code = `(char-ci<? #\a #\B)`
+               expected = '#t' ).
+       scheme( code = `(char-ci<? #\A #\a)`
+               expected = '#f' ).
+       scheme( code = `(char-ci<?)`
+               expected = 'Eval: char-ci<? missing argument' ).
+     ENDMETHOD.
+
+     METHOD char_ci_gt.
+       scheme( code = `(char-ci>? #\B #\a)`
+               expected = '#t' ).
+       scheme( code = `(char-ci>? #\B #\b)`
+               expected = '#f' ).
+       scheme( code = `(char-ci>? #\c #\B #\b)`
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD char_ci_le.
+       scheme( code = `(char-ci<=? #\a #\B #\b #\T)`
+               expected = '#t' ).
+       scheme( code = `(char-ci<=? #\B #\a)`
+               expected = '#f' ).
+       scheme( code = `(char-ci<=? #\C)`
+               expected = 'Eval: char-ci<=? missing argument' ).
+     ENDMETHOD.
+
+     METHOD char_ci_ge.
+       scheme( code = `(char-ci>=? #\b #\a #\V)`
+               expected = '#f' ).
+       scheme( code = `(char-ci>=? #\e #\D #\B #\b)`
+               expected = '#t' ).
+       scheme( code = `(char-ci>=? #\c #\B #\b)`
+               expected = '#t' ).
+     ENDMETHOD.
+
      METHOD char_single.
        scheme( code = '#\A'
                expected = '"A"' ).
@@ -1088,16 +1140,27 @@
      METHOD char_unknown.
        scheme( code = '#\aA'
                expected = 'Parse: unknown char #\aA found' ).
+       scheme( code = `(char-ci>=? #e #D #\B #\b)`
+               expected = 'An exception with the type CX_SY_CONVERSION_NO_NUMBER was raised, but was not handled locally or declared in a RAISING clause.' ).
      ENDMETHOD.
 
      METHOD string_len.
        scheme( code = '(string-length "Abd#\aA")'
-               expected = '7' ).
+               expected = '6' ).
      ENDMETHOD.
 
      METHOD string_delim.
        scheme( code = '"Benjamin \"Bugsy\" Siegel"'
                expected = '"Benjamin \"Bugsy\" Siegel"' ).
+     ENDMETHOD.
+
+     METHOD string_parse.
+       scheme( code = `"Here’s text \ ` &
+                      ` containing just one line"`
+               expected = '"Here’s text containing just one line"' ).
+
+       scheme( code = '"\x03B1; is named GREEK SMALL LETTER ALPHA."'
+               expected = '"α is named GREEK SMALL LETTER ALPHA."' ).
      ENDMETHOD.
 
      METHOD string_set_0.
