@@ -41,8 +41,6 @@
 *----------------------------------------------------------------------*
    CLASS ltc_interpreter DEFINITION FOR TESTING
      RISK LEVEL HARMLESS DURATION SHORT.
-     PUBLIC SECTION.
-       METHODS constructor.
      PROTECTED SECTION.
        DATA mo_int TYPE REF TO lcl_lisp_interpreter.
        DATA mo_port TYPE REF TO lcl_lisp_buffered_port.
@@ -96,9 +94,6 @@
 *
 *----------------------------------------------------------------------*
    CLASS ltc_interpreter IMPLEMENTATION.
-
-     METHOD constructor.
-     ENDMETHOD.
 
      METHOD new_interpreter.
        CREATE OBJECT mo_port
@@ -854,44 +849,41 @@
      ENDMETHOD.
 
      METHOD call_cc_0.
-       RETURN.
-       scheme( code = |(call-with-current-continuation | &
-                         |  (lambda (exit)           | &
-                         |    (for-each (lambda (x)  | &
-                         |       (if (negative? x)   | &
-                         |         (exit x)))        | &
-                         |      '(54 0 37 -3 245 19))| &
-                         |  #t))|
-               expected = '-3' ).
+*       scheme( code = |(call-with-current-continuation | &
+*                         |  (lambda (exit)           | &
+*                         |    (for-each (lambda (x)  | &
+*                         |       (if (negative? x)   | &
+*                         |         (exit x)))        | &
+*                         |      '(54 0 37 -3 245 19))| &
+*                         |  #t))|
+*               expected = '-3' ).
      ENDMETHOD.
 
      METHOD call_cc_1.
-       RETURN.
-       scheme( code = |(define list-length                              | &
-                         |  (lambda (obj)                                  | &
-                         |    (call-with-current-continuation              | &
-                         |       (lambda (return)                          | &
-                         |         (letrec ((r                             | &
-                         |                   (lambda (obj)                 | &
-                         |                     (cond ((null? obj) 0)       | &
-                         |                           ((pair? obj)          | &
-                         |                             (+ (r (cdr obj)) 1))| &
-                         |                           (else (return #f))))))| &
-                         |          (r obj)))))) |
-               expected = 'list-length' ).
-
-       scheme( code = |(list-length '(1 2 3 4))|
-               expected = '4' ).
-       scheme( code = |(list-length '(a b . c))|
-               expected = '#f' ).
+*       scheme( code = |(define list-length                              | &
+*                         |  (lambda (obj)                                  | &
+*                         |    (call-with-current-continuation              | &
+*                         |       (lambda (return)                          | &
+*                         |         (letrec ((r                             | &
+*                         |                   (lambda (obj)                 | &
+*                         |                     (cond ((null? obj) 0)       | &
+*                         |                           ((pair? obj)          | &
+*                         |                             (+ (r (cdr obj)) 1))| &
+*                         |                           (else (return #f))))))| &
+*                         |          (r obj)))))) |
+*               expected = 'list-length' ).
+*
+*       scheme( code = |(list-length '(1 2 3 4))|
+*               expected = '4' ).
+*       scheme( code = |(list-length '(a b . c))|
+*               expected = '#f' ).
      ENDMETHOD.
 
      METHOD call_cc_values.
-       RETURN.
-       scheme( code = |(define (values . things)                 | &
-                         |  (call-with-current-continuation          | &
-                         |     (lambda (cont) (apply cont things)))) |
-               expected = 'values' ).
+*       scheme( code = |(define (values . things)                 | &
+*                         |  (call-with-current-continuation          | &
+*                         |     (lambda (cont) (apply cont things)))) |
+*               expected = 'values' ).
      ENDMETHOD.
 
      METHOD is_symbol_true_1.
@@ -2401,6 +2393,10 @@
        METHODS list_to_string_1   FOR TESTING.
        METHODS string_to_number_1 FOR TESTING.
        METHODS string_to_number_2 FOR TESTING.
+       METHODS string_to_number_3 FOR TESTING.
+       METHODS string_to_number_4 FOR TESTING.
+       METHODS string_to_num_radix FOR TESTING.
+       METHODS string_to_num_radix_error FOR TESTING.
        METHODS number_to_string_1 FOR TESTING.
        METHODS string_append_1    FOR TESTING.
 
@@ -3057,6 +3053,26 @@
      METHOD string_to_number_2.
        scheme( code = |(string->number "42")|
                expected = '42' ).
+     ENDMETHOD.
+
+     METHOD string_to_number_3.
+       scheme( code = |(string->number "1e2")|
+               expected = '100' ).
+     ENDMETHOD.
+
+     METHOD string_to_number_4.
+       scheme( code = |(string->number "1a2")|
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD string_to_num_radix.
+       scheme( code = |(string->number "100" 16)|
+               expected = '256' ).
+     ENDMETHOD.
+
+     METHOD string_to_num_radix_error.
+       scheme( code = |(string->number "100" 12)|
+               expected = 'Eval: 12 must be 2, 8, 10 or 16 in string->number (radix)' ).
      ENDMETHOD.
 
      METHOD number_to_string_1.
