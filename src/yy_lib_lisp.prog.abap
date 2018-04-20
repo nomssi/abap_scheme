@@ -1,5 +1,4 @@
 *&---------------------------------------------------------------------*
-*&---------------------------------------------------------------------*
 *&  Include           YY_LIB_LISP
 *& https://github.com/nomssi/abap_scheme
 *& https://github.com/mydoghasworms/abap-lisp
@@ -8,7 +7,7 @@
 *&---------------------------------------------------------------------*
 *& MIT License (see below)
 *& Martin Ceronio, martin.ceronio@infosize.co.za June 2015
-*& Jacques Nomssi Nzali, www.informatik-dv.com March 2018
+*& Jacques Nomssi Nzali, www.informatik-dv.com April 2018
 *&---------------------------------------------------------------------*
 *  The MIT License (MIT)
 *
@@ -36,31 +35,31 @@
   DATA gv_lisp_trace TYPE flag VALUE abap_false ##NEEDED.
 
   CONSTANTS:
-    c_lisp_input     TYPE string VALUE 'ABAP Lisp Input',
+    c_lisp_input     TYPE string VALUE 'ABAP Lisp Input' ##NO_TEXT,
     c_lisp_eof       TYPE x LENGTH 2 VALUE 'FFFF', " we do not expect this in source code
     c_lisp_nil       TYPE string VALUE '''()',
     c_expr_separator TYPE string VALUE ` `.   " multiple expression output
   CONSTANTS:
-    c_error_message         TYPE string VALUE 'Error in processing',
-    c_error_incorrect_input TYPE string VALUE 'Incorrect input',
-    c_error_unexpected_end  TYPE string VALUE 'Unexpected end',
-    c_error_eval            TYPE string VALUE 'EVAL( ) came up empty-handed',
-    c_error_no_exp_in_body  TYPE string VALUE 'no expression in body'.
+    c_error_message         TYPE string VALUE 'Error in processing' ##NO_TEXT,
+    c_error_incorrect_input TYPE string VALUE 'Incorrect input' ##NO_TEXT,
+    c_error_unexpected_end  TYPE string VALUE 'Unexpected end' ##NO_TEXT,
+    c_error_eval            TYPE string VALUE 'EVAL( ) came up empty-handed' ##NO_TEXT,
+    c_error_no_exp_in_body  TYPE string VALUE 'no expression in body' ##NO_TEXT.
   CONSTANTS:
-    c_area_eval  TYPE string VALUE `Eval`,
-    c_area_parse TYPE string VALUE `Parse`.
+    c_area_eval  TYPE string VALUE `Eval` ##NO_TEXT,
+    c_area_parse TYPE string VALUE `Parse` ##NO_TEXT.
   CONSTANTS:
-    c_lisp_else TYPE string VALUE 'else',
+    c_lisp_else TYPE string VALUE 'else' ##NO_TEXT,
     c_lisp_then TYPE c LENGTH 2 VALUE '=>'.
   CONSTANTS:
-    c_eval_append           TYPE string VALUE 'append',
-    c_eval_cons             TYPE string VALUE 'cons',
-    c_eval_list             TYPE string VALUE 'list',
+    c_eval_append           TYPE string VALUE 'append' ##NO_TEXT,
+    c_eval_cons             TYPE string VALUE 'cons' ##NO_TEXT,
+    c_eval_list             TYPE string VALUE 'list' ##NO_TEXT,
 
-    c_eval_quote            TYPE string VALUE 'quote',
-    c_eval_quasiquote       TYPE string VALUE 'quasiquote',
-    c_eval_unquote          TYPE string VALUE 'unquote',
-    c_eval_unquote_splicing TYPE string VALUE 'unquote-splicing'.
+    c_eval_quote            TYPE string VALUE 'quote' ##NO_TEXT,
+    c_eval_quasiquote       TYPE string VALUE 'quasiquote' ##NO_TEXT,
+    c_eval_unquote          TYPE string VALUE 'unquote' ##NO_TEXT,
+    c_eval_unquote_splicing TYPE string VALUE 'unquote-splicing' ##NO_TEXT.
 
   TYPES tv_int TYPE i.         " integer data type, use int8 if available
   TYPES tv_index TYPE tv_int.
@@ -99,28 +98,28 @@
   DEFINE _validate_mutable.
     _validate &1.
     IF &1->mutable EQ abap_false.
-      throw( |constant { &2 } cannot be changed| ).
+      throw( |constant { &2 } cannot be changed| ) ##NO_TEXT.
     ENDIF.
   END-OF-DEFINITION.
 
   DEFINE _validate_type.
     _validate &1.
     IF &1->type NE lcl_lisp=>type_&3.
-      throw( &1->to_string( ) && ` is not a ` && &4 && ` in ` && &2 ).
+      throw( &1->to_string( ) && ` is not a ` && &4 && ` in ` && &2 ) ##NO_TEXT.
     ENDIF.
   END-OF-DEFINITION.
 
   DEFINE _validate_integer.
     _validate &1.
     IF &1->type NE lcl_lisp=>type_integer.
-      throw( &1->to_string( ) && ` is not an integer in ` && &2 ).
+      throw( &1->to_string( ) && ` is not an integer in ` && &2 ) ##NO_TEXT.
     ENDIF.
   END-OF-DEFINITION.
 
   DEFINE _validate_index.
     _validate_integer &1 &2.
     IF CAST lcl_lisp_integer( &1 )->integer LT 0.
-      throw( &1->to_string( ) && ` must be non-negative in ` && &2 ).
+      throw( &1->to_string( ) && ` must be non-negative in ` && &2 ) ##NO_TEXT.
     ENDIF.
   END-OF-DEFINITION.
 
@@ -148,12 +147,12 @@
         OR lcl_lisp=>type_rational
         OR lcl_lisp=>type_complex.
       WHEN OTHERS.
-        throw( |{ &1->to_string( ) } is not a number in | && &2 ).
+        throw( |{ &1->to_string( ) } is not a number in | && &2 ) ##NO_TEXT.
     ENDCASE.
   END-OF-DEFINITION.
 
   DEFINE _error_no_list.
-    throw( |{ &2 }: { &1->to_string( ) } is not a proper list| ).
+    throw( |{ &2 }: { &1->to_string( ) } is not a proper list| ) ##NO_TEXT.
   END-OF-DEFINITION.
 
   DEFINE _validate_tail.
@@ -218,10 +217,10 @@
         lo_rat ?= cell->car.
         IF carry * lo_rat->denominator &1 lo_rat->integer.
           RETURN.
-         ENDIF.
-         carry = lo_rat->integer / lo_rat->denominator.
+        ENDIF.
+        carry = lo_rat->integer / lo_rat->denominator.
 
-*     WHEN lcl_lisp=>type_complex.
+*       WHEN lcl_lisp=>type_complex.
       WHEN OTHERS.
         throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
     ENDCASE.
@@ -278,9 +277,9 @@
     result = nil.
     _validate list.
     TRY.
-      _get_number carry list->car &2.
-      _is_last_param list.
-      result = lcl_lisp_new=>real( &1( carry ) ).
+        _get_number carry list->car &2.
+        _is_last_param list.
+        result = lcl_lisp_new=>real( &1( carry ) ).
     _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -295,9 +294,9 @@
     result = nil.
     _validate list.
     TRY.
-      _get_number carry list->car &2.
-      _is_last_param list.
-      result = lcl_lisp_new=>real( &1( carry ) ).
+        _get_number carry list->car &2.
+        _is_last_param list.
+        result = lcl_lisp_new=>real( &1( carry ) ).
     _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -491,7 +490,9 @@
   CLASS lcl_lisp_char IMPLEMENTATION.
 
     METHOD new.
-      ro_elem = VALUE #( char_table[ char = value ]-elem DEFAULT NEW lcl_lisp_char( value ) ).
+      DATA lv_char TYPE char01.
+      lv_char = value.
+      ro_elem = VALUE #( char_table[ char = lv_char ]-elem DEFAULT NEW lcl_lisp_char( lv_char ) ).
     ENDMETHOD.
 
     METHOD constructor.
@@ -510,6 +511,17 @@
 
   CLASS lcl_lisp_boolean DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
+      METHODS constructor IMPORTING value TYPE any.
+  ENDCLASS.
+
+  CLASS lcl_lisp_boolean IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( ).
+      type = type_boolean.
+      me->value = value.
+    ENDMETHOD.
+
   ENDCLASS.
 
   CLASS lcl_lisp_string DEFINITION INHERITING FROM lcl_lisp
@@ -733,7 +745,7 @@
   INTERFACE lif_output_port.
     METHODS write IMPORTING element TYPE REF TO lcl_lisp.
     METHODS display IMPORTING element TYPE REF TO lcl_lisp
-                    RAISING lcx_lisp_exception.
+                    RAISING   lcx_lisp_exception.
   ENDINTERFACE.
 
   CLASS lcl_lisp_port DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
@@ -770,6 +782,7 @@
       DATA last_input TYPE string.
       DATA last_index TYPE tv_index.
       DATA last_len TYPE tv_index.
+      DATA finite_size TYPE flag.
 
       METHODS read_block.
   ENDCLASS.
@@ -829,10 +842,10 @@
                            RAISING   cx_sy_conversion_no_number.
       CLASS-METHODS octal IMPORTING value          TYPE any
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
-                          RAISING  lcx_lisp_exception cx_sy_conversion_no_number.
+                          RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
       CLASS-METHODS octal_integer IMPORTING value         TYPE csequence
                                   RETURNING VALUE(rv_int) TYPE tv_int
-                                  RAISING lcx_lisp_exception  cx_sy_conversion_no_number.
+                                  RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
 
       CLASS-METHODS hex IMPORTING value          TYPE any
                         RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
@@ -999,12 +1012,17 @@
     METHOD set_input_string.
       last_input = last_input && iv_text.
       last_len = strlen( last_input ).
+      finite_size = abap_true.
     ENDMETHOD.
 
     METHOD read_block.
+      IF finite_size EQ abap_true.
+        last_input = c_lisp_eof.
+        last_len = 0.
+        RETURN.
+      ENDIF.
       last_input = read_stream( ).
       last_len = strlen( last_input ).
-      last_index = 0.
     ENDMETHOD.
 
     METHOD lif_input_port~peek_char.
@@ -1320,15 +1338,13 @@
       DATA statement TYPE REF TO cl_sql_statement.
   ENDCLASS.
 
+  CLASS lcl_lisp_env_factory DEFINITION DEFERRED.
+
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp_environment DEFINITION
 *----------------------------------------------------------------------*
-  CLASS lcl_lisp_environment DEFINITION CREATE PRIVATE.
+  CLASS lcl_lisp_environment DEFINITION CREATE PRIVATE FRIENDS lcl_lisp_env_factory.
     PUBLIC SECTION.
-
-      CLASS-METHODS
-        new IMPORTING io_outer      TYPE REF TO lcl_lisp_environment OPTIONAL
-            RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment.
 
       METHODS:
         scope_of IMPORTING symbol     TYPE any
@@ -1366,7 +1382,37 @@
 
       METHODS unbound_symbol IMPORTING symbol TYPE any
                              RAISING   lcx_lisp_exception.
+
+      METHODS prepare.
   ENDCLASS.                    "lcl_lisp_environment DEFINITION
+
+  CLASS lcl_lisp_env_factory DEFINITION ABSTRACT.
+    PUBLIC SECTION.
+      CLASS-METHODS:
+        new   RETURNING VALUE(env)  TYPE REF TO lcl_lisp_environment,
+        clone IMPORTING io_outer    TYPE REF TO lcl_lisp_environment
+              RETURNING VALUE(env)  TYPE REF TO lcl_lisp_environment,
+        create IMPORTING io_outer   TYPE REF TO lcl_lisp_environment OPTIONAL
+               RETURNING VALUE(env) TYPE REF TO lcl_lisp_environment.
+  ENDCLASS.
+
+  CLASS lcl_lisp_env_factory  IMPLEMENTATION.
+
+    METHOD new.
+      env = NEW lcl_lisp_environment( ).
+    ENDMETHOD.                    "new
+
+    METHOD clone.
+      env = new( ).
+      env->outer = io_outer.
+    ENDMETHOD.
+
+    METHOD create.
+      env = clone( io_outer ).
+      env->prepare( ).
+    ENDMETHOD.
+
+  ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_parser DEFINITION
@@ -1428,8 +1474,8 @@
         peek_char RETURNING VALUE(rv_char) TYPE char1,
         peek_bytevector RETURNING VALUE(rv_flag) TYPE flag,
         match_label IMPORTING iv_limit        TYPE char1
-                   EXPORTING ev_label        TYPE string
-                   RETURNING VALUE(rv_found) TYPE flag,
+                    EXPORTING ev_label        TYPE string
+                    RETURNING VALUE(rv_found) TYPE flag,
         skip_label,
         skip_whitespace
           RETURNING VALUE(rv_has_next) TYPE flag
@@ -1440,7 +1486,7 @@
         parse_token RETURNING VALUE(element) TYPE REF TO lcl_lisp
                     RAISING   lcx_lisp_exception.
       METHODS match_string CHANGING cv_val TYPE string
-                           RAISING lcx_lisp_exception.
+                           RAISING  lcx_lisp_exception.
       METHODS match_atom CHANGING cv_val TYPE string.
 
       METHODS throw IMPORTING message TYPE string
@@ -1485,6 +1531,8 @@
         validate_source
           IMPORTING code            TYPE clike
           RETURNING VALUE(response) TYPE string.
+
+    PROTECTED SECTION.
 
 * Functions for dealing with lists:
       _proc_meth:
@@ -1605,6 +1653,7 @@
       proc_write_char        ##called,
       proc_write_string      ##called,
       proc_read_char         ##called,
+      proc_read_string       ##called,
       proc_peek_char         ##called,
       proc_is_char_ready     ##called,
 
@@ -1723,7 +1772,6 @@
 * Called internally only:
       proc_abap_function_call. ##called
 
-    PROTECTED SECTION.
       METHODS define_syntax
         IMPORTING element       TYPE REF TO lcl_lisp
                   environment   TYPE REF TO lcl_lisp_environment
@@ -1791,12 +1839,12 @@
       METHODS write IMPORTING io_elem       TYPE REF TO lcl_lisp
                               io_arg        TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                     RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                    RAISING lcx_lisp_exception.
+                    RAISING   lcx_lisp_exception.
 
       METHODS display IMPORTING io_elem       TYPE REF TO lcl_lisp
                                 io_arg        TYPE REF TO lcl_lisp
                       RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                      RAISING lcx_lisp_exception.
+                      RAISING   lcx_lisp_exception.
 
       METHODS read IMPORTING io_arg        TYPE REF TO lcl_lisp
                    RETURNING VALUE(result) TYPE REF TO lcl_lisp
@@ -1806,8 +1854,11 @@
                         RETURNING VALUE(result) TYPE REF TO lcl_lisp
                         RAISING   lcx_lisp_exception.
 
+      METHODS read_string IMPORTING io_arg        TYPE REF TO lcl_lisp
+                          RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                          RAISING   lcx_lisp_exception.
     PRIVATE SECTION.
-     TYPES: BEGIN OF ts_digit,
+      TYPES: BEGIN OF ts_digit,
                zero  TYPE x LENGTH 3,
                langu TYPE string,
              END OF ts_digit.
@@ -1816,20 +1867,20 @@
 
       METHODS unicode_digit_zero RETURNING VALUE(rt_zero) TYPE tt_digit.
 
-      METHODS unicode_to_digit IMPORTING iv_char TYPE char01
+      METHODS unicode_to_digit IMPORTING iv_char         TYPE char01
                                RETURNING VALUE(rv_digit) TYPE i.
 
-      METHODS char_to_integer IMPORTING io_char TYPE REF TO lcl_lisp
+      METHODS char_to_integer IMPORTING io_char       TYPE REF TO lcl_lisp
                               RETURNING VALUE(rv_int) TYPE tv_int
-                              RAISING lcx_lisp_exception.
+                              RAISING   lcx_lisp_exception.
 
-      METHODS fold_case IMPORTING element TYPE REF TO lcl_lisp
+      METHODS fold_case IMPORTING element          TYPE REF TO lcl_lisp
                         RETURNING VALUE(rv_string) TYPE string.
 
-      METHODS char_fold_case_to_integer IMPORTING element TYPE REF TO lcl_lisp
+      METHODS char_fold_case_to_integer IMPORTING element       TYPE REF TO lcl_lisp
                                         RETURNING VALUE(rv_int) TYPE tv_int.
 
-      METHODS char_case_identity IMPORTING element TYPE REF TO lcl_lisp
+      METHODS char_case_identity IMPORTING element          TYPE REF TO lcl_lisp
                                  RETURNING VALUE(rv_string) TYPE string.
 
       METHODS throw IMPORTING message TYPE string
@@ -2201,11 +2252,11 @@
 
     METHOD match_string.
       CONSTANTS:
-        c_esc_a TYPE char1 VALUE 'a',
-        c_esc_b TYPE char1 VALUE 'b',
-        c_esc_t TYPE char1 VALUE 't',
-        c_esc_n TYPE char1 VALUE 'n',
-        c_esc_r TYPE char1 VALUE 'r',
+        c_esc_a          TYPE char1 VALUE 'a',
+        c_esc_b          TYPE char1 VALUE 'b',
+        c_esc_t          TYPE char1 VALUE 't',
+        c_esc_n          TYPE char1 VALUE 'n',
+        c_esc_r          TYPE char1 VALUE 'r',
         c_esc_semi_colon TYPE char1 VALUE ';',
         c_esc_vline      TYPE char1 VALUE '|'.
 
@@ -2514,290 +2565,10 @@
       gi_log = ii_log.
       mt_zero = unicode_digit_zero( ).
 
-      env = lcl_lisp_environment=>new( ).
-
-*     Create symbols for nil, true and false values
       nil = lcl_lisp=>nil.
       true = lcl_lisp=>true.
       false = lcl_lisp=>false.
-      env->set( symbol = 'nil' element = nil ).
-      env->set( symbol = '#f' element = false ).
-      env->set( symbol = '#t' element = true ).
-
-*     Add primitive functions to environment
-      env->define_value( symbol = 'define'          type = lcl_lisp=>type_syntax value   = 'define' ).
-      env->define_value( symbol = 'lambda'          type = lcl_lisp=>type_syntax value   = 'lambda' ).
-      env->define_value( symbol = 'if'              type = lcl_lisp=>type_syntax value   = 'if' ).
-      env->define_value( symbol = c_eval_quote      type = lcl_lisp=>type_syntax value   = `'` ).
-      env->define_value( symbol = c_eval_quasiquote type = lcl_lisp=>type_syntax value   = '`' ).
-      env->define_value( symbol = 'set!'            type = lcl_lisp=>type_syntax value   = 'set!' ).
-
-      env->define_value( symbol = 'define-macro'    type = lcl_lisp=>type_syntax value   = 'define-macro' ).
-      env->define_value( symbol = 'define-syntax'   type = lcl_lisp=>type_syntax value   = 'define-syntax' ).
-      env->define_value( symbol = 'macroexpand'     type = lcl_lisp=>type_syntax value   = 'macroexpand' ).
-      env->define_value( symbol = 'gensym'          type = lcl_lisp=>type_syntax value   = 'gensym' ).
-
-      env->define_value( symbol = 'and'      type = lcl_lisp=>type_syntax value   = 'and' ).
-      env->define_value( symbol = 'or'       type = lcl_lisp=>type_syntax value   = 'or' ).
-      env->define_value( symbol = 'cond'     type = lcl_lisp=>type_syntax value   = 'cond' ).
-      env->define_value( symbol = 'unless'   type = lcl_lisp=>type_syntax value   = 'unless' ).
-      env->define_value( symbol = 'when'     type = lcl_lisp=>type_syntax value   = 'when' ).
-      env->define_value( symbol = 'begin'    type = lcl_lisp=>type_syntax value   = 'begin' ).
-      env->define_value( symbol = 'let'      type = lcl_lisp=>type_syntax value   = 'let' ).
-      env->define_value( symbol = 'let*'     type = lcl_lisp=>type_syntax value   = 'let*' ).
-      env->define_value( symbol = 'letrec'   type = lcl_lisp=>type_syntax value   = 'letrec' ).
-      env->define_value( symbol = 'letrec*'  type = lcl_lisp=>type_syntax value   = 'letrec*' ).
-      env->define_value( symbol = 'do'       type = lcl_lisp=>type_syntax value   = 'do' ).
-      env->define_value( symbol = 'case'     type = lcl_lisp=>type_syntax value   = 'case' ).
-
-      env->define_value( symbol = c_eval_unquote          type = lcl_lisp=>type_syntax value   = ',' ).
-      env->define_value( symbol = c_eval_unquote_splicing type = lcl_lisp=>type_syntax value   = ',@' ).
-
-*     Procedures
-      env->define_value( symbol = 'apply'        type = lcl_lisp=>type_primitive value   = 'apply' ).
-      env->define_value( symbol = 'for-each'     type = lcl_lisp=>type_primitive value   = 'for-each' ).
-      env->define_value( symbol = 'map'          type = lcl_lisp=>type_primitive value   = 'map' ).
-
-*     Add native functions to environment
-      env->define_value( symbol = '+'        type = lcl_lisp=>type_native value   = 'PROC_ADD' ).
-      env->define_value( symbol = '-'        type = lcl_lisp=>type_native value   = 'PROC_SUBTRACT' ).
-      env->define_value( symbol = '*'        type = lcl_lisp=>type_native value   = 'PROC_MULTIPLY' ).
-      env->define_value( symbol = '/'        type = lcl_lisp=>type_native value   = 'PROC_DIVIDE' ).
-      env->define_value( symbol = 'append'   type = lcl_lisp=>type_native value   = 'PROC_APPEND' ).
-      env->define_value( symbol = 'append!'  type = lcl_lisp=>type_native value   = 'PROC_APPEND_UNSAFE' ).
-      env->define_value( symbol = 'list'     type = lcl_lisp=>type_native value   = 'PROC_LIST' ).
-      env->define_value( symbol = 'length'   type = lcl_lisp=>type_native value   = 'PROC_LENGTH' ).
-      env->define_value( symbol = 'reverse'  type = lcl_lisp=>type_native value   = 'PROC_REVERSE' ).
-      env->define_value( symbol = 'not'      type = lcl_lisp=>type_native value   = 'PROC_NOT' ).
-
-      env->define_value( symbol = 'make-list'    type = lcl_lisp=>type_native value   = 'PROC_MAKE_LIST' ).
-      env->define_value( symbol = 'list-tail'    type = lcl_lisp=>type_native value   = 'PROC_LIST_TAIL' ).
-      env->define_value( symbol = 'list-ref'     type = lcl_lisp=>type_native value   = 'PROC_LIST_REF' ).
-      env->define_value( symbol = 'list-copy'    type = lcl_lisp=>type_native value   = 'PROC_LIST_COPY' ).
-      env->define_value( symbol = 'list->vector' type = lcl_lisp=>type_native value   = 'PROC_LIST_TO_VECTOR' ).
-      env->define_value( symbol = 'iota'         type = lcl_lisp=>type_native value   = 'PROC_IOTA' ).
-
-      env->define_value( symbol = 'memq'    type = lcl_lisp=>type_native value   = 'PROC_MEMQ' ).
-      env->define_value( symbol = 'memv'    type = lcl_lisp=>type_native value   = 'PROC_MEMV' ).
-      env->define_value( symbol = 'member'  type = lcl_lisp=>type_native value   = 'PROC_MEMBER' ).
-
-      env->define_value( symbol = 'assq'    type = lcl_lisp=>type_native value   = 'PROC_ASSQ' ).
-      env->define_value( symbol = 'assv'    type = lcl_lisp=>type_native value   = 'PROC_ASSV' ).
-      env->define_value( symbol = 'assoc'   type = lcl_lisp=>type_native value   = 'PROC_ASSOC' ).
-
-      env->define_value( symbol = 'car'     type = lcl_lisp=>type_native value   = 'PROC_CAR' ).
-      env->define_value( symbol = 'cdr'     type = lcl_lisp=>type_native value   = 'PROC_CDR' ).
-      env->define_value( symbol = 'cons'    type = lcl_lisp=>type_native value   = 'PROC_CONS' ).
-      env->define_value( symbol = 'nil?'    type = lcl_lisp=>type_native value   = 'PROC_NILP' ).
-      env->define_value( symbol = 'null?'   type = lcl_lisp=>type_native value   = 'PROC_NILP' ).
-
-      env->define_value( symbol = '>'       type = lcl_lisp=>type_native value   = 'PROC_GT' ).
-      env->define_value( symbol = '>='      type = lcl_lisp=>type_native value   = 'PROC_GTE' ).
-      env->define_value( symbol = '<'       type = lcl_lisp=>type_native value   = 'PROC_LT' ).
-      env->define_value( symbol = '<='      type = lcl_lisp=>type_native value   = 'PROC_LTE' ).
-      env->define_value( symbol = '='       type = lcl_lisp=>type_native value   = 'PROC_EQL' ). "Math equal
-      env->define_value( symbol = 'eq?'     type = lcl_lisp=>type_native value   = 'PROC_EQ' ).
-      env->define_value( symbol = 'eqv?'    type = lcl_lisp=>type_native value   = 'PROC_EQV' ).
-      env->define_value( symbol = 'equal?'  type = lcl_lisp=>type_native value   = 'PROC_EQUAL' ).
-
-      env->define_value( symbol = 'set-car!' type = lcl_lisp=>type_native value   = 'PROC_SET_CAR' ).
-      env->define_value( symbol = 'set-cdr!' type = lcl_lisp=>type_native value   = 'PROC_SET_CDR' ).
-      env->define_value( symbol = 'caar'     type = lcl_lisp=>type_native value   = 'PROC_CAAR' ).
-      env->define_value( symbol = 'cadr'     type = lcl_lisp=>type_native value   = 'PROC_CADR' ).
-      env->define_value( symbol = 'cdar'     type = lcl_lisp=>type_native value   = 'PROC_CDAR' ).
-      env->define_value( symbol = 'cddr'     type = lcl_lisp=>type_native value   = 'PROC_CDDR' ).
-
-      env->define_value( symbol = 'current-input-port'  type = lcl_lisp=>type_native value = 'PROC_CURRENT_INPUT_PORT' ).
-      env->define_value( symbol = 'current-output-port' type = lcl_lisp=>type_native value = 'PROC_CURRENT_OUTPUT_PORT' ).
-      env->define_value( symbol = 'current-error-port'  type = lcl_lisp=>type_native value = 'PROC_CURRENT_ERROR_PORT' ).
-
-      env->define_value( symbol = 'close-input-port'  type = lcl_lisp=>type_native value = 'PROC_CLOSE_INPUT_PORT' parameter = abap_true ).
-      env->define_value( symbol = 'close-output-port' type = lcl_lisp=>type_native value = 'PROC_CLOSE_OUTPUT_PORT' parameter = abap_true ).
-      env->define_value( symbol = 'close-port'        type = lcl_lisp=>type_native value = 'PROC_CLOSE_PORT' parameter = abap_true ).
-
-*     vector-related functions
-      env->define_value( symbol = 'vector'        type = lcl_lisp=>type_native value   = 'PROC_VECTOR' ).
-      env->define_value( symbol = 'vector-length' type = lcl_lisp=>type_native value   = 'PROC_VECTOR_LENGTH' ).
-      env->define_value( symbol = 'vector-set!'   type = lcl_lisp=>type_native value   = 'PROC_VECTOR_SET' ).
-      env->define_value( symbol = 'vector-ref'    type = lcl_lisp=>type_native value   = 'PROC_VECTOR_REF' ).
-      env->define_value( symbol = 'vector->list'  type = lcl_lisp=>type_native value   = 'PROC_VECTOR_TO_LIST' ).
-      env->define_value( symbol = 'make-vector'   type = lcl_lisp=>type_native value   = 'PROC_MAKE_VECTOR' ).
-
-*     Hash-related functions
-      env->define_value( symbol = 'make-hash'   type = lcl_lisp=>type_native value   = 'PROC_MAKE_HASH' ).
-      env->define_value( symbol = 'hash-get'    type = lcl_lisp=>type_native value   = 'PROC_HASH_GET' ).
-      env->define_value( symbol = 'hash-insert' type = lcl_lisp=>type_native value   = 'PROC_HASH_INSERT' ).
-      env->define_value( symbol = 'hash-remove' type = lcl_lisp=>type_native value   = 'PROC_HASH_REMOVE' ).
-      env->define_value( symbol = 'hash-keys'   type = lcl_lisp=>type_native value   = 'PROC_HASH_KEYS' ).
-*     Functions for type:
-      env->define_value( symbol = 'string?'     type = lcl_lisp=>type_native value = 'PROC_IS_STRING' ).
-      env->define_value( symbol = 'char?'       type = lcl_lisp=>type_native value = 'PROC_IS_CHAR' ).
-      env->define_value( symbol = 'hash?'       type = lcl_lisp=>type_native value = 'PROC_IS_HASH' ).
-      env->define_value( symbol = 'number?'     type = lcl_lisp=>type_native value = 'PROC_IS_NUMBER' ).
-      env->define_value( symbol = 'exact-integer?'    type = lcl_lisp=>type_native value = 'PROC_IS_EXACT_INTEGER' ).
-      env->define_value( symbol = 'integer?'    type = lcl_lisp=>type_native value = 'PROC_IS_INTEGER' ).
-      env->define_value( symbol = 'complex?'    type = lcl_lisp=>type_native value = 'PROC_IS_COMPLEX' ).
-      env->define_value( symbol = 'real?'       type = lcl_lisp=>type_native value = 'PROC_IS_REAL' ).
-      env->define_value( symbol = 'rational?'   type = lcl_lisp=>type_native value = 'PROC_IS_RATIONAL' ).
-      env->define_value( symbol = 'list?'       type = lcl_lisp=>type_native value = 'PROC_IS_LIST' ).
-      env->define_value( symbol = 'pair?'       type = lcl_lisp=>type_native value = 'PROC_IS_PAIR' ).
-      env->define_value( symbol = 'vector?'     type = lcl_lisp=>type_native value = 'PROC_IS_VECTOR' ).
-      env->define_value( symbol = 'boolean?'    type = lcl_lisp=>type_native value = 'PROC_IS_BOOLEAN' ).
-      env->define_value( symbol = 'alist?'      type = lcl_lisp=>type_native value = 'PROC_IS_ALIST' ).
-      env->define_value( symbol = 'procedure?'  type = lcl_lisp=>type_native value = 'PROC_IS_PROCEDURE' ).
-      env->define_value( symbol = 'symbol?'     type = lcl_lisp=>type_native value = 'PROC_IS_SYMBOL' ).
-      env->define_value( symbol = 'port?'       type = lcl_lisp=>type_native value = 'PROC_IS_PORT' ).
-      env->define_value( symbol = 'boolean=?'   type = lcl_lisp=>type_native value = 'PROC_BOOLEAN_LIST_IS_EQUAL' ).
-      env->define_value( symbol = 'exact?'      type = lcl_lisp=>type_native value = 'PROC_IS_EXACT' ).
-      env->define_value( symbol = 'inexact?'    type = lcl_lisp=>type_native value = 'PROC_IS_INEXACT' ).
-
-*     Format
-      env->define_value( symbol = 'newline'     type = lcl_lisp=>type_native value = 'PROC_NEWLINE' ).
-      env->define_value( symbol = 'write'       type = lcl_lisp=>type_native value = 'PROC_WRITE' ).
-      env->define_value( symbol = 'display'     type = lcl_lisp=>type_native value = 'PROC_DISPLAY' ).
-
-      env->define_value( symbol = 'read'         type = lcl_lisp=>type_native value = 'PROC_READ' ).
-      env->define_value( symbol = 'write-string' type = lcl_lisp=>type_native value = 'PROC_WRITE_STRING' ).
-      env->define_value( symbol = 'write-char'   type = lcl_lisp=>type_native value = 'PROC_WRITE_CHAR' ).
-      env->define_value( symbol = 'read-char'    type = lcl_lisp=>type_native value = 'PROC_READ_CHAR' ).
-      env->define_value( symbol = 'char-ready?'  type = lcl_lisp=>type_native value = 'PROC_IS_CHAR_READY' ).
-      env->define_value( symbol = 'peek-char'    type = lcl_lisp=>type_native value = 'PROC_PEEK_CHAR' ).
-
-      env->define_value( symbol = 'exact'          type = lcl_lisp=>type_native value = 'PROC_TO_EXACT' ).
-      env->define_value( symbol = 'inexact'        type = lcl_lisp=>type_native value = 'PROC_TO_INEXACT' ).
-
-      env->define_value( symbol = 'number->string' type = lcl_lisp=>type_native value = 'PROC_NUM_TO_STRING' ).
-      env->define_value( symbol = 'string->number' type = lcl_lisp=>type_native value = 'PROC_STRING_TO_NUM' ).
-      env->define_value( symbol = 'make-string'    type = lcl_lisp=>type_native value = 'PROC_MAKE_STRING' ).
-      env->define_value( symbol = 'string'         type = lcl_lisp=>type_native value = 'PROC_STRING' ).
-      env->define_value( symbol = 'string->list'   type = lcl_lisp=>type_native value = 'PROC_STRING_TO_LIST' ).
-      env->define_value( symbol = 'list->string'   type = lcl_lisp=>type_native value = 'PROC_LIST_TO_STRING' ).
-      env->define_value( symbol = 'symbol->string' type = lcl_lisp=>type_native value = 'PROC_SYMBOL_TO_STRING' ).
-      env->define_value( symbol = 'string->symbol' type = lcl_lisp=>type_native value = 'PROC_STRING_TO_SYMBOL' ).
-      env->define_value( symbol = 'string-append'  type = lcl_lisp=>type_native value = 'PROC_STRING_APPEND' ).
-      env->define_value( symbol = 'string-length'  type = lcl_lisp=>type_native value = 'PROC_STRING_LENGTH' ).
-      env->define_value( symbol = 'string-copy'    type = lcl_lisp=>type_native value = 'PROC_STRING_COPY' ).
-      env->define_value( symbol = 'substring'      type = lcl_lisp=>type_native value = 'PROC_STRING_COPY' ).
-      env->define_value( symbol = 'string-ref'     type = lcl_lisp=>type_native value = 'PROC_STRING_REF' ).
-      env->define_value( symbol = 'string-set!'    type = lcl_lisp=>type_native value = 'PROC_STRING_SET' ).
-
-      env->define_value( symbol = 'string=?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_EQ' ).
-      env->define_value( symbol = 'string<?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_LT' ).
-      env->define_value( symbol = 'string>?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_GT' ).
-      env->define_value( symbol = 'string<=?'    type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_LE' ).
-      env->define_value( symbol = 'string>=?'    type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_GE' ).
-
-      env->define_value( symbol = 'string-ci=?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_EQ' ).
-      env->define_value( symbol = 'string-ci<?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_LT' ).
-      env->define_value( symbol = 'string-ci>?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_GT' ).
-      env->define_value( symbol = 'string-ci<=?'    type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_LE' ).
-      env->define_value( symbol = 'string-ci>=?'    type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_GE' ).
-
-*     Math
-      env->define_value( symbol = 'abs'   type = lcl_lisp=>type_native value = 'PROC_ABS' ).
-      env->define_value( symbol = 'sin'   type = lcl_lisp=>type_native value = 'PROC_SIN' ).
-      env->define_value( symbol = 'cos'   type = lcl_lisp=>type_native value = 'PROC_COS' ).
-      env->define_value( symbol = 'tan'   type = lcl_lisp=>type_native value = 'PROC_TAN' ).
-      env->define_value( symbol = 'asin'  type = lcl_lisp=>type_native value = 'PROC_ASIN' ).
-      env->define_value( symbol = 'acos'  type = lcl_lisp=>type_native value = 'PROC_ACOS' ).
-      env->define_value( symbol = 'atan'  type = lcl_lisp=>type_native value = 'PROC_ATAN' ).
-      env->define_value( symbol = 'sinh'  type = lcl_lisp=>type_native value = 'PROC_SINH' ).
-      env->define_value( symbol = 'cosh'  type = lcl_lisp=>type_native value = 'PROC_COSH' ).
-      env->define_value( symbol = 'tanh'  type = lcl_lisp=>type_native value = 'PROC_TANH' ).
-      env->define_value( symbol = 'asinh' type = lcl_lisp=>type_native value = 'PROC_ASINH' ).
-      env->define_value( symbol = 'acosh' type = lcl_lisp=>type_native value = 'PROC_ACOSH' ).
-      env->define_value( symbol = 'atanh' type = lcl_lisp=>type_native value = 'PROC_ATANH' ).
-      env->define_value( symbol = 'expt'  type = lcl_lisp=>type_native value = 'PROC_EXPT' ).
-      env->define_value( symbol = 'exp'   type = lcl_lisp=>type_native value = 'PROC_EXP' ).
-      env->define_value( symbol = 'log'   type = lcl_lisp=>type_native value = 'PROC_LOG' ).
-      env->define_value( symbol = 'sqrt'  type = lcl_lisp=>type_native value = 'PROC_SQRT' ).
-
-      env->define_value( symbol = 'floor'    type = lcl_lisp=>type_native value = 'PROC_FLOOR' ).
-      env->define_value( symbol = 'ceiling'  type = lcl_lisp=>type_native value = 'PROC_CEILING' ).
-      env->define_value( symbol = 'truncate' type = lcl_lisp=>type_native value = 'PROC_TRUNCATE' ).
-      env->define_value( symbol = 'round'    type = lcl_lisp=>type_native value = 'PROC_ROUND' ).
-
-      env->define_value( symbol = 'remainder' type = lcl_lisp=>type_native value = 'PROC_REMAINDER' ).
-      env->define_value( symbol = 'modulo'    type = lcl_lisp=>type_native value = 'PROC_MODULO' ).
-      env->define_value( symbol = 'quotient'  type = lcl_lisp=>type_native value = 'PROC_QUOTIENT' ).
-      env->define_value( symbol = 'random'    type = lcl_lisp=>type_native value = 'PROC_RANDOM' ).
-      env->define_value( symbol = 'max'       type = lcl_lisp=>type_native value = 'PROC_MAX' ).
-      env->define_value( symbol = 'min'       type = lcl_lisp=>type_native value = 'PROC_MIN' ).
-      env->define_value( symbol = 'gcd'       type = lcl_lisp=>type_native value = 'PROC_GCD' ).
-      env->define_value( symbol = 'lcm'       type = lcl_lisp=>type_native value = 'PROC_LCM' ).
-
-      env->define_value( symbol = 'zero?'     type = lcl_lisp=>type_native value = 'PROC_IS_ZERO' ).
-      env->define_value( symbol = 'positive?' type = lcl_lisp=>type_native value = 'PROC_IS_POSITIVE' ).
-      env->define_value( symbol = 'negative?' type = lcl_lisp=>type_native value = 'PROC_IS_NEGATIVE' ).
-      env->define_value( symbol = 'odd?'      type = lcl_lisp=>type_native value = 'PROC_IS_ODD' ).
-      env->define_value( symbol = 'even?'     type = lcl_lisp=>type_native value = 'PROC_IS_EVEN' ).
-*     Continuation
-      env->define_value( symbol = 'call-with-current-continuation' type = lcl_lisp=>type_native value = 'PROC_CALL_CC' ).
-      env->define_value( symbol = 'call/cc'                        type = lcl_lisp=>type_native value = 'PROC_CALL_CC' ).
-
-*     Native functions for ABAP integration
-      env->define_value( symbol = 'ab-data'       type = lcl_lisp=>type_native value   = 'PROC_ABAP_DATA' ).
-      env->define_value( symbol = 'ab-function'   type = lcl_lisp=>type_native value   = 'PROC_ABAP_FUNCTION' ).
-      env->define_value( symbol = 'ab-func-param' type = lcl_lisp=>type_native value   = 'PROC_ABAP_FUNCTION_PARAM' ).
-      env->define_value( symbol = 'ab-table'      type = lcl_lisp=>type_native value   = 'PROC_ABAP_TABLE' ).
-      env->define_value( symbol = 'ab-append-row' type = lcl_lisp=>type_native value   = 'PROC_ABAP_APPEND_ROW' ).
-      env->define_value( symbol = 'ab-delete-row' type = lcl_lisp=>type_native value   = 'PROC_ABAP_DELETE_ROW' ).
-      env->define_value( symbol = 'ab-get-row'    type = lcl_lisp=>type_native value   = 'PROC_ABAP_GET_ROW' ).
-      env->define_value( symbol = 'ab-get-value'  type = lcl_lisp=>type_native value   = 'PROC_ABAP_GET_VALUE' ).
-      env->define_value( symbol = 'ab-set-value'  type = lcl_lisp=>type_native value   = 'PROC_ABAP_SET_VALUE' ).
-
-      env->define_value( symbol = 'ab-get' type = lcl_lisp=>type_native value = 'PROC_ABAP_GET' ).
-      env->define_value( symbol = 'ab-set' type = lcl_lisp=>type_native value = 'PROC_ABAP_SET' ).
-
-*     Compatibility
-      env->define_value( symbol = 'empty?'  type = lcl_lisp=>type_native value   = 'PROC_NILP' ).
-      env->define_value( symbol = 'first'   type = lcl_lisp=>type_native value   = 'PROC_CAR' ).
-      env->define_value( symbol = 'rest'    type = lcl_lisp=>type_native value   = 'PROC_CDR' ).
-
-*     Ports
-      env->define_value( symbol = 'input-port?'         type = lcl_lisp=>type_native value   = 'PROC_IS_INPUT_PORT' ).
-      env->define_value( symbol = 'output-port?'        type = lcl_lisp=>type_native value   = 'PROC_IS_OUTPUT_PORT' ).
-      env->define_value( symbol = 'textual-port?'       type = lcl_lisp=>type_native value   = 'PROC_IS_TEXTUAL_PORT' ).
-      env->define_value( symbol = 'binary-port?'        type = lcl_lisp=>type_native value   = 'PROC_IS_BINARY_PORT' ).
-      env->define_value( symbol = 'input-port-open?'    type = lcl_lisp=>type_native value   = 'PROC_IS_OPEN_INPUT_PORT' ).
-      env->define_value( symbol = 'output-port-open?'   type = lcl_lisp=>type_native value   = 'PROC_IS_OPEN_OUTPUT_PORT' ).
-      env->define_value( symbol = 'eof-object?'         type = lcl_lisp=>type_native value   = 'PROC_IS_EOF_OBJECT' ).
-      env->define_value( symbol = 'open-output-string'  type = lcl_lisp=>type_native value   = 'PROC_OPEN_OUTPUT_STRING' ).
-      env->define_value( symbol = 'open-input-string'   type = lcl_lisp=>type_native value   = 'PROC_OPEN_INPUT_STRING' ).
-      env->define_value( symbol = 'get-output-string'   type = lcl_lisp=>type_native value   = 'PROC_GET_OUTPUT_STRING' ).
-      env->define_value( symbol = 'eof-object'          type = lcl_lisp=>type_native value   = 'PROC_EOF_OBJECT' ).
-
-      env->define_value( symbol = 'char-alphabetic?'  type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_ALPHABETIC' ).
-      env->define_value( symbol = 'char-numeric?'     type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_NUMERIC' ).
-      env->define_value( symbol = 'char-whitespace?'  type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_WHITESPACE' ).
-      env->define_value( symbol = 'char-upper-case?'  type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_UPPER_CASE' ).
-      env->define_value( symbol = 'char-lower-case?'  type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_LOWER_CASE' ).
-
-      env->define_value( symbol = 'digit-value'       type = lcl_lisp=>type_native value   = 'PROC_DIGIT_VALUE' ).
-      env->define_value( symbol = 'char->integer'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_TO_INTEGER' ).
-      env->define_value( symbol = 'integer->char'     type = lcl_lisp=>type_native value   = 'PROC_INTEGER_TO_CHAR' ).
-      env->define_value( symbol = 'char-upcase'       type = lcl_lisp=>type_native value   = 'PROC_CHAR_UPCASE' ).
-      env->define_value( symbol = 'char-downcase'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_DOWNCASE' ).
-
-      env->define_value( symbol = 'char=?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_EQ' ).
-      env->define_value( symbol = 'char<?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_LT' ).
-      env->define_value( symbol = 'char>?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_GT' ).
-      env->define_value( symbol = 'char<=?'    type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_LE' ).
-      env->define_value( symbol = 'char>=?'    type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_GE' ).
-
-      env->define_value( symbol = 'char-ci=?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_EQ' ).
-      env->define_value( symbol = 'char-ci<?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_LT' ).
-      env->define_value( symbol = 'char-ci>?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_GT' ).
-      env->define_value( symbol = 'char-ci<=?'    type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_LE' ).
-      env->define_value( symbol = 'char-ci>=?'    type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_GE' ).
-
-      env->define_value( symbol = 'sql-query'         type = lcl_lisp=>type_native value   = 'PROC_SQL_QUERY' ).
-      env->define_value( symbol = 'define-query'      type = lcl_lisp=>type_native value   = 'PROC_SQL_PREPARE' ).
-
-      DATA lr_ref TYPE REF TO data.
-*     Define a value in the environment for SYST
-      GET REFERENCE OF syst INTO lr_ref.
-      env->set( symbol = 'ab-sy' element = lcl_lisp_new=>data( lr_ref ) ).
+      env = lcl_lisp_env_factory=>create( ).
     ENDMETHOD.                    "constructor
 
     METHOD throw.
@@ -3065,7 +2836,7 @@
 *     had been written instead of (<variable> <init>).
       _validate io_head.
 
-      eo_env = lcl_lisp_environment=>new( io_env ).
+      eo_env = lcl_lisp_env_factory=>clone( io_env ).
       eo_step = nil.
 
       DATA(lo_loop) = io_head.
@@ -3115,7 +2886,7 @@
         lo_command = lo_command->cdr.
       ENDWHILE.
 
-      DATA(lo_local_env) = lcl_lisp_environment=>new( ).
+      DATA(lo_local_env) = lcl_lisp_env_factory=>new( ).
 *     the <step> expressions are evaluated in some unspecified order
       DATA(lo_step) = io_steps.
       WHILE lo_step->type EQ lcl_lisp=>type_pair.
@@ -3179,7 +2950,7 @@
 *     The function (LAMBDA) receives its own local environment in which to execute,
 *     where parameters become symbols that are mapped to the corresponding arguments
       _validate io_head.
-      ro_env = lcl_lisp_environment=>new( io_head->environment ).
+      ro_env = lcl_lisp_env_factory=>clone( io_head->environment ).
 
       IF io_head->macro EQ abap_true.
         lo_args = io_args.
@@ -3256,7 +3027,7 @@
                          IMPORTING eo_pars = DATA(lo_pars)
                                    eo_args = DATA(lo_args) ).
 
-      ro_env = lcl_lisp_environment=>new( io_env ).
+      ro_env = lcl_lisp_env_factory=>clone( io_env ).
 *     setup the environment before evaluating the initial value expressions
       DATA(lo_par) = lo_pars.
       DATA(lo_arg) = lo_args.
@@ -3282,7 +3053,7 @@
                          IMPORTING eo_pars = DATA(lo_pars)
                                    eo_args = DATA(lo_args) ).
 
-      ro_env = lcl_lisp_environment=>new( io_env ).
+      ro_env = lcl_lisp_env_factory=>clone( io_env ).
 
       DATA(lo_par) = lo_pars.
       DATA(lo_arg) = lo_args.
@@ -3327,7 +3098,7 @@
       extract_arguments( EXPORTING io_head = co_head->car
                          IMPORTING eo_pars = DATA(lo_pars)
                                    eo_args = DATA(lo_args) ).
-      ro_env = lcl_lisp_environment=>new( io_env ).
+      ro_env = lcl_lisp_env_factory=>clone( io_env ).
 
       DATA(lo_new_args) = evaluate_parameters( io_list = lo_args       " Pointer to arguments
                                                environment = io_env ).
@@ -3346,7 +3117,7 @@
       extract_arguments( EXPORTING io_head = io_head
                          IMPORTING eo_pars = DATA(lo_pars)
                                    eo_args = DATA(lo_args) ).
-      ro_env = lcl_lisp_environment=>new( io_env ).
+      ro_env = lcl_lisp_env_factory=>clone( io_env ).
 
       evaluate_in_sequence( io_args = lo_args      " Pointer to arguments e.g. (4, (+ x 4)
                             io_pars = lo_pars      " Pointer to formal parameters (x y)
@@ -3977,10 +3748,10 @@
       DATA li_port TYPE REF TO lif_&2_port.
 
       IF &1->type EQ lcl_lisp=>type_pair.
-      _validate_port &1->car &3.
-      li_port ?= &1->car.
+        _validate_port &1->car &3.
+        li_port ?= &1->car.
       ELSE.
-      li_port = go_&2_port.
+        li_port = go_&2_port.
       ENDIF.
     END-OF-DEFINITION.
 
@@ -4008,7 +3779,35 @@
     METHOD read_char.
       _optional_port_arg input `read-char`.
 
-      result = lcl_lisp_new=>char( li_port->read( ) ).
+      result = lcl_lisp_new=>char( li_port->read_char( ) ).
+    ENDMETHOD.
+
+    METHOD read_string.
+      DATA k TYPE tv_index.
+      DATA lv_input TYPE string.
+      DATA lv_char TYPE char01.
+      DATA li_port TYPE REF TO lif_input_port.
+
+      _validate io_arg.
+      _validate_integer io_arg->car `read-string`.
+      k = CAST lcl_lisp_integer( io_arg->car )->integer.
+
+      IF io_arg->cdr->type EQ lcl_lisp=>type_pair.
+        _validate_port io_arg->cdr->car `read-string`.
+        li_port ?= io_arg->cdr->car.
+      ELSE.
+        li_port = go_input_port.
+      ENDIF.
+
+      DO k TIMES.
+        IF li_port->is_char_ready( ).
+          lv_char = li_port->read_char( ).
+          CONCATENATE lv_input lv_char INTO lv_input RESPECTING BLANKS.
+        ELSE.
+          EXIT.
+        ENDIF.
+      ENDDO.
+      result = lcl_lisp_new=>string( lv_input ).
     ENDMETHOD.
 
     METHOD eval_source.
@@ -4274,7 +4073,7 @@
 
     METHOD proc_caar.
       _validate list.
-      IF list EQ nil.
+      IF list->type NE lcl_lisp=>type_pair.
         list->error_not_a_pair( `caar: ` ).
       ENDIF.
 
@@ -4293,7 +4092,7 @@
 
     METHOD proc_cadr.
       _validate list.
-      IF list EQ nil.
+      IF list->type NE lcl_lisp=>type_pair.
         list->error_not_a_pair( `cadr: ` ).
       ENDIF.
 
@@ -4312,7 +4111,7 @@
 
     METHOD proc_cdar.
       _validate list.
-      IF list EQ nil.
+      IF list->type NE lcl_lisp=>type_pair.
         list->error_not_a_pair( `cdar: ` ).
       ENDIF.
 
@@ -4331,7 +4130,7 @@
 
     METHOD proc_cddr.
       _validate list.
-      IF list EQ nil.
+      IF list->type NE lcl_lisp=>type_pair.
         list->error_not_a_pair( `cddr: ` ).
       ENDIF.
 
@@ -5569,9 +5368,6 @@
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
 *     (exact-integer? z) procedure
 *     Returns #t if z is both exact and an integer; otherwise returns #f.
-*      (exact-integer? 32)   => #t
-*      (exact-integer? 32.0) => #f
-*      (exact-integer? 32/5) => #f
       result = false.
       CHECK list->car IS BOUND.
       CASE list->car->type.
@@ -6050,8 +5846,8 @@
             WHEN OTHERS.
               lv_radix_error = abap_true.
           ENDCASE.
-      CATCH lcx_lisp_exception cx_sy_conversion_error.
-        result = false.
+        CATCH lcx_lisp_exception cx_sy_conversion_error.
+          result = false.
       ENDTRY.
       CHECK lv_radix_error EQ abap_true.
       throw( lo_int->to_string( ) && ` must be 2, 8, 10 or 16 in string->number (radix)` ).
@@ -6094,6 +5890,10 @@
 
     METHOD proc_read_char.
       result = read_char( io_arg = list ).
+    ENDMETHOD.
+
+    METHOD proc_read_string.
+      result = read_string( io_arg = list ).
     ENDMETHOD.
 
     METHOD proc_peek_char.
@@ -6605,12 +6405,13 @@
     ENDMETHOD.
 
     METHOD unicode_to_digit.
-      DATA lv_int TYPE tv_int.
       FIELD-SYMBOLS <lv_hex> TYPE x.
       FIELD-SYMBOLS <lv_int> TYPE x.
+      DATA ls_digit TYPE ts_digit.
       DATA lv_xdigit TYPE ts_digit-zero.
       DATA lv_zero TYPE i.
-      DATA ls_digit TYPE ts_digit.
+      DATA lv_index TYPE sytabix.
+      DATA lv_int TYPE tv_int.
 
       rv_digit = -1.
 
@@ -6619,12 +6420,25 @@
       <lv_int> = <lv_hex>. " conversion
       lv_xdigit = lv_int.
 
-      LOOP AT mt_zero INTO ls_digit WHERE zero LE lv_xdigit.
-      ENDLOOP ##NEEDED.
-      IF sy-subrc EQ 0.
-        lv_zero = ls_digit-zero.
-        rv_digit = lv_int - lv_zero.
-      ENDIF.
+      READ TABLE mt_zero INTO ls_digit WITH TABLE KEY zero = lv_xdigit.
+      CASE sy-subrc.
+        WHEN 0.
+
+        WHEN 4.
+          lv_index = sy-tabix - 1.
+          IF lv_index LT 1.
+            lv_index = 1.
+          ENDIF.
+          READ TABLE mt_zero INDEX lv_index INTO ls_digit.
+          IF sy-subrc NE 0.
+            RETURN.
+          ENDIF.
+
+        WHEN OTHERS.
+          RETURN.
+      ENDCASE.
+      lv_zero = ls_digit-zero.
+      rv_digit = lv_int - lv_zero.
     ENDMETHOD.
 
     METHOD proc_digit_value.
@@ -6768,59 +6582,59 @@
       _char01_to_integer lv_char rv_int.
     ENDMETHOD.
 
-  DEFINE _proc_list_compare.
-    DATA lo_test TYPE REF TO lcl_lisp.
-    DATA lo_arg TYPE REF TO lcl_lisp.
-    DATA lv_ref TYPE &4.
-    DATA lv_test TYPE &4.
+    DEFINE _proc_list_compare.
+      DATA lo_test TYPE REF TO lcl_lisp.
+      DATA lo_arg TYPE REF TO lcl_lisp.
+      DATA lv_ref TYPE &4.
+      DATA lv_test TYPE &4.
 
-    _validate list.
+      _validate list.
 
-    result = false.
-    lo_arg = list.
+      result = false.
+      lo_arg = list.
 
-    lo_test = nil.
-    IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>&5.
+      lo_test = nil.
+      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>&5.
       lo_test = lo_arg->car.
       lv_ref = &3( lo_test ).
       lo_arg = lo_arg->cdr.
-    ENDIF.
-    IF lo_test EQ nil OR lo_arg EQ nil.
+      ENDIF.
+      IF lo_test EQ nil OR lo_arg EQ nil.
       throw( |{ &1 } missing argument| ).
-    ENDIF.
+      ENDIF.
 
-    WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>&5.
+      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>&5.
       lv_test = &3( lo_arg->car ).
       IF lv_ref &2 lv_test.
-        lv_ref = lv_test.
+      lv_ref = lv_test.
       ELSE.
-        RETURN.
+      RETURN.
       ENDIF.
       lo_arg = lo_arg->cdr.
-    ENDWHILE.
+      ENDWHILE.
 
-    IF lo_arg NE nil.
+      IF lo_arg NE nil.
       throw( |{ &1 } wrong argument in { lo_arg->car->to_string( ) }| ).
-    ENDIF.
-    CHECK lo_arg = nil.
-    result = true.
-  END-OF-DEFINITION.
+      ENDIF.
+      CHECK lo_arg = nil.
+      result = true.
+    END-OF-DEFINITION.
 
-  DEFINE _proc_string_list_compare.
-    _proc_list_compare &1 &2 char_case_identity string type_string.
-  END-OF-DEFINITION.
+    DEFINE _proc_string_list_compare.
+      _proc_list_compare &1 &2 char_case_identity string type_string.
+    END-OF-DEFINITION.
 
-  DEFINE _proc_string_ci_list_compare.
-    _proc_list_compare &1 &2 fold_case string type_string.
-  END-OF-DEFINITION.
+    DEFINE _proc_string_ci_list_compare.
+      _proc_list_compare &1 &2 fold_case string type_string.
+    END-OF-DEFINITION.
 
-  DEFINE _proc_char_list_compare.
-    _proc_list_compare &1 &2 char_to_integer tv_int type_char.
-  END-OF-DEFINITION.
+    DEFINE _proc_char_list_compare.
+      _proc_list_compare &1 &2 char_to_integer tv_int type_char.
+    END-OF-DEFINITION.
 
-  DEFINE _proc_char_ci_list_compare.
-    _proc_list_compare &1 &2 char_fold_case_to_integer tv_int type_char.
-  END-OF-DEFINITION.
+    DEFINE _proc_char_ci_list_compare.
+      _proc_list_compare &1 &2 char_fold_case_to_integer tv_int type_char.
+    END-OF-DEFINITION.
 
 *----- Char
     METHOD proc_char_list_is_eq.
@@ -7511,7 +7325,7 @@
       ENDTRY.
     ENDMETHOD.
 
-ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
+  ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp_abapfunction IMPLEMENTATION
@@ -7677,11 +7491,6 @@ ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
 *----------------------------------------------------------------------*
   CLASS lcl_lisp_environment IMPLEMENTATION.
 
-    METHOD new.
-      ro_env = NEW #( ).
-      ro_env->outer = io_outer.
-    ENDMETHOD.                    "new
-
     METHOD scope_of.
 *     find the environment where the symbol is defined
       env = me.
@@ -7765,7 +7574,7 @@ ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
           DATA(lo_var) = io_pars.                " Pointer to formal parameters
           DATA(lo_arg) = io_args.                " Pointer to arguments
 *         local environment used to detect duplicate variable usage (invalid)
-          DATA(local) = lcl_lisp_environment=>new( me ).
+          DATA(local) = lcl_lisp_env_factory=>clone( me ).
 
           WHILE lo_var NE lcl_lisp=>nil.         " Nil would mean no parameters to map
 
@@ -7813,6 +7622,290 @@ ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
       ENDCASE.
 
     ENDMETHOD.                    "parameters_to_symbols
+
+    METHOD prepare.
+*     Create symbols for nil, true and false values
+      set( symbol = 'nil' element = lcl_lisp=>nil ).
+      set( symbol = '#f' element = lcl_lisp=>true ).
+      set( symbol = '#t' element = lcl_lisp=>false ).
+
+*     Add primitive functions to environment
+      define_value( symbol = 'define'          type = lcl_lisp=>type_syntax value   = 'define' ).
+      define_value( symbol = 'lambda'          type = lcl_lisp=>type_syntax value   = 'lambda' ).
+      define_value( symbol = 'if'              type = lcl_lisp=>type_syntax value   = 'if' ).
+      define_value( symbol = c_eval_quote      type = lcl_lisp=>type_syntax value   = `'` ).
+      define_value( symbol = c_eval_quasiquote type = lcl_lisp=>type_syntax value   = '`' ).
+      define_value( symbol = 'set!'            type = lcl_lisp=>type_syntax value   = 'set!' ).
+
+      define_value( symbol = 'define-macro'    type = lcl_lisp=>type_syntax value   = 'define-macro' ).
+      define_value( symbol = 'define-syntax'   type = lcl_lisp=>type_syntax value   = 'define-syntax' ).
+      define_value( symbol = 'macroexpand'     type = lcl_lisp=>type_syntax value   = 'macroexpand' ).
+      define_value( symbol = 'gensym'          type = lcl_lisp=>type_syntax value   = 'gensym' ).
+
+      define_value( symbol = 'and'      type = lcl_lisp=>type_syntax value   = 'and' ).
+      define_value( symbol = 'or'       type = lcl_lisp=>type_syntax value   = 'or' ).
+      define_value( symbol = 'cond'     type = lcl_lisp=>type_syntax value   = 'cond' ).
+      define_value( symbol = 'unless'   type = lcl_lisp=>type_syntax value   = 'unless' ).
+      define_value( symbol = 'when'     type = lcl_lisp=>type_syntax value   = 'when' ).
+      define_value( symbol = 'begin'    type = lcl_lisp=>type_syntax value   = 'begin' ).
+      define_value( symbol = 'let'      type = lcl_lisp=>type_syntax value   = 'let' ).
+      define_value( symbol = 'let*'     type = lcl_lisp=>type_syntax value   = 'let*' ).
+      define_value( symbol = 'letrec'   type = lcl_lisp=>type_syntax value   = 'letrec' ).
+      define_value( symbol = 'letrec*'  type = lcl_lisp=>type_syntax value   = 'letrec*' ).
+      define_value( symbol = 'do'       type = lcl_lisp=>type_syntax value   = 'do' ).
+      define_value( symbol = 'case'     type = lcl_lisp=>type_syntax value   = 'case' ).
+
+      define_value( symbol = c_eval_unquote          type = lcl_lisp=>type_syntax value   = ',' ).
+      define_value( symbol = c_eval_unquote_splicing type = lcl_lisp=>type_syntax value   = ',@' ).
+
+*     Procedures
+      define_value( symbol = 'apply'        type = lcl_lisp=>type_primitive value   = 'apply' ).
+      define_value( symbol = 'for-each'     type = lcl_lisp=>type_primitive value   = 'for-each' ).
+      define_value( symbol = 'map'          type = lcl_lisp=>type_primitive value   = 'map' ).
+
+*     Add native functions to environment
+      define_value( symbol = '+'        type = lcl_lisp=>type_native value   = 'PROC_ADD' ).
+      define_value( symbol = '-'        type = lcl_lisp=>type_native value   = 'PROC_SUBTRACT' ).
+      define_value( symbol = '*'        type = lcl_lisp=>type_native value   = 'PROC_MULTIPLY' ).
+      define_value( symbol = '/'        type = lcl_lisp=>type_native value   = 'PROC_DIVIDE' ).
+      define_value( symbol = c_eval_append type = lcl_lisp=>type_native value   = 'PROC_APPEND' ).
+      define_value( symbol = 'append!'     type = lcl_lisp=>type_native value   = 'PROC_APPEND_UNSAFE' ).
+      define_value( symbol = 'list'     type = lcl_lisp=>type_native value   = 'PROC_LIST' ).
+      define_value( symbol = 'length'   type = lcl_lisp=>type_native value   = 'PROC_LENGTH' ).
+      define_value( symbol = 'reverse'  type = lcl_lisp=>type_native value   = 'PROC_REVERSE' ).
+      define_value( symbol = 'not'      type = lcl_lisp=>type_native value   = 'PROC_NOT' ).
+
+      define_value( symbol = 'make-list'    type = lcl_lisp=>type_native value   = 'PROC_MAKE_LIST' ).
+      define_value( symbol = 'list-tail'    type = lcl_lisp=>type_native value   = 'PROC_LIST_TAIL' ).
+      define_value( symbol = 'list-ref'     type = lcl_lisp=>type_native value   = 'PROC_LIST_REF' ).
+      define_value( symbol = 'list-copy'    type = lcl_lisp=>type_native value   = 'PROC_LIST_COPY' ).
+      define_value( symbol = 'list->vector' type = lcl_lisp=>type_native value   = 'PROC_LIST_TO_VECTOR' ).
+      define_value( symbol = 'iota'         type = lcl_lisp=>type_native value   = 'PROC_IOTA' ).
+
+      define_value( symbol = 'memq'    type = lcl_lisp=>type_native value   = 'PROC_MEMQ' ).
+      define_value( symbol = 'memv'    type = lcl_lisp=>type_native value   = 'PROC_MEMV' ).
+      define_value( symbol = 'member'  type = lcl_lisp=>type_native value   = 'PROC_MEMBER' ).
+
+      define_value( symbol = 'assq'    type = lcl_lisp=>type_native value   = 'PROC_ASSQ' ).
+      define_value( symbol = 'assv'    type = lcl_lisp=>type_native value   = 'PROC_ASSV' ).
+      define_value( symbol = 'assoc'   type = lcl_lisp=>type_native value   = 'PROC_ASSOC' ).
+
+      define_value( symbol = 'car'     type = lcl_lisp=>type_native value   = 'PROC_CAR' ).
+      define_value( symbol = 'cdr'     type = lcl_lisp=>type_native value   = 'PROC_CDR' ).
+      define_value( symbol = c_eval_cons    type = lcl_lisp=>type_native value   = 'PROC_CONS' ).
+      define_value( symbol = 'nil?'    type = lcl_lisp=>type_native value   = 'PROC_NILP' ).
+      define_value( symbol = 'null?'   type = lcl_lisp=>type_native value   = 'PROC_NILP' ).
+
+      define_value( symbol = '>'       type = lcl_lisp=>type_native value   = 'PROC_GT' ).
+      define_value( symbol = '>='      type = lcl_lisp=>type_native value   = 'PROC_GTE' ).
+      define_value( symbol = '<'       type = lcl_lisp=>type_native value   = 'PROC_LT' ).
+      define_value( symbol = '<='      type = lcl_lisp=>type_native value   = 'PROC_LTE' ).
+      define_value( symbol = '='       type = lcl_lisp=>type_native value   = 'PROC_EQL' ). "Math equal
+      define_value( symbol = 'eq?'     type = lcl_lisp=>type_native value   = 'PROC_EQ' ).
+      define_value( symbol = 'eqv?'    type = lcl_lisp=>type_native value   = 'PROC_EQV' ).
+      define_value( symbol = 'equal?'  type = lcl_lisp=>type_native value   = 'PROC_EQUAL' ).
+
+      define_value( symbol = 'set-car!' type = lcl_lisp=>type_native value   = 'PROC_SET_CAR' ).
+      define_value( symbol = 'set-cdr!' type = lcl_lisp=>type_native value   = 'PROC_SET_CDR' ).
+      define_value( symbol = 'caar'     type = lcl_lisp=>type_native value   = 'PROC_CAAR' ).
+      define_value( symbol = 'cadr'     type = lcl_lisp=>type_native value   = 'PROC_CADR' ).
+      define_value( symbol = 'cdar'     type = lcl_lisp=>type_native value   = 'PROC_CDAR' ).
+      define_value( symbol = 'cddr'     type = lcl_lisp=>type_native value   = 'PROC_CDDR' ).
+
+      define_value( symbol = 'current-input-port'  type = lcl_lisp=>type_native value = 'PROC_CURRENT_INPUT_PORT' ).
+      define_value( symbol = 'current-output-port' type = lcl_lisp=>type_native value = 'PROC_CURRENT_OUTPUT_PORT' ).
+      define_value( symbol = 'current-error-port'  type = lcl_lisp=>type_native value = 'PROC_CURRENT_ERROR_PORT' ).
+
+      define_value( symbol = 'close-input-port'  type = lcl_lisp=>type_native value = 'PROC_CLOSE_INPUT_PORT' parameter = abap_true ).
+      define_value( symbol = 'close-output-port' type = lcl_lisp=>type_native value = 'PROC_CLOSE_OUTPUT_PORT' parameter = abap_true ).
+      define_value( symbol = 'close-port'        type = lcl_lisp=>type_native value = 'PROC_CLOSE_PORT' parameter = abap_true ).
+
+*     vector-related functions
+      define_value( symbol = 'vector'        type = lcl_lisp=>type_native value   = 'PROC_VECTOR' ).
+      define_value( symbol = 'vector-length' type = lcl_lisp=>type_native value   = 'PROC_VECTOR_LENGTH' ).
+      define_value( symbol = 'vector-set!'   type = lcl_lisp=>type_native value   = 'PROC_VECTOR_SET' ).
+      define_value( symbol = 'vector-ref'    type = lcl_lisp=>type_native value   = 'PROC_VECTOR_REF' ).
+      define_value( symbol = 'vector->list'  type = lcl_lisp=>type_native value   = 'PROC_VECTOR_TO_LIST' ).
+      define_value( symbol = 'make-vector'   type = lcl_lisp=>type_native value   = 'PROC_MAKE_VECTOR' ).
+
+*     Hash-related functions
+      define_value( symbol = 'make-hash'   type = lcl_lisp=>type_native value   = 'PROC_MAKE_HASH' ).
+      define_value( symbol = 'hash-get'    type = lcl_lisp=>type_native value   = 'PROC_HASH_GET' ).
+      define_value( symbol = 'hash-insert' type = lcl_lisp=>type_native value   = 'PROC_HASH_INSERT' ).
+      define_value( symbol = 'hash-remove' type = lcl_lisp=>type_native value   = 'PROC_HASH_REMOVE' ).
+      define_value( symbol = 'hash-keys'   type = lcl_lisp=>type_native value   = 'PROC_HASH_KEYS' ).
+*     Functions for type:
+      define_value( symbol = 'string?'     type = lcl_lisp=>type_native value = 'PROC_IS_STRING' ).
+      define_value( symbol = 'char?'       type = lcl_lisp=>type_native value = 'PROC_IS_CHAR' ).
+      define_value( symbol = 'hash?'       type = lcl_lisp=>type_native value = 'PROC_IS_HASH' ).
+      define_value( symbol = 'number?'     type = lcl_lisp=>type_native value = 'PROC_IS_NUMBER' ).
+      define_value( symbol = 'exact-integer?'    type = lcl_lisp=>type_native value = 'PROC_IS_EXACT_INTEGER' ).
+      define_value( symbol = 'integer?'    type = lcl_lisp=>type_native value = 'PROC_IS_INTEGER' ).
+      define_value( symbol = 'complex?'    type = lcl_lisp=>type_native value = 'PROC_IS_COMPLEX' ).
+      define_value( symbol = 'real?'       type = lcl_lisp=>type_native value = 'PROC_IS_REAL' ).
+      define_value( symbol = 'rational?'   type = lcl_lisp=>type_native value = 'PROC_IS_RATIONAL' ).
+      define_value( symbol = 'list?'       type = lcl_lisp=>type_native value = 'PROC_IS_LIST' ).
+      define_value( symbol = 'pair?'       type = lcl_lisp=>type_native value = 'PROC_IS_PAIR' ).
+      define_value( symbol = 'vector?'     type = lcl_lisp=>type_native value = 'PROC_IS_VECTOR' ).
+      define_value( symbol = 'boolean?'    type = lcl_lisp=>type_native value = 'PROC_IS_BOOLEAN' ).
+      define_value( symbol = 'alist?'      type = lcl_lisp=>type_native value = 'PROC_IS_ALIST' ).
+      define_value( symbol = 'procedure?'  type = lcl_lisp=>type_native value = 'PROC_IS_PROCEDURE' ).
+      define_value( symbol = 'symbol?'     type = lcl_lisp=>type_native value = 'PROC_IS_SYMBOL' ).
+      define_value( symbol = 'port?'       type = lcl_lisp=>type_native value = 'PROC_IS_PORT' ).
+      define_value( symbol = 'boolean=?'   type = lcl_lisp=>type_native value = 'PROC_BOOLEAN_LIST_IS_EQUAL' ).
+      define_value( symbol = 'exact?'      type = lcl_lisp=>type_native value = 'PROC_IS_EXACT' ).
+      define_value( symbol = 'inexact?'    type = lcl_lisp=>type_native value = 'PROC_IS_INEXACT' ).
+
+*     Format
+      define_value( symbol = 'newline'     type = lcl_lisp=>type_native value = 'PROC_NEWLINE' ).
+      define_value( symbol = 'write'       type = lcl_lisp=>type_native value = 'PROC_WRITE' ).
+      define_value( symbol = 'display'     type = lcl_lisp=>type_native value = 'PROC_DISPLAY' ).
+
+      define_value( symbol = 'read'         type = lcl_lisp=>type_native value = 'PROC_READ' ).
+      define_value( symbol = 'write-string' type = lcl_lisp=>type_native value = 'PROC_WRITE_STRING' ).
+      define_value( symbol = 'write-char'   type = lcl_lisp=>type_native value = 'PROC_WRITE_CHAR' ).
+      define_value( symbol = 'read-char'    type = lcl_lisp=>type_native value = 'PROC_READ_CHAR' ).
+      define_value( symbol = 'read-string'  type = lcl_lisp=>type_native value = 'PROC_READ_STRING' ).
+      define_value( symbol = 'char-ready?'  type = lcl_lisp=>type_native value = 'PROC_IS_CHAR_READY' ).
+      define_value( symbol = 'peek-char'    type = lcl_lisp=>type_native value = 'PROC_PEEK_CHAR' ).
+
+      define_value( symbol = 'exact'          type = lcl_lisp=>type_native value = 'PROC_TO_EXACT' ).
+      define_value( symbol = 'inexact'        type = lcl_lisp=>type_native value = 'PROC_TO_INEXACT' ).
+
+      define_value( symbol = 'number->string' type = lcl_lisp=>type_native value = 'PROC_NUM_TO_STRING' ).
+      define_value( symbol = 'string->number' type = lcl_lisp=>type_native value = 'PROC_STRING_TO_NUM' ).
+      define_value( symbol = 'make-string'    type = lcl_lisp=>type_native value = 'PROC_MAKE_STRING' ).
+      define_value( symbol = 'string'         type = lcl_lisp=>type_native value = 'PROC_STRING' ).
+      define_value( symbol = 'string->list'   type = lcl_lisp=>type_native value = 'PROC_STRING_TO_LIST' ).
+      define_value( symbol = 'list->string'   type = lcl_lisp=>type_native value = 'PROC_LIST_TO_STRING' ).
+      define_value( symbol = 'symbol->string' type = lcl_lisp=>type_native value = 'PROC_SYMBOL_TO_STRING' ).
+      define_value( symbol = 'string->symbol' type = lcl_lisp=>type_native value = 'PROC_STRING_TO_SYMBOL' ).
+      define_value( symbol = 'string-append'  type = lcl_lisp=>type_native value = 'PROC_STRING_APPEND' ).
+      define_value( symbol = 'string-length'  type = lcl_lisp=>type_native value = 'PROC_STRING_LENGTH' ).
+      define_value( symbol = 'string-copy'    type = lcl_lisp=>type_native value = 'PROC_STRING_COPY' ).
+      define_value( symbol = 'substring'      type = lcl_lisp=>type_native value = 'PROC_STRING_COPY' ).
+      define_value( symbol = 'string-ref'     type = lcl_lisp=>type_native value = 'PROC_STRING_REF' ).
+      define_value( symbol = 'string-set!'    type = lcl_lisp=>type_native value = 'PROC_STRING_SET' ).
+
+      define_value( symbol = 'string=?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_EQ' ).
+      define_value( symbol = 'string<?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_LT' ).
+      define_value( symbol = 'string>?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_GT' ).
+      define_value( symbol = 'string<=?'    type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_LE' ).
+      define_value( symbol = 'string>=?'    type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_GE' ).
+
+      define_value( symbol = 'string-ci=?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_EQ' ).
+      define_value( symbol = 'string-ci<?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_LT' ).
+      define_value( symbol = 'string-ci>?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_GT' ).
+      define_value( symbol = 'string-ci<=?'    type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_LE' ).
+      define_value( symbol = 'string-ci>=?'    type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_GE' ).
+
+*     Math
+      define_value( symbol = 'abs'   type = lcl_lisp=>type_native value = 'PROC_ABS' ).
+      define_value( symbol = 'sin'   type = lcl_lisp=>type_native value = 'PROC_SIN' ).
+      define_value( symbol = 'cos'   type = lcl_lisp=>type_native value = 'PROC_COS' ).
+      define_value( symbol = 'tan'   type = lcl_lisp=>type_native value = 'PROC_TAN' ).
+      define_value( symbol = 'asin'  type = lcl_lisp=>type_native value = 'PROC_ASIN' ).
+      define_value( symbol = 'acos'  type = lcl_lisp=>type_native value = 'PROC_ACOS' ).
+      define_value( symbol = 'atan'  type = lcl_lisp=>type_native value = 'PROC_ATAN' ).
+      define_value( symbol = 'sinh'  type = lcl_lisp=>type_native value = 'PROC_SINH' ).
+      define_value( symbol = 'cosh'  type = lcl_lisp=>type_native value = 'PROC_COSH' ).
+      define_value( symbol = 'tanh'  type = lcl_lisp=>type_native value = 'PROC_TANH' ).
+      define_value( symbol = 'asinh' type = lcl_lisp=>type_native value = 'PROC_ASINH' ).
+      define_value( symbol = 'acosh' type = lcl_lisp=>type_native value = 'PROC_ACOSH' ).
+      define_value( symbol = 'atanh' type = lcl_lisp=>type_native value = 'PROC_ATANH' ).
+      define_value( symbol = 'expt'  type = lcl_lisp=>type_native value = 'PROC_EXPT' ).
+      define_value( symbol = 'exp'   type = lcl_lisp=>type_native value = 'PROC_EXP' ).
+      define_value( symbol = 'log'   type = lcl_lisp=>type_native value = 'PROC_LOG' ).
+      define_value( symbol = 'sqrt'  type = lcl_lisp=>type_native value = 'PROC_SQRT' ).
+
+      define_value( symbol = 'floor'    type = lcl_lisp=>type_native value = 'PROC_FLOOR' ).
+      define_value( symbol = 'ceiling'  type = lcl_lisp=>type_native value = 'PROC_CEILING' ).
+      define_value( symbol = 'truncate' type = lcl_lisp=>type_native value = 'PROC_TRUNCATE' ).
+      define_value( symbol = 'round'    type = lcl_lisp=>type_native value = 'PROC_ROUND' ).
+
+      define_value( symbol = 'remainder' type = lcl_lisp=>type_native value = 'PROC_REMAINDER' ).
+      define_value( symbol = 'modulo'    type = lcl_lisp=>type_native value = 'PROC_MODULO' ).
+      define_value( symbol = 'quotient'  type = lcl_lisp=>type_native value = 'PROC_QUOTIENT' ).
+      define_value( symbol = 'random'    type = lcl_lisp=>type_native value = 'PROC_RANDOM' ).
+      define_value( symbol = 'max'       type = lcl_lisp=>type_native value = 'PROC_MAX' ).
+      define_value( symbol = 'min'       type = lcl_lisp=>type_native value = 'PROC_MIN' ).
+      define_value( symbol = 'gcd'       type = lcl_lisp=>type_native value = 'PROC_GCD' ).
+      define_value( symbol = 'lcm'       type = lcl_lisp=>type_native value = 'PROC_LCM' ).
+
+      define_value( symbol = 'zero?'     type = lcl_lisp=>type_native value = 'PROC_IS_ZERO' ).
+      define_value( symbol = 'positive?' type = lcl_lisp=>type_native value = 'PROC_IS_POSITIVE' ).
+      define_value( symbol = 'negative?' type = lcl_lisp=>type_native value = 'PROC_IS_NEGATIVE' ).
+      define_value( symbol = 'odd?'      type = lcl_lisp=>type_native value = 'PROC_IS_ODD' ).
+      define_value( symbol = 'even?'     type = lcl_lisp=>type_native value = 'PROC_IS_EVEN' ).
+*     Continuation
+      define_value( symbol = 'call-with-current-continuation' type = lcl_lisp=>type_native value = 'PROC_CALL_CC' ).
+      define_value( symbol = 'call/cc'                        type = lcl_lisp=>type_native value = 'PROC_CALL_CC' ).
+
+*     Native functions for ABAP integration
+      define_value( symbol = 'ab-data'       type = lcl_lisp=>type_native value   = 'PROC_ABAP_DATA' ).
+      define_value( symbol = 'ab-function'   type = lcl_lisp=>type_native value   = 'PROC_ABAP_FUNCTION' ).
+      define_value( symbol = 'ab-func-param' type = lcl_lisp=>type_native value   = 'PROC_ABAP_FUNCTION_PARAM' ).
+      define_value( symbol = 'ab-table'      type = lcl_lisp=>type_native value   = 'PROC_ABAP_TABLE' ).
+      define_value( symbol = 'ab-append-row' type = lcl_lisp=>type_native value   = 'PROC_ABAP_APPEND_ROW' ).
+      define_value( symbol = 'ab-delete-row' type = lcl_lisp=>type_native value   = 'PROC_ABAP_DELETE_ROW' ).
+      define_value( symbol = 'ab-get-row'    type = lcl_lisp=>type_native value   = 'PROC_ABAP_GET_ROW' ).
+      define_value( symbol = 'ab-get-value'  type = lcl_lisp=>type_native value   = 'PROC_ABAP_GET_VALUE' ).
+      define_value( symbol = 'ab-set-value'  type = lcl_lisp=>type_native value   = 'PROC_ABAP_SET_VALUE' ).
+
+      define_value( symbol = 'ab-get' type = lcl_lisp=>type_native value = 'PROC_ABAP_GET' ).
+      define_value( symbol = 'ab-set' type = lcl_lisp=>type_native value = 'PROC_ABAP_SET' ).
+
+*     Compatibility
+      define_value( symbol = 'empty?'  type = lcl_lisp=>type_native value   = 'PROC_NILP' ).
+      define_value( symbol = 'first'   type = lcl_lisp=>type_native value   = 'PROC_CAR' ).
+      define_value( symbol = 'rest'    type = lcl_lisp=>type_native value   = 'PROC_CDR' ).
+
+*     Ports
+      define_value( symbol = 'input-port?'         type = lcl_lisp=>type_native value   = 'PROC_IS_INPUT_PORT' ).
+      define_value( symbol = 'output-port?'        type = lcl_lisp=>type_native value   = 'PROC_IS_OUTPUT_PORT' ).
+      define_value( symbol = 'textual-port?'       type = lcl_lisp=>type_native value   = 'PROC_IS_TEXTUAL_PORT' ).
+      define_value( symbol = 'binary-port?'        type = lcl_lisp=>type_native value   = 'PROC_IS_BINARY_PORT' ).
+      define_value( symbol = 'input-port-open?'    type = lcl_lisp=>type_native value   = 'PROC_IS_OPEN_INPUT_PORT' ).
+      define_value( symbol = 'output-port-open?'   type = lcl_lisp=>type_native value   = 'PROC_IS_OPEN_OUTPUT_PORT' ).
+      define_value( symbol = 'eof-object?'         type = lcl_lisp=>type_native value   = 'PROC_IS_EOF_OBJECT' ).
+      define_value( symbol = 'open-output-string'  type = lcl_lisp=>type_native value   = 'PROC_OPEN_OUTPUT_STRING' ).
+      define_value( symbol = 'open-input-string'   type = lcl_lisp=>type_native value   = 'PROC_OPEN_INPUT_STRING' ).
+      define_value( symbol = 'get-output-string'   type = lcl_lisp=>type_native value   = 'PROC_GET_OUTPUT_STRING' ).
+      define_value( symbol = 'eof-object'          type = lcl_lisp=>type_native value   = 'PROC_EOF_OBJECT' ).
+
+      define_value( symbol = 'char-alphabetic?'  type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_ALPHABETIC' ).
+      define_value( symbol = 'char-numeric?'     type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_NUMERIC' ).
+      define_value( symbol = 'char-whitespace?'  type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_WHITESPACE' ).
+      define_value( symbol = 'char-upper-case?'  type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_UPPER_CASE' ).
+      define_value( symbol = 'char-lower-case?'  type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_LOWER_CASE' ).
+
+      define_value( symbol = 'digit-value'       type = lcl_lisp=>type_native value   = 'PROC_DIGIT_VALUE' ).
+      define_value( symbol = 'char->integer'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_TO_INTEGER' ).
+      define_value( symbol = 'integer->char'     type = lcl_lisp=>type_native value   = 'PROC_INTEGER_TO_CHAR' ).
+      define_value( symbol = 'char-upcase'       type = lcl_lisp=>type_native value   = 'PROC_CHAR_UPCASE' ).
+      define_value( symbol = 'char-downcase'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_DOWNCASE' ).
+
+      define_value( symbol = 'char=?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_EQ' ).
+      define_value( symbol = 'char<?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_LT' ).
+      define_value( symbol = 'char>?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_GT' ).
+      define_value( symbol = 'char<=?'    type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_LE' ).
+      define_value( symbol = 'char>=?'    type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_GE' ).
+
+      define_value( symbol = 'char-ci=?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_EQ' ).
+      define_value( symbol = 'char-ci<?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_LT' ).
+      define_value( symbol = 'char-ci>?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_GT' ).
+      define_value( symbol = 'char-ci<=?'    type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_LE' ).
+      define_value( symbol = 'char-ci>=?'    type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_GE' ).
+
+      define_value( symbol = 'sql-query'         type = lcl_lisp=>type_native value   = 'PROC_SQL_QUERY' ).
+      define_value( symbol = 'define-query'      type = lcl_lisp=>type_native value   = 'PROC_SQL_PREPARE' ).
+
+      DATA lr_ref TYPE REF TO data.
+*     Define a value in the environment for SYST
+      GET REFERENCE OF syst INTO lr_ref.
+      set( symbol = 'ab-sy' element = lcl_lisp_new=>data( lr_ref ) ).
+
+    ENDMETHOD.
 
   ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
 
@@ -8013,7 +8106,7 @@ ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
           CHECK me->value EQ io_elem->value.
           result = true.
 
-"        WHEN lcl_lisp=>type_bytevector.
+          "        WHEN lcl_lisp=>type_bytevector.
 
         WHEN OTHERS.
           result = is_equivalent( io_elem ).
@@ -8394,9 +8487,7 @@ ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
     ENDMETHOD.
 
     METHOD boolean.
-      ro_elem = NEW lcl_lisp_boolean( ).
-      ro_elem->type = lcl_lisp=>type_boolean.
-      ro_elem->value = value.
+      ro_elem = NEW lcl_lisp_boolean( value ).
     ENDMETHOD.
 
     METHOD null.
@@ -8473,6 +8564,13 @@ ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
 
     ENDMETHOD.
 
+    DEFINE _throw_radix.
+      RAISE EXCEPTION TYPE lcx_lisp_exception
+        EXPORTING
+          message = &1
+          area    = 'Radix'.
+    END-OF-DEFINITION.
+
     METHOD hex_integer.
       DATA lv_text TYPE string VALUE '0000000000000000'. " 2x8 = 16
       DATA lv_len TYPE tv_int.
@@ -8488,10 +8586,7 @@ ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
         lv_hex = lv_text.
         rv_int = lv_hex.
       ELSE.
-        RAISE EXCEPTION TYPE lcx_lisp_exception
-          EXPORTING
-            message = `Invalid hexadecimal number`
-            area    = 'Radix'.
+        _throw_radix `Invalid hexadecimal number`.
       ENDIF.
     ENDMETHOD.
 
@@ -8533,10 +8628,7 @@ ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
       CLEAR rv_int.
       lv_text = value.
       IF lv_text CN '01234567'.
-        RAISE EXCEPTION TYPE lcx_lisp_exception
-          EXPORTING
-            message = `Invalid octal number`
-            area    = 'Radix'.
+        _throw_radix `Invalid octal number`.
       ENDIF.
 
       lv_index = lv_size = strlen( lv_text ).
@@ -8585,10 +8677,7 @@ ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
 
       lv_text = value.
       IF lv_text CN '01'.
-        RAISE EXCEPTION TYPE lcx_lisp_exception
-          EXPORTING
-            message = `Invalid binary number`
-            area    = 'Radix'.
+        _throw_radix `Invalid binary number`.
       ENDIF.
 
       lv_index = lv_size = strlen( lv_text ).
@@ -8989,9 +9078,8 @@ ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
 
       CASE type.
         WHEN lcl_lisp=>type_vector.
-          LOOP AT vector ASSIGNING <lo_elem>.
-            CHECK <lo_elem>->type = type_symbol
-              AND <lo_elem>->value = mv_label.
+          LOOP AT vector ASSIGNING <lo_elem> WHERE table_line->type EQ type_symbol
+                                               AND table_line->value = mv_label.
             <lo_elem> = me.
             RETURN.
           ENDLOOP.

@@ -328,6 +328,9 @@
        METHODS setup.
        METHODS teardown.
 
+       METHODS call_no_lambda FOR TESTING.
+
+       METHODS quote_2_args FOR TESTING.
        METHODS quote_19 FOR TESTING.
        METHODS quote_a FOR TESTING.
        METHODS quote_symbol_19 FOR TESTING.
@@ -413,6 +416,12 @@
        METHODS setup.
        METHODS teardown.
 
+       METHODS char_eq FOR TESTING.
+       METHODS char_lt FOR TESTING.
+       METHODS char_gt FOR TESTING.
+       METHODS char_le FOR TESTING.
+       METHODS char_ge FOR TESTING.
+
        METHODS char_ci_eq FOR TESTING.
        METHODS char_ci_lt FOR TESTING.
        METHODS char_ci_gt FOR TESTING.
@@ -443,8 +452,6 @@
        METHODS compare_string_ci_list_ge FOR TESTING.
 
        METHODS symbol_to_string FOR TESTING.
-       METHODS input_string_1 FOR TESTING.
-       METHODS output_string_1 FOR TESTING.
 
        METHODS char_alphabetic_1 FOR TESTING.
        METHODS char_alphabetic_2 FOR TESTING.
@@ -511,6 +518,9 @@
        METHODS cond_4 FOR TESTING.
        METHODS cond_5 FOR TESTING.
 
+       METHODS case_no_args FOR TESTING.
+       METHODS case_no_clauses FOR TESTING.
+
        METHODS case_1 FOR TESTING.
        METHODS case_2 FOR TESTING.
        METHODS case_3 FOR TESTING.
@@ -527,6 +537,7 @@
        METHODS when_1 FOR TESTING.
 
        METHODS unless_1 FOR TESTING.
+       METHODS unless_2 FOR TESTING.
 
    ENDCLASS.
 
@@ -539,6 +550,7 @@
 
        METHODS quasiquote_1 FOR TESTING.
        METHODS quasiquote_2 FOR TESTING.
+       METHODS quasiquote_2_args FOR TESTING.
        METHODS quasiquote_splicing_3 FOR TESTING.
        METHODS quasiquote_splicing_4 FOR TESTING.
        METHODS quasiquote_splicing_5 FOR TESTING.
@@ -603,6 +615,11 @@
        FREE mo_int.
      ENDMETHOD.                    "teardown
 
+     METHOD call_no_lambda.
+       scheme( code = '(1 2)'
+            expected = 'Eval: attempt to apply 1 - not a procedure' ).
+     ENDMETHOD.                    "quote_19
+
      METHOD quote_19.
        scheme( code = '(quote 19)'
             expected = '19' ).
@@ -612,6 +629,11 @@
        scheme( code = '(quote a)'
             expected = 'a' ).
      ENDMETHOD.                    "quote_a
+
+     METHOD quote_2_args.
+       scheme( code = '(quote a b)'
+            expected = 'Eval: quote can only take a single argument' ).
+     ENDMETHOD.
 
      METHOD quote_symbol_19.
        scheme( code = '''19'
@@ -1079,6 +1101,51 @@
                expected = '( "A" "a" )' ).
      ENDMETHOD.
 
+     METHOD char_eq.
+       scheme( code = `(char=? #\a #\a)`
+               expected = '#t' ).
+       scheme( code = `(char=? #\A #\a)`
+               expected = '#f' ).
+       scheme( code = `(char=? #\A)`
+               expected = 'Eval: char=? missing argument' ).
+     ENDMETHOD.
+
+     METHOD char_lt.
+       scheme( code = `(char<? #\a #\B)`
+               expected = '#f' ).
+       scheme( code = `(char<? #\A #\a)`
+               expected = '#t' ).
+       scheme( code = `(char<?)`
+               expected = 'Eval: char<? missing argument' ).
+     ENDMETHOD.
+
+     METHOD char_gt.
+       scheme( code = `(char>? #\B #\a)`
+               expected = '#f' ).
+       scheme( code = `(char>? #\b #\A)`
+               expected = '#t' ).
+       scheme( code = `(char>? #\C #\B #\A )`
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD char_le.
+       scheme( code = `(char<=? #\B #\T #\a #\b )`
+               expected = '#t' ).
+       scheme( code = `(char<=? #\B #\a)`
+               expected = '#t' ).
+       scheme( code = `(char<=? #\C)`
+               expected = 'Eval: char<=? missing argument' ).
+     ENDMETHOD.
+
+     METHOD char_ge.
+       scheme( code = `(char>=? #\b #\a #\V)`
+               expected = '#t' ).
+       scheme( code = `(char>=? #\e #\D #\B #\b)`
+               expected = '#f' ).
+       scheme( code = `(char>=? #\c #\b #\B)`
+               expected = '#t' ).
+     ENDMETHOD.
+
      METHOD char_ci_eq.
        scheme( code = `(char-ci=? #\A #\a)`
                expected = '#t' ).
@@ -1253,29 +1320,6 @@
                expected = '#f' ).
      ENDMETHOD.
 
-     METHOD input_string_1.
-       scheme( code = | (define p (open-input-string "(a . (b . (c . ()))) 34"))|
-               expected = 'p' ).
-       scheme( code = | (input-port? p)|
-               expected = '#t' ).
-       scheme( code = | (read p)|
-               expected = '( a b c )' ).
-       scheme( code = | (read p)|
-               expected = '34' ).
-       scheme( code = | (eof-object? (peek-char p))|
-               expected = '#t' ).
-     ENDMETHOD.
-
-     METHOD output_string_1.
-       scheme( code = |(let ((q (open-output-string))| &
-                         |      (x '(a b c)))| &
-                         |  (write (car x) q)| &
-                         |  (write (cdr x) q)| &
-                         |  (get-output-string q))|
-               expected = '"a( b c )"' ).
-     ENDMETHOD.
-
-
      METHOD char_alphabetic_1.
        scheme( code = '(char-alphabetic? #\A)'
                expected = '#t' ).
@@ -1412,6 +1456,75 @@
 
    ENDCLASS.
 
+   CLASS ltc_port DEFINITION INHERITING FROM ltc_interpreter
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PRIVATE SECTION.
+       METHODS setup.
+       METHODS teardown.
+
+       METHODS read_char_1 FOR TESTING.
+       METHODS read_char_2 FOR TESTING.
+       METHODS read_string_1 FOR TESTING.
+       METHODS read_string_2 FOR TESTING.
+       METHODS input_string_1 FOR TESTING.
+       METHODS output_string_1 FOR TESTING.
+
+   ENDCLASS.
+
+   CLASS ltc_port IMPLEMENTATION.
+
+     METHOD setup.
+       new_interpreter( ).
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
+
+     METHOD read_char_1.
+       scheme( code = |(read-char (open-input-string "char"))|
+               expected = '"c"' ).
+     ENDMETHOD.
+
+     METHOD read_char_2.
+       scheme( code = |(read-char (open-input-string ""))|
+               expected = '' ).  " <eof>
+     ENDMETHOD.
+
+     METHOD read_string_1.
+       scheme( code = |(read-string 50 (open-input-string ""))|
+               expected = '""' ).  " <eof>
+     ENDMETHOD.
+
+     METHOD read_string_2.
+       scheme( code = |(read-string 50 (open-input-string "the string"))|
+               expected = '"the string"' ).
+     ENDMETHOD.
+
+     METHOD input_string_1.
+       scheme( code = | (define p (open-input-string "(a . (b . (c . ()))) 34"))|
+               expected = 'p' ).
+       scheme( code = | (input-port? p)|
+               expected = '#t' ).
+       scheme( code = | (read p)|
+               expected = '( a b c )' ).
+       scheme( code = | (read p)|
+               expected = '34' ).
+       scheme( code = | (eof-object? (peek-char p))|
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD output_string_1.
+       scheme( code = |(let ((q (open-output-string))| &
+                         |      (x '(a b c)))| &
+                         |  (write (car x) q)| &
+                         |  (write (cdr x) q)| &
+                         |  (get-output-string q))|
+               expected = '"a( b c )"' ).
+     ENDMETHOD.
+
+   ENDCLASS.
+
    CLASS ltc_conditionals IMPLEMENTATION.
 
      METHOD setup.
@@ -1511,6 +1624,16 @@
                expected = |y| ).
      ENDMETHOD.
 
+     METHOD case_no_args.
+       scheme( code = |(case)|
+               expected = 'Eval: Incorrect input' ).
+     ENDMETHOD.
+
+     METHOD case_no_clauses.
+       scheme( code = |(case (* 2 3))|
+               expected = 'Eval: Incorrect input' ).
+     ENDMETHOD.
+
      METHOD case_1.
        scheme( code = |(case (* 2 3)| &
                          |      ((2 3 5 7) 'prime)| &
@@ -1585,6 +1708,12 @@
                          |(display "1")| &
                          |(display "2"))|
                expected = c_lisp_nil ).  " prints nothing
+     ENDMETHOD.
+
+     METHOD unless_2.
+       scheme( code = |(unless (= 1 2)| &
+                         |(+ 1 2) )|
+               expected = '3' ).
      ENDMETHOD.
 
    ENDCLASS.
@@ -1672,8 +1801,13 @@
        METHODS setup.
        METHODS teardown.
 
+       METHODS is_even FOR TESTING.
+       METHODS is_odd FOR TESTING.
+       METHODS is_negative FOR TESTING.
+
        METHODS is_complex FOR TESTING.
        METHODS is_real FOR TESTING.
+       METHODS is_real_1 FOR TESTING.
        METHODS is_rational FOR TESTING.
        METHODS is_integer FOR TESTING.
 
@@ -1688,6 +1822,10 @@
        METHODS exact_3 FOR TESTING.
        METHODS exact_4 FOR TESTING.
        METHODS exact_5 FOR TESTING.
+
+       METHODS exact_integer_1 FOR TESTING.
+       METHODS exact_integer_2 FOR TESTING.
+       METHODS exact_integer_3 FOR TESTING.
 
        METHODS inexact_1 FOR TESTING.
        METHODS inexact_2 FOR TESTING.
@@ -1710,14 +1848,41 @@
        FREE mo_int.
      ENDMETHOD.
 
+     METHOD is_even.
+       scheme( code = '(even? 3)'
+               expected = '#f' ).
+       scheme( code = '(even? 0)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_odd.
+       scheme( code = '(odd? 3)'
+               expected = '#t' ).
+       scheme( code = '(odd? 0)'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD is_negative.
+       scheme( code = '(negative? 3)'
+               expected = '#f' ).
+       scheme( code = '(negative? 0)'
+               expected = '#f' ).
+       scheme( code = '(negative? -1/3)'
+               expected = '#t' ).
+     ENDMETHOD.
+
      METHOD is_complex.
        scheme( code = '(complex? 3)'
                expected = '#t' ).
      ENDMETHOD.
 
      METHOD is_real.
-*      ;(real? #e1e10)
        scheme( code = '(real? 3)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_real_1.
+       scheme( code = '(real? #e1e10)'
                expected = '#t' ).
      ENDMETHOD.
 
@@ -1784,6 +1949,21 @@
      METHOD exact_5.
        scheme( code = '(exact? #e3.0)'
                expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD exact_integer_1.
+       scheme( code = '(exact-integer? 32)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD exact_integer_2.
+       scheme( code = '(exact-integer? 32.0)'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD exact_integer_3.
+       scheme( code = '(exact-integer? 32/5)'
+               expected = '#f' ).
      ENDMETHOD.
 
      METHOD inexact_1.
@@ -2038,17 +2218,17 @@
 
      METHOD math_sinh_1.
        code_test_f( code =  '(sinh 0.5)'
-                 expected = '0.52109530549374736162242562641149' ).
+                 expected = '0.52109530549374736162242562641149' ) ##LITERAL.
      ENDMETHOD.                    "math_sinh_1
 
      METHOD math_cosh_1.
        code_test_f( code =  '(cosh 1)'
-                 expected = '1.5430806348152437784779056207571' ).
+                 expected = '1.5430806348152437784779056207571' ) ##LITERAL.
      ENDMETHOD.                    "math_cosh_1
 
      METHOD math_tanh_1.
        code_test_f( code =  '(tanh 1)'
-                 expected = '0.76159415595576488811945828260479' ).
+                 expected = '0.76159415595576488811945828260479' ) ##LITERAL.
      ENDMETHOD.                    "math_tanh_1
 
      METHOD math_asinh.
@@ -2068,44 +2248,44 @@
 
      METHOD math_asin.
        code_test_f( code =  '(asin 1)'
-                 expected = '1.5707963267948966192313216916398' ).
+                 expected = '1.5707963267948966192313216916398' ) ##LITERAL.
      ENDMETHOD.                    "math_asin
 
      METHOD math_acos.
        code_test_f( code =  '(acos 0)'
-                 expected = '1.5707963267948966192313216916398' ).
+                 expected = '1.5707963267948966192313216916398' ) ##LITERAL.
      ENDMETHOD.                    "math_acos
 
      METHOD math_atan.
        code_test_f( code =  '(atan 1)'
-                 expected = '0.78539816339744830961566084581988' ).
+                 expected = '0.78539816339744830961566084581988' ) ##LITERAL.
      ENDMETHOD.                    "math_atan
 
      METHOD math_exp.
        code_test_f( code =  '(exp 2)'
-                 expected = '7.389056098930650227230427460575' ).
+                 expected = '7.389056098930650227230427460575' ) ##LITERAL.
      ENDMETHOD.                    "math_exp
 
      METHOD math_expt.
        scheme( code =  '(expt 2 10)'
                expected = '1024' ).
        code_test_f( code =  '(expt 2 0.5)'
-                 expected = '1.4142135623730950488016887242097' ).
+                 expected = '1.4142135623730950488016887242097' ) ##LITERAL.
      ENDMETHOD.                    "math_expt
 
      METHOD math_expt_1.
        scheme( code =  '(exp 2 10)'
-               expected = 'Eval: ( 2 10 ) Parameter mismatch' ).
+               expected = 'Eval: ( 2 10 ) Parameter mismatch' ) ##LITERAL.
      ENDMETHOD.                    "math_expt_1
 
      METHOD math_sqrt.
        code_test_f( code =  '(sqrt 2)'
-                 expected = '1.4142135623730950488016887242097' ).
+                 expected = '1.4142135623730950488016887242097' ) ##LITERAL.
      ENDMETHOD.                    "math_sqrt
 
      METHOD math_log.
        code_test_f( code =  '(log 7.389056)'
-                 expected = '1.999999986611192' ).
+                 expected = '1.999999986611192' ) ##LITERAL.
      ENDMETHOD.                    "math_log
 
      METHOD math_floor.
@@ -4347,6 +4527,11 @@
      METHOD quasiquote_2.
        scheme( code = |(let ((name 'a)) `(list ,name ',name))|
                expected = |( list a ' a )| ).
+     ENDMETHOD.
+
+     METHOD quasiquote_2_args.
+       scheme( code = '(quasiquote a b)'
+            expected = 'Eval: quasiquote can only take a single argument' ).
      ENDMETHOD.
 
      METHOD quasiquote_splicing_3.
