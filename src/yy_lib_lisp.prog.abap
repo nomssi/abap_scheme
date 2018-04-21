@@ -499,6 +499,9 @@
       super->constructor( ).
       type = lcl_lisp=>type_char.
       me->value = value.
+      IF value EQ space.   " Special treatment for space,
+        me->value = ` `.   " see https://blogs.sap.com/2016/08/10/trailing-blanks-in-character-string-processing/
+      ENDIF.
       INSERT VALUE #( char = value
                       elem = me ) INTO TABLE char_table.
     ENDMETHOD.
@@ -1420,12 +1423,13 @@
   CLASS lcl_parser DEFINITION.
     PUBLIC SECTION.
       TYPES tt_element TYPE STANDARD TABLE OF REF TO lcl_lisp WITH DEFAULT KEY.
+      TYPES tv_char2 TYPE c LENGTH 2.
       CONSTANTS:
         c_lisp_dot    TYPE char1 VALUE '.',
         c_open_paren  TYPE char1 VALUE '(',
         c_close_paren TYPE char1 VALUE ')',
         c_lisp_equal  TYPE char1 VALUE '=',
-        c_lisp_x      TYPE char1 VALUE 'x'.
+        c_lisp_xX     TYPE tv_char2 VALUE 'xX'.
       CONSTANTS:
         c_escape_char    TYPE char1 VALUE '\',
         c_text_quote     TYPE char1 VALUE '"',
@@ -1441,12 +1445,11 @@
         c_open_bracket   TYPE char1 VALUE '[',
         c_close_bracket  TYPE char1 VALUE ']'.
       CONSTANTS:
-        c_number_exact   TYPE c VALUE 'e',
-        c_number_inexact TYPE c VALUE 'i',
-        c_number_octal   TYPE c VALUE 'o',
-        c_number_binary  TYPE c VALUE 'b',
-        c_number_decimal TYPE c VALUE 'd',
-        c_number_hex     TYPE c VALUE 'x'.
+        c_number_exact   TYPE tv_char2 VALUE 'eE',
+        c_number_inexact TYPE tv_char2 VALUE 'iI',
+        c_number_octal   TYPE tv_char2 VALUE 'oO',
+        c_number_binary  TYPE tv_char2 VALUE 'bB',
+        c_number_decimal TYPE tv_char2 VALUE 'dD'.
 
       METHODS:
         constructor,
@@ -2128,7 +2131,7 @@
     ENDMETHOD.
 
     METHOD peek_bytevector.
-      CONSTANTS c_prefix TYPE char03 VALUE 'u8('.
+      CONSTANTS c_prefix TYPE char03 VALUE 'U8('.
       DATA lv_token TYPE string.
 
       DATA(lv_idx) = index.
@@ -2137,7 +2140,7 @@
         lv_idx = lv_idx + 1.
 
         IF lv_idx < length.
-          lv_token = lv_token && code+lv_idx(1).
+          lv_token = to_upper( lv_token ) && code+lv_idx(1).
         ELSE.
           RETURN.
         ENDIF.
@@ -2300,7 +2303,7 @@
               pchar = lcl_lisp=>char_return->value+0(1).
               next_char( ).
 
-            WHEN c_lisp_x.      " hex scalar value terminated by semi-colon ;
+            WHEN c_lisp_xX+0(1) OR c_lisp_xX+1(1).      " hex scalar value terminated by semi-colon ;
               DATA lv_xstr TYPE string.
               DATA lo_char TYPE REF TO lcl_lisp_char.
               next_char( ).
@@ -2424,7 +2427,7 @@
             WHEN c_escape_char.  " Character constant  #\a
               next_char( ).      " skip #
               next_char( ).      " skip \
-              IF char EQ c_lisp_x.
+              IF char EQ c_lisp_xX+0(1) OR char EQ c_lisp_xX+1(1).
                 next_char( ).      " skip x
                 match_atom( CHANGING cv_val = sval ).
                 IF strlen( sval ) LE 4.
@@ -2467,7 +2470,7 @@
 *           Notation for numbers #e (exact) #i (inexact) #b (binary) #o (octal) #d (decimal) #x (hexadecimal)
 *           further, instead of exp:  s (short), f (single), d (double), l (long)
 *           positive infinity, negative infinity -inf / -inf.0, NaN +nan.0, positive zero, negative zero
-            WHEN c_number_exact.   "#e (exact)
+            WHEN c_number_exact+0(1) OR c_number_exact+1(1).   "#e (exact)
               next_char( ).        " skip #
               next_char( ).        " skip e
               match_atom( CHANGING cv_val = sval ).
@@ -2475,7 +2478,7 @@
                                               iv_exact = abap_true ).
               RETURN.
 
-            WHEN c_number_inexact. "#i (inexact)
+            WHEN c_number_inexact+0(1) OR c_number_inexact+1(1). "#i (inexact)
               next_char( ).      " skip #
               next_char( ).      " skip i
               match_atom( CHANGING cv_val = sval ).
@@ -2483,28 +2486,28 @@
                                               iv_exact = abap_false ).
               RETURN.
 
-            WHEN c_number_octal.   "#o (octal)
+            WHEN c_number_octal+0(1) OR c_number_octal+1(1).     "#o (octal)
               next_char( ).      " skip #
               next_char( ).      " skip o
               match_atom( CHANGING cv_val = sval ).
               element = lcl_lisp_new=>octal( sval ).
               RETURN.
 
-            WHEN c_number_binary.   "#b (octal)
+            WHEN c_number_binary+0(1) OR c_number_binary+1(1).  "#b (binary)
               next_char( ).      " skip #
               next_char( ).      " skip b
               match_atom( CHANGING cv_val = sval ).
               element = lcl_lisp_new=>binary( sval ).
               RETURN.
 
-            WHEN c_number_decimal. "#d (decimal)
+            WHEN c_number_decimal+0(1) OR c_number_decimal+1(1). "#d (decimal)
               next_char( ).      " skip #
               next_char( ).      " skip d
               match_atom( CHANGING cv_val = sval ).
               element = lcl_lisp_new=>number( sval ).
               RETURN.
 
-            WHEN c_number_hex. "#x (hexadecimal)
+            WHEN c_lisp_xX+0(1) OR c_lisp_xX+1(1).                "#x (hexadecimal)
               next_char( ).      " skip #
               next_char( ).      " skip x
               match_atom( CHANGING cv_val = sval ).
@@ -5928,7 +5931,7 @@
 
     METHOD proc_make_string.
       DATA lv_len TYPE tv_index.
-      DATA lv_char TYPE c LENGTH 1.
+      DATA lv_char TYPE char01.
       DATA lv_text TYPE string.
 
       _validate: list.
@@ -5942,7 +5945,7 @@
       ENDIF.
 
       DO lv_len TIMES.
-        lv_text = lv_text && lv_char.
+        CONCATENATE lv_text lv_char INTO lv_text RESPECTING BLANKS.
       ENDDO.
       result = lcl_lisp_new=>string( lv_text ).
     ENDMETHOD.
@@ -8582,7 +8585,10 @@
       ELSE.
         lv_text = value.
       ENDIF.
-      IF lv_text CO '0123456789abcdefABCDEF'.
+      IF lv_text CA 'abcdef'.
+        lv_text = to_upper( lv_text ).
+      ENDIF.
+      IF lv_text CO '0123456789ABCDEF'.
         lv_hex = lv_text.
         rv_int = lv_hex.
       ELSE.

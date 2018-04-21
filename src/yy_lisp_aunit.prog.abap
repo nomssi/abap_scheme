@@ -1255,6 +1255,10 @@
                expected = '#f' ).
        scheme( code = |(string=? "a" "as" "a")|
                expected = '#f' ).
+       scheme( code = |(string=? "mom" "mom")|
+               expected = '#t' ).
+       scheme( code = |(string=? "Mom and Dad" "mom and dad")|
+               expected = '#f' ).
      ENDMETHOD.
 
      METHOD compare_string_list_lt.
@@ -1262,12 +1266,18 @@
                expected = '#t' ).
        scheme( code = |(string<? "a" "bas" "bas")|
                expected = '#f' ).
+       scheme( code = |(string<? "mom" "mommy")|
+               expected = '#t' ).
+       scheme( code = |(string<? "a" "b" "c")|
+               expected = '#t' ).
      ENDMETHOD.
 
      METHOD compare_string_list_gt.
        scheme( code = |(string>? "Tapple" "Mapple" "Apple" )|
                expected = '#t' ).
        scheme( code = |(string>? "tza" "tas" "zca")|
+               expected = '#f' ).
+       scheme( code = |(string>? "Dad" "Dad")|
                expected = '#f' ).
      ENDMETHOD.
 
@@ -1290,6 +1300,10 @@
                expected = '#t' ).
        scheme( code = |(string-ci=? "a" "as" "a")|
                expected = '#f' ).
+       scheme( code = |(string-ci=? "Mom and Dad" "mom and dad")|
+               expected = '#t' ).
+       scheme( code = |(string-ci=? "Strasse" "strasse")|
+               expected = '#t' ).
      ENDMETHOD.
 
      METHOD compare_string_ci_list_lt.
@@ -1304,6 +1318,8 @@
                expected = '#t' ).
        scheme( code = |(string-ci>? "tza" "tas" "zca")|
                expected = '#f' ).
+       scheme( code = |(string-ci>? "N" "m" "L" "k")|
+               expected = '#t' ).
      ENDMETHOD.
 
      METHOD compare_string_ci_list_le.
@@ -1311,6 +1327,8 @@
                expected = '#t' ).
        scheme( code = |(string-ci<=? "a" "BSA" "bsa" "bas")|
                expected = '#f' ).
+       scheme( code = |(string-ci<=? "say what" "Say What!?")|
+               expected = '#t' ).
      ENDMETHOD.
 
      METHOD compare_string_ci_list_ge.
@@ -1987,6 +2005,8 @@
      ENDMETHOD.
 
      METHOD binary_1.
+       scheme( code = '#b100101'
+               expected = '37' ).
        scheme( code = '(eq? #b101001 #o51)'
                expected = '#t' ).
        scheme( code = '(eq? #b1010111100 #o1274)'
@@ -2008,17 +2028,21 @@
                expected = '0.1640625' ).
        scheme( code = '(eq? #o1057 #b001000101111)'
                expected = '#t' ).
-
+       scheme( code = '(eq? #b0011111110100101 #o037645)'
+               expected = '#t' ).
      ENDMETHOD.
 
      METHOD hexadecimal_1.
        scheme( code = '(eq? #o1057 #x22F)'
                expected = '#t' ).
-       scheme( code = '(eq? #b0011111110100101 #o037645)'
-               expected = '#t' ).
-
-       scheme( code = '#b100101'
-               expected = '37' ).
+       scheme( code = '#x1C'
+               expected = '28' ).
+       scheme( code = '#x1c'
+               expected = '28' ).
+       scheme( code = '#x1a'
+               expected = '26' ).
+       scheme( code = '#X1a'
+               expected = '26' ).
      ENDMETHOD.
 
 
@@ -2565,8 +2589,9 @@
 
        METHODS list_shared_1 FOR TESTING.
 
-       METHODS make_string_1      FOR TESTING.
-       METHODS make_string_2      FOR TESTING.
+       METHODS make_string_error   FOR TESTING.
+       METHODS make_string_3a      FOR TESTING.
+       METHODS make_string_blanks3 FOR TESTING.
        METHODS string_to_list_1   FOR TESTING.
        METHODS string_to_list_2   FOR TESTING.
        METHODS string_to_list_3   FOR TESTING.
@@ -3195,14 +3220,19 @@
                expected = '( 2 )' ).
      ENDMETHOD.
 
-     METHOD make_string_1.
+     METHOD make_string_error.
        scheme( code = |(make-string 3 "a")|
                expected = 'Eval: "a" is not a char in make-string' ).
      ENDMETHOD.
 
-     METHOD make_string_2.
+     METHOD make_string_3a.
        scheme( code = '(make-string 3 #\a)'
                expected = '"aaa"' ).
+     ENDMETHOD.
+
+     METHOD make_string_blanks3.
+       scheme( code = '(make-string 3 #\space)'
+               expected = '"   "' ).
      ENDMETHOD.
 
      METHOD string_to_list_1.
