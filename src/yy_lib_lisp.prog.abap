@@ -5511,10 +5511,6 @@
       result = true.
     ENDMETHOD.                    "proc_is_alist
 
-    METHOD proc_abs.
-      _math abs '[abs]'.
-    ENDMETHOD.                    "proc_abs
-
     METHOD proc_sin.
       _trigonometric sin '[sin]'.
     ENDMETHOD.                    "proc_sin
@@ -5634,16 +5630,33 @@
       _math sqrt '[sqrt]'.
     ENDMETHOD.                    "proc_sqrt
 
+  DEFINE _math_int.
+    DATA carry TYPE tv_real.
+    DATA cell TYPE REF TO lcl_lisp.
+    DATA lo_rat TYPE REF TO lcl_lisp_rational.
+    DATA lo_int TYPE REF TO lcl_lisp_integer.
+    DATA lo_real TYPE REF TO lcl_lisp_real.
+
+    result = nil.
+    _validate list.
+    TRY.
+        _get_number carry list->car &2.
+        _is_last_param list.
+        result = lcl_lisp_new=>number( &1( carry ) ).
+    _catch_arithmetic_error.
+    ENDTRY.
+  END-OF-DEFINITION.
+
     METHOD proc_floor.
-      _math floor '[floor]'.
+      _math_int floor '[floor]'.
     ENDMETHOD.                    "proc_floor
 
     METHOD proc_ceiling.
-      _math ceil '[ceil]'.
+      _math_int ceil '[ceil]'.
     ENDMETHOD.                    "proc_ceiling
 
     METHOD proc_truncate.
-      _math trunc '[truncate]'.
+      _math_int trunc '[truncate]'.
     ENDMETHOD.                    "proc_truncate
 
     METHOD proc_round.
@@ -5662,6 +5675,37 @@
           _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_round
+
+    METHOD proc_abs.
+      DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+
+      result = nil.
+      _validate list.
+      _is_last_param list.
+
+      TRY.
+          _validate list->car.
+          CASE list->car->type.
+            WHEN lcl_lisp=>type_integer.
+              lo_int ?= list->car.
+              result = lcl_lisp_new=>integer( abs( lo_int->integer ) ).
+            WHEN lcl_lisp=>type_real.
+              lo_real ?= list->car.
+              result = lcl_lisp_new=>integer( abs( lo_real->real ) ).
+            WHEN lcl_lisp=>type_rational.
+              lo_rat ?= list->car.
+              result = lcl_lisp_new=>rational( nummer = abs( lo_rat->integer )
+                                               denom = lo_rat->denominator ).
+*            WHEN lcl_lisp=>type_complex.
+            WHEN OTHERS.
+              throw( |{ list->car->to_string( ) } is not a number in [abs]| ).
+          ENDCASE.
+
+      _catch_arithmetic_error.
+      ENDTRY.
+    ENDMETHOD.                    "proc_abs
 
     METHOD proc_remainder.
       DATA numerator TYPE tv_real.

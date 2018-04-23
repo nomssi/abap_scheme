@@ -3501,6 +3501,11 @@
                expected = |12| ).
        scheme( code = |(abs 0)|
                expected = |0| ).
+
+       scheme( code = |(equal? 7 (abs 7))|
+               expected = '#t' ).
+       scheme( code = |(equal? 0 (abs 0))|
+               expected = '#t' ).
      ENDMETHOD.                    "abs
 
    ENDCLASS.                    "ltc_library_function IMPLEMENTATION
@@ -3822,6 +3827,7 @@
        METHODS compa_equal_8 FOR TESTING.
        METHODS compa_equal_9 FOR TESTING.
        METHODS compa_equal_10 FOR TESTING.
+       METHODS compa_equal_11 FOR TESTING.
 
        METHODS compa_if_1 FOR TESTING.
        METHODS compa_if_2 FOR TESTING.
@@ -3993,6 +3999,11 @@
        scheme( code = |(equal? (lambda (x) x)| &
                       |        (lambda (y) y))|
                expected = '#f' ).   " unspecified
+     ENDMETHOD.
+
+     METHOD compa_equal_11.
+       scheme( code = |(equal? 7 (abs -7))|
+               expected = '#t' ).
      ENDMETHOD.
 
      METHOD compa_if_1.
