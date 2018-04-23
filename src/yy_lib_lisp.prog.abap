@@ -3478,6 +3478,16 @@
                     ENDIF.
 
                   WHEN 'begin'.
+                    "1st form of begin can appear as part of a <body>,
+                      " or at the outermost level of a <program>,
+                      " or at the REPL,
+                      " or directly nested in a begin that is itself of this form.
+                    " It causes the contained expressions and deﬁnitions to be
+                    " evaluated exactly as if the enclosing begin construct were not present.
+                    " (begin) is valid, and (begin (begin)) is valid
+
+                    "2nd form of begin: used as an ordinary expression.
+                    " (begin) is not valid
                     lo_elem = lr_tail.
                     _tail_sequence.
 
