@@ -14,12 +14,18 @@ CONSTANTS:
 
 DATA g_ok_code TYPE syucomm.
 
+*----------------------------------------------------------------------*
+*       INTERFACE lif_unit_test IMPLEMENTATION
+*----------------------------------------------------------------------*
+INTERFACE lif_unit_test.
+ENDINTERFACE.                    "lif_unit_test IMPLEMENTATION
+
 TYPES: BEGIN OF ts_settings,
          stack      TYPE string_table,
          new_editor TYPE flag,
        END OF ts_settings.
 
-CLASS lcl_stack DEFINITION.
+CLASS lcl_stack DEFINITION FRIENDS lif_unit_test.
   PUBLIC SECTION.
     TYPES tv_data TYPE string.
 
@@ -112,44 +118,37 @@ ENDCLASS.                    "lcl_editor DEFINITION
 CLASS lcl_stack IMPLEMENTATION.
 
   METHOD push.
-    DATA lo_node TYPE REF TO ts_node.
-    DATA lo_last TYPE REF TO ts_node.
+    DATA lr_new TYPE REF TO ts_node.
+    DATA ls_node TYPE ts_node.
+
+    CREATE DATA lr_new.
+    lr_new->data = iv_key.
 
     IF mr_top IS BOUND.
-      lo_last = mr_top.
-      mr_top = NEW ts_node( data = iv_key
-                            prev = lo_last->prev
-                            next = lo_last ).
-      IF lo_last->prev IS BOUND.
-        lo_node ?= lo_last->prev.
-        lo_node->next = mr_top.
+      lr_new->prev = mr_top.
+      IF mr_top->next IS BOUND.
+        lr_new->next = mr_top->next.
       ENDIF.
-      lo_last->prev = mr_top.
-    ELSE.
-      mr_top = NEW ts_node( data = iv_key
-                            next = mr_top ).
+      mr_top->next = lr_new.
     ENDIF.
+    mr_top = lr_new.
   ENDMETHOD.
-
-*  METHOD pop.
-*    CLEAR rv_data.
-*    CHECK mr_top IS BOUND.
-*    rv_data = mr_top->data.
-*    mr_top ?= mr_top->next.
-*  ENDMETHOD.
 
   METHOD previous.
     CLEAR rv_data.
     CHECK mr_top IS BOUND.
+    IF mr_top->prev IS BOUND.
+      mr_top ?= mr_top->prev.
+    ENDIF.
     rv_data = mr_top->data.
-    CHECK mr_top->next IS BOUND.
-    mr_top ?= mr_top->next.
   ENDMETHOD.
 
   METHOD next.
     CLEAR rv_data.
-    CHECK mr_top IS BOUND AND mr_top->prev IS BOUND.
-    mr_top ?= mr_top->prev.
+    CHECK mr_top IS BOUND.
+    IF mr_top->next IS BOUND.
+      mr_top ?= mr_top->next.
+    ENDIF.
     rv_data = mr_top->data.
   ENDMETHOD.
 
@@ -158,7 +157,8 @@ CLASS lcl_stack IMPLEMENTATION.
 *  ENDMETHOD.
 
   METHOD deserialize.
-    LOOP AT it_string INTO DATA(lv_string).
+    DATA lv_string TYPE string.
+    LOOP AT it_string INTO lv_string.
       push( lv_string ).
     ENDLOOP.
   ENDMETHOD.
@@ -168,6 +168,11 @@ CLASS lcl_stack IMPLEMENTATION.
 
     CLEAR rt_string.
     lr_node = mr_top.
+*   Find first entry
+    WHILE lr_node IS BOUND AND lr_node->prev IS BOUND.
+      lr_node ?= lr_node->prev.
+    ENDWHILE.
+
     WHILE lr_node IS BOUND.
       APPEND lr_node->data TO rt_string.
       lr_node ?= lr_node->next.
@@ -302,17 +307,11 @@ CLASS lcl_configuration DEFINITION CREATE PRIVATE.
           mv_mode_txt TYPE flag.
     METHODS dialog.
     CLASS-METHODS get_java_path RETURNING VALUE(rv_fullpath) TYPE string.
-    CLASS-METHODS get_registry_value IMPORTING iv_key          TYPE string
-                                               iv_value        TYPE string
-                                     EXPORTING ev_subrc        TYPE sysubrc
-                                     RETURNING VALUE(rv_value) TYPE string.
+    CLASS-METHODS get_registry_value IMPORTING iv_key        TYPE string
+                                               iv_value      TYPE string
+                                     EXPORTING ev_subrc      TYPE sysubrc
+                                               ev_value      TYPE string.
 ENDCLASS.
-
-*----------------------------------------------------------------------*
-*       INTERFACE lif_unit_test IMPLEMENTATION
-*----------------------------------------------------------------------*
-INTERFACE lif_unit_test.
-ENDINTERFACE.                    "lif_unit_test IMPLEMENTATION
 
 CLASS lcl_dot_diagram DEFINITION.
   PUBLIC SECTION.
@@ -558,8 +557,9 @@ CLASS lcl_ide IMPLEMENTATION.
 
   METHOD graphics.
     DATA lx_root TYPE REF TO cx_root.
+    DATA code TYPE string.
     TRY.
-        DATA(code) = mi_source->to_string( ).
+        code = mi_source->to_string( ).
         CHECK code IS NOT INITIAL.
 
         sexpr_viewer( mo_int->parse( code ) ).
@@ -570,10 +570,14 @@ CLASS lcl_ide IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD sexpr_viewer.
-    DATA(ls_cfg) = lcl_configuration=>get( ).
+    DATA ls_cfg TYPE ts_diagram_config.
+    DATA lo_uml TYPE REF TO lcl_plant_uml.
 
-    NEW lcl_plant_uml( lcl_dot_diagram=>new( is_config = ls_cfg
-                          )->generate( it_elem = it_elem ) )->output( ls_cfg ).
+    ls_cfg = lcl_configuration=>get( ).
+
+    CREATE OBJECT lo_uml EXPORTING
+      iv_diagram = lcl_dot_diagram=>new( is_config = ls_cfg )->generate( it_elem = it_elem ).
+    lo_uml->output( ls_cfg ).
   ENDMETHOD.
 
   METHOD graph_config.
@@ -606,9 +610,11 @@ CLASS lcl_ide IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD display.
+    DATA lo_table TYPE REF TO lcl_lisp_table.
     CASE element->type.
       WHEN lcl_lisp=>type_abap_table.
-        view_table( CAST lcl_lisp_table( element ) ).
+        lo_table ?= element.
+        view_table( lo_table ).
 
       WHEN OTHERS.
         super->display( element ).
@@ -633,9 +639,12 @@ CLASS lcl_ide IMPLEMENTATION.
   ENDMETHOD.                    "first_output
 
   METHOD evaluate.
+    DATA code TYPE string.
+    DATA response TYPE string.
+    DATA lx_root TYPE REF TO cx_root.
     TRY.
-        DATA(code) = mi_source->to_string( ).
-        DATA(response) = mo_int->eval_repl( code ).
+        code = mi_source->to_string( ).
+        response = mo_int->eval_repl( code ).
 
         mo_output->append_source( code ).
         mo_console->append_source( response ).
@@ -643,7 +652,7 @@ CLASS lcl_ide IMPLEMENTATION.
         mi_source->push_text( ).
         mi_source->update_status( |[ { mo_int->runtime } µs ] { response }| ).
 
-      CATCH cx_root INTO DATA(lx_root).
+      CATCH cx_root INTO lx_root.
         response = lx_root->get_text( ).
         mi_source->update_status( response ).
     ENDTRY.
@@ -660,24 +669,25 @@ CLASS lcl_ide IMPLEMENTATION.
              user TYPE syuname,
              time TYPE syuzeit,
            END OF ts_header.
-    DATA(header) = VALUE ts_header( user = sy-uname
-                                    time = sy-uzeit ).
+    DATA header TYPE ts_header.
+    header-user = sy-uname.
+    header-time = sy-uzeit.
     gv_lisp_trace = abap_true.
-    cl_demo_output=>begin_section( `ABAP LISP Workbench` ).
-    cl_demo_output=>write( header ).
+    lcl_demo_output=>begin_section( `ABAP LISP Workbench` ).
+    lcl_demo_output=>write( header ).
     " cl_demo_output=>set_mode( cl_demo_output=>text_mode  ).
 
-    cl_demo_output=>begin_section( `Scheme Code` ).
-    cl_demo_output=>write( mi_source->to_string( ) ).
+    lcl_demo_output=>begin_section( `Scheme Code` ).
+    lcl_demo_output=>write( mi_source->to_string( ) ).
 
-    cl_demo_output=>begin_section( `Trace Output` ).
+    lcl_demo_output=>begin_section( `Trace Output` ).
 
 *   Run
     evaluate( ).
 
     gv_lisp_trace = abap_false.
 
-    cl_demo_output=>display( ).
+    lcl_demo_output=>display( ).
 
   ENDMETHOD.
 
@@ -774,11 +784,12 @@ CLASS lcl_container IMPLEMENTATION.
 
   METHOD constructor.
 *   Splitter Container
-    mo_splitter_h = NEW #( link_dynnr = '0100'
-                            link_repid = sy-repid
-                            parent     = cl_gui_container=>screen0
-                            rows       = 1
-                            columns    = 2 ).
+    CREATE OBJECT mo_splitter_h
+      EXPORTING link_dynnr = '0100'
+                link_repid = sy-repid
+                parent     = cl_gui_container=>screen0
+                rows       = 1
+                columns    = 2.
     mo_splitter_h->set_border( border = cl_gui_cfw=>false ).
 
     mo_splitter_h->set_column_mode( mode = mo_splitter_h->mode_absolute ).
@@ -788,18 +799,20 @@ CLASS lcl_container IMPLEMENTATION.
                                              column = 1 ).
     mo_right = mo_splitter_h->get_container( row = 1
                                               column = 2 ).
-    mo_splitter_v_h = NEW #( parent  = mo_right
-                              rows    = 2
-                              columns = 1 ).
+    CREATE OBJECT mo_splitter_v_h
+      EXPORTING parent  = mo_right
+                rows    = 2
+                columns = 1.
     mo_splitter_v_h->set_border( border = cl_gui_cfw=>false ).
     mo_splitter_v_h->set_row_mode( mode = mo_splitter_v_h->mode_relative ).
 
     mo_output  = mo_splitter_v_h->get_container( row = 1 column = 1 ).
     mo_console = mo_alv = mo_splitter_v_h->get_container( row = 2 column = 1 ).
 
-    mo_splitter_v = NEW #( parent  = mo_left
-                           rows    = 2
-                           columns = 1 ).
+    CREATE OBJECT mo_splitter_v
+      EXPORTING parent  = mo_left
+                rows    = 2
+                columns = 1.
     mo_splitter_v->set_border( border = cl_gui_cfw=>false ).
     mo_splitter_v->set_row_mode( mode = mo_splitter_v->mode_relative ).
 
@@ -832,7 +845,12 @@ CLASS lcl_editor IMPLEMENTATION.
     super->constructor( io_container ).
     set_comments_string( c_comments_string ).
     set_highlight_comments_mode( ).
-    set_toolbar_mode( SWITCH #( iv_toolbar WHEN abap_true THEN 1 ELSE 0 ) ).
+    IF iv_toolbar EQ abap_true.
+      mode = 1.
+    ELSE.
+      mode = 0.
+    ENDIF.
+    set_toolbar_mode( mode ).
     cl_gui_cfw=>flush( ).
 
     IF iv_read_only EQ abap_true.
@@ -844,7 +862,7 @@ CLASS lcl_editor IMPLEMENTATION.
     set_statusbar_mode( mode ).
 *   Work around to avoid NO DATA dump on first read
     lif_source_editor~clear( ).
-    mo_stack = NEW #( ).
+    CREATE OBJECT mo_stack.
   ENDMETHOD.                    "constructor
 
   METHOD lif_source_editor~clear.
@@ -873,11 +891,14 @@ CLASS lcl_editor IMPLEMENTATION.
   ENDMETHOD.                    "to_string
 
   METHOD lif_source_editor~update_status.
-    set_status_text( CONV char72( iv_string ) ).
+    DATA lv_text TYPE char72.
+    lv_text = iv_string.
+    set_status_text( lv_text ).
   ENDMETHOD.                    "update_status
 
   METHOD lif_source_editor~push_text.
-    DATA(code) = lif_source_editor~to_string( ).
+    DATA code TYPE string.
+    code = lif_source_editor~to_string( ).
     CHECK code NE space.
     mo_stack->push( code ).
     lif_source_editor~clear( ).
@@ -944,13 +965,18 @@ CLASS lcl_source IMPLEMENTATION.
         WHEN 4.
           exception_name = 'ERROR_CNTL_INIT'.
       ENDCASE.
-      RAISE EXCEPTION TYPE cx_coverage_editor_problem
-        EXPORTING
-          exception_name = exception_name.
+      RAISE EXCEPTION TYPE cx_coverage_api_adapter.
+*        EXPORTING
+*          exception_name = exception_name.
     ENDIF.
 
     set_source_type( c_source_type ).
-    set_toolbar_mode( SWITCH #( iv_toolbar WHEN abap_true THEN 1 ELSE 0 ) ).
+    IF iv_toolbar EQ abap_true.
+      mode = 1.
+    ELSE.
+      mode = 0.
+    ENDIF.
+    set_toolbar_mode( mode ).
     cl_gui_cfw=>flush( ).
 
     IF iv_read_only EQ abap_true.
@@ -976,7 +1002,7 @@ CLASS lcl_source IMPLEMENTATION.
 *   Work around to avoid NO DATA dump on first read
     lif_source_editor~clear( ).
 
-    mo_stack = NEW #( ).
+    CREATE OBJECT mo_stack.
   ENDMETHOD.                    "constructor
 
   METHOD lif_source_editor~set_focus.
@@ -1014,7 +1040,8 @@ CLASS lcl_source IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD lif_source_editor~push_text.
-    DATA(code) = lif_source_editor~to_string( ).
+    DATA code TYPE string.
+    code = lif_source_editor~to_string( ).
     CHECK code NE space.
     mo_stack->push( code ).
     lif_source_editor~clear( ).
@@ -1069,12 +1096,14 @@ CLASS lcl_plant_uml IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD output.
+    DATA lo_name TYPE REF TO lcl_file_name.
+
     CASE is_cfg-output_mode.
       WHEN lcl_configuration=>c_mode_url.
         show_html( |<img src="{ to_url( ) }"/>\n{ source( is_cfg-display_source ) }| ).
 
       WHEN lcl_configuration=>c_mode_exe.
-        DATA(lo_name) = lcl_file_name=>new( lcl_file=>c_mode_txt ).
+        lo_name = lcl_file_name=>new( lcl_file=>c_mode_txt ).
         IF lcl_file=>download( iv_data = to_xstring( mv_diagram )
                                io_name = lo_name ) IS INITIAL.
           show_html( |<img src="{ to_png( io_name = lo_name
@@ -1105,8 +1134,10 @@ CLASS lcl_plant_uml IMPLEMENTATION.
   ENDMETHOD.                    "to_url
 
   METHOD to_xstring.
-    cl_abap_conv_out_ce=>create( encoding = 'UTF-8' )->convert( EXPORTING data = iv_string
-                                                                IMPORTING buffer = rv_xstring ).
+    DATA lo_conv TYPE REF TO cl_abap_conv_out_ce.
+    lo_conv = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
+    lo_conv->convert( EXPORTING data = iv_string
+                      IMPORTING buffer = rv_xstring ).
   ENDMETHOD.                    "to_xstring
 
   METHOD parameter_string.
@@ -1139,14 +1170,14 @@ ENDCLASS.
 CLASS lcl_configuration IMPLEMENTATION.
 
   METHOD class_constructor.
-    gs_cfg = VALUE #( java_appl = get_java_path( )
-                      local_path = `C:\Temp\Dokumente\UML\`                           " PlantUML jar file and output path
-                      java_jar = `C:\Temp\Dokumente\UML\plantuml.jar`
-                      server_url = `http://www.plantuml.com/plantuml/img/` ##NO_TEXT  " PlantUML server URL
-                      output_mode = c_mode_url
-                      skip_dialog = space
-                      scale = c_default_scale
-                      display_source = abap_false ).
+    gs_cfg-java_appl = get_java_path( ).
+    gs_cfg-local_path = `C:\Temp\Dokumente\UML\`.                           " PlantUML jar file and output path
+    gs_cfg-java_jar = `C:\Temp\Dokumente\UML\plantuml.jar`.
+    gs_cfg-server_url = `http://www.plantuml.com/plantuml/img/` ##NO_TEXT.  " PlantUML server URL
+    gs_cfg-output_mode = c_mode_url.
+    gs_cfg-skip_dialog = space.
+    gs_cfg-scale = c_default_scale.
+    gs_cfg-display_source = abap_false.
   ENDMETHOD.
 
   METHOD get_registry_value.
@@ -1156,7 +1187,7 @@ CLASS lcl_configuration IMPLEMENTATION.
         key   = iv_key
         value = iv_value
       IMPORTING
-        reg_value = rv_value
+        reg_value = ev_value
       EXCEPTIONS
         OTHERS               = 5 ).
     ev_subrc = sy-subrc.
@@ -1165,42 +1196,54 @@ CLASS lcl_configuration IMPLEMENTATION.
   METHOD get_java_path.
 *   Windows: Local Java installation
     DATA lv_subrc TYPE sysubrc.
+    DATA lv_path TYPE string.
 
     rv_fullpath = `C:\Windows\System32\java`.   " Default
-    DATA(lv_path) = get_registry_value( EXPORTING iv_key = c_registry_java_base_key
-                                                  iv_value = 'CurrentVersion'
-                                        IMPORTING ev_subrc = lv_subrc ).
+    get_registry_value( EXPORTING iv_key = c_registry_java_base_key
+                                  iv_value = 'CurrentVersion'
+                        IMPORTING ev_subrc = lv_subrc
+                                  ev_value = lv_path ).
     CHECK lv_subrc EQ 0.
-    lv_path = get_registry_value( EXPORTING iv_key = |{ c_registry_java_base_key }\\{ lv_path }|
-                                            iv_value = 'JavaHome'
-                                  IMPORTING ev_subrc = lv_subrc ).
+    get_registry_value( EXPORTING iv_key = |{ c_registry_java_base_key }\\{ lv_path }|
+                                  iv_value = 'JavaHome'
+                        IMPORTING ev_subrc = lv_subrc
+                                  ev_value = lv_path ).
     CHECK lv_subrc EQ 0.
     rv_fullpath = |{ lv_path }\\bin\\java|.
   ENDMETHOD.
 
   METHOD get_attributes.
+    DATA ls_attr TYPE sci_attent.
 * Table Type has type 'T' - patterns SCI_PATTERN
 *                     ' ' - ?? private attributes?
 *                     'I' - ?? Integer?
-    rt_attr = VALUE #(
-     ( ref = REF #( gs_cfg-skip_dialog )    text = 'Remember my settings'(c00)    kind = 'C' )
-     ( ref = REF #( sy-index )              text = 'PlantUML Execution Mode'(c10) kind = 'G' ) " Group
-     ( ref = REF #( mv_mode_url )           text = 'PlantUML web service'(c11)    kind = 'R' button_group = 'MOD' )
-     ( ref = REF #( mv_mode_txt )           text = 'Save text file'(c12)          kind = 'R' button_group = 'MOD' )
-     ( ref = REF #( mv_mode_exe )           text = 'Local PlantUML '(c13)         kind = 'R' button_group = 'MOD' )
-     ( ref = REF #( '' )                    text = 'PlantUML Settings'(c20)       kind = 'G' )
-     ( ref = REF #( gs_cfg-scale )          text = 'Scale '(c21)                  kind = 'S' )
-     ( ref = REF #( gs_cfg-server_url )     text = 'PlantUML Server'(c25)         kind = 'S' )
-     ( ref = REF #( gs_cfg-local_path )     text = 'Local PlantUML path'(c26)     kind = 'S' )
-     ( ref = REF #( gs_cfg-java_jar )       text = 'Local PlantUML jar file'(c27) kind = ' ' )
-     ( ref = REF #( gs_cfg-java_appl )      text = 'Local Java path'(c28)         kind = 'S' ) " Select-Options
-     ( ref = REF #( gs_cfg-display_source ) text = 'Display source '(c32)         kind = 'C' )    ).
+    DEFINE _add_attr.
+      CLEAR ls_attr.
+      GET REFERENCE OF &1 INTO ls_attr-ref.
+      ls_attr-text = &2.
+      ls_attr-kind = &3.
+      ls_attr-button_group = &4.
+      INSERT ls_attr INTO TABLE rt_attr.
+    END-OF-DEFINITION.
+
+    _add_attr: gs_cfg-skip_dialog      'Remember my settings'(c00)     'C' space,
+               SY-INDEX                'PlantUML Execution Mode'(c10)  'G' space,
+               mv_mode_url             'PlantUML web service'(c11)     'R' 'MOD',
+               mv_mode_txt             'Save text file'(c12)           'R' 'MOD',
+               mv_mode_exe             'Local PlantUML '(c13)          'R' 'MOD',
+                ''                     'PlantUML Settings'(c20)        'G' space,
+               gs_cfg-scale            'Scale '(c21)                   'S' space,
+               gs_cfg-server_url       'PlantUML Server'(c25)          'S' space,
+               gs_cfg-local_path       'Local PlantUML path'(c26)      'S' space,
+               gs_cfg-java_jar         'Local PlantUML jar file'(c27)  ' ' space,
+               gs_cfg-java_appl        'Local Java path'(c28)          'S' space, " Select-Options
+               gs_cfg-display_source   'Display source '(c32)          'C' space.
   ENDMETHOD.
 
   METHOD to_radiobutton.
-    mv_mode_url = xsdbool( gs_cfg-output_mode EQ c_mode_url ).
-    mv_mode_exe = xsdbool( gs_cfg-output_mode EQ c_mode_exe ).
-    mv_mode_txt = xsdbool( gs_cfg-output_mode EQ c_mode_txt ).
+    mv_mode_url = boolc( gs_cfg-output_mode EQ c_mode_url ).
+    mv_mode_exe = boolc( gs_cfg-output_mode EQ c_mode_exe ).
+    mv_mode_txt = boolc( gs_cfg-output_mode EQ c_mode_txt ).
   ENDMETHOD.
 
   METHOD from_radiobutton.
@@ -1214,18 +1257,22 @@ CLASS lcl_configuration IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD get.
-    rs_cfg = CORRESPONDING #( gs_cfg ).
+    MOVE-CORRESPONDING gs_cfg TO rs_cfg.
   ENDMETHOD.
 
   METHOD query.
-    NEW lcl_configuration( )->dialog( ).
+    DATA lo_cfg TYPE REF TO lcl_configuration.
+    CREATE OBJECT lo_cfg.
+    lo_cfg->dialog( ).
   ENDMETHOD.
 
   METHOD dialog.
+    DATA lv_repid TYPE sychar30.
+    lv_repid = sy-repid.
     to_radiobutton( ).
     "CHECK gs_cfg-skip_dialog EQ abap_false.
     CHECK cl_ci_query_attributes=>generic(
-        p_name       = CONV #( sy-repid )                    " unique screen ID
+        p_name       = lv_repid                              " unique screen ID
         p_title      = 'Class Diagram Parameters'            " Screen title
         p_attributes = get_attributes( )                     " Screen fields
         p_display    = abap_false                            " Edit / Display only
@@ -1255,20 +1302,22 @@ CLASS lcl_file_name IMPLEMENTATION.
   METHOD new.
     CASE iv_mode.
       WHEN lcl_configuration=>c_mode_aut.
-        ro_file = NEW lcl_file_name_dummy( iv_mode ).
+        CREATE OBJECT ro_file TYPE lcl_file_name_dummy
+          EXPORTING iv_mode = iv_mode.
       WHEN OTHERS.
-        ro_file = NEW lcl_file_name( iv_mode ).
+        CREATE OBJECT ro_file TYPE lcl_file_name
+          EXPORTING iv_mode = iv_mode.
     ENDCASE.
   ENDMETHOD.
 
   METHOD constructor.
     CASE iv_mode.
       WHEN lcl_configuration=>c_mode_txt.
-        ms_file = VALUE #( title = |Save UML text source|
-                           ext = |.txt| ).
+        ms_file-title = |Save UML text source|.
+        ms_file-ext = |.txt|.
       WHEN OTHERS.
-        ms_file = VALUE #( title = |Save As...|
-                           ext = |.txt| ).
+        ms_file-title = |Save As...|.
+        ms_file-ext = |.txt|.
     ENDCASE.
   ENDMETHOD.
 
@@ -1316,7 +1365,8 @@ ENDCLASS.
 CLASS lcl_dot_diagram IMPLEMENTATION.
 
   METHOD generate.
-    LOOP AT it_elem INTO DATA(lo_elem).
+    DATA lo_elem TYPE REF TO lcl_lisp.
+    LOOP AT it_elem INTO lo_elem.
       node( elem = lo_elem ).
     ENDLOOP.
     rv_diagram = get( ).
@@ -1340,9 +1390,13 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
       WHEN lcl_lisp=>type_null.
         rv_node = space.
       WHEN lcl_lisp=>type_real.
-        rv_node = |{ CAST lcl_lisp_real( io_elem )->real }|.
+        DATA lo_real TYPE REF TO lcl_lisp_real.
+        lo_real ?= io_elem.
+        rv_node = |{ lo_real->real }|.
       WHEN lcl_lisp=>type_integer.
-        rv_node = |{ CAST lcl_lisp_integer( io_elem )->integer }|.
+        DATA lo_int TYPE REF TO lcl_lisp_integer.
+        lo_int ?= io_elem.
+        rv_node = |{ lo_int->integer }|.
       WHEN OTHERS.
         rv_node = io_elem->value.
     ENDCASE.
@@ -1392,7 +1446,7 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
   ENDMETHOD.                    " footer
 
   METHOD new.
-    ro_dot = NEW #( ).
+    CREATE OBJECT ro_dot.
     ro_dot->header( is_config ).
   ENDMETHOD.                    " new
 
@@ -1407,5 +1461,65 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
                            ID 'OBJID'  FIELD rv_oid
                            ID 'OBJ'    FIELD io_ref.
   ENDMETHOD.
+
+ENDCLASS.
+
+CLASS ltc_stack DEFINITION FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+  PUBLIC SECTION.
+    INTERFACES lif_unit_test.
+  PRIVATE SECTION.
+    CONSTANTS:
+      c_pi TYPE lcl_stack=>tv_data VALUE `Que j'aime a faire connaitre ce nombre si utile aux sages`,
+      c_euler TYPE lcl_stack=>tv_data VALUE `2.71828182845985`.
+    DATA mo_stack TYPE REF TO lcl_stack.
+
+    METHODS setup.
+    METHODS empty FOR TESTING.
+    METHODS push_1 FOR TESTING.
+    METHODS push_2 FOR TESTING.
+ENDCLASS.
+
+CLASS ltc_stack IMPLEMENTATION.
+
+   METHOD setup.
+     CREATE OBJECT mo_stack.
+   ENDMETHOD.
+
+   METHOD empty.
+     cl_abap_unit_assert=>assert_not_bound( mo_stack->mr_top ).
+     cl_abap_unit_assert=>assert_equals( act = mo_stack->next( )
+                                         exp = space ).
+     cl_abap_unit_assert=>assert_equals( act = mo_stack->previous( )
+                                         exp = space ).
+   ENDMETHOD.
+
+   METHOD push_1.
+     mo_stack->push( c_pi ).
+     cl_abap_unit_assert=>assert_equals( act = mo_stack->next( )
+                                         exp = c_pi ).
+     cl_abap_unit_assert=>assert_equals( act = mo_stack->next( )
+                                         exp = c_pi ).
+     cl_abap_unit_assert=>assert_equals( act = mo_stack->previous( )
+                                         exp = c_pi ).
+   ENDMETHOD.
+
+   METHOD push_2.
+     DATA lv_next TYPE lcl_stack=>tv_data.
+     DATA lv_prev TYPE lcl_stack=>tv_data.
+
+     mo_stack->push( c_pi ).
+     mo_stack->push( c_euler ).
+     cl_abap_unit_assert=>assert_equals( act = mo_stack->previous( )
+                                         exp = c_pi ).
+     cl_abap_unit_assert=>assert_equals( act = mo_stack->previous( )
+                                         exp = c_pi ).
+
+     cl_abap_unit_assert=>assert_equals( act = mo_stack->next( )
+                                         exp = c_euler ).
+     cl_abap_unit_assert=>assert_equals( act = mo_stack->next( )
+                                         exp = c_euler ).
+     cl_abap_unit_assert=>assert_equals( act = mo_stack->previous( )
+                                         exp = c_pi ).
+   ENDMETHOD.
 
 ENDCLASS.
