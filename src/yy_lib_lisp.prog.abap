@@ -1,5 +1,5 @@
 *&---------------------------------------------------------------------*
-*&  Include           YY_LIB_LISP
+*& Include           YY_LIB_LISP
 *& https://github.com/nomssi/abap_scheme
 *& https://github.com/mydoghasworms/abap-lisp
 *& Lisp interpreter written in ABAP
@@ -1388,6 +1388,7 @@
 *----------------------------------------------------------------------*
   CLASS lcl_lisp_environment DEFINITION CREATE PRIVATE FRIENDS lcl_lisp_env_factory.
     PUBLIC SECTION.
+      DATA top_level TYPE flag VALUE abap_false READ-ONLY.
 
       METHODS:
         scope_of IMPORTING symbol     TYPE any
@@ -1397,10 +1398,9 @@
             RETURNING VALUE(cell) TYPE REF TO lcl_lisp
             RAISING   lcx_lisp_exception,
         set IMPORTING symbol  TYPE string
-                      element TYPE REF TO lcl_lisp,
-        set_once IMPORTING symbol  TYPE string
-                           element TYPE REF TO lcl_lisp
-                 RAISING   lcx_lisp_exception,
+                      element TYPE REF TO lcl_lisp
+                      once    TYPE flag DEFAULT abap_false
+            RAISING   lcx_lisp_exception,
 *       Convenience method to add a value and create the cell
         define_value IMPORTING symbol         TYPE string
                                type           TYPE lcl_lisp=>tv_type
@@ -1412,8 +1412,8 @@
                                               io_args TYPE REF TO lcl_lisp
                                     RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
-*     Reference to outer (parent) environment:
-      DATA outer TYPE REF TO lcl_lisp_environment.
+*     Reference to
+      DATA outer TYPE REF TO lcl_lisp_environment.  " outer (parent) environment:
 
       TYPES: BEGIN OF ts_map,
                symbol TYPE string,
@@ -1425,7 +1425,6 @@
 
       METHODS unbound_symbol IMPORTING symbol TYPE any
                              RAISING   lcx_lisp_exception.
-
       METHODS prepare.
   ENDCLASS.                    "lcl_lisp_environment DEFINITION
 
@@ -1435,8 +1434,8 @@
         new   RETURNING VALUE(env)  TYPE REF TO lcl_lisp_environment,
         clone IMPORTING io_outer    TYPE REF TO lcl_lisp_environment
               RETURNING VALUE(env)  TYPE REF TO lcl_lisp_environment,
-        create IMPORTING io_outer   TYPE REF TO lcl_lisp_environment OPTIONAL
-               RETURNING VALUE(env) TYPE REF TO lcl_lisp_environment.
+        make_top_level IMPORTING io_outer   TYPE REF TO lcl_lisp_environment OPTIONAL
+                       RETURNING VALUE(env) TYPE REF TO lcl_lisp_environment.
   ENDCLASS.
 
   CLASS lcl_lisp_env_factory  IMPLEMENTATION.
@@ -1450,9 +1449,10 @@
       env->outer = io_outer.
     ENDMETHOD.
 
-    METHOD create.
+    METHOD make_top_level.
       env = clone( io_outer ).
       env->prepare( ).
+      env->top_level = abap_true.
     ENDMETHOD.
 
   ENDCLASS.
@@ -1821,14 +1821,14 @@
         RETURNING VALUE(result) TYPE  REF TO lcl_lisp
         RAISING   lcx_lisp_exception.
 
-      METHODS assign_symbol
+      METHODS bind_symbol
         IMPORTING element       TYPE REF TO lcl_lisp
                   environment   TYPE REF TO lcl_lisp_environment
                   iv_macro      TYPE flag DEFAULT abap_false
         RETURNING VALUE(result) TYPE  REF TO lcl_lisp
         RAISING   lcx_lisp_exception.
 
-      METHODS re_assign_symbol
+      METHODS assign_symbol
         IMPORTING element       TYPE REF TO lcl_lisp
                   environment   TYPE REF TO lcl_lisp_environment
         RETURNING VALUE(result) TYPE  REF TO lcl_lisp
@@ -1907,6 +1907,11 @@
              END OF ts_digit.
       TYPES tt_digit TYPE SORTED TABLE OF ts_digit WITH UNIQUE KEY zero.
       DATA mt_zero TYPE tt_digit.
+
+      METHODS string_to_number IMPORTING iv_text TYPE string
+                                         iv_radix TYPE i DEFAULT 10
+                               RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                               RAISING lcx_lisp_exception.
 
       METHODS unicode_digit_zero RETURNING VALUE(rt_zero) TYPE tt_digit.
 
@@ -2610,26 +2615,26 @@
       nil = lcl_lisp=>nil.
       true = lcl_lisp=>true.
       false = lcl_lisp=>false.
-      env = lcl_lisp_env_factory=>create( ).
+      env = lcl_lisp_env_factory=>make_top_level( ).
     ENDMETHOD.                    "constructor
 
     METHOD throw.
       lcl_lisp=>throw( message ).
     ENDMETHOD.                    "throw
 
-    METHOD assign_symbol.
+    METHOD bind_symbol.
+      DATA lv_symbol TYPE string.
+      DATA lo_params TYPE REF TO lcl_lisp.
 *     Scheme does not return a value for define; but we are returning the new symbol reference
       DATA(lo_head) = element->car.
       CASE lo_head->type.
         WHEN lcl_lisp=>type_symbol.
 *         call the set method of the current environment using the unevaluated first parameter
 *         (second list element) as the symbol key and the evaluated second parameter as the value.
-          DATA(lo_params) = eval( element = element->cdr->car
-                                  environment = environment ).
+          lo_params = eval( element = element->cdr->car
+                            environment = environment ).
           lo_params->macro = iv_macro.
-          environment->set( symbol  = lo_head->value
-                            element = lo_params ).
-          result = lcl_lisp_new=>symbol( lo_head->value ).
+          lv_symbol = lo_head->value.
 
 *       Function shorthand (define (id arg ... ) body ...+)
         WHEN lcl_lisp=>type_pair.
@@ -2638,25 +2643,29 @@
           ENDIF.
 *         define's function shorthand allows us to define a function by specifying a list as the
 *         first argument where the first element is a symbol and consecutive elements are arguments
-          result = lcl_lisp_new=>lambda( io_car = lo_head->cdr  "List of params following function symbol
-                                         io_cdr = element->cdr
-                                         io_env = environment
-                                         iv_macro = iv_macro ).
-*         Add function to the environment with symbol
-          environment->set( symbol  = lo_head->car->value
-                            element = result ).
+          lo_params = lcl_lisp_new=>lambda( io_car = lo_head->cdr  "List of params following function symbol
+                                            io_cdr = element->cdr
+                                            io_env = environment
+                                            iv_macro = iv_macro ).
+          lv_symbol = lo_head->car->value.
 
-          result = lcl_lisp_new=>symbol( lo_head->car->value ).
         WHEN OTHERS.
           throw( |{ lo_head->to_string( ) } cannot be a variable identifier| ).
       ENDCASE.
+
+*     Add function to the environment with symbol
+      environment->set( symbol  = lv_symbol
+                        element = lo_params
+                        once = xsdbool( env NE environment ) ). " Internal definition => once!
+
+      result = lcl_lisp_new=>symbol( lv_symbol ).
     ENDMETHOD.                    "assign_symbol
 
     METHOD define_syntax.
 *
-      result = assign_symbol( element = element
-                              environment = environment
-                              iv_macro = abap_true ).
+      result = bind_symbol( element = element
+                            environment = environment
+                            iv_macro = abap_true ).
     ENDMETHOD.
 
     METHOD is_macro_call.
@@ -2729,8 +2738,10 @@
                                      index = lv_index ). " uninterned symbols have integer > 0
     ENDMETHOD.
 
-    METHOD re_assign_symbol.
+    METHOD assign_symbol.
+      _validate: element, element->car.
       result = element->car.
+
       CASE result->type.
         WHEN lcl_lisp=>type_symbol.
 *         re-define symbol in the original environment, but evaluate parameters in the current environment
@@ -2738,7 +2749,7 @@
                                                        element = eval( element = element->cdr->car
                                                                        environment = environment ) ).
         WHEN OTHERS.
-          throw( |{ result->to_string( ) } must be a symbol| ).
+          throw( |{ result->to_string( ) } is not a bound symbol| ).
       ENDCASE.
     ENDMETHOD.                    "re_assign_symbol
 
@@ -2894,9 +2905,10 @@
         IF lo_spec NE nil.
           DATA(lo_init) = lo_spec->car.
 
-          eo_env->set_once( symbol = lo_var->value
-                            element = eval_ast( element = lo_init    " inits are evaluated in org. environment
-                                                environment = io_env ) ).
+          eo_env->set( symbol = lo_var->value
+                       element = eval_ast( element = lo_init    " inits are evaluated in org. environment
+                                           environment = io_env )
+                       once = abap_true ).
           lo_spec = lo_spec->cdr.
           IF lo_spec NE nil.
 *           <step>
@@ -3058,7 +3070,8 @@
 *       NOTE: element of the argument list is evaluated before being defined in the environment
         io_env->set( symbol = lo_par->value
                      element = eval( element = lo_args->next( )
-                                     environment = io_env ) ).
+                                     environment = io_env )
+                     once = abap_false ).
       ENDWHILE.
     ENDMETHOD.
 
@@ -3076,8 +3089,9 @@
       WHILE lo_par IS BOUND AND lo_par NE nil   " Nil means no parameters to map
         AND lo_arg IS BOUND AND lo_arg NE nil.  " Nil means no arguments
 
-        ro_env->set_once( symbol = lo_par->car->value
-                          element = lo_arg->car ).
+        ro_env->set( symbol = lo_par->car->value
+                     element = lo_arg->car
+                     once = abap_true ).
         lo_par = lo_par->cdr.
         lo_arg = lo_arg->cdr.
       ENDWHILE.
@@ -3088,6 +3102,8 @@
 
       ro_env->parameters_to_symbols( io_args = lo_new_args
                                      io_pars = lo_pars ).   " Pointer to formal parameters
+*     to allow (define) with the same variable name as in (letrec ( )), create new scope
+      ro_env = lcl_lisp_env_factory=>clone( ro_env ).
     ENDMETHOD.
 
     METHOD environment_letrec_star.
@@ -3102,8 +3118,9 @@
       WHILE lo_par IS BOUND AND lo_par NE nil   " Nil means no parameters to map
         AND lo_arg IS BOUND AND lo_arg NE nil.  " Nil means no parameters to map
 
-        ro_env->set_once( symbol = lo_par->car->value
-                          element = lo_arg->car ).
+        ro_env->set( symbol = lo_par->car->value
+                     element = lo_arg->car
+                     once = abap_true ).
         lo_par = lo_par->cdr.
         lo_arg = lo_arg->cdr.
       ENDWHILE.
@@ -3111,6 +3128,8 @@
       evaluate_in_sequence( io_args = lo_args      " Pointer to arguments e.g. (4, (+ x 4)
                             io_pars = lo_pars      " Pointer to formal parameters (x y)
                             io_env = ro_env ).
+*     to allow (define) with the same variable name as in (let* ( )), create new scope
+      ro_env = lcl_lisp_env_factory=>clone( ro_env ).
     ENDMETHOD.
 
 *Here's an example loop, which prints out the integers from 0 to 9:
@@ -3147,12 +3166,16 @@
       ro_env->parameters_to_symbols( io_args = lo_new_args
                                      io_pars = lo_pars ).              " Pointer to formal parameters
 
-      CHECK lo_var IS BOUND AND lo_var NE nil.
-*     named let
-      ro_env->set_once( symbol = lo_var->value
-                        element = lcl_lisp_new=>lambda( io_car = lo_pars                " List of parameters
-                                                        io_cdr = co_head->cdr           " Body
-                                                        io_env = ro_env ) ).
+      IF lo_var IS BOUND AND lo_var NE nil.
+*       named let
+        ro_env->set( symbol = lo_var->value
+                     element = lcl_lisp_new=>lambda( io_car = lo_pars                " List of parameters
+                                                     io_cdr = co_head->cdr           " Body
+                                                     io_env = ro_env )
+                     once = abap_true ).
+      ENDIF.
+*     to allow (define) with the same variable name in the body of (let ( )), create new scope
+      ro_env = lcl_lisp_env_factory=>clone( ro_env ).
     ENDMETHOD.
 
     METHOD environment_let_star.
@@ -3164,6 +3187,8 @@
       evaluate_in_sequence( io_args = lo_args      " Pointer to arguments e.g. (4, (+ x 4)
                             io_pars = lo_pars      " Pointer to formal parameters (x y)
                             io_env = ro_env ).
+*     to allow (define) with the same variable name in the body of (let* ( )), create new scope
+      ro_env = lcl_lisp_env_factory=>clone( ro_env ).
     ENDMETHOD.
 
     METHOD eval_ast.
@@ -3209,8 +3234,10 @@
                                           io_environment = lo_env
                                 IMPORTING eo_elem = lo_elem ).
         _tail_expression lo_elem.
-      ELSE.
+      ELSEIF lo_env->top_level EQ abap_false.
         throw( c_error_no_exp_in_body ).
+      ELSE.  " empty (begin) ?
+        CONTINUE.
       ENDIF.
     END-OF-DEFINITION.
 
@@ -3410,7 +3437,7 @@
 
                 CASE lr_head->value.
 
-                  WHEN c_eval_quote. " Return the argument to quote unevaluated
+                  WHEN c_eval_quote. " Literal expression: Return the argument to quote unevaluated
                     IF lr_tail->cdr NE nil.
                       throw( |quote can only take a single argument| ).
                     ENDIF.
@@ -3427,7 +3454,7 @@
                     CONTINUE.  "tail_expression lo_elem.
 
                   WHEN 'and'.
-*                   (and <expression>* >tail expression>)
+*                   Derived expression: Conditional (and <expression>* >tail expression>)
                     result = true.
                     DATA(lo_ptr) = lr_tail.
                     WHILE result NE false AND lo_ptr IS BOUND AND lo_ptr NE nil AND lo_ptr->cdr NE nil.
@@ -3440,7 +3467,7 @@
                     ENDIF.
 
                   WHEN 'or'.
-*                  (or <expression>* <tail expression>)
+*                   Derived expression: Conditional (or <expression>* <tail expression>)
                     result = false.
                     lo_ptr = lr_tail.
                     WHILE result EQ false AND lo_ptr IS BOUND AND lo_ptr NE nil AND lo_ptr->cdr NE nil.
@@ -3453,6 +3480,7 @@
                     ENDIF.
 
                   WHEN 'cond'.
+*                   Derived expression: Conditional
                     lo_ptr = lr_tail.
                     lo_elem = nil.
                     WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
@@ -3481,23 +3509,24 @@
                     ENDIF.
 
                   WHEN 'define'.
+*                   Variable definition:
 *           call the set method of the current environment using the unevaluated first parameter
 *           (second list element) as the symbol key and the evaluated second parameter as the value.
-                    result = assign_symbol( element = lr_tail
-                                            environment = lo_env ).
+                    result = bind_symbol( element = lr_tail
+                                          environment = lo_env ).
 
                   WHEN 'define-macro'.
-                    result = assign_symbol( element = lr_tail
-                                            environment = lo_env
-                                            iv_macro = abap_true ).
+                    result = bind_symbol( element = lr_tail
+                                          environment = lo_env
+                                          iv_macro = abap_true ).
 
                   WHEN 'define-syntax'.
                     result = define_syntax( element = lr_tail
                                             environment = lo_env ).
 
                   WHEN 'set!'.                        " Re-Assign symbol
-                    result = re_assign_symbol( element     = lr_tail
-                                               environment = lo_env ).
+                    result = assign_symbol( element     = lr_tail
+                                            environment = lo_env ).
 
                   WHEN 'if'.
                     " _validate lr_tail->cdr. "I do not have a test case yet where it fails here
@@ -3518,7 +3547,15 @@
 
                   WHEN 'begin'.
                     lo_elem = lr_tail.
-                    _tail_sequence.
+*                    _tail_sequence.
+                    IF lo_elem NE nil.
+                      result = eval_list_tco( EXPORTING io_head = lo_elem
+                                                        io_environment = lo_env
+                                              IMPORTING eo_elem = lo_elem ).
+                      _tail_expression lo_elem.
+                    ELSE.  " empty (begin) ?
+                      CONTINUE.
+                    ENDIF.
 
                   WHEN 'let'.
                     lo_env = environment_named_let( EXPORTING io_env = lo_env
@@ -5855,15 +5892,91 @@
     ENDMETHOD.
 
     METHOD proc_num_to_string.
+      CONSTANTS c_digit_to_char TYPE c LENGTH 16 VALUE '0123456789ABCDEF'.
+      DATA lv_radix TYPE i VALUE 10.
+      DATA lv_radix_error TYPE flag VALUE abap_false.
+      DATA lv_text TYPE string.
+      DATA lv_int TYPE tv_int.
+      DATA lv_real TYPE tv_real.
+      DATA lv_digit TYPE i.
+
       _validate list.
-      _validate_number list->car `number->string`.
-      result = lcl_lisp_new=>string( list->car->to_string( ) ).
+      "_validate_number list->car `number->string`.
+      _validate list->car.
+*     Optional radix
+      _validate list->cdr.
+      IF list->cdr NE nil.
+        _validate_integer list->cdr->car `number->string`.
+        _to_integer list->cdr->car lv_radix.
+      ENDIF.
+
+      CASE list->car->type.
+        WHEN lcl_lisp=>type_integer.
+          _to_integer list->car lv_int.
+          CASE lv_radix.
+            WHEN 10.
+              lv_text = lv_int.
+              result = lcl_lisp_new=>string( condense( lv_text ) ).
+
+            WHEN 2 OR 8 OR 16.
+              CLEAR lv_text.
+              WHILE lv_int GT 0.
+                lv_digit = lv_int mod lv_radix.
+                lv_int = lv_int DIV lv_radix.
+                lv_text = c_digit_to_char+lv_digit(1) && lv_text.
+              ENDWHILE.
+              result = lcl_lisp_new=>string( lv_text ).
+
+            WHEN OTHERS.
+              lv_radix_error = abap_true.
+          ENDCASE.
+
+        WHEN lcl_lisp=>type_real.
+          lv_radix_error = xsdbool( lv_radix NE 10 ).
+          _to_real list->car lv_real.
+          lv_text = lv_real.
+          result = lcl_lisp_new=>string( condense( lv_text ) ).
+
+        WHEN lcl_lisp=>type_rational.
+          lv_radix_error = xsdbool( lv_radix NE 10 ).
+          lv_text = list->car->to_string( ).
+          result = lcl_lisp_new=>string( lv_text ).
+
+        WHEN OTHERS.
+          throw( |{ list->car->to_string( ) } is not a number in number->string| ) ##NO_TEXT.
+      ENDCASE.
+      IF lv_radix_error EQ abap_true.
+        throw( |{ list->car->to_string( ) } radix { lv_radix } not supported in number->string| ) ##NO_TEXT.
+      ENDIF.
+
+    ENDMETHOD.
+
+    METHOD string_to_number.
+      DATA lv_radix_error TYPE flag VALUE abap_false.
+
+      result = false.
+      CHECK iv_text NE space.
+      TRY.
+          CASE iv_radix.
+            WHEN 2.
+              result = lcl_lisp_new=>binary( iv_text ).
+            WHEN 8.
+              result = lcl_lisp_new=>octal( iv_text ).
+            WHEN 10.
+              result = lcl_lisp_new=>number( iv_text ).
+            WHEN 16.
+              result = lcl_lisp_new=>hex( iv_text ).
+            WHEN OTHERS.
+              lv_radix_error = abap_true.
+          ENDCASE.
+        CATCH lcx_lisp_exception cx_sy_conversion_error.
+      ENDTRY.
+      CHECK lv_radix_error EQ abap_true.
+      throw( |radix ({ iv_radix }) must be 2, 8, 10 or 16 in string->number| ).
     ENDMETHOD.
 
     METHOD proc_string_to_num.
       DATA lv_radix TYPE i VALUE 10.
-      DATA lv_radix_error TYPE flag VALUE abap_false.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
 
       _validate list.
       _validate_string list->car `string->number`.
@@ -5873,24 +5986,9 @@
         _validate_integer list->cdr->car `string->number`.
         _to_integer list->cdr->car lv_radix.
       ENDIF.
-      TRY.
-          CASE lv_radix.
-            WHEN 2.
-              result = lcl_lisp_new=>binary( list->car->value ).
-            WHEN 8.
-              result = lcl_lisp_new=>octal( list->car->value ).
-            WHEN 10.
-              result = lcl_lisp_new=>number( list->car->value ).
-            WHEN 16.
-              result = lcl_lisp_new=>hex( list->car->value ).
-            WHEN OTHERS.
-              lv_radix_error = abap_true.
-          ENDCASE.
-        CATCH lcx_lisp_exception cx_sy_conversion_error.
-          result = false.
-      ENDTRY.
-      CHECK lv_radix_error EQ abap_true.
-      throw( |radix ({ lv_radix }) must be 2, 8, 10 or 16 in string->number| ).
+
+      result = string_to_number( iv_text = list->car->value
+                                 iv_radix = lv_radix ).
     ENDMETHOD.
 
     METHOD proc_newline.
@@ -5953,7 +6051,7 @@
       DATA lo_ptr TYPE REF TO lcl_lisp.
       DATA lv_text TYPE string.
 
-      _validate: list, list->car.
+      _validate list.
       lo_ptr = list.
       WHILE lo_ptr->type EQ lcl_lisp=>type_pair AND lo_ptr->car->type EQ lcl_lisp=>type_char.
         lv_text = lv_text && lo_ptr->car->value+0(1).
@@ -6162,7 +6260,7 @@
     METHOD proc_string_append.
       DATA lv_text TYPE string.
       DATA lo_ptr TYPE REF TO lcl_lisp.
-      _validate: list, list->car.
+      _validate list.
 
       lo_ptr = list.
       WHILE lo_ptr->type = lcl_lisp=>type_pair AND lo_ptr->car->type EQ lcl_lisp=>type_string.
@@ -6410,7 +6508,7 @@
       _validate_char list->car `char-alphabetic?`.
       result = false.
       lv_char = list->car->value.
-      CHECK lv_char CN '0123456789'.
+      CHECK lv_char NE space AND to_upper( lv_char ) CO sy-abcde.
       result = true.
     ENDMETHOD.
 
@@ -7573,19 +7671,15 @@
       DATA(ls_map) = VALUE ts_map( symbol = symbol
                                    value = element ).
       INSERT ls_map INTO TABLE map.
-      CHECK sy-subrc = 4.                " To comply with Scheme define,
-      MODIFY TABLE map FROM ls_map.      " overwrite existing defined values
-    ENDMETHOD.                    "define
-
-    METHOD set_once.
-*     Add a value to the (local) environment. The value must not exist yet
-      DATA(ls_map) = VALUE ts_map( symbol = symbol
-                                   value = element ).
-      INSERT ls_map INTO TABLE map.
       CHECK sy-subrc = 4.
-*     It is an error for a <variable> to appear more than once in the list of variables.
-      lcl_lisp=>throw( |variable { symbol } appears more than once| ).
-    ENDMETHOD.                    "define
+      IF once EQ abap_true.
+*       The value must not exist yet in scope
+*       It is an error for a <variable> to appear more than once in the list of variables.
+        lcl_lisp=>throw( |variable { symbol } appears more than once| ).
+      ELSE.
+        MODIFY TABLE map FROM ls_map.         " overwrite existing defined values
+      ENDIF.
+    ENDMETHOD.
 
     METHOD parameters_to_symbols.
 *     The lambda receives its own local environment in which to execute, where parameters
@@ -7607,8 +7701,9 @@
 *             dotted pair after fixed number of parameters, to be bound to a variable number of arguments
 
 *             1) Read the next parameter, bind to the (rest) list of arguments
-              local->set_once( symbol = lo_var->value
-                               element = lcl_lisp=>nil ).
+              local->set( symbol = lo_var->value
+                          element = lcl_lisp=>nil
+                          once = abap_true ).
               set( symbol = lo_var->value
                    element = lo_arg ).
 *             2) Exit
@@ -7624,8 +7719,9 @@
             ADD 1 TO lv_count.
 
 *           NOTE: Each element of the argument list is evaluated before being defined in the environment
-            local->set_once( symbol = lo_var->car->value
-                             element = lcl_lisp=>nil ).
+            local->set( symbol = lo_var->car->value
+                        element = lcl_lisp=>nil
+                        once = abap_true ).
             set( symbol = lo_var->car->value
                  element = lo_arg->car ).
 

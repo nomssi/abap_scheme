@@ -441,6 +441,8 @@
        METHODS string_delim FOR TESTING.
        METHODS string_parse FOR TESTING.
 
+       METHODS string_empty FOR TESTING.
+
        METHODS string_set_0 FOR TESTING.
        METHODS string_set_1 FOR TESTING.
        METHODS string_set_2 FOR TESTING.
@@ -462,6 +464,8 @@
        METHODS char_alphabetic_1 FOR TESTING.
        METHODS char_alphabetic_2 FOR TESTING.
        METHODS char_alphabetic_3 FOR TESTING.
+       METHODS char_alphabetic_4 FOR TESTING.
+       METHODS char_alphabetic_space FOR TESTING.
 
        METHODS char_numeric_1 FOR TESTING.
        METHODS char_numeric_2 FOR TESTING.
@@ -697,6 +701,10 @@
      METHOD set_2.
        scheme( code = '(set! x 5)'
                expected = 'Eval: Symbol x is unbound' ).
+       scheme( code = '(set! 7 5)'
+               expected = 'Eval: 7 is not a bound symbol' ).
+       scheme( code = '(set!)'
+               expected = 'Eval: Incorrect input' ).
      ENDMETHOD.                    "set_2
 
      METHOD set_3.
@@ -870,9 +878,8 @@
           |   (mean / /)))|
                expected = 'means' ).
 
-*      evaluating (means '(3 (1 4))) returns 36/19.
-       scheme( code = |(floor (* 19 (means '(3 (1 4)))))|
-               expected = |36| ).
+       scheme( code = |(means '(3 (1 4)))|
+               expected = |36/19| ).
      ENDMETHOD.                    "letrec_star_0
 
      METHOD values_0.
@@ -1267,6 +1274,11 @@
                expected = '"α is named GREEK SMALL LETTER ALPHA."' ).
      ENDMETHOD.                    "string_parse
 
+     METHOD string_empty.
+       scheme( code = '(string)'
+               expected = '""' ).
+     ENDMETHOD.                    "string_set_0
+
      METHOD string_set_0.
        scheme( code = '(define s (string #\A #\p #\p #\l #\e))'
                expected = 's' ).
@@ -1397,6 +1409,16 @@
        scheme( code = '(char-alphabetic? "Not a char")'
                expected = 'Eval: "Not a char" is not a char in char-alphabetic?' ).
      ENDMETHOD.                    "char_alphabetic_3
+
+     METHOD char_alphabetic_4.
+       scheme( code = '(char-alphabetic? #\;)'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD char_alphabetic_space.
+       scheme( code = '(char-alphabetic? #\space)'
+               expected = '#f' ).
+     ENDMETHOD.
 
      METHOD char_numeric_1.
        scheme( code = '(char-numeric? #\p)'
@@ -2671,6 +2693,8 @@
        METHODS string_to_list_2   FOR TESTING.
        METHODS string_to_list_3   FOR TESTING.
        METHODS list_to_string_1   FOR TESTING.
+
+       METHODS string_to_number_empty FOR TESTING.
        METHODS string_to_number_1 FOR TESTING.
        METHODS string_to_number_2 FOR TESTING.
        METHODS string_to_number_3 FOR TESTING.
@@ -2678,6 +2702,8 @@
        METHODS string_to_num_radix FOR TESTING.
        METHODS string_to_num_radix_error FOR TESTING.
        METHODS number_to_string_1 FOR TESTING.
+       METHODS number_to_string_2 FOR TESTING.
+       METHODS string_append_0    FOR TESTING.
        METHODS string_append_1    FOR TESTING.
 
    ENDCLASS.                    "ltc_list DEFINITION
@@ -3330,6 +3356,11 @@
                expected = '"Aali"' ).
      ENDMETHOD.                    "list_to_string_1
 
+     METHOD string_to_number_empty.
+       scheme( code = |(string->number "")|
+               expected = '#f' ).
+     ENDMETHOD.
+
      METHOD string_to_number_1.
        scheme( code = |(string->number '( 13 ))|
                expected = 'Eval: ( 13 ) is not a string in string->number' ).
@@ -3364,6 +3395,16 @@
        scheme( code = |(number->string '21)|
                expected = '"21"' ).
      ENDMETHOD.                    "number_to_string_1
+
+     METHOD number_to_string_2.
+       scheme( code = |(number->string 256 16)|
+               expected = '"100"' ).
+     ENDMETHOD.
+
+     METHOD string_append_0.
+       scheme( code = |(string-append)|
+               expected = '""' ).
+     ENDMETHOD.                    "string_append_1
 
      METHOD string_append_1.
        scheme( code = |(string-append "ABAP" "Scheme" "Lisp")|
