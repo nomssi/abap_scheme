@@ -61,7 +61,7 @@
     c_eval_unquote          TYPE string VALUE 'unquote' ##NO_TEXT,
     c_eval_unquote_splicing TYPE string VALUE 'unquote-splicing' ##NO_TEXT.
 
-  TYPES tv_int TYPE i.         " integer data type, use int8 if available
+  TYPES tv_int TYPE i.             " integer data type, use int8 if available
   TYPES tv_index TYPE tv_int.
   TYPES tv_real TYPE decfloat34.  " real data type
   TYPES tv_xword TYPE x LENGTH 2.
@@ -228,40 +228,44 @@
     _data_local_numeric_cell.
 
     result = false.
-    _validate list.
+    _validate: list, list->cdr.
     _get_number carry list->car &2.
 
     cell = list->cdr.
+    IF cell->type NE lcl_lisp=>type_pair.
+      throw( c_error_incorrect_input ).
+    ENDIF.
+
     WHILE cell->type EQ lcl_lisp=>type_pair.
-    _validate cell->car.
+      _validate cell->car.
 
-    CASE cell->car->type.
-      WHEN lcl_lisp=>type_integer.
-        lo_int ?= cell->car.
-        IF carry &1 lo_int->integer.
-          RETURN.
-        ENDIF.
-        carry = lo_int->integer.
+      CASE cell->car->type.
+        WHEN lcl_lisp=>type_integer.
+          lo_int ?= cell->car.
+          IF carry &1 lo_int->integer.
+            RETURN.
+          ENDIF.
+          carry = lo_int->integer.
 
-      WHEN lcl_lisp=>type_real.
-        lo_real ?= cell->car.
-        IF carry &1 lo_real->real.
-          RETURN.
-        ENDIF.
-        carry = lo_real->real.
+        WHEN lcl_lisp=>type_real.
+          lo_real ?= cell->car.
+          IF carry &1 lo_real->real.
+            RETURN.
+          ENDIF.
+          carry = lo_real->real.
 
-      WHEN lcl_lisp=>type_rational.
-        lo_rat ?= cell->car.
-        IF carry * lo_rat->denominator &1 lo_rat->integer.
-          RETURN.
-        ENDIF.
-        carry = lo_rat->integer / lo_rat->denominator.
+        WHEN lcl_lisp=>type_rational.
+          lo_rat ?= cell->car.
+          IF carry * lo_rat->denominator &1 lo_rat->integer.
+            RETURN.
+          ENDIF.
+          carry = lo_rat->integer / lo_rat->denominator.
 
-*       WHEN lcl_lisp=>type_complex.
-      WHEN OTHERS.
-        throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
-    ENDCASE.
-    cell = cell->cdr.
+*         WHEN lcl_lisp=>type_complex.
+        WHEN OTHERS.
+          throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
+      ENDCASE.
+      cell = cell->cdr.
     ENDWHILE.
     result = true.
   END-OF-DEFINITION.
@@ -714,9 +718,35 @@
     ENDMETHOD.
 
     METHOD float_eq.
+      CONSTANTS: c_epsilon TYPE tv_real VALUE cl_abap_math=>MIN_DECFLOAT16,
+                 c_min_normal TYPE tv_real VALUE cl_abap_math=>MIN_DECFLOAT34,
+                 c_max_value TYPE tv_real VALUE cl_abap_math=>MAX_DECFLOAT34.
+      DATA diff TYPE tv_real.
+      DATA sum TYPE tv_real.
+      DATA abs_a TYPE tv_real.
+      DATA abs_b TYPE tv_real.
+
       result = abap_false.
-      CHECK real EQ iv_real.
-      result = abap_true.
+      IF real EQ iv_real.
+        result = abap_true.
+      ELSE.
+        abs_a = abs( real ).
+        abs_b = abs( iv_real ).
+        diff = abs( real - iv_real ).
+        sum = abs_a + abs_b.
+
+        IF real = 0 OR iv_real = 0 OR sum < c_min_normal.
+*         real or iv_real is zero or both are extremely close to it
+*         relative error is less meaningfull here
+          IF diff < c_epsilon * c_min_normal.
+            result = abap_true.
+          ELSE. " use relative error
+            IF diff / nmin( val1 = sum val2 = c_max_value ) < c_epsilon.
+              result = abap_true.
+            endif.
+          ENDIF.
+        ENDIF.
+      ENDIF.
     ENDMETHOD.
 
   ENDCLASS.
@@ -5130,6 +5160,7 @@
     ENDMETHOD.                    "proc_lte
 
 **********************************************************************
+
     METHOD proc_eql.
       _data_local_numeric.
       DATA lo_rat_2 TYPE REF TO lcl_lisp_rational.
@@ -5138,11 +5169,15 @@
 
       _validate: list, list->car, list->cdr.
 
-      result = nil.
+      result = false.
       DATA(lo_ptr) = list.
+      IF lo_ptr->cdr->type NE lcl_lisp=>type_pair.
+        throw( c_error_incorrect_input ).
+      ENDIF.
+
       WHILE lo_ptr->cdr NE nil.
         _validate_number: lo_ptr->car '[=]',
-                         lo_ptr->cdr->car '[=]'.
+                          lo_ptr->cdr->car '[=]'.
         CASE lo_ptr->car->type.
           WHEN lcl_lisp=>type_integer.
             _to_integer lo_ptr->car lv_int.
@@ -5188,7 +5223,7 @@
                 ENDIF.
 
               WHEN lcl_lisp=>type_real.
-                IF lv_real = CAST lcl_lisp_real( lo_ptr->cdr->car )->real.
+                IF CAST lcl_lisp_real( lo_ptr->cdr->car )->float_eq( lv_real ).
                   result = true.
                 ELSE.
                   result = false.
@@ -9232,6 +9267,7 @@
     ENDMETHOD.
 
     METHOD execute.
+*     Development not completed yet
       DATA lo_set TYPE REF TO cl_sql_result_set.
       IF sql_query IS NOT INITIAL.
 *       prepared statement

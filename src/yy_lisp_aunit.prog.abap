@@ -59,10 +59,11 @@
                                 expected TYPE any
                                 level    TYPE aunit_level
                                   DEFAULT if_aunit_constants=>critical.
+       METHODS scheme_incorrect IMPORTING code TYPE string.
        METHODS code_test_f IMPORTING code     TYPE string
                                      expected TYPE numeric.
 
-       METHODS riff_shuffle_code RETURNING value(code) TYPE string.
+       METHODS riff_shuffle_code RETURNING VALUE(code) TYPE string.
 
        METHODS new_interpreter.
      PRIVATE SECTION.
@@ -142,6 +143,11 @@
                     level = level ).
      ENDMETHOD.                    "code_test
 
+     METHOD scheme_incorrect.
+       scheme( code = code
+               expected = `Eval: Incorrect input` ).
+     ENDMETHOD.                    "code_test
+
      METHOD code_test_f.
        DATA lv_result TYPE f.
        lv_result = mo_int->eval_source( code ).
@@ -167,8 +173,7 @@
      ENDMETHOD.                    "stability_1
 
      METHOD stability_2.
-       scheme( code = '(define a)'
-               expected = `Eval: Incorrect input` ).
+       scheme_incorrect( '(define a)' ).
      ENDMETHOD.                    "stability_2
 
      METHOD basic_define_error.
@@ -703,8 +708,7 @@
                expected = 'Eval: Symbol x is unbound' ).
        scheme( code = '(set! 7 5)'
                expected = 'Eval: 7 is not a bound symbol' ).
-       scheme( code = '(set!)'
-               expected = 'Eval: Incorrect input' ).
+       scheme_incorrect( '(set!)' ).
      ENDMETHOD.                    "set_2
 
      METHOD set_3.
@@ -1725,13 +1729,11 @@
      ENDMETHOD.                    "cond_5
 
      METHOD case_no_args.
-       scheme( code = |(case)|
-               expected = 'Eval: Incorrect input' ).
+       scheme_incorrect( |(case)| ).
      ENDMETHOD.                    "case_no_args
 
      METHOD case_no_clauses.
-       scheme( code = |(case (* 2 3))|
-               expected = 'Eval: Incorrect input' ).
+       scheme_incorrect( |(case (* 2 3))| ).
      ENDMETHOD.                    "case_no_clauses
 
      METHOD case_1.
@@ -1928,6 +1930,12 @@
        METHODS exact_4 FOR TESTING.
        METHODS exact_5 FOR TESTING.
 
+       METHODS compare_eq FOR TESTING.
+       METHODS compare_lt FOR TESTING.
+       METHODS compare_gt FOR TESTING.
+       METHODS compare_le FOR TESTING.
+       METHODS compare_ge FOR TESTING.
+
        METHODS exact_integer_1 FOR TESTING.
        METHODS exact_integer_2 FOR TESTING.
        METHODS exact_integer_3 FOR TESTING.
@@ -2060,6 +2068,61 @@
        scheme( code = '(exact? #e3.0)'
                expected = '#t' ).
      ENDMETHOD.                    "exact_5
+
+     METHOD compare_eq.
+       scheme_incorrect( '(=)' ).
+       scheme_incorrect( '(= 1)' ).
+       scheme( code = '(= 1 2)'
+               expected = '#f' ).
+       scheme( code = '(= 1 1)'
+               expected = '#t' ).
+       scheme( code = '(= 0 -2)'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD compare_lt.
+       scheme_incorrect( '(<)' ).
+       scheme_incorrect( '(< 1)' ).
+       scheme( code = '(< 1 2)'
+               expected = '#t' ).
+       scheme( code = '(< 2 2)'
+               expected = '#f' ).
+       scheme( code = '(< 1 -2)'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD compare_gt.
+       scheme_incorrect( '(>)' ).
+       scheme_incorrect( '(> 1)' ).
+       scheme( code = '(> 1 2)'
+               expected = '#f' ).
+       scheme( code = '(> 2 2)'
+               expected = '#f' ).
+       scheme( code = '(> 1 -2)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD compare_le.
+       scheme_incorrect( '(<=)' ).
+       scheme_incorrect( '(<= 1)' ).
+       scheme( code = '(<= 1 2)'
+               expected = '#t' ).
+       scheme( code = '(<= 2 2)'
+               expected = '#t' ).
+       scheme( code = '(<= 1 -2)'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD compare_ge.
+       scheme_incorrect( '(>=)' ).
+       scheme_incorrect( '(>= 1)' ).
+       scheme( code = '(>= 1 2)'
+               expected = '#f' ).
+       scheme( code = '(>= 2 2)'
+               expected = '#t' ).
+       scheme( code = '(>= 1 -2)'
+               expected = '#t' ).
+     ENDMETHOD.
 
      METHOD exact_integer_1.
        scheme( code = '(exact-integer? 32)'
@@ -2200,6 +2263,8 @@
        METHODS math_remainder FOR TESTING.
        METHODS math_modulo FOR TESTING.
        METHODS math_random FOR TESTING.
+       METHODS math_random_invalid FOR TESTING.
+       METHODS math_random_too_large FOR TESTING.
 
        METHODS math_div_test_1 FOR TESTING.
 
@@ -2480,6 +2545,9 @@
                expected = '#t' ).
        scheme( code =  '(random -5 4)'
                expected = 'Eval: ( -5 4 ) Parameter mismatch' ).
+     ENDMETHOD.                    "math_modulo
+
+     METHOD math_random_invalid.
        DATA lo_rand TYPE REF TO cx_abap_random.
        CREATE OBJECT lo_rand
          EXPORTING
@@ -2489,11 +2557,20 @@
                expected = |Eval: { lo_rand->get_text( ) }| ). " Invalid interval boundaries
        scheme( code =  '(< (random 10) 11)'
                expected = '#t' ).
-       scheme( code =  '(random 100000000000000)'
-               expected = |Eval: 100000000000000 is not an integer in [random]| ). "Overflow converting from &
-*       scheme( code =  '(random 100000000000000)'
-*               expected = |Eval: { NEW cx_sy_conversion_overflow( textid = '5E429A39EE412B43E10000000A11447B'
-*                                                                     value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
+     ENDMETHOD.                    "math_modulo
+
+     METHOD math_random_too_large.
+*      Only one assert is executed, depending on the defintion of tv_int (i or int8)
+       DATA lv_int TYPE tv_int.
+       TRY.
+           lv_int = '100000000000000'.
+           scheme( code =  '(random 100000000000000)'
+                   expected = |Eval: { NEW cx_sy_conversion_overflow( textid = '5E429A39EE412B43E10000000A11447B'
+                                                                      value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
+         CATCH cx_root.
+           scheme( code =  '(random 100000000000000)'
+                   expected = |Eval: 100000000000000 is not an integer in [random]| ).
+       ENDTRY.
      ENDMETHOD.                    "math_modulo
 
      METHOD math_min_0.
@@ -3645,7 +3722,7 @@
        METHODS lambda_dotted FOR TESTING.
        METHODS lambda_variadic FOR TESTING.
 
-       METHODS fold_right RETURNING value(code) TYPE string.
+       METHODS fold_right RETURNING VALUE(code) TYPE string.
 
        METHODS foldr FOR TESTING.
        METHODS foldl FOR TESTING.
@@ -4568,8 +4645,8 @@
      PRIVATE SECTION.
        METHODS setup.
        METHODS teardown.
-       METHODS get_first_profile RETURNING value(rv_prof) TYPE xuprofile.
-       METHODS get_ip_address RETURNING value(rv_addrstr) TYPE ni_nodeaddr.
+       METHODS get_first_profile RETURNING VALUE(rv_prof) TYPE xuprofile.
+       METHODS get_ip_address RETURNING VALUE(rv_addrstr) TYPE ni_nodeaddr.
 
        METHODS fm_user_info FOR TESTING.
        METHODS fm_test_rfc FOR TESTING.

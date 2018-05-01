@@ -870,7 +870,10 @@ CLASS lcl_editor IMPLEMENTATION.
   ENDMETHOD.                    "append_string
 
   METHOD append_string.
-    set_textstream( |{ lif_source_editor~to_string( ) }{ iv_text }| ).
+    DATA lv_text TYPE string.
+    lv_text = lif_source_editor~to_string( ).
+    CONCATENATE lv_text iv_text INTO lv_text RESPECTING BLANKS.
+    set_textstream( lv_text ).
     go_to_line( c_max_line_count ).
   ENDMETHOD.
 
