@@ -9,7 +9,7 @@
 After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a> inspired by [Peter Norvig](http://norvig.com/lispy2.html).
 So I started my [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) project based on [https://github.com/mydoghasworms/abap-lisp](https://github.com/mydoghasworms/abap-lisp). 
 
-![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)
+[![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
 My contributions:
 - target the _Revised <sup>7</sup> Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) including proper treatment of tail calls
