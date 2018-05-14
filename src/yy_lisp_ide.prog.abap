@@ -107,13 +107,24 @@ CLASS lcl_editor DEFINITION INHERITING FROM cl_gui_textedit.
     INTERFACES lif_source_editor.
 
     METHODS append_string IMPORTING iv_text TYPE string.
-  PRIVATE SECTION.
+  PROTECTED SECTION.
     DATA mv_counter TYPE i.
     DATA mo_stack TYPE REF TO lcl_stack.
 
     METHODS format_input IMPORTING code           TYPE string
                          RETURNING VALUE(rv_text) TYPE string.
 ENDCLASS.                    "lcl_editor DEFINITION
+
+CLASS lcl_console DEFINITION INHERITING FROM lcl_editor.
+  PUBLIC SECTION.
+    METHODS constructor IMPORTING io_container TYPE REF TO cl_gui_container
+                                  iv_toolbar   TYPE flag DEFAULT abap_false.
+    METHODS set_textstream REDEFINITION.
+    METHODS lif_source_editor~to_string REDEFINITION.
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+    DATA mv_content TYPE string.
+ENDCLASS.
 
 CLASS lcl_stack IMPLEMENTATION.
 
@@ -369,7 +380,7 @@ CLASS lcl_ide DEFINITION INHERITING FROM lcl_lisp_buffered_port CREATE PRIVATE.
     DATA mi_source TYPE REF TO lif_source_editor.
     DATA mo_output TYPE REF TO lcl_editor.
     DATA mo_log TYPE REF TO lcl_editor.
-    DATA mo_console TYPE REF TO lcl_editor.
+    DATA mo_console TYPE REF TO lcl_console.
     DATA mo_alv TYPE REF TO cl_salv_table.
 
     METHODS:
@@ -940,6 +951,25 @@ CLASS lcl_editor IMPLEMENTATION.
 
 ENDCLASS.                    "lcl_editor IMPLEMENTATION
 
+CLASS lcl_console IMPLEMENTATION.
+
+  METHOD constructor.
+    super->constructor( io_container = io_container
+                        iv_read_only = abap_true
+                        iv_toolbar = iv_toolbar ).
+  ENDMETHOD.
+
+  METHOD set_textstream.
+    super->set_textstream( text ).
+    mv_content = text.
+  ENDMETHOD.
+
+  METHOD lif_source_editor~to_string.
+    rv_text = mv_content.
+  ENDMETHOD.                    "to_string
+
+ENDCLASS.
+
 CLASS lcl_source IMPLEMENTATION.
 
   METHOD constructor.
@@ -1472,7 +1502,7 @@ CLASS ltc_stack DEFINITION FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
     INTERFACES lif_unit_test.
   PRIVATE SECTION.
     CONSTANTS:
-      c_pi TYPE lcl_stack=>tv_data VALUE `Que j'aime a faire connaitre ce nombre si utile aux sages`,
+      c_pi TYPE lcl_stack=>tv_data VALUE `Que j'aime a faire connaitre ce nombre si utile aux sages` ##NO_TEXT,
       c_euler TYPE lcl_stack=>tv_data VALUE `2.71828182845985`.
     DATA mo_stack TYPE REF TO lcl_stack.
 

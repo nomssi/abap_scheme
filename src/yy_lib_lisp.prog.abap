@@ -1,4 +1,5 @@
 *&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
 *& Include           YY_LIB_LISP
 *& https://github.com/nomssi/abap_scheme
 *& https://github.com/mydoghasworms/abap-lisp
@@ -60,34 +61,37 @@
     c_eval_quasiquote       TYPE string VALUE 'quasiquote' ##NO_TEXT,
     c_eval_unquote          TYPE string VALUE 'unquote' ##NO_TEXT,
     c_eval_unquote_splicing TYPE string VALUE 'unquote-splicing' ##NO_TEXT.
+  CONSTANTS:
+    c_decimal_digits TYPE char10 VALUE '0123456789',
+    c_hex_digits TYPE c LENGTH 16 VALUE '0123456789ABCDEF'.
 
-  TYPES tv_int TYPE i.             " integer data type, use int8 if available
+  TYPES tv_int TYPE i.            " integer data type, use int8 if available
   TYPES tv_index TYPE tv_int.
   TYPES tv_real TYPE decfloat34.  " real data type
   TYPES tv_xword TYPE x LENGTH 2.
 
- CLASS lcl_demo_output DEFINITION.
-   PUBLIC SECTION.
-     CLASS-METHODS write IMPORTING iv_text TYPE any.
-     CLASS-METHODS display.
-     CLASS-METHODS begin_section IMPORTING iv_text TYPE any.
- ENDCLASS.
+  CLASS lcl_demo_output DEFINITION.
+    PUBLIC SECTION.
+      CLASS-METHODS write IMPORTING iv_text TYPE any.
+      CLASS-METHODS display.
+      CLASS-METHODS begin_section IMPORTING iv_text TYPE any.
+  ENDCLASS.
 
- CLASS lcl_demo_output IMPLEMENTATION.
+  CLASS lcl_demo_output IMPLEMENTATION.
 
-   METHOD write.
-     cl_demo_output=>write( iv_text ).
-   ENDMETHOD.
+    METHOD write.
+      cl_demo_output=>write( iv_text ).
+    ENDMETHOD.
 
-   METHOD begin_section.
-     cl_demo_output=>begin_section( iv_text ).
-   ENDMETHOD.
+    METHOD begin_section.
+      cl_demo_output=>begin_section( iv_text ).
+    ENDMETHOD.
 
-   METHOD display.
-     cl_demo_output=>display( ).
-   ENDMETHOD.
+    METHOD display.
+      cl_demo_output=>display( ).
+    ENDMETHOD.
 
- ENDCLASS.
+  ENDCLASS.
 
   DEFINE _trace_call.
     IF gv_lisp_trace EQ abap_true.
@@ -225,47 +229,73 @@
 * procedures, where only the comparison operator differs
   DEFINE _comparison.
     DATA carry TYPE tv_real.
+    DATA carry_int TYPE tv_int.
+    DATA carry_is_int TYPE flag.
     _data_local_numeric_cell.
 
     result = false.
-    _validate: list, list->cdr.
-    _get_number carry list->car &2.
-
-    cell = list->cdr.
-    IF cell->type NE lcl_lisp=>type_pair.
-      throw( c_error_incorrect_input ).
+    _validate: list, list->car, list->cdr.
+    IF list->cdr->type NE lcl_lisp=>type_pair.
+    throw( c_error_incorrect_input ).
     ENDIF.
 
+    cell = list->car.
+    carry_is_int = abap_false.
+    CASE cell->type.
+    WHEN lcl_lisp=>type_integer.
+    carry_is_int = abap_true.
+    _to_integer cell carry_int.
+    carry = carry_int.
+    WHEN lcl_lisp=>type_real.
+    _to_real cell carry.
+    WHEN lcl_lisp=>type_rational.
+    lo_rat ?= cell.
+    carry = lo_rat->integer / lo_rat->denominator.
+*      WHEN lcl_lisp=>type_complex.
+    WHEN OTHERS.
+    throw( |{ cell->to_string( ) } is not a number in { &2 }| ).
+    ENDCASE.
+
+    cell = list->cdr.
     WHILE cell->type EQ lcl_lisp=>type_pair.
-      _validate cell->car.
+    _validate cell->car.
 
-      CASE cell->car->type.
-        WHEN lcl_lisp=>type_integer.
-          lo_int ?= cell->car.
-          IF carry &1 lo_int->integer.
-            RETURN.
-          ENDIF.
-          carry = lo_int->integer.
+    CASE cell->car->type.
+    WHEN lcl_lisp=>type_integer.
+    lo_int ?= cell->car.
+    IF carry_is_int = abap_true.
+    IF carry_int &1 lo_int->integer.
+    RETURN.
+    ENDIF.
+    carry_int = lo_int->integer.
+    ELSE.
+    IF carry &1 lo_int->integer.
+    RETURN.
+    ENDIF.
+    ENDIF.
+    carry = lo_int->integer.
 
-        WHEN lcl_lisp=>type_real.
-          lo_real ?= cell->car.
-          IF carry &1 lo_real->real.
-            RETURN.
-          ENDIF.
-          carry = lo_real->real.
+    WHEN lcl_lisp=>type_real.
+    carry_is_int = abap_false.
+    lo_real ?= cell->car.
+    IF carry &1 lo_real->real.
+    RETURN.
+    ENDIF.
+    carry = lo_real->real.
 
-        WHEN lcl_lisp=>type_rational.
-          lo_rat ?= cell->car.
-          IF carry * lo_rat->denominator &1 lo_rat->integer.
-            RETURN.
-          ENDIF.
-          carry = lo_rat->integer / lo_rat->denominator.
+    WHEN lcl_lisp=>type_rational.
+    carry_is_int = abap_false.
+    lo_rat ?= cell->car.
+    IF carry * lo_rat->denominator &1 lo_rat->integer.
+    RETURN.
+    ENDIF.
+    carry = lo_rat->integer / lo_rat->denominator.
 
 *         WHEN lcl_lisp=>type_complex.
-        WHEN OTHERS.
-          throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
-      ENDCASE.
-      cell = cell->cdr.
+    WHEN OTHERS.
+    throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
+    ENDCASE.
+    cell = cell->cdr.
     ENDWHILE.
     result = true.
   END-OF-DEFINITION.
@@ -279,7 +309,7 @@
     _get_number carry list->car &2.
 
     IF sign( carry ) NE &1.
-      RETURN.
+    RETURN.
     ENDIF.
     result = true.
   END-OF-DEFINITION.
@@ -312,9 +342,9 @@
     result = nil.
     _validate list.
     TRY.
-        _get_number carry list->car &2.
-        _is_last_param list.
-        result = lcl_lisp_new=>&3( &1( carry ) ).
+    _get_number carry list->car &2.
+    _is_last_param list.
+    result = lcl_lisp_new=>&3( &1( carry ) ).
     _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -326,9 +356,9 @@
     result = nil.
     _validate list.
     TRY.
-        _get_number carry list->car &2.
-        _is_last_param list.
-        result = lcl_lisp_new=>real( &1( carry ) ).
+    _get_number carry list->car &2.
+    _is_last_param list.
+    result = lcl_lisp_new=>real( &1( carry ) ).
     _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -388,18 +418,19 @@
         type_rational TYPE tv_type VALUE 'r',
         type_string   TYPE tv_type VALUE '"'.
       CONSTANTS:
-        type_boolean    TYPE tv_type VALUE 'b',
-        type_char       TYPE tv_type VALUE 'c',
-        type_null       TYPE tv_type VALUE '0',
-        type_pair       TYPE tv_type VALUE 'C',
-        type_lambda     TYPE tv_type VALUE 'λ',
-        type_native     TYPE tv_type VALUE 'n',
-        type_primitive  TYPE tv_type VALUE 'I',
-        type_syntax     TYPE tv_type VALUE 'y',
-        type_hash       TYPE tv_type VALUE 'h',
-        type_vector     TYPE tv_type VALUE 'v',
-        type_bytevector TYPE tv_type VALUE '8',
-        type_port       TYPE tv_type VALUE 'o'.
+        type_boolean     TYPE tv_type VALUE 'b',
+        type_char        TYPE tv_type VALUE 'c',
+        type_null        TYPE tv_type VALUE '0',
+        type_pair        TYPE tv_type VALUE 'C',
+        type_lambda      TYPE tv_type VALUE 'λ',
+        type_case_lambda TYPE tv_type VALUE 'A',
+        type_native      TYPE tv_type VALUE 'n',
+        type_primitive   TYPE tv_type VALUE 'I',
+        type_syntax      TYPE tv_type VALUE 'y',
+        type_hash        TYPE tv_type VALUE 'h',
+        type_vector      TYPE tv_type VALUE 'v',
+        type_bytevector  TYPE tv_type VALUE '8',
+        type_port        TYPE tv_type VALUE 'o'.
 *      Types for ABAP integration:
       CONSTANTS:
         type_abap_data     TYPE tv_type VALUE 'D',
@@ -503,6 +534,8 @@
                                 EXPORTING ev_skip TYPE flag
                                           ev_str  TYPE string.
   ENDCLASS.                    "lcl_lisp DEFINITION
+
+  TYPES tt_lisp TYPE STANDARD TABLE OF REF TO lcl_lisp WITH EMPTY KEY.
 
   CLASS lcl_lisp_char DEFINITION INHERITING FROM lcl_lisp
     CREATE PROTECTED FRIENDS lcl_lisp_new.
@@ -702,8 +735,8 @@
     CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
       DATA real TYPE tv_real READ-ONLY.
-      METHODS float_eq IMPORTING iv_real TYPE tv_real
-                       RETURNING VALUE(result) type flag.
+      METHODS float_eq IMPORTING iv_real       TYPE tv_real
+                       RETURNING VALUE(result) TYPE flag.
     PROTECTED SECTION.
       METHODS constructor IMPORTING value TYPE any.
   ENDCLASS.
@@ -718,9 +751,9 @@
     ENDMETHOD.
 
     METHOD float_eq.
-      CONSTANTS: c_epsilon TYPE tv_real VALUE cl_abap_math=>MIN_DECFLOAT16,
-                 c_min_normal TYPE tv_real VALUE cl_abap_math=>MIN_DECFLOAT34,
-                 c_max_value TYPE tv_real VALUE cl_abap_math=>MAX_DECFLOAT34.
+      CONSTANTS: c_epsilon    TYPE tv_real VALUE cl_abap_math=>min_decfloat16,
+                 c_min_normal TYPE tv_real VALUE cl_abap_math=>min_decfloat34,
+                 c_max_value  TYPE tv_real VALUE cl_abap_math=>max_decfloat34.
       DATA diff TYPE tv_real.
       DATA sum TYPE tv_real.
       DATA abs_a TYPE tv_real.
@@ -743,7 +776,7 @@
           ELSE. " use relative error
             IF diff / nmin( val1 = sum val2 = c_max_value ) < c_epsilon.
               result = abap_true.
-            endif.
+            ENDIF.
           ENDIF.
         ENDIF.
       ENDIF.
@@ -759,6 +792,72 @@
   CLASS lcl_lisp_lambda DEFINITION INHERITING FROM lcl_lisp_pair FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
     PROTECTED SECTION.
+  ENDCLASS.
+
+  CLASS lcl_lisp_case_lambda DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
+    PUBLIC SECTION.
+      METHODS match IMPORTING args          TYPE REF TO lcl_lisp
+                    RETURNING VALUE(result) TYPE REF TO lcl_lisp_lambda
+                    RAISING lcx_lisp_exception.
+    PROTECTED SECTION.
+      DATA clauses TYPE tt_lisp.
+  ENDCLASS.
+
+  CLASS lcl_lisp_case_lambda IMPLEMENTATION.
+
+    METHOD match.
+*     Find the first lambda where we can assign each argument to its corresponding symbol
+      DATA lo_lambda TYPE REF TO lcl_lisp_lambda.
+      DATA lo_clause TYPE REF TO lcl_lisp.
+
+      LOOP AT clauses INTO lo_clause.
+        IF lo_clause->type NE type_lambda.
+          EXIT.
+        ENDIF.
+        lo_lambda ?= lo_clause.
+        DATA(lo_var) = lo_lambda->car.      " pointer to formal parameters
+        DATA(lo_arg) = args.                " Pointer to arguments
+
+        CASE lo_arg->type.
+          WHEN lcl_lisp=>type_pair OR lcl_lisp=>type_null.   "Do we have a proper list?
+
+            WHILE lo_var NE lcl_lisp=>nil.         " Nil would mean no parameters to map
+
+              IF lo_var->type EQ lcl_lisp=>type_symbol.
+*               dotted pair after fixed number of parameters, to be bound to a variable number of arguments
+                result = lo_lambda.
+                RETURN.
+              ENDIF.
+
+*             Part of the list with fixed number of parameters
+              IF lo_arg = lcl_lisp=>nil.           " Premature end of arguments
+                EXIT.
+              ENDIF.
+
+              lo_var = lo_var->cdr.
+              lo_arg = lo_arg->cdr.
+              CHECK lo_arg IS NOT BOUND.
+              lo_arg = lcl_lisp=>nil.
+            ENDWHILE.
+
+            IF lo_arg EQ lcl_lisp=>nil AND lo_var EQ lcl_lisp=>nil.  " Correct number of arguments
+              result = lo_lambda.
+              RETURN.
+            ENDIF.
+
+          WHEN lcl_lisp=>type_symbol.
+*           args is a symbol to be bound to a variable number of parameters
+            result = lo_lambda.
+            RETURN.
+
+        ENDCASE.
+
+      ENDLOOP.
+
+      throw( `no clause matching the arguments` ).
+
+    ENDMETHOD.
+
   ENDCLASS.
 
   CLASS lcl_lisp_symbol DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
@@ -801,7 +900,6 @@
     METHODS get RETURNING VALUE(result) TYPE string.
   ENDINTERFACE.
 
-  TYPES tt_lisp TYPE STANDARD TABLE OF REF TO lcl_lisp WITH EMPTY KEY.
   CLASS lcl_lisp_vector DEFINITION DEFERRED.
   CLASS lcl_lisp_abapfunction DEFINITION DEFERRED.
   CLASS lcl_lisp_hash DEFINITION DEFERRED.
@@ -971,6 +1069,9 @@
                                      io_env           TYPE REF TO lcl_lisp_environment
                                      iv_macro         TYPE flag DEFAULT abap_false
                            RETURNING VALUE(ro_lambda) TYPE REF TO lcl_lisp.
+
+      CLASS-METHODS case_lambda IMPORTING it_clauses       TYPE tt_lisp
+                                RETURNING VALUE(ro_lambda) TYPE REF TO lcl_lisp.
 
       CLASS-METHODS function IMPORTING io_list        TYPE REF TO lcl_lisp
                              RETURNING VALUE(ro_func) TYPE REF TO lcl_lisp_abapfunction
@@ -1312,6 +1413,12 @@
                        RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                        RAISING   lcx_lisp_exception.
 
+      METHODS fill IMPORTING from           TYPE tv_index DEFAULT 0
+                             to             TYPE tv_index OPTIONAL
+                             elem           TYPE REF TO lcl_lisp
+                   RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_vector
+                   RAISING   lcx_lisp_exception.
+
       METHODS length RETURNING VALUE(ro_length) TYPE REF TO lcl_lisp.
 
       METHODS to_string REDEFINITION.
@@ -1462,8 +1569,8 @@
     PUBLIC SECTION.
       CLASS-METHODS:
         new   RETURNING VALUE(env)  TYPE REF TO lcl_lisp_environment,
-        clone IMPORTING io_outer    TYPE REF TO lcl_lisp_environment
-              RETURNING VALUE(env)  TYPE REF TO lcl_lisp_environment,
+        clone IMPORTING io_outer   TYPE REF TO lcl_lisp_environment
+              RETURNING VALUE(env) TYPE REF TO lcl_lisp_environment,
         make_top_level IMPORTING io_outer   TYPE REF TO lcl_lisp_environment OPTIONAL
                        RETURNING VALUE(env) TYPE REF TO lcl_lisp_environment.
   ENDCLASS.
@@ -1499,7 +1606,7 @@
         c_open_paren  TYPE char1 VALUE '(',
         c_close_paren TYPE char1 VALUE ')',
         c_lisp_equal  TYPE char1 VALUE '=',
-        c_lisp_xX     TYPE tv_char2 VALUE 'xX'.
+        c_lisp_xx     TYPE tv_char2 VALUE 'xX'.
       CONSTANTS:
         c_escape_char    TYPE char1 VALUE '\',
         c_text_quote     TYPE char1 VALUE '"',
@@ -1564,6 +1671,8 @@
 
       METHODS throw IMPORTING message TYPE string
                     RAISING   lcx_lisp_exception.
+      METHODS skip_one_datum RAISING lcx_lisp_exception.
+      METHODS skip_block_comment RAISING lcx_lisp_exception.
 
   ENDCLASS.                    "lcl_parser DEFINITION
 
@@ -1621,6 +1730,31 @@
       proc_cadr,             ##called
       proc_cdar,             ##called
       proc_cddr,             ##called
+
+      proc_caaar,            ##called
+      proc_cdaar,            ##called
+      proc_caadr,            ##called
+      proc_cdadr,            ##called
+      proc_cadar,            ##called
+      proc_cddar,            ##called
+      proc_caddr,            ##called
+      proc_cdddr,            ##called
+      proc_caaaar,           ##called
+      proc_cdaaar,           ##called
+      proc_cadaar,           ##called
+      proc_cddaar,           ##called
+      proc_caaadr,           ##called
+      proc_cdaadr,           ##called
+      proc_cadadr,           ##called
+      proc_cddadr,           ##called
+      proc_caadar,           ##called
+      proc_cdadar,           ##called
+      proc_caddar,           ##called
+      proc_cdddar,           ##called
+      proc_caaddr,           ##called
+      proc_cdaddr,           ##called
+      proc_cadddr,           ##called
+      proc_cddddr,           ##called
 
       proc_memq,     ##called
       proc_memv,     ##called
@@ -1781,6 +1915,9 @@
 
 * Continuation
       proc_call_cc,              ##called
+* Exceptions
+      proc_error,                ##called
+      proc_raise,                ##called
 * Not in the spec: Just adding it anyway
       proc_random,       ##called
       proc_eq,           ##called
@@ -1797,6 +1934,7 @@
       proc_vector,         ##called
       proc_vector_length,  ##called
       proc_vector_set,     ##called
+      proc_vector_fill,    ##called
       proc_vector_ref,     ##called
       proc_vector_to_list. ##called
 
@@ -1810,6 +1948,8 @@
 
 * Ports
       _proc_meth:
+      proc_make_parameter         ##called,
+      proc_parameterize           ##called,
       proc_is_input_port          ##called,
       proc_is_output_port         ##called,
       proc_is_textual_port        ##called,
@@ -1938,10 +2078,10 @@
       TYPES tt_digit TYPE SORTED TABLE OF ts_digit WITH UNIQUE KEY zero.
       DATA mt_zero TYPE tt_digit.
 
-      METHODS string_to_number IMPORTING iv_text TYPE string
-                                         iv_radix TYPE i DEFAULT 10
+      METHODS string_to_number IMPORTING iv_text       TYPE string
+                                         iv_radix      TYPE i DEFAULT 10
                                RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                               RAISING lcx_lisp_exception.
+                               RAISING   lcx_lisp_exception.
 
       METHODS unicode_digit_zero RETURNING VALUE(rt_zero) TYPE tt_digit.
 
@@ -2018,6 +2158,12 @@
                                           eo_args TYPE REF TO lcl_lisp
                                 RAISING   lcx_lisp_exception.
 
+      METHODS extract_parameter_objects IMPORTING io_head TYPE REF TO lcl_lisp
+                                                  io_env  TYPE REF TO lcl_lisp_environment
+                                        EXPORTING eo_pars TYPE REF TO lcl_lisp
+                                                  eo_args TYPE REF TO lcl_lisp
+                                        RAISING   lcx_lisp_exception.
+
       METHODS eval_do_step IMPORTING io_command TYPE REF TO lcl_lisp
                                      io_steps   TYPE REF TO lcl_lisp
                                      io_env     TYPE REF TO lcl_lisp_environment
@@ -2055,6 +2201,10 @@
                                     CHANGING  co_head       TYPE REF TO lcl_lisp
                                     RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
                                     RAISING   lcx_lisp_exception.
+      METHODS environment_parameterize IMPORTING VALUE(io_env) TYPE REF TO lcl_lisp_environment
+                                       CHANGING  co_head       TYPE REF TO lcl_lisp
+                                       RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
+                                       RAISING   lcx_lisp_exception.
 
       METHODS table_of_lists IMPORTING io_head         TYPE REF TO lcl_lisp
                                        environment     TYPE REF TO lcl_lisp_environment
@@ -2113,10 +2263,10 @@
 *     Whitespace values
       CLEAR mv_whitespace.
       mv_whitespace+0(1) = ' '.
-      mv_whitespace+1(1) = cl_abap_char_utilities=>newline.
-      mv_whitespace+2(1) = cl_abap_char_utilities=>cr_lf(1).
-      mv_whitespace+3(1) = cl_abap_char_utilities=>cr_lf(2).
-      mv_whitespace+4(1) = cl_abap_char_utilities=>horizontal_tab.
+      mv_whitespace+1(1) = cl_abap_char_utilities=>newline.        " \n
+      mv_whitespace+2(1) = cl_abap_char_utilities=>cr_lf(1).       " \r
+      mv_whitespace+3(1) = cl_abap_char_utilities=>cr_lf(2).       " \n
+      mv_whitespace+4(1) = cl_abap_char_utilities=>horizontal_tab. " \t
       mv_whitespace+5(1) = cl_abap_char_utilities=>vertical_tab.
       mv_whitespace+6(1) = cl_abap_char_utilities=>form_feed.
 
@@ -2145,37 +2295,43 @@
       ENDIF.
 
       IF char EQ c_lisp_hash AND rv_has_next EQ abap_true AND peek_char( ) EQ c_lisp_comment.
-        " Character constant  #; comment
-        next_char( ).       " skip #
-        next_char( ).       " skip ;
-*       skip optional blanks, max. until end of line
-        WHILE char CN mv_eol AND index LT length AND peek_char( ) EQ ` `.
-          next_char( ).
-        ENDWHILE.
-*       skip one datum
-        DATA sval TYPE string.
-        match_atom( CHANGING cv_val = sval ).
+        skip_one_datum( ).
         rv_has_next = skip_whitespace( ).
       ENDIF.
 
       IF char EQ c_lisp_hash AND rv_has_next EQ abap_true AND peek_char( ) EQ c_block_comment.
-        next_char( ).   " skip |
-*       match |#
-        next_char( ).
-*       skip block comment, from #| to |#
-        WHILE index LT length AND NOT ( char EQ c_block_comment AND peek_char( ) EQ c_lisp_hash ).
-          next_char( ).
-        ENDWHILE.
-
-        IF char EQ c_block_comment AND peek_char( ) EQ c_lisp_hash.
-          next_char( ).
-          next_char( ).
-        ENDIF.
-
+        skip_block_comment( ).
         rv_has_next = skip_whitespace( ).
       ENDIF.
 
-    ENDMETHOD.                    "skip_whitespace
+    ENDMETHOD.
+
+    METHOD skip_block_comment.
+*     skip block comment, from #| to |#
+      next_char( ).   " skip |#
+      next_char( ).
+      WHILE index LT length AND NOT ( char EQ c_block_comment AND peek_char( ) EQ c_lisp_hash ).
+        next_char( ).
+      ENDWHILE.
+
+      IF char EQ c_block_comment AND peek_char( ) EQ c_lisp_hash.
+        next_char( ).  " skip #|
+        next_char( ).
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD skip_one_datum.
+*     Character constant  #; comment
+      next_char( ).       " skip #;
+      next_char( ).
+*     skip optional blanks, max. until end of line
+      WHILE char CN mv_eol AND index LT length AND peek_char( ) EQ ` `.
+        next_char( ).
+      ENDWHILE.
+*     skip one datum
+      DATA sval TYPE string.
+      match_atom( CHANGING cv_val = sval ).
+    ENDMETHOD.
 
     METHOD next_char.
       index = index + 1.
@@ -2215,7 +2371,8 @@
         lv_idx = lv_idx + 1.
 
         IF lv_idx < length.
-          lv_token = to_upper( lv_token ) && code+lv_idx(1).
+          lv_token = to_upper( lv_token ).
+          CONCATENATE lv_token code+lv_idx(1) INTO lv_token RESPECTING BLANKS.
         ELSE.
           RETURN.
         ENDIF.
@@ -2378,7 +2535,7 @@
               pchar = lcl_lisp=>char_return->value+0(1).
               next_char( ).
 
-            WHEN c_lisp_xX+0(1) OR c_lisp_xX+1(1).      " hex scalar value terminated by semi-colon ;
+            WHEN c_lisp_xx+0(1) OR c_lisp_xx+1(1).      " hex scalar value terminated by semi-colon ;
               DATA lv_xstr TYPE string.
               DATA lo_char TYPE REF TO lcl_lisp_char.
               next_char( ).
@@ -2408,7 +2565,7 @@
     METHOD skip_label.
 *     Skip if match was successful
       next_char( ).                 " Skip past hash
-      WHILE index < length AND char CO '0123456789'.
+      WHILE index < length AND char CO c_decimal_digits.
         next_char( ).
       ENDWHILE.
       next_char( ).                 "Skip past closing iv_limit ( = or # )
@@ -2425,7 +2582,7 @@
         lv_idx = lv_idx + 1.
 
         DATA(lv_char) = code+lv_idx(1).
-        IF lv_char CO '0123456789'.
+        IF lv_char CO c_decimal_digits.
           ev_label = |{ ev_label }{ lv_char }|.
         ELSEIF lv_char = iv_limit AND ev_label IS NOT INITIAL.
           rv_found = abap_true.
@@ -2478,17 +2635,15 @@
           RETURN.
 
         WHEN c_lisp_unquote.
-          CASE peek_char( ).
-            WHEN c_lisp_splicing.  " unquote-splicing
-              next_char( ).        " Skip past ,@
-              next_char( ).
-              element = lcl_lisp_new=>splice_unquote( parse_token( ) ).  " token must evaluate to a list, not be a list
 
-            WHEN OTHERS.           " unquote,  TO DO
-              next_char( ).        " Skip past single quote
-              element = lcl_lisp_new=>unquote( parse_token( ) ).
-
-          ENDCASE.
+          IF peek_char( ) EQ c_lisp_splicing.  " unquote-splicing ,@
+            next_char( ).        " Skip past ,
+            next_char( ).        " Skip past @
+            element = lcl_lisp_new=>splice_unquote( parse_token( ) ).  " token must evaluate to a list, not be a list
+          ELSE.                                " unquote ,
+            next_char( ).        " Skip past ,
+            element = lcl_lisp_new=>unquote( parse_token( ) ).
+          ENDIF.
           RETURN.
 
         WHEN c_text_quote.
@@ -2508,7 +2663,7 @@
             WHEN c_escape_char.  " Character constant  #\a
               next_char( ).      " skip #
               next_char( ).      " skip \
-              IF char EQ c_lisp_xX+0(1) OR char EQ c_lisp_xX+1(1).
+              IF char EQ c_lisp_xx+0(1) OR char EQ c_lisp_xx+1(1).
                 next_char( ).      " skip x
                 match_atom( CHANGING cv_val = sval ).
                 IF strlen( sval ) LE 4.
@@ -2583,7 +2738,7 @@
               element = lcl_lisp_new=>number( sval ).
               RETURN.
 
-            WHEN c_lisp_xX+0(1) OR c_lisp_xX+1(1).                "#x (hexadecimal)
+            WHEN c_lisp_xx+0(1) OR c_lisp_xx+1(1).                "#x (hexadecimal)
               _get_atom sval.
               element = lcl_lisp_new=>hex( sval ).
               RETURN.
@@ -3105,6 +3260,59 @@
       ENDWHILE.
     ENDMETHOD.
 
+    METHOD extract_parameter_objects.
+      DATA lo_val TYPE REF TO lcl_lisp.
+      DATA lo_par TYPE REF TO lcl_lisp.
+      DATA lo_param TYPE REF TO lcl_lisp.
+      DATA lo_values TYPE REF TO lcl_lisp.
+
+      DEFINE _to_param_object.
+        &2 = eval( element = &1
+                   environment = io_env ).
+        IF &2->parameter_object EQ abap_false.
+          throw( |missing parameter object in parameterize| ).
+        ENDIF.
+      END-OF-DEFINITION.
+
+      _validate io_head.
+      lo_values = eo_pars = eo_args = nil.                "list of parameter objects
+
+      CHECK io_head->car IS BOUND AND io_head->car NE nil.
+      DATA(lo_ptr) = io_head->car.
+
+      _validate lo_ptr->car.
+      _to_param_object lo_ptr->car lo_param.
+      lo_par = lcl_lisp_new=>cons( io_car = lo_param ).
+
+      IF lo_ptr->cdr IS BOUND AND lo_ptr->cdr NE nil.
+        lo_val = lcl_lisp_new=>cons( io_car = lo_ptr->cdr->car ).
+      ENDIF.
+
+      eo_pars = lo_par.
+      lo_values = lo_val.
+
+      lo_ptr = io_head->cdr.
+      WHILE lo_ptr->type EQ lcl_lisp=>type_pair. " IS BOUND AND lo_ptr NE nil.
+*       Rest of list, pick head
+        DATA(lo_first) = lo_ptr->car.
+        IF lo_first IS BOUND AND lo_first->car NE nil.
+          _to_param_object lo_first->car lo_param.
+          lo_par = lo_par->cdr = lcl_lisp_new=>cons( io_car = lo_param ).
+        ENDIF.
+
+        DATA(lo_second) = lo_first->cdr.
+        IF lo_second IS BOUND AND lo_second NE nil.
+          lo_val = lo_val->cdr = lcl_lisp_new=>cons( io_car = lo_second->car ).
+        ENDIF.
+
+        lo_ptr = lo_ptr->cdr.
+      ENDWHILE.
+      lo_par->cdr = lo_val->cdr = nil.
+
+      eo_args = evaluate_parameters( io_list = lo_values       " Pointer to values
+                                     environment = io_env ).
+    ENDMETHOD.
+
 * A letrec expression is equivalent to a let where the bindings are initialized with dummy values,
 * and then the initial values are computed and assigned into the bindings.
     METHOD environment_letrec.
@@ -3204,6 +3412,20 @@
                                                      io_env = ro_env )
                      once = abap_true ).
       ENDIF.
+*     to allow (define) with the same variable name in the body of (let ( )), create new scope
+      ro_env = lcl_lisp_env_factory=>clone( ro_env ).
+    ENDMETHOD.
+
+    METHOD environment_parameterize.
+      extract_parameter_objects( EXPORTING io_head = co_head->car
+                                           io_env = io_env
+                                 IMPORTING eo_pars = DATA(lo_pars)
+                                           eo_args = DATA(lo_new_args) ).
+
+      ro_env = lcl_lisp_env_factory=>clone( io_env ).
+      ro_env->parameters_to_symbols( io_args = lo_new_args
+                                     io_pars = lo_pars ).              " Pointer to parameter objects
+
 *     to allow (define) with the same variable name in the body of (let ( )), create new scope
       ro_env = lcl_lisp_env_factory=>clone( ro_env ).
     ENDMETHOD.
@@ -3635,6 +3857,30 @@
                                                    io_cdr = lr_tail->cdr         " Body
                                                    io_env = lo_env ).
 
+                  WHEN 'case-lambda'.
+                    DATA lt_clauses TYPE tt_lisp.
+                    _validate lr_tail.
+                    CLEAR lt_clauses.
+                    lo_clause = lr_tail.
+                    WHILE lo_clause->type = lcl_lisp=>type_pair.
+                      lr_tail = lo_clause->car.
+                      lo_ptr = lcl_lisp_new=>lambda( io_car = lr_tail->car         " List of parameters
+                                                     io_cdr = lr_tail->cdr         " Body
+                                                     io_env = lo_env ).
+                      APPEND lo_ptr TO lt_clauses.
+                      lo_clause = lo_clause->cdr.
+                    ENDWHILE.
+                    IF lo_clause NE nil.
+                      throw( `Invalid case-lambda clause` ).
+                    ENDIF.
+                    result = lcl_lisp_new=>case_lambda( lt_clauses ).
+
+                  WHEN 'parameterize'.
+                    lo_env = environment_parameterize( EXPORTING io_env = lo_env
+                                                       CHANGING co_head = lr_tail ).
+                    lo_elem = lr_tail->cdr.
+                    _tail_sequence.
+
 *(do ((<variable1> <init1> <step1>) ... ) <-- iteration spec
 *     (<test> <do result> ... )           <-- tail sequence
 *     <command> ... )
@@ -3831,6 +4077,16 @@
 *              >> TEST: Support evaluation of ABAP methods directly
 *              << TEST
 
+                      WHEN lcl_lisp=>type_case_lambda.
+                        DATA lo_case TYPE REF TO lcl_lisp_case_lambda.
+                        lo_case ?= lo_proc.
+                        lo_proc = lo_case->match( lr_tail ).
+                        lo_env = lambda_environment( io_head = lo_proc
+                                                     io_args = lr_tail
+                                                     environment = lo_env ).
+                        lo_elem = lo_proc->cdr.
+                        _tail_sequence.
+
                       WHEN OTHERS.
                         throw( |attempt to apply { lo_proc->to_string( ) } - not a procedure| ).
 
@@ -3857,10 +4113,10 @@
       DATA li_port TYPE REF TO lif_&2_port.
 
       IF &1->type EQ lcl_lisp=>type_pair.
-        _validate_port &1->car &3.
-        li_port ?= &1->car.
+      _validate_port &1->car &3.
+      li_port ?= &1->car.
       ELSE.
-        li_port = go_&2_port.
+      li_port = go_&2_port.
       ENDIF.
     END-OF-DEFINITION.
 
@@ -4109,13 +4365,17 @@
       ENDIF.
     ENDMETHOD.                    "proc_append_unsafe
 
+    DEFINE _validate_pair.
+      IF &1->type NE lcl_lisp=>type_pair.
+        &1->error_not_a_pair( &2 ).
+      ENDIF.
+    END-OF-DEFINITION.
+
     METHOD proc_car.
       _validate: list, list->car.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
-        lo_arg->error_not_a_pair( `car: ` ).
-      ENDIF.
+      _validate_pair lo_arg `car: `.
       result = lo_arg->car.
     ENDMETHOD.                    "proc_car
 
@@ -4125,9 +4385,7 @@
       DATA(lo_arg) = list->car.
       _validate_mutable: lo_arg  `list`.
 
-      IF lo_arg->type NE lcl_lisp=>type_pair.
-        lo_arg->error_not_a_pair( `set-car!: ` ).
-      ENDIF.
+      _validate_pair lo_arg `set-car!: `.
 
       lo_arg->car = list->cdr->car.
       result = nil.
@@ -4139,9 +4397,7 @@
       DATA(lo_arg) = list->car.
       _validate_mutable: lo_arg `list`.
 
-      IF lo_arg->type NE lcl_lisp=>type_pair.
-        lo_arg->error_not_a_pair( `set-cdr!: ` ).
-      ENDIF.
+      _validate_pair lo_arg `set-cdr!: `.
 
       lo_arg->cdr = list->cdr->car.
       result = nil.
@@ -4151,9 +4407,7 @@
       _validate list.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
-        lo_arg->error_not_a_pair( `cdr: ` ).
-      ENDIF.
+      _validate_pair lo_arg `cdr: `.
       result = lo_arg->cdr.
     ENDMETHOD.                    "proc_cdr
 
@@ -4180,81 +4434,161 @@
       ENDIF.
     ENDMETHOD.                    "proc_cons
 
-    METHOD proc_caar.
+    DEFINE _validate_cxxr.
       _validate list.
-      IF list->type NE lcl_lisp=>type_pair.
-        list->error_not_a_pair( `caar: ` ).
-      ENDIF.
+      _validate_pair list &1.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
-        lo_arg->error_not_a_pair( `caar: ` ).
-      ENDIF.
+      _validate_pair lo_arg &1.
+    END-OF-DEFINITION.
 
-      lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
-        lo_arg->error_not_a_pair( `caar: ` ).
-      ENDIF.
+    DEFINE _execute_cxxr.
+      _validate_cxxr &1.
 
-      result = lo_arg->car.
-    ENDMETHOD.                    "proc_car
+      lo_arg = lo_arg->&2.
+      _validate_pair lo_arg &1.
+
+      result = lo_arg->&3.
+    END-OF-DEFINITION.
+
+    METHOD proc_caar.
+      _execute_cxxr `caar: ` car car.
+    ENDMETHOD.                    "proc_caar
 
     METHOD proc_cadr.
-      _validate list.
-      IF list->type NE lcl_lisp=>type_pair.
-        list->error_not_a_pair( `cadr: ` ).
-      ENDIF.
-
-      DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
-        lo_arg->error_not_a_pair( `cadr: ` ).
-      ENDIF.
-
-      lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
-        lo_arg->error_not_a_pair( `cadr: ` ).
-      ENDIF.
-
-      result = lo_arg->car.
-    ENDMETHOD.                    "proc_cdr
+      _execute_cxxr `cadr: ` cdr car.
+    ENDMETHOD.                    "proc_cadr
 
     METHOD proc_cdar.
-      _validate list.
-      IF list->type NE lcl_lisp=>type_pair.
-        list->error_not_a_pair( `cdar: ` ).
-      ENDIF.
-
-      DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
-        lo_arg->error_not_a_pair( `cdar: ` ).
-      ENDIF.
-
-      lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
-        lo_arg->error_not_a_pair( `cdar: ` ).
-      ENDIF.
-
-      result = lo_arg->cdr.
-    ENDMETHOD.                    "proc_car
+      _execute_cxxr `cdar: ` car cdr.
+    ENDMETHOD.                    "proc_cdar
 
     METHOD proc_cddr.
-      _validate list.
-      IF list->type NE lcl_lisp=>type_pair.
-        list->error_not_a_pair( `cddr: ` ).
-      ENDIF.
+      _execute_cxxr `cddr: ` cdr cdr.
+    ENDMETHOD.                    "proc_cddr
 
-      DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
-        lo_arg->error_not_a_pair( `cddr: ` ).
-      ENDIF.
+    DEFINE _execute_cx3r.
+      _validate_cxxr &1.
 
-      lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
-        lo_arg->error_not_a_pair( `cddr: ` ).
-      ENDIF.
+      lo_arg = lo_arg->&2.
+      _validate_pair lo_arg &1.
 
-      result = lo_arg->cdr.
-    ENDMETHOD.                    "proc_cdr
+      lo_arg = lo_arg->&3.
+      _validate_pair lo_arg &1.
+
+      result = lo_arg->&4.
+    END-OF-DEFINITION.
+
+    METHOD proc_caaar.
+      _execute_cx3r `caaar: ` car car car.
+    ENDMETHOD.
+
+    METHOD proc_cdaar.
+      _execute_cx3r `cdaar: ` car car cdr.
+    ENDMETHOD.
+
+    METHOD proc_caadr.
+      _execute_cx3r `caadr: ` cdr car car.
+    ENDMETHOD.
+
+    METHOD proc_cdadr.
+      _execute_cx3r `cdadr: ` cdr car cdr.
+    ENDMETHOD.
+
+    METHOD proc_cadar.
+      _execute_cx3r `cadar: ` car cdr car.
+    ENDMETHOD.
+
+    METHOD proc_cddar.
+      _execute_cx3r `cddar: ` car cdr cdr.
+    ENDMETHOD.
+
+    METHOD proc_caddr.
+      _execute_cx3r `caddr: ` cdr cdr car.
+    ENDMETHOD.
+
+    METHOD proc_cdddr.
+      _execute_cx3r `cdddr: ` cdr cdr cdr.
+    ENDMETHOD.
+
+    DEFINE _execute_cx4r.
+      _validate_cxxr &1.
+
+      lo_arg = lo_arg->&2.
+      _validate_pair lo_arg &1.
+
+      lo_arg = lo_arg->&3.
+      _validate_pair lo_arg &1.
+
+      lo_arg = lo_arg->&4.
+      _validate_pair lo_arg &1.
+
+      result = lo_arg->&5.
+    END-OF-DEFINITION.
+
+    METHOD proc_caaaar.
+      _execute_cx4r `caaaar: ` car car car car.
+    ENDMETHOD.
+
+    METHOD proc_cdaaar.
+      _execute_cx4r `cdaaar: ` car car car cdr.
+    ENDMETHOD.
+
+    METHOD proc_cadaar.
+      _execute_cx4r `cadaar: ` car car cdr car.
+    ENDMETHOD.
+
+    METHOD proc_cddaar.
+      _execute_cx4r `cddaar: ` car car cdr cdr.
+    ENDMETHOD.
+
+    METHOD proc_caaadr.
+      _execute_cx4r `caaadr: ` cdr car car car.
+    ENDMETHOD.
+
+    METHOD proc_cdaadr.
+      _execute_cx4r `cdaadr: ` cdr car car cdr.
+    ENDMETHOD.
+
+    METHOD proc_cadadr.
+      _execute_cx4r `cadadr: ` cdr car cdr car.
+    ENDMETHOD.
+
+    METHOD proc_cddadr.
+      _execute_cx4r `cddadr: ` cdr car cdr cdr.
+    ENDMETHOD.
+
+    METHOD proc_caadar.
+      _execute_cx4r `caadar: ` car cdr car car.
+    ENDMETHOD.
+
+    METHOD proc_cdadar.
+      _execute_cx4r `cdadar: ` car cdr car cdr.
+    ENDMETHOD.
+
+    METHOD proc_caddar.
+      _execute_cx4r `caddar: ` car cdr cdr car.
+    ENDMETHOD.
+
+    METHOD proc_cdddar.
+      _execute_cx4r `cdddar: ` car cdr cdr cdr.
+    ENDMETHOD.
+
+    METHOD proc_caaddr.
+      _execute_cx4r `caaddr: ` cdr cdr car car.
+    ENDMETHOD.
+
+    METHOD proc_cdaddr.
+      _execute_cx4r `cdaddr: ` cdr cdr car cdr.
+    ENDMETHOD.
+
+    METHOD proc_cadddr.
+      _execute_cx4r `cadddr: ` cdr cdr cdr car.
+    ENDMETHOD.
+
+    METHOD proc_cddddr.
+      _execute_cx4r `cddddr: ` cdr cdr cdr cdr.
+    ENDMETHOD.
 
     METHOD list_length.
       DATA lo_fast TYPE REF TO lcl_lisp.
@@ -4363,7 +4697,7 @@
       _validate_index list->cdr->car 'list-tail'.
 
       result = list_tail( list = list->car
-                          k    = CAST lcl_lisp_integer( list->cdr->car )->integer
+                          k  = CAST lcl_lisp_integer( list->cdr->car )->integer
                           area = 'list-tail' ).
     ENDMETHOD.
 
@@ -4379,7 +4713,7 @@
 
       result = list.
       DO k TIMES.
-        IF result->cdr EQ nil.
+        IF result->type NE lcl_lisp=>type_pair.
           throw( area && `: list too short` ).
         ENDIF.
         result = result->cdr.
@@ -4438,7 +4772,7 @@
       _validate_index list->cdr->car 'list-ref'.
 
       result = list_tail( list = list->car
-                          k    = CAST lcl_lisp_integer( list->cdr->car )->integer
+                          k = CAST lcl_lisp_integer( list->cdr->car )->integer
                           area = 'list-ref' ).
       result = result->car.
     ENDMETHOD.
@@ -4508,6 +4842,47 @@
                    io_elem = lo_obj ).
 *     Result is undefined, but must be valid
       result = lo_obj.
+    ENDMETHOD.
+
+    METHOD proc_vector_fill.
+* (vector-fill! vector fill) procedure
+* (vector-fill! vector fill start) procedure
+* (vector-fill! vector fill start end) procedure
+*The vector-fill! procedure stores fill in the elements of vector between start and end.
+      _validate list.
+      DATA(lo_ptr) = list.
+
+      _validate_vector lo_ptr->car 'vector-fill!'.
+      DATA(lo_vec) = CAST lcl_lisp_vector( lo_ptr->car ).
+
+      lo_ptr = lo_ptr->cdr.
+      _validate: lo_ptr, lo_ptr->car.
+      DATA(lo_fill) = lo_ptr->car.
+
+      lo_ptr = lo_ptr->cdr.
+      _validate lo_ptr.
+      IF lo_ptr NE nil.
+        _validate_index lo_ptr->car 'vector-fill! start'.
+        DATA lv_start TYPE tv_int.
+        _to_integer lo_ptr->car lv_start.
+
+        lo_ptr = lo_ptr->cdr.
+        _validate lo_ptr.
+        IF lo_ptr NE nil.
+          _validate_index lo_ptr->car 'vector-fill! end'.
+
+          result = lo_vec->fill( from = lv_start
+                                 to = CAST lcl_lisp_integer( lo_ptr->car )->integer
+                                 elem = lo_fill ).
+        ELSE.
+          result = lo_vec->fill( from = lv_start
+                                 elem = lo_fill ).
+        ENDIF.
+
+      ELSE.
+        result = lo_vec->fill( elem = lo_fill ).
+      ENDIF.
+
     ENDMETHOD.
 
     METHOD proc_vector_to_list.
@@ -5646,7 +6021,7 @@
               throw( |{ list->car->to_string( ) } is not a number in [abs]| ).
           ENDCASE.
 
-      _catch_arithmetic_error.
+          _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_abs
 
@@ -5729,18 +6104,36 @@
     ENDMETHOD.                    "proc_atanh
 
     METHOD proc_expt.
-      DATA num1 TYPE tv_real.
+      DATA base1 TYPE tv_real.
       DATA exp1 TYPE tv_real.
       _data_local_numeric_cell.
 
       result = nil.
       _validate: list, list->cdr.
-      _get_number num1 list->car '[expt]'.
-      _get_number exp1 list->cdr->car '[expt]'.
-
       _is_last_param list->cdr.
+
+      _get_number base1 list->car '[expt]'.
+
       TRY.
-          result = lcl_lisp_new=>real( num1 ** exp1 ).
+*          _get_number exp1 list->cdr->car '[expt]'.
+          _validate list->cdr->car.
+          cell = list->cdr->car.
+          CASE cell->type.
+            WHEN lcl_lisp=>type_integer.
+              _to_integer cell exp1.
+              result = lcl_lisp_new=>number( ipow( base = base1  exp = exp1 ) ).
+            WHEN lcl_lisp=>type_real.
+              _to_real cell exp1.
+              result = lcl_lisp_new=>number( base1 ** exp1 ).
+            WHEN lcl_lisp=>type_rational.
+              lo_rat ?= cell.
+              exp1 = lo_rat->integer / lo_rat->denominator.
+              result = lcl_lisp_new=>number( base1 ** exp1 ).
+*            WHEN lcl_lisp=>type_complex.
+            WHEN OTHERS.
+              throw( |{ cell->to_string( ) } is not a number in [expt]| ).
+          ENDCASE.
+
           _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_expt
@@ -5927,7 +6320,6 @@
     ENDMETHOD.
 
     METHOD proc_num_to_string.
-      CONSTANTS c_digit_to_char TYPE c LENGTH 16 VALUE '0123456789ABCDEF'.
       DATA lv_radix TYPE i VALUE 10.
       DATA lv_radix_error TYPE flag VALUE abap_false.
       DATA lv_text TYPE string.
@@ -5956,9 +6348,9 @@
             WHEN 2 OR 8 OR 16.
               CLEAR lv_text.
               WHILE lv_int GT 0.
-                lv_digit = lv_int mod lv_radix.
+                lv_digit = lv_int MOD lv_radix.
                 lv_int = lv_int DIV lv_radix.
-                lv_text = c_digit_to_char+lv_digit(1) && lv_text.
+                lv_text = c_hex_digits+lv_digit(1) && lv_text.
               ENDWHILE.
               result = lcl_lisp_new=>string( lv_text ).
 
@@ -6004,7 +6396,7 @@
             WHEN OTHERS.
               lv_radix_error = abap_true.
           ENDCASE.
-        CATCH lcx_lisp_exception cx_sy_conversion_error.
+        CATCH lcx_lisp_exception cx_sy_conversion_error ##NO_HANDLER.
       ENDTRY.
       CHECK lv_radix_error EQ abap_true.
       throw( |radix ({ iv_radix }) must be 2, 8, 10 or 16 in string->number| ).
@@ -6537,6 +6929,66 @@
       result = true.
     ENDMETHOD.
 
+    METHOD proc_make_parameter.
+* (make-parameter init) procedure
+* (make-parameter init converter) procedure
+*  Returns a newly allocated parameter object, which is a procedure that accepts zero arguments
+*    and returns the value associated with the parameter object. Initially, this value is the
+*    value of (converter init), or of init if the conversion procedure converter is not specified.
+*  The associated value can be temporarily changed using parameterize, which is described below.
+*  The effect of passing arguments to a parameter object is implementation-dependent.
+
+* The following implementation of make-parameter and parameterize is suitable for an implementation with
+* no threads. Parameter objects are implemented here as procedures, using two arbitrary unique objects
+* <param-set!> and <param-convert>:
+*(define (make-parameter init . o)
+*  (let* ((converter
+*           (if (pair? o) (car o) (lambda (x) x)))
+*           (value (converter init)))
+*    (lambda args (cond ((null? args)
+*                          value)
+*                       ((eq? (car args) <param-set!>)
+*                         (set! value (cadr args)))
+*                       ((eq? (car args) <param-convert>)
+*                         converter)
+*                       (else (error "bad parameter syntax"))))))
+
+      DATA lo_converter TYPE REF TO lcl_lisp.
+      DATA lo_init TYPE REF TO lcl_lisp.
+      DATA lo_value TYPE REF TO lcl_lisp.
+      DATA lo_env TYPE REF TO lcl_lisp_environment.
+
+      _validate: list, list->car, list->cdr.
+      lo_init = list->car.
+
+      DATA(lo_ptr) = list->cdr.
+      IF lo_ptr NE nil.
+        _validate lo_ptr->car.
+        IF lo_ptr->cdr NE nil.
+          throw( |unexpected parameter { lo_ptr->cdr->to_string( ) } in make-parameter| ).
+        ENDIF.
+
+        lo_converter = lo_ptr->car.
+        IF NOT lo_converter->is_procedure( ).
+          throw( |{ lo_converter->to_string( ) } is not a procedure in make-parameter| ).
+        ENDIF.
+
+        lo_value = eval( element = lcl_lisp_new=>box( io_proc = lo_converter
+                                                      io_elem = lo_init )
+                         environment = env ).
+      ELSE.
+        lo_value = lo_init.
+      ENDIF.
+      result = lcl_lisp_new=>lambda( io_car = nil
+                                     io_cdr = lcl_lisp_new=>cons( io_car = lo_value )
+                                     io_env = env ).
+      result->parameter_object = abap_true.
+    ENDMETHOD.
+
+    METHOD proc_parameterize.
+      result = nil.
+    ENDMETHOD.
+
     METHOD proc_is_char_alphabetic.
       DATA lv_char TYPE char01.
       _validate list.
@@ -6752,26 +7204,26 @@
 
       lo_test = nil.
       IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>&5.
-        lo_test = lo_arg->car.
-        lv_ref = &3( lo_test ).
-        lo_arg = lo_arg->cdr.
+      lo_test = lo_arg->car.
+      lv_ref = &3( lo_test ).
+      lo_arg = lo_arg->cdr.
       ENDIF.
       IF lo_test EQ nil OR lo_arg EQ nil.
-        throw( |{ &1 } missing argument| ).
+      throw( |{ &1 } missing argument| ).
       ENDIF.
 
       WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>&5.
-        lv_test = &3( lo_arg->car ).
-        IF lv_ref &2 lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
+      lv_test = &3( lo_arg->car ).
+      IF lv_ref &2 lv_test.
+      lv_ref = lv_test.
+      ELSE.
+      RETURN.
+      ENDIF.
+      lo_arg = lo_arg->cdr.
       ENDWHILE.
 
       IF lo_arg NE nil.
-        throw( |{ &1 } wrong argument in { lo_arg->car->to_string( ) }| ).
+      throw( |{ &1 } wrong argument in { lo_arg->car->to_string( ) }| ).
       ENDIF.
       CHECK lo_arg = nil.
       result = true.
@@ -6913,6 +7365,17 @@
       _validate list.
       _validate_char list->car `char-downcase`.
       result = lcl_lisp_new=>char( to_lower( list->car->value ) ).
+    ENDMETHOD.
+
+    METHOD proc_error.
+      _validate list.
+      throw( list->to_string( ) ).
+    ENDMETHOD.
+
+    METHOD proc_raise.
+      _validate list.
+      _validate list->car.
+      throw( list->car->to_string( ) ).
     ENDMETHOD.
 
     METHOD proc_call_cc.
@@ -7797,6 +8260,8 @@
       define_value( symbol = 'define-syntax'   type = lcl_lisp=>type_syntax value   = 'define-syntax' ).
       define_value( symbol = 'macroexpand'     type = lcl_lisp=>type_syntax value   = 'macroexpand' ).
       define_value( symbol = 'gensym'          type = lcl_lisp=>type_syntax value   = 'gensym' ).
+      define_value( symbol = 'case-lambda'     type = lcl_lisp=>type_syntax value   = 'case-lambda' ).
+      define_value( symbol = 'parameterize'    type = lcl_lisp=>type_syntax value   = 'parameterize' ).
 
       define_value( symbol = 'and'      type = lcl_lisp=>type_syntax value   = 'and' ).
       define_value( symbol = 'or'       type = lcl_lisp=>type_syntax value   = 'or' ).
@@ -7863,10 +8328,39 @@
 
       define_value( symbol = 'set-car!' type = lcl_lisp=>type_native value   = 'PROC_SET_CAR' ).
       define_value( symbol = 'set-cdr!' type = lcl_lisp=>type_native value   = 'PROC_SET_CDR' ).
+
       define_value( symbol = 'caar'     type = lcl_lisp=>type_native value   = 'PROC_CAAR' ).
       define_value( symbol = 'cadr'     type = lcl_lisp=>type_native value   = 'PROC_CADR' ).
       define_value( symbol = 'cdar'     type = lcl_lisp=>type_native value   = 'PROC_CDAR' ).
       define_value( symbol = 'cddr'     type = lcl_lisp=>type_native value   = 'PROC_CDDR' ).
+      define_value( symbol = 'caaar'    type = lcl_lisp=>type_native value   = 'PROC_CAAAR' ).
+      define_value( symbol = 'cdaar'    type = lcl_lisp=>type_native value   = 'PROC_CDAAR' ).
+      define_value( symbol = 'caadr'    type = lcl_lisp=>type_native value   = 'PROC_CAADR' ).
+      define_value( symbol = 'cdadr'    type = lcl_lisp=>type_native value   = 'PROC_CDADR' ).
+      define_value( symbol = 'cadar'    type = lcl_lisp=>type_native value   = 'PROC_CADAR' ).
+      define_value( symbol = 'cddar'    type = lcl_lisp=>type_native value   = 'PROC_CDDAR' ).
+      define_value( symbol = 'caddr'    type = lcl_lisp=>type_native value   = 'PROC_CADDR' ).
+      define_value( symbol = 'cdddr'    type = lcl_lisp=>type_native value   = 'PROC_CDDDR' ).
+
+      define_value( symbol = 'caaaar'    type = lcl_lisp=>type_native value   = 'PROC_CAAAAR' ).
+      define_value( symbol = 'cdaaar'    type = lcl_lisp=>type_native value   = 'PROC_CDAAAR' ).
+      define_value( symbol = 'cadaar'    type = lcl_lisp=>type_native value   = 'PROC_CADAAR' ).
+      define_value( symbol = 'cddaar'    type = lcl_lisp=>type_native value   = 'PROC_CDDAAR' ).
+      define_value( symbol = 'caaadr'    type = lcl_lisp=>type_native value   = 'PROC_CAAADR' ).
+      define_value( symbol = 'cdaadr'    type = lcl_lisp=>type_native value   = 'PROC_CDAADR' ).
+      define_value( symbol = 'cadadr'    type = lcl_lisp=>type_native value   = 'PROC_CADADR' ).
+      define_value( symbol = 'cddadr'    type = lcl_lisp=>type_native value   = 'PROC_CDDADR' ).
+      define_value( symbol = 'caadar'    type = lcl_lisp=>type_native value   = 'PROC_CAADAR' ).
+      define_value( symbol = 'cdadar'    type = lcl_lisp=>type_native value   = 'PROC_CDADAR' ).
+      define_value( symbol = 'caddar'    type = lcl_lisp=>type_native value   = 'PROC_CADDAR' ).
+      define_value( symbol = 'cdddar'    type = lcl_lisp=>type_native value   = 'PROC_CDDDAR' ).
+      define_value( symbol = 'caaddr'    type = lcl_lisp=>type_native value   = 'PROC_CAADDR' ).
+      define_value( symbol = 'caaddr'    type = lcl_lisp=>type_native value   = 'PROC_CAADDR' ).
+      define_value( symbol = 'cadddr'    type = lcl_lisp=>type_native value   = 'PROC_CADDDR' ).
+      define_value( symbol = 'cddddr'    type = lcl_lisp=>type_native value   = 'PROC_CDDDDR' ).
+
+
+      define_value( symbol = 'make-parameter'    type = lcl_lisp=>type_native value = 'PROC_MAKE_PARAMETER' ).
 
       define_value( symbol = 'current-input-port'  type = lcl_lisp=>type_native value = 'PROC_CURRENT_INPUT_PORT' ).
       define_value( symbol = 'current-output-port' type = lcl_lisp=>type_native value = 'PROC_CURRENT_OUTPUT_PORT' ).
@@ -7880,6 +8374,7 @@
       define_value( symbol = 'vector'        type = lcl_lisp=>type_native value   = 'PROC_VECTOR' ).
       define_value( symbol = 'vector-length' type = lcl_lisp=>type_native value   = 'PROC_VECTOR_LENGTH' ).
       define_value( symbol = 'vector-set!'   type = lcl_lisp=>type_native value   = 'PROC_VECTOR_SET' ).
+      define_value( symbol = 'vector-fill!'  type = lcl_lisp=>type_native value   = 'PROC_VECTOR_FILL' ).
       define_value( symbol = 'vector-ref'    type = lcl_lisp=>type_native value   = 'PROC_VECTOR_REF' ).
       define_value( symbol = 'vector->list'  type = lcl_lisp=>type_native value   = 'PROC_VECTOR_TO_LIST' ).
       define_value( symbol = 'make-vector'   type = lcl_lisp=>type_native value   = 'PROC_MAKE_VECTOR' ).
@@ -8015,6 +8510,10 @@
       define_value( symbol = 'empty?'  type = lcl_lisp=>type_native value   = 'PROC_NILP' ).
       define_value( symbol = 'first'   type = lcl_lisp=>type_native value   = 'PROC_CAR' ).
       define_value( symbol = 'rest'    type = lcl_lisp=>type_native value   = 'PROC_CDR' ).
+
+*     Errors
+      define_value( symbol = 'raise'   type = lcl_lisp=>type_native value   = 'PROC_RAISE' ).
+      define_value( symbol = 'error'   type = lcl_lisp=>type_native value   = 'PROC_ERROR' ).
 
 *     Ports
       define_value( symbol = 'input-port?'         type = lcl_lisp=>type_native value   = 'PROC_IS_INPUT_PORT' ).
@@ -8172,7 +8671,7 @@
           DATA(lo_p_b) = CAST lcl_lisp_pair( b ).
           CHECK lo_pair->car EQ lo_p_b->car AND lo_pair->cdr EQ lo_p_b->cdr.
 
-        WHEN lcl_lisp=>type_lambda.
+        WHEN lcl_lisp=>type_lambda OR lcl_lisp=>type_case_lambda .
 * obj1 and obj2 are procedures whose location tags are equal (section 4.1.4).
           DATA(lo_lambda) = CAST lcl_lisp_lambda( me ).
           DATA(lo_l_b) = CAST lcl_lisp_lambda( b ).
@@ -8188,11 +8687,11 @@
     ENDMETHOD.
 
     METHOD is_equal. "equal?
-* The equal? procedure, when applied to pairs, vectors, strings and bytevectors, recursively
-* compares them, returning #t when the unfoldings of its arguments into (possibly inﬁnite)
-* trees are equal (in the sense of equal?) as ordered trees, and #f otherwise.
-* equal? returns the same as eqv? when applied to booleans, symbols, numbers, characters,
-* ports, procedures, and the empty list. If two objects are eqv?, they must be equal? as well.
+* The equal? procedure, when applied to pairs, vectors, strings and bytevectors, recursively compares them,
+* returning #t when the unfoldings of its arguments into (possibly infinite) trees are equal (in the sense
+* of equal?) as ordered trees, and #f otherwise.
+* equal? returns the same as eqv? when applied to booleans, symbols, numbers, characters, ports, procedures,
+* and the empty list. If two objects are eqv?, they must be equal? as well.
 * In all other cases, equal? may return either #t or #f.
 * Even if its arguments are circular data structures, equal? must always terminate.
       _validate: io_elem.
@@ -8262,7 +8761,7 @@
           CHECK me->value EQ io_elem->value.
           result = true.
 
-          "        WHEN lcl_lisp=>type_bytevector.
+*        WHEN lcl_lisp=>type_bytevector.
 
         WHEN OTHERS.
           result = is_equivalent( io_elem ).
@@ -8717,7 +9216,8 @@
       ENDTRY.
 
       RAISE EXCEPTION TYPE cx_sy_conversion_no_number
-        EXPORTING value = value.
+        EXPORTING
+          value = value.
 
     ENDMETHOD.
 
@@ -8725,7 +9225,7 @@
       RAISE EXCEPTION TYPE lcx_lisp_exception
         EXPORTING
           message = &1
-          area    = 'Radix'.
+          area    = 'Radix' ##NO_TEXT.
     END-OF-DEFINITION.
 
     METHOD hex_integer.
@@ -8742,7 +9242,7 @@
       IF lv_text CA 'abcdef'.
         lv_text = to_upper( lv_text ).
       ENDIF.
-      IF lv_text CO '0123456789ABCDEF'.
+      IF lv_text CO c_hex_digits.
         lv_hex = lv_text.
         rv_int = lv_hex.
       ELSE.
@@ -8959,12 +9459,23 @@
       lo_lambda->cdr = io_cdr.               " Body
       lo_lambda->macro = iv_macro.
 
-*     Store the reference to the environment in which the lambda was created
-*     (lexical scope) e.g. if the lambda is created inside another lambda
-*     we want that environment to be present when we evaluate the new lambda
+*     Store the reference to the environment in which the lambda was created (lexical scope)
+*     e.g. if the lambda is created inside another lambda we want that environment to be present
+*     when we evaluate the new lambda
       lo_lambda->environment = io_env.
       ro_lambda = lo_lambda.
     ENDMETHOD.                    "new_lambda
+
+    METHOD case_lambda.
+      IF it_clauses IS INITIAL.
+        ro_lambda = lcl_lisp=>nil.
+      ELSE.
+        DATA(lo_lambda) = NEW lcl_lisp_case_lambda( ).
+        lo_lambda->type = lcl_lisp=>type_case_lambda.
+        lo_lambda->clauses = it_clauses.
+        ro_lambda ?= lo_lambda.
+      ENDIF.
+    ENDMETHOD.
 
     METHOD hash.
       _validate io_list.
@@ -9187,6 +9698,28 @@
       ENDIF.
     ENDMETHOD.
 
+    METHOD fill.
+      DATA lv_end TYPE tv_index.
+      _validate_mutable me `vector`.
+      ro_elem = me.
+
+      DATA(lv_start) = from + 1.         " start is Inclusive
+      DATA(lv_size) = lines( vector ).
+      IF to IS SUPPLIED.
+        lv_end = to.                     " end is Exclusive
+      ELSE.
+        lv_end = lv_size.        " End of vector
+      ENDIF.
+
+      IF lv_end LT 1 OR lv_end GT lv_size OR lv_start GT lv_end.
+        throw( |vector-fill!: out-of-bound range| ).
+      ENDIF.
+
+      LOOP AT vector FROM lv_start TO lv_end ASSIGNING FIELD-SYMBOL(<vec>).
+        <vec> = elem.
+      ENDLOOP.
+    ENDMETHOD.
+
     METHOD length.
       ro_length = mo_length.
     ENDMETHOD.
@@ -9221,13 +9754,9 @@
     ENDMETHOD.
 
     METHOD eval.
-      DATA lt_vector TYPE tt_lisp.
-
-      LOOP AT vector INTO DATA(lo_list).
-        APPEND interpreter->eval( element = lo_list
-                                  environment = environment ) TO lt_vector.
-      ENDLOOP.
-      result = lcl_lisp_new=>vector( it_vector = lt_vector
+      result = lcl_lisp_new=>vector( it_vector = VALUE tt_lisp( FOR lo_elem IN vector
+                                                    ( interpreter->eval( element = lo_elem
+                                                                         environment = environment ) ) )
                                      iv_mutable = abap_true ).
     ENDMETHOD.
 

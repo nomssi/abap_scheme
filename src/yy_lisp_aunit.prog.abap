@@ -3516,6 +3516,8 @@
        METHODS vector_set_1 FOR TESTING.
        METHODS vector_set_2 FOR TESTING.
 
+       METHODS vector_fill_1 FOR TESTING.
+
        METHODS vector_to_list_1 FOR TESTING.
        METHODS vector_to_list_2 FOR TESTING.
        METHODS vector_to_list_3 FOR TESTING.
@@ -3655,7 +3657,14 @@
                expected = '#( 1 4 9 16 25 )' ).
      ENDMETHOD.                    "list_to_vector_2
 
-   ENDCLASS.                    "ltc_vector IMPLEMENTATION
+     METHOD vector_fill_1.
+       scheme( code = |(define a (vector 1 2 3 4 5))|
+               expected = 'a' ).
+       scheme( code = |(vector-fill! a 'smash 2 4)|
+               expected = '#( 1 2 smash smash 5 )' ).
+     ENDMETHOD.
+
+ENDCLASS.                    "ltc_vector IMPLEMENTATION
 
 *----------------------------------------------------------------------*
 *       CLASS ltc_library_function DEFINITION
@@ -3668,8 +3677,11 @@
 *      merge with LTC_MATH?
        METHODS setup.
        METHODS teardown.
+       METHODS radix RETURNING VALUE(code) TYPE string.
+       METHODS make_parameter_1.
 
        METHODS abs_1 FOR TESTING.
+       METHODS parameter_object_1 FOR TESTING.
    ENDCLASS.                    "ltc_library_function DEFINITION
 
 *----------------------------------------------------------------------*
@@ -3706,7 +3718,36 @@
                expected = '#t' ).
      ENDMETHOD.                    "abs
 
-   ENDCLASS.                    "ltc_library_function IMPLEMENTATION
+     METHOD radix.
+       code = |(define radix| &
+              |  (make-parameter 10 | &
+              |   (lambda (x) (if (and (exact-integer? x) (<= 2 x 16))| &
+              |                  x| &
+              |                 (error "invalid radix")))))|.
+     ENDMETHOD.
+
+     METHOD make_parameter_1.
+       scheme( code = radix( )
+               expected = 'radix' ).
+       scheme( code = |(define (f n) (number->string n (radix)))|
+               expected = 'f' ).
+       scheme( code = |(f 12)|
+               expected = '"12"' ).
+     ENDMETHOD.
+
+     METHOD parameter_object_1.
+       make_parameter_1( ).
+       scheme( code = |(parameterize ((radix 2)) (f 12))|
+               expected = '"1100"' ).
+       scheme( code = |(f 12)|
+               expected = '"12"' ).
+       scheme( code = |(radix 16)|
+               expected = |'()| ).
+       scheme( code = |(parameterize ((radix 0)) (f 12))|
+               expected = 'Eval: radix (0) must be 2, 8, 10 or 16 in number->string' ).
+     ENDMETHOD.
+
+ENDCLASS.                    "ltc_library_function IMPLEMENTATION
 
 *----------------------------------------------------------------------*
 *       CLASS ltc_higher_order DEFINITION
@@ -4447,6 +4488,14 @@
 
        METHODS funct_arg_count FOR TESTING.
        METHODS funct_arg_missing FOR TESTING.
+
+       METHODS case_lambda_empty FOR TESTING.
+       METHODS case_lambda_one FOR TESTING.
+       METHODS case_lambda_0 FOR TESTING.
+       METHODS case_lambda_1 FOR TESTING.
+       METHODS case_lambda_2 FOR TESTING.
+       METHODS case_lambda_3 FOR TESTING.
+       METHODS case_lambda_error FOR TESTING RAISING cx_static_check.
    ENDCLASS.                    "ltc_basic_functions DEFINITION
 
 *----------------------------------------------------------------------*
@@ -4510,7 +4559,84 @@
                expected = 'Eval: Missing parameter(s) ( y )' ).
      ENDMETHOD.                    "funct_arg_count
 
-   ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
+     METHOD case_lambda_empty.
+       scheme( code = '(case-lambda)'
+               expected = |'()| ).
+     ENDMETHOD.
+
+     METHOD case_lambda_one.
+       scheme( code = '(case-lambda)'
+               expected = |'()| ).
+     ENDMETHOD.
+
+     METHOD case_lambda_0.
+       scheme( code = |(define range (case-lambda | &
+                      | ((e) (range 0 e))| &
+                      | ((b e) (do ((r '() (cons e r)) | &
+                      |           (e (- e 1) (- e 1)))| &
+                      |           ((< e b) r)))))|
+               expected = |range| ).
+       scheme( code = |(range 3)|
+               expected = |( 0 1 2 )| ).
+       scheme( code = |(range 3 5)|
+               expected = |( 3 4 )| ).
+     ENDMETHOD.
+
+     METHOD case_lambda_1.
+       scheme( code = |(let ([f (case-lambda| &
+                      |          [() 10]| &
+                      |          [(x) x]| &
+                      |          [(x y) (list y x)]| &
+                      |          [r r])])| &
+                      |  (list (f)| &
+                      |        (f 1)| &
+                      |        (f 1 2)| &
+                      |        (f 1 2 3)))|
+               expected = |( 10 1 ( 2 1 ) ( 1 2 3 ) )| ).
+     ENDMETHOD.
+
+     METHOD case_lambda_2.
+       scheme( code = |(define (make-accum n)| &
+                      |  (case-lambda| &
+                      |    (() n)| &
+                      |    ((m) (set! n (+ n m)) n)))|
+               expected = |make-accum| ).
+       scheme( code = |(define a (make-accum 20))|
+               expected = |a| ).
+       scheme( code = |(a)|
+               expected = |20| ).
+       scheme( code = |(a 10)|
+               expected = |30| ).
+       scheme( code = |(a)|
+               expected = |30| ).
+     ENDMETHOD.
+
+     METHOD case_lambda_3.
+       scheme( code = |(define plus| &
+                      |  (case-lambda | &
+                      |    (() 0)| &
+                      |    ((x) x)| &
+                      |    ((x y) (+ x y))| &
+                      |    ((x y z) (+ (+ x y) z))| &
+                      |    (args (apply + args))))|
+               expected = |plus| ).
+       scheme( code = |(plus)|
+               expected = |0| ).
+       scheme( code = |(plus 1)|
+               expected = |1| ).
+       scheme( code = |(plus 1 2 3)|
+               expected = |6| ).
+     ENDMETHOD.
+
+     METHOD case_lambda_error.
+       scheme( code = |((case-lambda| &
+                          |   ((a) a)| &
+                          |   ((a b) (* a b)))| &
+                          |  1 2 3)|
+               expected = `Eval: no clause matching the arguments` ).
+     ENDMETHOD.
+
+ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
 
 *----------------------------------------------------------------------*
 *       CLASS ltc_hash_element DEFINITION
