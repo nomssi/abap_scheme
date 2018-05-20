@@ -236,66 +236,66 @@
     result = false.
     _validate: list, list->car, list->cdr.
     IF list->cdr->type NE lcl_lisp=>type_pair.
-    throw( c_error_incorrect_input ).
+      throw( c_error_incorrect_input ).
     ENDIF.
 
     cell = list->car.
     carry_is_int = abap_false.
     CASE cell->type.
-    WHEN lcl_lisp=>type_integer.
-    carry_is_int = abap_true.
-    _to_integer cell carry_int.
-    carry = carry_int.
-    WHEN lcl_lisp=>type_real.
-    _to_real cell carry.
-    WHEN lcl_lisp=>type_rational.
-    lo_rat ?= cell.
-    carry = lo_rat->integer / lo_rat->denominator.
-*      WHEN lcl_lisp=>type_complex.
-    WHEN OTHERS.
-    throw( |{ cell->to_string( ) } is not a number in { &2 }| ).
+      WHEN lcl_lisp=>type_integer.
+        carry_is_int = abap_true.
+        _to_integer cell carry_int.
+        carry = carry_int.
+      WHEN lcl_lisp=>type_real.
+        _to_real cell carry.
+      WHEN lcl_lisp=>type_rational.
+        lo_rat ?= cell.
+        carry = lo_rat->integer / lo_rat->denominator.
+*        WHEN lcl_lisp=>type_complex.
+      WHEN OTHERS.
+        throw( |{ cell->to_string( ) } is not a number in { &2 }| ).
     ENDCASE.
 
     cell = list->cdr.
     WHILE cell->type EQ lcl_lisp=>type_pair.
-    _validate cell->car.
+      _validate cell->car.
 
-    CASE cell->car->type.
-    WHEN lcl_lisp=>type_integer.
-    lo_int ?= cell->car.
-    IF carry_is_int = abap_true.
-    IF carry_int &1 lo_int->integer.
-    RETURN.
-    ENDIF.
-    carry_int = lo_int->integer.
-    ELSE.
-    IF carry &1 lo_int->integer.
-    RETURN.
-    ENDIF.
-    ENDIF.
-    carry = lo_int->integer.
+      CASE cell->car->type.
+        WHEN lcl_lisp=>type_integer.
+          lo_int ?= cell->car.
+          IF carry_is_int = abap_true.
+            IF carry_int &1 lo_int->integer.
+              RETURN.
+            ENDIF.
+            carry_int = lo_int->integer.
+          ELSE.
+            IF carry &1 lo_int->integer.
+              RETURN.
+            ENDIF.
+          ENDIF.
+          carry = lo_int->integer.
 
-    WHEN lcl_lisp=>type_real.
-    carry_is_int = abap_false.
-    lo_real ?= cell->car.
-    IF carry &1 lo_real->real.
-    RETURN.
-    ENDIF.
-    carry = lo_real->real.
+        WHEN lcl_lisp=>type_real.
+          carry_is_int = abap_false.
+          lo_real ?= cell->car.
+          IF carry &1 lo_real->real.
+            RETURN.
+          ENDIF.
+          carry = lo_real->real.
 
-    WHEN lcl_lisp=>type_rational.
-    carry_is_int = abap_false.
-    lo_rat ?= cell->car.
-    IF carry * lo_rat->denominator &1 lo_rat->integer.
-    RETURN.
-    ENDIF.
-    carry = lo_rat->integer / lo_rat->denominator.
+        WHEN lcl_lisp=>type_rational.
+          carry_is_int = abap_false.
+          lo_rat ?= cell->car.
+          IF carry * lo_rat->denominator &1 lo_rat->integer.
+            RETURN.
+          ENDIF.
+          carry = lo_rat->integer / lo_rat->denominator.
 
-*         WHEN lcl_lisp=>type_complex.
-    WHEN OTHERS.
-    throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
-    ENDCASE.
-    cell = cell->cdr.
+*           WHEN lcl_lisp=>type_complex.
+        WHEN OTHERS.
+          throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
+      ENDCASE.
+      cell = cell->cdr.
     ENDWHILE.
     result = true.
   END-OF-DEFINITION.
@@ -309,7 +309,7 @@
     _get_number carry list->car &2.
 
     IF sign( carry ) NE &1.
-    RETURN.
+      RETURN.
     ENDIF.
     result = true.
   END-OF-DEFINITION.
@@ -342,9 +342,9 @@
     result = nil.
     _validate list.
     TRY.
-    _get_number carry list->car &2.
-    _is_last_param list.
-    result = lcl_lisp_new=>&3( &1( carry ) ).
+        _get_number carry list->car &2.
+        _is_last_param list.
+        result = lcl_lisp_new=>&3( &1( carry ) ).
     _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -356,9 +356,9 @@
     result = nil.
     _validate list.
     TRY.
-    _get_number carry list->car &2.
-    _is_last_param list.
-    result = lcl_lisp_new=>real( &1( carry ) ).
+        _get_number carry list->car &2.
+        _is_last_param list.
+        result = lcl_lisp_new=>real( &1( carry ) ).
     _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -458,7 +458,6 @@
       DATA mutable TYPE flag VALUE abap_true READ-ONLY.
 
       DATA macro TYPE flag.
-      DATA parameter_object TYPE flag.
       DATA value TYPE string.
 
       DATA car TYPE REF TO lcl_lisp.
@@ -791,6 +790,7 @@
 
   CLASS lcl_lisp_lambda DEFINITION INHERITING FROM lcl_lisp_pair FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
+      DATA parameter_object TYPE flag.
     PROTECTED SECTION.
   ENDCLASS.
 
@@ -1064,10 +1064,11 @@
                                      iv_mutable    TYPE flag
                            RETURNING VALUE(ro_vec) TYPE REF TO lcl_lisp_vector.
 
-      CLASS-METHODS lambda IMPORTING io_car           TYPE REF TO lcl_lisp
-                                     io_cdr           TYPE REF TO lcl_lisp
-                                     io_env           TYPE REF TO lcl_lisp_environment
-                                     iv_macro         TYPE flag DEFAULT abap_false
+      CLASS-METHODS lambda IMPORTING io_car              TYPE REF TO lcl_lisp
+                                     io_cdr              TYPE REF TO lcl_lisp
+                                     io_env              TYPE REF TO lcl_lisp_environment
+                                     iv_macro            TYPE flag DEFAULT abap_false
+                                     iv_parameter_object TYPE flag DEFAULT abap_false
                            RETURNING VALUE(ro_lambda) TYPE REF TO lcl_lisp.
 
       CLASS-METHODS case_lambda IMPORTING it_clauses       TYPE tt_lisp
@@ -1542,7 +1543,6 @@
         define_value IMPORTING symbol         TYPE string
                                type           TYPE lcl_lisp=>tv_type
                                value          TYPE any OPTIONAL
-                               parameter      TYPE flag DEFAULT abap_false
                      RETURNING VALUE(element) TYPE REF TO lcl_lisp.
 
       METHODS parameters_to_symbols IMPORTING io_pars TYPE REF TO lcl_lisp
@@ -2044,9 +2044,9 @@
                     RAISING   lcx_lisp_exception.
 
       CLASS-DATA gi_log TYPE REF TO lif_log.
-      CLASS-DATA: go_input_port  TYPE REF TO lcl_lisp_port,
-                  go_output_port TYPE REF TO lcl_lisp_port,
-                  go_error_port  TYPE REF TO lcl_lisp_port.
+      CLASS-DATA: go_input_port  TYPE REF TO lcl_lisp_lambda,
+                  go_output_port TYPE REF TO lcl_lisp_lambda,
+                  go_error_port  TYPE REF TO lcl_lisp_lambda.
       CLASS-DATA gensym_counter TYPE i.
 
       METHODS write IMPORTING io_elem       TYPE REF TO lcl_lisp
@@ -2793,13 +2793,15 @@
 
     METHOD constructor.
       super->constructor( ).
-      go_input_port = go_output_port = go_error_port = io_port.
-      gi_log = ii_log.
-      mt_zero = unicode_digit_zero( ).
-
       nil = lcl_lisp=>nil.
       true = lcl_lisp=>true.
       false = lcl_lisp=>false.
+
+      go_input_port ?= proc_make_parameter( lcl_lisp_new=>cons( io_car = io_port ) ).
+      go_output_port = go_error_port = go_input_port.
+      gi_log = ii_log.
+      mt_zero = unicode_digit_zero( ).
+
       env = lcl_lisp_env_factory=>make_top_level( ).
     ENDMETHOD.                    "constructor
 
@@ -3265,11 +3267,17 @@
       DATA lo_par TYPE REF TO lcl_lisp.
       DATA lo_param TYPE REF TO lcl_lisp.
       DATA lo_values TYPE REF TO lcl_lisp.
+      DATA lo_lambda TYPE REF TO lcl_lisp_lambda.
+      DATA lv_parameter_object TYPE flag VALUE abap_false.
 
       DEFINE _to_param_object.
         &2 = eval( element = &1
                    environment = io_env ).
-        IF &2->parameter_object EQ abap_false.
+        IF &2->type EQ lcl_lisp=>type_lambda.
+          lo_lambda ?= &2.
+          lv_parameter_object = lo_lambda->parameter_object.
+        ENDIF.
+        IF lv_parameter_object EQ abap_false.
           throw( |missing parameter object in parameterize| ).
         ENDIF.
       END-OF-DEFINITION.
@@ -4112,12 +4120,16 @@
     DEFINE _optional_port.
       DATA li_port TYPE REF TO lif_&2_port.
 
+      TRY.
       IF &1->type EQ lcl_lisp=>type_pair.
-      _validate_port &1->car &3.
-      li_port ?= &1->car.
+        _validate_port &1->car &3.
+        li_port ?= &1->car.
       ELSE.
-      li_port = go_&2_port.
+        li_port ?= proc_current_&2_port( nil ).
       ENDIF.
+      CATCH cx_root INTO DATA(lx_error).
+        throw( lx_error->get_text( ) ).
+      ENDTRY.
     END-OF-DEFINITION.
 
     DEFINE _optional_port_arg.
@@ -4161,7 +4173,7 @@
         _validate_port io_arg->cdr->car `read-string`.
         li_port ?= io_arg->cdr->car.
       ELSE.
-        li_port = go_input_port.
+        li_port ?= proc_current_input_port( nil ).
       ENDIF.
 
       DO k TIMES.
@@ -6848,15 +6860,18 @@
     ENDMETHOD.
 
     METHOD proc_current_output_port.
-      result = go_output_port.
+      result = eval( element = lcl_lisp_new=>cons( io_car = go_output_port )  " no parameters
+                     environment = env ).
     ENDMETHOD.
 
     METHOD proc_current_input_port.
-      result = go_input_port.
+      result = eval( element = lcl_lisp_new=>cons( io_car = go_input_port )
+                     environment = env ).
     ENDMETHOD.
 
     METHOD proc_current_error_port.
-      result = go_error_port.
+      result = eval( element = lcl_lisp_new=>cons( io_car = go_error_port )
+                     environment = env ).
     ENDMETHOD.
 
     METHOD proc_close_output_port.
@@ -6981,8 +6996,8 @@
       ENDIF.
       result = lcl_lisp_new=>lambda( io_car = nil
                                      io_cdr = lcl_lisp_new=>cons( io_car = lo_value )
-                                     io_env = env ).
-      result->parameter_object = abap_true.
+                                     io_env = env
+                                     iv_parameter_object = abap_true ).
     ENDMETHOD.
 
     METHOD proc_parameterize.
@@ -8158,8 +8173,7 @@
 
     METHOD define_value.
       element = lcl_lisp_new=>elem( type = type
-                                    value = value
-                                    parameter = parameter ).
+                                    value = value ).
       set( symbol = symbol
            element = element ).
     ENDMETHOD.                    "define_cell
@@ -8366,9 +8380,9 @@
       define_value( symbol = 'current-output-port' type = lcl_lisp=>type_native value = 'PROC_CURRENT_OUTPUT_PORT' ).
       define_value( symbol = 'current-error-port'  type = lcl_lisp=>type_native value = 'PROC_CURRENT_ERROR_PORT' ).
 
-      define_value( symbol = 'close-input-port'  type = lcl_lisp=>type_native value = 'PROC_CLOSE_INPUT_PORT' parameter = abap_true ).
-      define_value( symbol = 'close-output-port' type = lcl_lisp=>type_native value = 'PROC_CLOSE_OUTPUT_PORT' parameter = abap_true ).
-      define_value( symbol = 'close-port'        type = lcl_lisp=>type_native value = 'PROC_CLOSE_PORT' parameter = abap_true ).
+      define_value( symbol = 'close-input-port'  type = lcl_lisp=>type_native value = 'PROC_CLOSE_INPUT_PORT' ).
+      define_value( symbol = 'close-output-port' type = lcl_lisp=>type_native value = 'PROC_CLOSE_OUTPUT_PORT' ).
+      define_value( symbol = 'close-port'        type = lcl_lisp=>type_native value = 'PROC_CLOSE_PORT' ).
 
 *     vector-related functions
       define_value( symbol = 'vector'        type = lcl_lisp=>type_native value   = 'PROC_VECTOR' ).
@@ -9087,8 +9101,8 @@
           CREATE OBJECT ro_elem.
           ro_elem->type = type.
           ro_elem->value = value.
+
       ENDCASE.
-      ro_elem->parameter_object = parameter.
     ENDMETHOD.
 
     METHOD atom.
@@ -9458,6 +9472,7 @@
       lo_lambda->car = io_car.               " List of parameters
       lo_lambda->cdr = io_cdr.               " Body
       lo_lambda->macro = iv_macro.
+      lo_lambda->parameter_object = iv_parameter_object.
 
 *     Store the reference to the environment in which the lambda was created (lexical scope)
 *     e.g. if the lambda is created inside another lambda we want that environment to be present
