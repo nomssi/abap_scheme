@@ -73,12 +73,19 @@ The result on the expression either `#t` or `#f`.
 
 #### Optional: Console Interface
 
-      INTERFACE lif_port.
-        METHODS write IMPORTING element TYPE REF TO lcl_lisp
-                      RETURNING VALUE(rv_input) TYPE string.
-
-        METHODS read IMPORTING iv_input        TYPE string OPTIONAL
+      INTERFACE lif_input_port.
+        METHODS read IMPORTING iv_title        TYPE string OPTIONAL
                      RETURNING VALUE(rv_input) TYPE string.
+        METHODS peek_char RETURNING VALUE(rv_char) TYPE char01.
+        METHODS is_char_ready RETURNING VALUE(rv_flag) TYPE flag.
+        METHODS read_char RETURNING VALUE(rv_char) TYPE char01.
+        METHODS put IMPORTING iv_text TYPE string.
+      ENDINTERFACE.
+    
+      INTERFACE lif_output_port.
+        METHODS write IMPORTING element TYPE REF TO lcl_lisp.
+        METHODS display IMPORTING element TYPE REF TO lcl_lisp
+                        RAISING   lcx_lisp_exception.
       ENDINTERFACE.
 
 ## FAQ
