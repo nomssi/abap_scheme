@@ -337,7 +337,7 @@ CLASS lcl_dot_diagram DEFINITION.
     DATA mv_diagram TYPE string.
     METHODS header IMPORTING is_cfg TYPE ts_diagram_config.
     METHODS footer.
-    METHODS node IMPORTING elem      TYPE REF TO lcl_lisp.
+    METHODS node IMPORTING elem TYPE REF TO lcl_lisp.
     METHODS add IMPORTING iv_code TYPE string.
     METHODS get RETURNING VALUE(rv_dot) TYPE string.
     METHODS get_object_id IMPORTING io_ref        TYPE REF TO object

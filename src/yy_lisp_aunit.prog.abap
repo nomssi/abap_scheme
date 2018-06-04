@@ -348,6 +348,9 @@
        METHODS set_2 FOR TESTING.
        METHODS set_3 FOR TESTING.
 
+       METHODS set_car_1 FOR TESTING.
+       METHODS set_car_2 FOR TESTING.
+
        METHODS let_1 FOR TESTING.
        METHODS let_2 FOR TESTING.
        METHODS let_3 FOR TESTING.
@@ -721,6 +724,20 @@
        scheme( code = '(srand 2)'
                expected = '2' ).
      ENDMETHOD.                    "set_3
+
+     METHOD set_car_1.
+       scheme( code = |(define (f) (list 'not-a-constant-list))|
+               expected = 'f' ).
+       scheme( code = |(set-car! (f) 3)|   " unspeciﬁed
+               expected = c_lisp_nil ).
+     ENDMETHOD.
+
+     METHOD set_car_2.
+       scheme( code = |(define (g) '(constant-list))|
+               expected = 'g' ).
+       scheme( code = |(set-car! (g) 3)|   " error
+               expected = 'Eval: constant list in set-car! cannot be changed' ).
+     ENDMETHOD.
 
      METHOD let_1.
        scheme( code = '(let ((x 4) (y 5)) (+ x y))'
@@ -1563,6 +1580,9 @@
        METHODS input_string_1 FOR TESTING.
        METHODS output_string_1 FOR TESTING.
 
+       METHODS write_1 FOR TESTING.
+       METHODS display_1 FOR TESTING.
+
    ENDCLASS.                    "ltc_port DEFINITION
 
 *----------------------------------------------------------------------*
@@ -1621,6 +1641,20 @@
                          |  (get-output-string q))|
                expected = '"a( b c )"' ).
      ENDMETHOD.                    "output_string_1
+
+     METHOD write_1.
+       scheme_incorrect( |(write)| ).
+       scheme_incorrect( |(write (if (= 1 2)))| ).
+       scheme( code = |(write (if (= 1 2) 5))|
+               expected = c_lisp_nil ).  " unspecified?
+     ENDMETHOD.                    "write_1
+
+     METHOD display_1.
+       scheme_incorrect( |(display)| ).
+       scheme_incorrect( |(display (if (= 1 2)))| ).
+       scheme( code = |(display (if (= 1 2) 5))|
+               expected = c_lisp_nil ).   " unspecified?
+     ENDMETHOD.                    "display_1
 
    ENDCLASS.                    "ltc_port IMPLEMENTATION
 
@@ -2166,7 +2200,7 @@
                expected = '#t' ).
        scheme( code = '(eq? #b1010111100 #o1274)'
                expected = '#t' ).
-       scheme( code = '(eq? #b11100.01001 #o34.22)'
+       scheme( code = '(eq? #b11100.01001 #o34.22)' " not allowed in R7RS, DrRacket does it anyway
                expected = '#t' ).
      ENDMETHOD.                    "binary_1
 
@@ -2179,7 +2213,7 @@
                expected = '500' ).
        scheme( code = '#o65'
                expected = '53' ).
-       scheme( code = '#o0.124'
+       scheme( code = '#o0.124'          " not allowed in R7RS, DrRacket does it anyway
                expected = '0.1640625' ).
        scheme( code = '(eq? #o1057 #b001000101111)'
                expected = '#t' ).
@@ -2729,6 +2763,9 @@
        METHODS list_cons_4 FOR TESTING.
        METHODS list_cons_5 FOR TESTING.
 
+       METHODS list_cons_error_1 FOR TESTING.
+       METHODS list_cons_error_2 FOR TESTING.
+
        METHODS list_make_list FOR TESTING.
        METHODS list_make_list_2 FOR TESTING.
        METHODS list_ref FOR TESTING.
@@ -2760,6 +2797,13 @@
        METHODS list_cddr_3 FOR TESTING.
        METHODS list_cddr_4 FOR TESTING.
        METHODS list_cddr_5 FOR TESTING.
+
+       METHODS list_caaar_1 FOR TESTING.
+       METHODS list_cdaaar_1 FOR TESTING.
+       METHODS list_caaaar_1 FOR TESTING.
+       METHODS list_cddddr_1 FOR TESTING.
+
+       METHODS list_c4xr FOR TESTING.
 
        METHODS list_shared_1 FOR TESTING.
 
@@ -3233,6 +3277,36 @@
                expected = '( 6 )' ).
      ENDMETHOD.                    "list_cddr_5
 
+     METHOD list_caaaar_1.
+       scheme( code = |(caaaar '((( ( 1 ) 8 ) 2 ) 6))|
+               expected = '1' ).
+     ENDMETHOD.
+
+     METHOD list_caaar_1.
+       scheme( code = |(caaar '( ( ( 5 ) ) 2 6))|
+               expected = '5' ).
+     ENDMETHOD.
+
+     METHOD list_cdaaar_1.
+       scheme( code = |(cdaaar '( ( ( ( 0 6 ) 7 ) 8 ) 1 2 6))|
+               expected = '( 6 )' ).
+     ENDMETHOD.
+
+     METHOD list_c4xr.
+       CONSTANTS c_test_list TYPE string VALUE '( ( ( ( 0 6 ) 7 ) 8 ) 1 2 6)'.
+       scheme( code = |(cddaar '{ c_test_list })|
+               expected = c_lisp_nil ).
+       scheme( code = |(cddadr '{ c_test_list })|
+               expected = |Eval: cddadr: 1 is not a pair| ).
+       scheme( code = |(cdddar '{ c_test_list })|
+               expected = |Eval: cdddar: { c_lisp_nil } is not a pair| ).
+     ENDMETHOD.
+
+     METHOD list_cddddr_1.
+       scheme( code = |(cddddr '(1 2 6 ( ( ( ( 0 6 ) 7 ) ( ( 8 ) ) ) ) ))|
+               expected = c_lisp_nil ).
+     ENDMETHOD.
+
      METHOD list_shared_1.
        scheme( code = |(let ((x (list 'a 'b 'c)))| &
                          |  (set-cdr! (cddr x) x)| &
@@ -3352,6 +3426,18 @@
        scheme( code = |(cons '(a b) 'c)|
                expected = '( ( a b ) . c )' ).
      ENDMETHOD.                    "list_cons_5
+
+     METHOD list_cons_error_1.
+       scheme_incorrect( |(cons)| ).
+     ENDMETHOD.
+
+     METHOD list_cons_error_2.
+       CONSTANTS c_cons_error TYPE string VALUE 'Eval: cons: only 2 arguments allowed'.
+       scheme( code = |(cons 'a)|
+               expected = c_cons_error ).
+       scheme( code = |(cons 'a 'b 'c)|
+               expected = c_cons_error ).
+     ENDMETHOD.
 
      METHOD list_make_list.
        scheme( code = '(make-list 5)'
@@ -3487,7 +3573,8 @@
        scheme( code = |(string-append "ABAP" "Scheme" "Lisp")|
                expected = '"ABAPSchemeLisp"' ).
      ENDMETHOD.                    "string_append_1
-   ENDCLASS.                    "ltc_list IMPLEMENTATION
+
+ENDCLASS.                    "ltc_list IMPLEMENTATION
 
 *----------------------------------------------------------------------*
 

@@ -566,6 +566,7 @@
       IF value EQ space.   " Special treatment for space,
         me->value = ` `.   " see https://blogs.sap.com/2016/08/10/trailing-blanks-in-character-string-processing/
       ENDIF.
+      mutable = abap_false.
       INSERT VALUE #( char = value
                       elem = me ) INTO TABLE char_table.
     ENDMETHOD.
@@ -955,7 +956,7 @@
       DATA last_len TYPE tv_index.
       DATA finite_size TYPE flag.
 
-      METHODS read_block.
+      METHODS block_read RETURNING VALUE(rv_char) TYPE char01.
   ENDCLASS.
 
   CLASS lcl_lisp_buffered_port DEFINITION INHERITING FROM lcl_lisp_port FRIENDS lcl_lisp_new.
@@ -1115,7 +1116,7 @@
     ENDMETHOD.
 
     METHOD read.
-      rv_input = space.
+      rv_input = c_lisp_eof.
     ENDMETHOD.
 
   ENDCLASS.                    "lcl_console DEFINITION
@@ -1190,14 +1191,15 @@
       finite_size = abap_true.
     ENDMETHOD.
 
-    METHOD read_block.
+    METHOD block_read.
       IF finite_size EQ abap_true.
         last_input = c_lisp_eof.
         last_len = 0.
-        RETURN.
+      ELSE.
+        last_input = read_stream( ).
+        last_len = strlen( last_input ).
       ENDIF.
-      last_input = read_stream( ).
-      last_len = strlen( last_input ).
+      rv_char = last_input+0(1).
     ENDMETHOD.
 
     METHOD lif_input_port~peek_char.
@@ -1205,8 +1207,7 @@
       IF last_index < last_len.
         rv_char = last_input+last_index(1).
       ELSE.
-        read_block( ).
-        rv_char = last_input+0(1).
+        rv_char = block_read( ).
       ENDIF.
     ENDMETHOD.
 
@@ -1215,8 +1216,7 @@
       IF last_index < last_len.
         rv_char = last_input+last_index(1).
       ELSE.
-        read_block( ).
-        rv_char = last_input+0(1).
+        rv_char = block_read( ).
       ENDIF.
       ADD 1 TO last_index.
     ENDMETHOD.
@@ -1259,27 +1259,21 @@
     ENDMETHOD.
 
     METHOD write.
-      DATA lv_text TYPE string.
-
       CHECK element IS BOUND.
       TRY.
-          lv_text = element->to_string( ).
+          add( element->to_string( ) ).
         CATCH lcx_lisp_exception INTO DATA(lx_error).
-          lv_text = lx_error->get_text( ).
+          add( lx_error->get_text( ) ).
       ENDTRY.
-      add( lv_text ).
     ENDMETHOD.
 
     METHOD display.
-      DATA lv_text TYPE string.
-
       CHECK element IS BOUND.
       TRY.
-          lv_text = element->to_text( ).
+          add( element->to_text( ) ).
         CATCH lcx_lisp_exception INTO DATA(lx_error).
-          lv_text = lx_error->get_text( ).
+          add( lx_error->get_text( ) ).
       ENDTRY.
-      add( lv_text ).
     ENDMETHOD.
 
     METHOD read.
@@ -2635,7 +2629,6 @@
           RETURN.
 
         WHEN c_lisp_unquote.
-
           IF peek_char( ) EQ c_lisp_splicing.  " unquote-splicing ,@
             next_char( ).        " Skip past ,
             next_char( ).        " Skip past @
@@ -3799,7 +3792,7 @@
                     ELSEIF lr_tail->cdr->cdr = nil.
                       result = false.
                     ELSE.
-                      " _validate lr_tail->cdr->cdr. " missing test case, comment out
+                      _validate lr_tail->cdr->cdr.
                       lo_elem = lr_tail->cdr->cdr->car. " Tail context
                       CONTINUE.
 
@@ -4395,9 +4388,8 @@
       _validate: list, list->cdr.
 
       DATA(lo_arg) = list->car.
-      _validate_mutable: lo_arg  `list`.
-
       _validate_pair lo_arg `set-car!: `.
+      _validate_mutable lo_arg `list in set-car!`.
 
       lo_arg->car = list->cdr->car.
       result = nil.
@@ -4407,9 +4399,8 @@
       _validate: list, list->cdr.
 
       DATA(lo_arg) = list->car.
-      _validate_mutable: lo_arg `list`.
-
       _validate_pair lo_arg `set-cdr!: `.
+      _validate_mutable lo_arg `list in set-cdr!`.
 
       lo_arg->cdr = list->cdr->car.
       result = nil.
@@ -5080,6 +5071,14 @@
                 RETURN.
               ENDIF.
 
+            WHEN lcl_lisp=>type_rational.
+              DATA(lo_key_rat) = CAST lcl_lisp_rational( lo_key ).
+              DATA(lo_target_rat) = CAST lcl_lisp_rational( lo_pair->car ).
+              IF lo_key_rat->integer = lo_target_rat->integer AND lo_key_rat->denominator = lo_target_rat->denominator.
+                result = lo_pair.
+                RETURN.
+              ENDIF.
+
             WHEN lcl_lisp=>type_real.
               IF CAST lcl_lisp_real( lo_key )->float_eq( CAST lcl_lisp_real( lo_pair->car )->real ).
                 result = lo_pair.
@@ -5644,7 +5643,7 @@
                 ENDIF.
 
               WHEN lcl_lisp=>type_real.
-                lv_real = ( CAST lcl_lisp_real( lo_ptr->cdr->car )->real ) * lo_rat->denominator.
+                lv_real = CAST lcl_lisp_real( lo_ptr->cdr->car )->real * lo_rat->denominator.
 
                 IF lo_rat->integer = trunc( lv_real ) AND frac( lv_real ) EQ 0.
                   result = true.
@@ -5687,6 +5686,16 @@
         CASE lo_ptr->car->type.
           WHEN lcl_lisp=>type_integer.
             IF CAST lcl_lisp_integer( lo_ref )->integer = CAST lcl_lisp_integer( lo_ptr->cdr->car )->integer.
+              result = true.
+            ELSE.
+              result = false.
+              RETURN.
+            ENDIF.
+
+          WHEN lcl_lisp=>type_rational.
+            DATA(lo_ref_rat) = CAST lcl_lisp_rational( lo_ref ).
+            DATA(lo_target_rat) = CAST lcl_lisp_rational( lo_ptr->cdr->car ).
+            IF lo_ref_rat->integer = lo_target_rat->integer AND lo_ref_rat->denominator = lo_target_rat->denominator.
               result = true.
             ELSE.
               result = false.
