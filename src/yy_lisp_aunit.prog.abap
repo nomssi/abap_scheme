@@ -292,7 +292,7 @@
 
      METHOD empty.
        assert_parse( code = ''
-                     expected = || ).
+                     expected = '<eof>' ).
      ENDMETHOD.                    "lambda
 
      METHOD lambda.
@@ -1607,7 +1607,7 @@
 
      METHOD read_char_2.
        scheme( code = |(read-char (open-input-string ""))|
-               expected = '' ).  " <eof>
+               expected = '<eof>' ).
      ENDMETHOD.                    "read_char_2
 
      METHOD read_string_1.
@@ -1646,14 +1646,14 @@
        scheme_incorrect( |(write)| ).
        scheme_incorrect( |(write (if (= 1 2)))| ).
        scheme( code = |(write (if (= 1 2) 5))|
-               expected = c_lisp_nil ).  " unspecified?
+               expected = c_undefined ).
      ENDMETHOD.                    "write_1
 
      METHOD display_1.
        scheme_incorrect( |(display)| ).
        scheme_incorrect( |(display (if (= 1 2)))| ).
        scheme( code = |(display (if (= 1 2) 5))|
-               expected = c_lisp_nil ).   " unspecified?
+               expected = c_undefined ).  " but output is empty
      ENDMETHOD.                    "display_1
 
    ENDCLASS.                    "ltc_port IMPLEMENTATION
@@ -4340,7 +4340,7 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
 
      METHOD compa_if_2.
        scheme( code = '(if (< 2 1) 23)'
-               expected = '#f' ).
+               expected = c_undefined ).
      ENDMETHOD.                    "compa_if_2
 
      METHOD compa_if_3.
@@ -4865,7 +4865,6 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        METHODS fm_test_rfc FOR TESTING.
        METHODS fm_user_details FOR TESTING.
 
-
    ENDCLASS.                    "ltc_abap_function_module DEFINITION
 
 *----------------------------------------------------------------------*
@@ -5073,7 +5072,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
                expected = 'x' ).
        scheme( code = '(while (< x 10)' &
                       '   (set! x (+ x 1)))'
-               expected = '#f' ).
+               expected = c_undefined ).
        scheme( code = 'x'
                expected = '10' ).
      ENDMETHOD.                    "macro_while

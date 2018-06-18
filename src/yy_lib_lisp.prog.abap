@@ -39,13 +39,16 @@
     c_lisp_input     TYPE string VALUE 'ABAP Lisp Input' ##NO_TEXT,
     c_lisp_eof       TYPE x LENGTH 2 VALUE 'FFFF', " we do not expect this in source code
     c_lisp_nil       TYPE string VALUE '''()',
-    c_expr_separator TYPE string VALUE ` `.   " multiple expression output
+    c_expr_separator TYPE string VALUE ` `,   " multiple expression output
+    c_undefined      TYPE string VALUE '<undefined>'.
+
   CONSTANTS:
     c_error_message         TYPE string VALUE 'Error in processing' ##NO_TEXT,
     c_error_incorrect_input TYPE string VALUE 'Incorrect input' ##NO_TEXT,
     c_error_unexpected_end  TYPE string VALUE 'Unexpected end' ##NO_TEXT,
     c_error_eval            TYPE string VALUE 'EVAL( ) came up empty-handed' ##NO_TEXT,
     c_error_no_exp_in_body  TYPE string VALUE 'no expression in body' ##NO_TEXT.
+
   CONSTANTS:
     c_area_eval  TYPE string VALUE `Eval` ##NO_TEXT,
     c_area_parse TYPE string VALUE `Parse` ##NO_TEXT.
@@ -422,7 +425,7 @@
         type_char        TYPE tv_type VALUE 'c',
         type_null        TYPE tv_type VALUE '0',
         type_pair        TYPE tv_type VALUE 'C',
-        type_lambda      TYPE tv_type VALUE 'λ',
+        type_lambda      TYPE tv_type VALUE 'L',
         type_case_lambda TYPE tv_type VALUE 'A',
         type_native      TYPE tv_type VALUE 'n',
         type_primitive   TYPE tv_type VALUE 'I',
@@ -430,7 +433,8 @@
         type_hash        TYPE tv_type VALUE 'h',
         type_vector      TYPE tv_type VALUE 'v',
         type_bytevector  TYPE tv_type VALUE '8',
-        type_port        TYPE tv_type VALUE 'o'.
+        type_port        TYPE tv_type VALUE 'o',
+        type_undefined   TYPE tv_type VALUE '#'.
 *      Types for ABAP integration:
       CONSTANTS:
         type_abap_data     TYPE tv_type VALUE 'D',
@@ -469,6 +473,7 @@
       CLASS-DATA nil        TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA false      TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA true       TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA undefined  TYPE REF TO  lcl_lisp READ-ONLY.
 
       CLASS-DATA quote            TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA quasiquote       TYPE REF TO  lcl_lisp READ-ONLY.
@@ -986,6 +991,7 @@
       CLASS-METHODS atom IMPORTING value          TYPE string
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS null RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+      CLASS-METHODS undefined RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS symbol IMPORTING value          TYPE any
                                      index          TYPE tv_int OPTIONAL
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_symbol.
@@ -1702,6 +1708,7 @@
           RETURNING VALUE(response) TYPE string,
         eval_repl
           IMPORTING code            TYPE clike
+          EXPORTING output          TYPE string  " for console output (text format)
           RETURNING VALUE(response) TYPE string
           RAISING   lcx_lisp_exception,
         validate_source
@@ -3790,7 +3797,7 @@
                       CONTINUE.
 
                     ELSEIF lr_tail->cdr->cdr = nil.
-                      result = false.
+                      result = lcl_lisp=>undefined.
                     ELSE.
                       _validate lr_tail->cdr->cdr.
                       lo_elem = lr_tail->cdr->cdr->car. " Tail context
@@ -3834,6 +3841,11 @@
                                                       io_env = lo_env ).
                     lo_elem = lr_tail->cdr.
                     _tail_sequence.
+
+*                  WHEN 'let-values'.
+*                  WHEN 'let*-values'.
+*                  WHEN 'let-syntax'.
+*                  WHEN 'letrec-syntax'.
 
                   WHEN 'unless'.
                     result = nil.
@@ -4194,6 +4206,7 @@
                                 environment = env ).
         gi_log->put( lo_result ).
       ENDLOOP.
+      output = lo_result->to_text( ).
       response = gi_log->get( ).
     ENDMETHOD.
 
@@ -4925,7 +4938,7 @@
 *   (list->vector list)
 * The list->vector procedure returns a newly created vector initialized
 * to the elements of the list list. Order is preserved.
-      _validate: list.
+      _validate list.
 
       result = lcl_lisp_vector=>from_list( list->car ).
     ENDMETHOD.
@@ -8603,7 +8616,8 @@
 
     METHOD eval_repl.
       GET RUN TIME FIELD DATA(lv_start).         " Start timer
-      response = super->eval_repl( code ).       " Evaluate given code
+      response = super->eval_repl( EXPORTING code = code
+                                   IMPORTING output = output ).       " Evaluate given code
       GET RUN TIME FIELD runtime.                " Stop time
 
       SUBTRACT lv_start FROM runtime.
@@ -8620,6 +8634,7 @@
       nil = lcl_lisp_new=>null( ).
       false = lcl_lisp_new=>boolean( '#f' ).
       true = lcl_lisp_new=>boolean( '#t' ).
+      undefined = lcl_lisp_new=>undefined( ).
 
       quote = lcl_lisp_new=>symbol( c_eval_quote ).
       quasiquote = lcl_lisp_new=>symbol( c_eval_quasiquote ).
@@ -8930,6 +8945,9 @@
           OR type_boolean.
           str = value.
 
+        WHEN type_undefined.
+          str = c_undefined.
+
         WHEN type_string.
           IF me EQ lcl_lisp=>new_line.
             str = |\n|.
@@ -8943,7 +8961,7 @@
             WHEN lcl_lisp=>new_line.
               str = |\n|.
             WHEN lcl_lisp=>eof_object.
-              str = space.
+              str = '<eof>'.
             WHEN OTHERS.
               str = |"{ escape( val = value format = cl_abap_format=>e_html_js ) }"|.
           ENDCASE.
@@ -9003,11 +9021,11 @@
             WHEN lcl_lisp=>new_line.
               str = |\n|.
             WHEN lcl_lisp=>eof_object.
-              str = '<eof>'.
+              str = space.
             WHEN OTHERS.
               str = value.
           ENDCASE.
-        WHEN type_null.
+        WHEN type_null OR type_undefined.
           str = space.
         WHEN OTHERS.
           str = to_string( ).
@@ -9172,6 +9190,11 @@
       ro_elem = NEW lcl_lisp_null( ).
       ro_elem->type = lcl_lisp=>type_null.
       ro_elem->value = c_lisp_nil.
+    ENDMETHOD.
+
+    METHOD undefined.
+      ro_elem = NEW lcl_lisp( ).
+      ro_elem->type = lcl_lisp=>type_undefined.
     ENDMETHOD.
 
     METHOD integer.
@@ -9791,7 +9814,7 @@
 
       CASE type.
         WHEN lcl_lisp=>type_vector.
-          LOOP AT vector ASSIGNING <lo_elem> WHERE table_line->type EQ type_symbol
+          LOOP AT vector ASSIGNING <lo_elem> WHERE table_line->type = type_symbol
                                                AND table_line->value = mv_label.
             <lo_elem> = me.
             RETURN.

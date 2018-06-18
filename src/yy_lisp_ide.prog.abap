@@ -652,13 +652,15 @@ CLASS lcl_ide IMPLEMENTATION.
   METHOD evaluate.
     DATA code TYPE string.
     DATA response TYPE string.
+    DATA output TYPE string.
     DATA lx_root TYPE REF TO cx_root.
     TRY.
         code = mi_source->to_string( ).
-        response = mo_int->eval_repl( code ).
 
+        response = mo_int->eval_repl( EXPORTING code = code
+                                      IMPORTING output = output ).
         mo_output->append_source( code ).
-        mo_console->append_source( response ).
+        mo_console->append_source( output ).
 
         mi_source->push_text( ).
         mi_source->update_status( |[ { mo_int->runtime } µs ] { response }| ).
