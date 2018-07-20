@@ -2294,6 +2294,9 @@
        METHODS math_truncate FOR TESTING.
        METHODS math_round FOR TESTING.
 
+       METHODS math_numerator FOR TESTING.
+       METHODS math_denominator FOR TESTING.
+
        METHODS math_remainder FOR TESTING.
        METHODS math_modulo FOR TESTING.
        METHODS math_random FOR TESTING.
@@ -2545,6 +2548,18 @@
        scheme( code =  '(remainder -17 -9)'
                expected = '-8' ).
      ENDMETHOD.                    "math_remainder
+
+     METHOD math_numerator.
+       scheme( code =  '(numerator (/ 6 4))'
+               expected = '3' ).
+     ENDMETHOD.
+
+     METHOD math_denominator.
+       scheme( code =  '(denominator (/ 6 4))'
+               expected = '2' ).
+       scheme( code =  '(denominator (inexact (/ 6 4)))'
+               expected = '2.0' ).
+     ENDMETHOD.
 
      METHOD math_div_test_1.
        scheme( code =  |(define (divtest n1 n2)| &

@@ -742,6 +742,10 @@
       DATA real TYPE tv_real READ-ONLY.
       METHODS float_eq IMPORTING iv_real       TYPE tv_real
                        RETURNING VALUE(result) TYPE flag.
+      CLASS-METHODS gcd IMPORTING n             TYPE numeric
+                                  d             TYPE numeric
+                        RETURNING VALUE(result) TYPE tv_real
+                        RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
       METHODS constructor IMPORTING value TYPE any.
   ENDCLASS.
@@ -785,6 +789,25 @@
           ENDIF.
         ENDIF.
       ENDIF.
+    ENDMETHOD.
+
+    METHOD gcd.
+      DATA num TYPE REF TO lcl_lisp_real.
+      DATA den TYPE REF TO lcl_lisp_real.
+      DATA lo_save TYPE REF TO lcl_lisp_real.
+
+      num = NEW #( n ).
+      den = NEW #( d ).
+      WHILE NOT den->float_eq( 0 ).
+        lo_save = den.
+        TRY.
+            den = NEW #( num->real - den->real * trunc( num->real / den->real ) ).
+          CATCH cx_sy_arithmetic_error INTO DATA(lx_error).
+            throw( lx_error->get_text( ) ).
+        ENDTRY.
+        num = lo_save.
+      ENDWHILE.
+      result = abs( num->real ).
     ENDMETHOD.
 
   ENDCLASS.
@@ -1847,6 +1870,8 @@
       proc_truncate,     ##called
       proc_round,        ##called
 
+      proc_numerator,    ##called
+      proc_denominator,  ##called
       proc_remainder,    ##called
       proc_modulo,       ##called
       proc_max,          ##called
@@ -2584,7 +2609,7 @@
 
         DATA(lv_char) = code+lv_idx(1).
         IF lv_char CO c_decimal_digits.
-          ev_label = |{ ev_label }{ lv_char }|.
+          ev_label = ev_label && lv_char.
         ELSEIF lv_char = iv_limit AND ev_label IS NOT INITIAL.
           rv_found = abap_true.
           skip_label( ).
@@ -6210,6 +6235,68 @@
       ENDTRY.
     ENDMETHOD.                    "proc_round
 
+    METHOD proc_numerator.
+      DATA lv_num TYPE tv_real.
+      _data_local_numeric_cell.
+
+      _validate: list, list->car.
+      _is_last_param list.
+
+      cell = list->car.
+      CASE cell->type.
+        WHEN lcl_lisp=>type_integer.
+          result = cell.
+
+        WHEN lcl_lisp=>type_real.
+          TRY.
+              _to_real cell lv_num.
+              result = lcl_lisp_new=>number( lcl_lisp_real=>gcd( n = lv_num
+                                                                 d = 1 ) * lv_num ).
+              _catch_arithmetic_error.
+          ENDTRY.
+
+        WHEN lcl_lisp=>type_rational.
+          lo_rat ?= cell.
+          result = lcl_lisp_new=>integer( lo_rat->integer ).
+*        WHEN lcl_lisp=>type_complex.
+        WHEN OTHERS.
+          throw( |{ cell->to_string( ) } is not a number in [numerator]| ).
+      ENDCASE.
+    ENDMETHOD.
+
+    METHOD proc_denominator.
+      DATA lo_frac TYPE REF TO lcl_lisp_real.
+      _data_local_numeric_cell.
+
+      _validate: list, list->car.
+      _is_last_param list.
+
+      cell = list->car.
+      CASE cell->type.
+        WHEN lcl_lisp=>type_integer.
+          result = lcl_lisp_new=>integer( 1 ).
+
+        WHEN lcl_lisp=>type_real.
+          TRY.
+              lo_real ?= cell.
+              lo_frac = lcl_lisp_new=>real( frac( lo_real->real ) ).
+              IF lo_frac->float_eq( 0 ).
+                result = lcl_lisp_new=>integer( 1 ).
+              ELSE.
+                result = lcl_lisp_new=>real( 1 / lo_frac->real ).
+              ENDIF.
+              _catch_arithmetic_error.
+          ENDTRY.
+
+        WHEN lcl_lisp=>type_rational.
+          lo_rat ?= cell.
+          result = lcl_lisp_new=>integer( lo_rat->denominator ).
+*        WHEN lcl_lisp=>type_complex.
+        WHEN OTHERS.
+          throw( |{ cell->to_string( ) } is not a number in [denominator]| ).
+      ENDCASE.
+    ENDMETHOD.
+
     METHOD proc_remainder.
       DATA numerator TYPE tv_real.
       DATA denominator TYPE tv_real.
@@ -8510,6 +8597,8 @@
       define_value( symbol = 'truncate' type = lcl_lisp=>type_native value = 'PROC_TRUNCATE' ).
       define_value( symbol = 'round'    type = lcl_lisp=>type_native value = 'PROC_ROUND' ).
 
+      define_value( symbol = 'numerator'   type = lcl_lisp=>type_native value = 'PROC_NUMERATOR' ).
+      define_value( symbol = 'denominator' type = lcl_lisp=>type_native value = 'PROC_DENOMINATOR' ).
       define_value( symbol = 'remainder' type = lcl_lisp=>type_native value = 'PROC_REMAINDER' ).
       define_value( symbol = 'modulo'    type = lcl_lisp=>type_native value = 'PROC_MODULO' ).
       define_value( symbol = 'quotient'  type = lcl_lisp=>type_native value = 'PROC_QUOTIENT' ).
@@ -8976,7 +9065,10 @@
           str = condense( str ).
 
         WHEN type_real.
+          DATA lo_real TYPE REF TO lcl_lisp_real.
+          lo_real ?= me.
           str = condense( CAST lcl_lisp_real( me )->real ).
+          "str = condense( CONV #( lo_real->real ) ).
 *        WHEN type_rational.
 
 *        WHEN type_complex.
@@ -9553,7 +9645,7 @@
     METHOD splice_unquote.
       ro_elem = box( io_proc = lcl_lisp=>unquote_splicing
                      io_elem = io_elem ).
-      ro_elem->cdr->mutable = abap_false.
+      ro_elem->cdr->mutable = abap_false.  " true?
     ENDMETHOD.
 
     METHOD quasiquote.
