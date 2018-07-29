@@ -3,6 +3,7 @@
 
 [![Language: ABAP](https://img.shields.io/badge/Language-ABAP-blue.svg?style=flat)](https://www.sap.com/developer/topics/abap-platform.html)
 [![License: MIT](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat)](https://opensource.org/licenses/MIT)
+[![abaplint](https://abaplint.org/badges/nomssi/abap_scheme)](https://abaplint.org/project/nomssi/abap_scheme)
 
 ## Overview 
 
