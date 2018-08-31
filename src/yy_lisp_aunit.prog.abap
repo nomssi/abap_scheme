@@ -1646,7 +1646,7 @@
        scheme_incorrect( |(write)| ).
        scheme_incorrect( |(write (if (= 1 2)))| ).
        scheme( code = |(write (if (= 1 2) 5))|
-               expected = c_undefined ).
+               expected = c_undefined && ` ` && c_undefined ).
      ENDMETHOD.                    "write_1
 
      METHOD display_1.

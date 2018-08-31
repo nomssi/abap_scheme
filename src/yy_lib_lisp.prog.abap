@@ -686,7 +686,8 @@
           nummer = nummer
           denom  = denom.
       IF lo_rat->denominator EQ 1.
-        result = NEW lcl_lisp_integer( lo_rat->integer ).
+        CREATE OBJECT result TYPE lcl_lisp_integer
+          EXPORTING value = lo_rat->integer.
       ELSE.
         result = lo_rat.
       ENDIF.
@@ -801,7 +802,8 @@
       WHILE NOT den->float_eq( 0 ).
         lo_save = den.
         TRY.
-            den = NEW #( num->real - den->real * trunc( num->real / den->real ) ).
+            den = NEW #( num->real mod den->real ).
+*            den = NEW #( num->real - den->real * trunc( num->real / den->real ) ).
           CATCH cx_sy_arithmetic_error INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
