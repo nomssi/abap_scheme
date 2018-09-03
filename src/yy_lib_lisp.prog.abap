@@ -2230,7 +2230,7 @@
                                     RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
                                     RAISING   lcx_lisp_exception.
       METHODS environment_parameterize IMPORTING VALUE(io_env) TYPE REF TO lcl_lisp_environment
-                                       CHANGING  co_head       TYPE REF TO lcl_lisp
+                                                 VALUE(io_head) TYPE REF TO lcl_lisp
                                        RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
                                        RAISING   lcx_lisp_exception.
 
@@ -3452,7 +3452,7 @@
     ENDMETHOD.
 
     METHOD environment_parameterize.
-      extract_parameter_objects( EXPORTING io_head = co_head->car
+      extract_parameter_objects( EXPORTING io_head = io_head->car
                                            io_env = io_env
                                  IMPORTING eo_pars = DATA(lo_pars)
                                            eo_args = DATA(lo_new_args) ).
@@ -3874,6 +3874,12 @@
 *                  WHEN 'let-syntax'.
 *                  WHEN 'letrec-syntax'.
 
+                  WHEN 'parameterize'.
+                    lo_env = environment_parameterize( io_env = lo_env
+                                                       io_head = lr_tail ).
+                    lo_elem = lr_tail->cdr.
+                    _tail_sequence.
+
                   WHEN 'unless'.
                     result = nil.
                     IF eval( element = lr_tail->car
@@ -3914,12 +3920,6 @@
                       throw( `Invalid case-lambda clause` ).
                     ENDIF.
                     result = lcl_lisp_new=>case_lambda( lt_clauses ).
-
-                  WHEN 'parameterize'.
-                    lo_env = environment_parameterize( EXPORTING io_env = lo_env
-                                                       CHANGING co_head = lr_tail ).
-                    lo_elem = lr_tail->cdr.
-                    _tail_sequence.
 
 *(do ((<variable1> <init1> <step1>) ... ) <-- iteration spec
 *     (<test> <do result> ... )           <-- tail sequence
