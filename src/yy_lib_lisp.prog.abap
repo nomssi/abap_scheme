@@ -726,7 +726,7 @@
       WHILE den NE 0.
         lv_save = den.
         TRY.
-            den = num - den * trunc( num / den ).
+            den = num mod den.  " num - den * trunc( num / den ).
           CATCH cx_sy_arithmetic_error INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
