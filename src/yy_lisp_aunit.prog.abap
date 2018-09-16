@@ -4496,8 +4496,8 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
      ENDMETHOD.                    "comp_eqv_3
 
      METHOD comp_eqv_4.
-*       scheme( code = |(eqv? 2 2.0)|
-*               expected = '#f' ). " #f  but we do not have inexact numbers yet
+       scheme( code = |(eqv? 2 2.0)|
+               expected = '#f' ). " #f
      ENDMETHOD.                    "comp_eqv_4
 
      METHOD comp_eqv_5.

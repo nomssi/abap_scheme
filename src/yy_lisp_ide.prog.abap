@@ -604,7 +604,7 @@ CLASS lcl_ide IMPLEMENTATION.
     DATA lx_error TYPE REF TO cx_root.
     FIELD-SYMBOLS <lt_table> TYPE STANDARD TABLE.
 
-    CHECK element->type EQ lcl_lisp=>type_abap_table.
+    CHECK element->type EQ type_abap_table.
     TRY.
         ASSIGN element->data->* TO <lt_table>.
         cl_salv_table=>factory(
@@ -623,7 +623,7 @@ CLASS lcl_ide IMPLEMENTATION.
   METHOD display.
     DATA lo_table TYPE REF TO lcl_lisp_table.
     CASE element->type.
-      WHEN lcl_lisp=>type_abap_table.
+      WHEN type_abap_table.
         lo_table ?= element.
         view_table( lo_table ).
 
@@ -1420,15 +1420,15 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
 
   METHOD print.
     CASE io_elem->type.
-      WHEN lcl_lisp=>type_pair.
+      WHEN type_pair.
         rv_node = get_object_id( io_elem ).
-      WHEN lcl_lisp=>type_null.
+      WHEN type_null.
         rv_node = space.
-      WHEN lcl_lisp=>type_real.
+      WHEN type_real.
         DATA lo_real TYPE REF TO lcl_lisp_real.
         lo_real ?= io_elem.
         rv_node = |{ lo_real->real }|.
-      WHEN lcl_lisp=>type_integer.
+      WHEN type_integer.
         DATA lo_int TYPE REF TO lcl_lisp_integer.
         lo_int ?= io_elem.
         rv_node = |{ lo_int->integer }|.
@@ -1444,7 +1444,7 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
 
   METHOD node.
     CASE elem->type.
-      WHEN lcl_lisp=>type_pair.
+      WHEN type_pair.
 
         IF elem->cdr NE lcl_lisp=>nil.
           add( |if ({ print( elem ) }) then ({ get_object_id( elem->car ) })\n| ).
@@ -1462,11 +1462,11 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
           detach( ).
         ENDIF.
 
-      WHEN lcl_lisp=>type_null.
+      WHEN type_null.
 *      do nothing
         add( |  :; \n| ).
 
-      WHEN lcl_lisp=>type_symbol.
+      WHEN type_symbol.
         add( |  :{ print( elem ) }; \n| ).
 
       WHEN OTHERS.
