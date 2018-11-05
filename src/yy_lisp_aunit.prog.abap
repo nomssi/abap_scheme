@@ -97,12 +97,10 @@
    CLASS ltc_interpreter IMPLEMENTATION.
 
      METHOD new_interpreter.
-       CREATE OBJECT mo_port
-         EXPORTING
-           iv_input  = abap_false
-           iv_output = abap_true
-           iv_error  = abap_true
-           iv_string = abap_false.
+       mo_port = lcl_lisp_new=>buffered_port( iv_input  = abap_false
+                                              iv_output = abap_true
+                                              iv_error  = abap_true
+                                              iv_string = abap_false ).
        mo_int = lcl_lisp_interpreter=>new( io_port = mo_port
                                            ii_log = mo_port ).
      ENDMETHOD.                    "new_interpreter
@@ -1149,12 +1147,10 @@
    CLASS ltc_string IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_port
-         EXPORTING
-           iv_input  = abap_false
-           iv_output = abap_true
-           iv_error  = abap_true
-           iv_string = abap_true.
+       mo_port = lcl_lisp_new=>buffered_port( iv_input  = abap_false
+                                              iv_output = abap_true
+                                              iv_error  = abap_true
+                                              iv_string = abap_true ).
        mo_int = lcl_lisp_interpreter=>new( io_port = mo_port
                                            ii_log = mo_port ).
      ENDMETHOD.                    "setup
@@ -1639,7 +1635,7 @@
                          |  (write (car x) q)| &
                          |  (write (cdr x) q)| &
                          |  (get-output-string q))|
-               expected = '"a( b c )"' ).
+               expected = '"a ( b c )"' ).
      ENDMETHOD.                    "output_string_1
 
      METHOD write_1.

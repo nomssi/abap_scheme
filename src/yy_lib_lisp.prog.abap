@@ -239,24 +239,24 @@
     result = false.
     _validate: list, list->car, list->cdr.
     IF list->cdr->type NE type_pair.
-    throw( c_error_incorrect_input ).
+      throw( c_error_incorrect_input ).
     ENDIF.
 
     cell = list->car.
     carry_is_int = abap_false.
     CASE cell->type.
-    WHEN type_integer.
-      carry_is_int = abap_true.
-      _to_integer cell carry_int.
-      carry = carry_int.
-    WHEN type_real.
-      _to_real cell carry.
-    WHEN type_rational.
-      lo_rat ?= cell.
-      carry = lo_rat->integer / lo_rat->denominator.
-*        WHEN type_complex.
-    WHEN OTHERS.
-    throw( |{ cell->to_string( ) } is not a number in { &2 }| ).
+      WHEN type_integer.
+        carry_is_int = abap_true.
+        _to_integer cell carry_int.
+        carry = carry_int.
+      WHEN type_real.
+        _to_real cell carry.
+      WHEN type_rational.
+        lo_rat ?= cell.
+        carry = lo_rat->integer / lo_rat->denominator.
+*      WHEN type_complex.
+      WHEN OTHERS.
+        throw( |{ cell->to_string( ) } is not a number in { &2 }| ).
     ENDCASE.
 
     cell = list->cdr.
@@ -264,39 +264,37 @@
       _validate cell->car.
 
       CASE cell->car->type.
-      WHEN type_integer.
-        lo_int ?= cell->car.
-        IF carry_is_int = abap_true.
-          IF carry_int &1 lo_int->integer.
+        WHEN type_integer.
+          lo_int ?= cell->car.
+          IF carry_is_int = abap_true.
+            IF carry_int &1 lo_int->integer.
+              RETURN.
+            ENDIF.
+            carry_int = lo_int->integer.
+          ELSEIF carry &1 lo_int->integer.
             RETURN.
           ENDIF.
-          carry_int = lo_int->integer.
-        ELSE.
-          IF carry &1 lo_int->integer.
+          carry = lo_int->integer.
+
+        WHEN type_real.
+          carry_is_int = abap_false.
+          lo_real ?= cell->car.
+          IF carry &1 lo_real->real.
             RETURN.
           ENDIF.
-        ENDIF.
-        carry = lo_int->integer.
+          carry = lo_real->real.
 
-      WHEN type_real.
-        carry_is_int = abap_false.
-        lo_real ?= cell->car.
-        IF carry &1 lo_real->real.
-          RETURN.
-        ENDIF.
-        carry = lo_real->real.
+        WHEN type_rational.
+          carry_is_int = abap_false.
+          lo_rat ?= cell->car.
+          IF carry * lo_rat->denominator &1 lo_rat->integer.
+            RETURN.
+          ENDIF.
+          carry = lo_rat->integer / lo_rat->denominator.
 
-      WHEN type_rational.
-        carry_is_int = abap_false.
-        lo_rat ?= cell->car.
-        IF carry * lo_rat->denominator &1 lo_rat->integer.
-          RETURN.
-        ENDIF.
-        carry = lo_rat->integer / lo_rat->denominator.
-
-*             WHEN type_complex.
-      WHEN OTHERS.
-        throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
+*        WHEN type_complex.
+        WHEN OTHERS.
+          throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
       ENDCASE.
       cell = cell->cdr.
     ENDWHILE.
@@ -345,10 +343,10 @@
     result = nil.
     _validate list.
     TRY.
-      _get_number carry list->car &2.
-      _is_last_param list.
-      result = lcl_lisp_new=>&3( &1( carry ) ).
-    _catch_arithmetic_error.
+        _get_number carry list->car &2.
+        _is_last_param list.
+        result = lcl_lisp_new=>&3( &1( carry ) ).
+      _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
 
@@ -359,10 +357,10 @@
     result = nil.
     _validate list.
     TRY.
-    _get_number carry list->car &2.
-    _is_last_param list.
-    result = lcl_lisp_new=>real( &1( carry ) ).
-    _catch_arithmetic_error.
+        _get_number carry list->car &2.
+        _is_last_param list.
+        result = lcl_lisp_new=>real( &1( carry ) ).
+      _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
 
@@ -451,7 +449,7 @@
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp DEFINITION
 *----------------------------------------------------------------------*
-  CLASS lcl_lisp DEFINITION FRIENDS lcl_lisp_new.
+  CLASS lcl_lisp DEFINITION CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
 *     Can this be replaced by a mesh? cf. DEMO_RND_PARSER_AST
       DATA type TYPE tv_type.
@@ -622,15 +620,11 @@
   CLASS lcl_lisp_number IMPLEMENTATION.
 
     METHOD is_exact.
-      result = false.
-      CHECK exact EQ abap_true.
-      result = true.
+      result = SWITCH #( exact WHEN abap_true THEN true ELSE false ).
     ENDMETHOD.
 
     METHOD is_inexact.
-      result = true.
-      CHECK exact EQ abap_true.
-      result = false.
+      result = SWITCH #( exact WHEN abap_true THEN false ELSE true ).
     ENDMETHOD.
 
   ENDCLASS.
@@ -676,18 +670,11 @@
   CLASS lcl_lisp_rational IMPLEMENTATION.
 
     METHOD new.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      CREATE OBJECT lo_rat
-        EXPORTING
-          nummer = nummer
-          denom  = denom.
-      IF lo_rat->denominator EQ 1.
-        CREATE OBJECT result TYPE lcl_lisp_integer
-          EXPORTING
-            value = lo_rat->integer.
-      ELSE.
-        result = lo_rat.
-      ENDIF.
+      DATA(lo_rat) = NEW lcl_lisp_rational( nummer = nummer
+                                            denom  = denom ).
+      result = SWITCH #( lo_rat->denominator
+                 WHEN 1 THEN NEW lcl_lisp_integer( value = lo_rat->integer )
+                 ELSE lo_rat ).
     ENDMETHOD.
 
     METHOD constructor.
@@ -766,10 +753,10 @@
       DATA abs_a TYPE tv_real.
       DATA abs_b TYPE tv_real.
 
-      result = abap_false.
       IF real EQ iv_real.
         result = abap_true.
       ELSE.
+        result = abap_false.
         abs_a = abs( real ).
         abs_b = abs( iv_real ).
         diff = abs( real - iv_real ).
@@ -778,12 +765,9 @@
         IF real = 0 OR iv_real = 0 OR sum < c_min_normal.
 *         real or iv_real is zero or both are extremely close to it
 *         relative error is less meaningfull here
-          IF diff < c_epsilon * c_min_normal.
+          IF ( diff < c_epsilon * c_min_normal )
+            OR ( diff / nmin( val1 = sum val2 = c_max_value ) < c_epsilon ). " use relative error
             result = abap_true.
-          ELSE. " use relative error
-            IF diff / nmin( val1 = sum val2 = c_max_value ) < c_epsilon.
-              result = abap_true.
-            ENDIF.
           ENDIF.
         ENDIF.
       ENDIF.
@@ -800,7 +784,6 @@
         lo_save = den.
         TRY.
             den = NEW #( num->real MOD den->real ).
-*            den = NEW #( num->real - den->real * trunc( num->real / den->real ) ).
           CATCH cx_sy_arithmetic_error INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
@@ -813,7 +796,20 @@
 
   CLASS lcl_lisp_pair DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
+      METHODS constructor IMPORTING io_car TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
+                                    io_cdr TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil.
     PROTECTED SECTION.
+  ENDCLASS.
+
+  CLASS lcl_lisp_pair IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( ).
+      type = type_pair.
+      car = io_car.
+      cdr = io_cdr.
+    ENDMETHOD.
+
   ENDCLASS.
 
   CLASS lcl_lisp_lambda DEFINITION INHERITING FROM lcl_lisp_pair FRIENDS lcl_lisp_new.
@@ -1061,11 +1057,17 @@
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_char.
       CLASS-METHODS charx IMPORTING value          TYPE any
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_char.
+      CLASS-METHODS buffered_port IMPORTING
+                                   iv_input       TYPE flag
+                                   iv_output      TYPE flag
+                                   iv_error       TYPE flag
+                                   iv_string      TYPE flag DEFAULT abap_false
+                         RETURNING VALUE(ro_port) TYPE REF TO lcl_lisp_buffered_port.
+
       CLASS-METHODS port IMPORTING iv_port_type   TYPE lcl_lisp_port=>tv_port_type
                                    iv_input       TYPE flag
                                    iv_output      TYPE flag
                                    iv_error       TYPE flag
-                                   iv_buffered    TYPE flag
                                    iv_separator   TYPE string OPTIONAL
                                    iv_string      TYPE flag DEFAULT abap_false
                          RETURNING VALUE(ro_port) TYPE REF TO lcl_lisp_port.
@@ -1080,6 +1082,9 @@
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_table.
       CLASS-METHODS query IMPORTING value          TYPE any OPTIONAL
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+      CLASS-METHODS sql_result IMPORTING io_result     TYPE REF TO cl_sql_result_set
+                               RETURNING VALUE(result) TYPE REF TO lcl_lisp.
+
       CLASS-METHODS cons IMPORTING io_car         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                                    io_cdr         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                          RETURNING VALUE(ro_cons) TYPE REF TO lcl_lisp.
@@ -1232,27 +1237,20 @@
 
     METHOD lif_input_port~peek_char.
       CHECK input EQ abap_true.
-      IF last_index < last_len.
-        rv_char = last_input+last_index(1).
-      ELSE.
-        rv_char = block_read( ).
-      ENDIF.
+      rv_char = COND #( WHEN last_index < last_len THEN last_input+last_index(1)
+                                                   ELSE block_read( ) ).
     ENDMETHOD.
 
     METHOD lif_input_port~read_char.
       CHECK input EQ abap_true.
-      IF last_index < last_len.
-        rv_char = last_input+last_index(1).
-      ELSE.
-        rv_char = block_read( ).
-      ENDIF.
+      rv_char = COND #( WHEN last_index < last_len THEN last_input+last_index(1)
+                                                   ELSE block_read( ) ).
       ADD 1 TO last_index.
     ENDMETHOD.
 
     METHOD lif_input_port~is_char_ready.
-      rv_flag = abap_false.
-      CHECK input EQ abap_true.
-      rv_flag = xsdbool( last_index < last_len ).
+      rv_flag = SWITCH #( input WHEN abap_true THEN xsdbool( last_index < last_len )
+                                               ELSE abap_false ).
     ENDMETHOD.
 
     METHOD lif_input_port~read.
@@ -1310,11 +1308,8 @@
         rv_input = super->read( ).
         RETURN.
       ENDIF.
-      IF last_index < last_len.
-        rv_input = last_input+last_index.
-      ELSE.
-        rv_input = c_lisp_eof.
-      ENDIF.
+      rv_input = COND #( WHEN last_index < last_len THEN last_input+last_index
+                                                    ELSE c_lisp_eof ).
       CLEAR: last_input, last_index, last_len.
     ENDMETHOD.
 
@@ -1324,11 +1319,8 @@
         rv_char = super->lif_input_port~peek_char( ).
         RETURN.
       ENDIF.
-      IF last_index < last_len.
-        rv_char = last_input+last_index(1).
-      ELSE.
-        rv_char = c_lisp_eof.
-      ENDIF.
+      rv_char = COND #( WHEN last_index < last_len THEN last_input+last_index(1)
+                                                   ELSE c_lisp_eof ).
     ENDMETHOD.
 
     METHOD flush.
@@ -1517,7 +1509,8 @@
                                       iv_kind  TYPE i.
   ENDCLASS.                    "lcl_lisp_abapfunction DEFINITION
 
-  CLASS lcl_lisp_sql_result DEFINITION INHERITING FROM lcl_lisp_data.
+  CLASS lcl_lisp_sql_result DEFINITION CREATE PROTECTED
+    INHERITING FROM lcl_lisp_data FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
       METHODS constructor IMPORTING io_result TYPE REF TO cl_sql_result_set.
       METHODS clear.
@@ -1655,10 +1648,10 @@
         parse IMPORTING iv_code         TYPE clike
               RETURNING VALUE(elements) TYPE tt_element
               RAISING   lcx_lisp_exception,
-        read_from IMPORTING ii_port        TYPE REF TO lif_input_port
-
-                  RETURNING VALUE(element) TYPE REF TO lcl_lisp
-                  RAISING   lcx_lisp_exception.
+*       like parse, with input from port. Returning a single S-expression
+        parse_expression IMPORTING ii_port        TYPE REF TO lif_input_port
+                         RETURNING VALUE(element) TYPE REF TO lcl_lisp
+                         RAISING   lcx_lisp_exception.
 
     PRIVATE SECTION.
       TYPES tv_text13 TYPE c LENGTH 13.
@@ -2429,7 +2422,7 @@
 
     ENDMETHOD.                    "parse
 
-    METHOD read_from.
+    METHOD parse_expression.
       code = ii_port->read( ).
       length = strlen( code ).
       element = lcl_lisp=>eof_object.
@@ -4151,10 +4144,10 @@
 
       TRY.
       IF &1->type EQ type_pair.
-        _validate_port &1->car &3.
-        li_port ?= &1->car.
+      _validate_port &1->car &3.
+      li_port ?= &1->car.
       ELSE.
-        li_port ?= proc_current_&2_port( nil ).
+      li_port ?= proc_current_&2_port( nil ).
       ENDIF.
       CATCH cx_root INTO DATA(lx_error).
       throw( lx_error->get_text( ) ).
@@ -4179,7 +4172,7 @@
 
     METHOD read.
       _optional_port_arg input `read`.
-      result = read_from( li_port ).
+      result = parse_expression( li_port ).
     ENDMETHOD.
 
     METHOD read_char.
@@ -4648,8 +4641,8 @@
         lo_fast = lo_fast->cdr.
 
         CHECK lo_fast = lo_slow.           " are we stuck in a circular list?
-*       If we are stuck in a circular list, then the fast pointer will eventually
-*       be equal to the slow pointer. That fact justifies this implementation.
+*       In a circular list, the fast pointer will eventually be equal to the slow pointer.
+*       That fact justifies this implementation.
         RETURN.
       ENDWHILE.
       CHECK lo_fast NE nil.
@@ -5585,7 +5578,9 @@
 
     METHOD proc_eql.
       _data_local_numeric.
-      DATA lo_rat_2 TYPE REF TO lcl_lisp_rational.
+      DATA lo_next_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_current TYPE REF TO lcl_lisp.
+      DATA lo_next TYPE REF TO lcl_lisp.
       DATA lv_int TYPE tv_int.
       DATA lv_real TYPE tv_real.
 
@@ -5600,12 +5595,14 @@
       WHILE lo_ptr->cdr NE nil.
         _validate_number: lo_ptr->car '[=]',
                           lo_ptr->cdr->car '[=]'.
-        CASE lo_ptr->car->type.
+        lo_current = lo_ptr->car.
+        lo_next = lo_ptr->cdr->car.
+        CASE lo_current->type.
           WHEN type_integer.
-            _to_integer lo_ptr->car lv_int.
-            CASE lo_ptr->cdr->car->type.
+            _to_integer lo_current lv_int.
+            CASE lo_next->type.
               WHEN type_integer.
-                IF lv_int = CAST lcl_lisp_integer( lo_ptr->cdr->car )->integer.
+                IF lv_int = CAST lcl_lisp_integer( lo_next )->integer.
                   result = true.
                 ELSE.
                   result = false.
@@ -5613,7 +5610,7 @@
                 ENDIF.
 
               WHEN type_real.
-                _to_real lo_ptr->cdr->car lv_real.
+                _to_real lo_next lv_real.
                 IF lv_int = trunc( lv_real ) AND frac( lv_real ) EQ 0.
                   result = true.
                 ELSE.
@@ -5622,7 +5619,7 @@
                 ENDIF.
 
               WHEN type_rational.
-                lo_rat ?= lo_ptr->cdr->car.
+                lo_rat ?= lo_next.
                 IF lv_int = lo_rat->integer AND lo_rat->denominator EQ 1.
                   result = true.
                 ELSE.
@@ -5634,10 +5631,10 @@
             ENDCASE.
 
           WHEN type_real.
-            lv_real = CAST lcl_lisp_real( lo_ptr->car )->real.
-            CASE lo_ptr->cdr->car->type.
+            lv_real = CAST lcl_lisp_real( lo_current )->real.
+            CASE lo_next->type.
               WHEN type_integer.
-                IF trunc( lv_real ) = CAST lcl_lisp_integer( lo_ptr->cdr->car )->integer AND frac( lv_real ) EQ 0.
+                IF trunc( lv_real ) = CAST lcl_lisp_integer( lo_next )->integer AND frac( lv_real ) EQ 0.
                   result = true.
                 ELSE.
                   result = false.
@@ -5645,7 +5642,7 @@
                 ENDIF.
 
               WHEN type_real.
-                IF CAST lcl_lisp_real( lo_ptr->cdr->car )->float_eq( lv_real ).
+                IF CAST lcl_lisp_real( lo_next )->float_eq( lv_real ).
                   result = true.
                 ELSE.
                   result = false.
@@ -5653,7 +5650,7 @@
                 ENDIF.
 
               WHEN type_rational.
-                lo_rat ?= lo_ptr->cdr->car.
+                lo_rat ?= lo_next.
                 lv_real = lv_real * lo_rat->denominator.
 
                 IF trunc( lv_real ) = lo_rat->integer AND frac( lv_real ) EQ 0.
@@ -5667,10 +5664,10 @@
             ENDCASE.
 
           WHEN type_rational.
-            lo_rat = CAST lcl_lisp_rational( lo_ptr->car ).
-            CASE lo_ptr->cdr->car->type.
+            lo_rat = CAST lcl_lisp_rational( lo_current ).
+            CASE lo_next->type.
               WHEN type_integer.
-                IF lo_rat->integer = CAST lcl_lisp_integer( lo_ptr->cdr->car )->integer
+                IF lo_rat->integer = CAST lcl_lisp_integer( lo_next )->integer
                   AND lo_rat->denominator EQ 1.
                   result = true.
                 ELSE.
@@ -5679,7 +5676,7 @@
                 ENDIF.
 
               WHEN type_real.
-                lv_real = CAST lcl_lisp_real( lo_ptr->cdr->car )->real * lo_rat->denominator.
+                lv_real = CAST lcl_lisp_real( lo_next )->real * lo_rat->denominator.
 
                 IF lo_rat->integer = trunc( lv_real ) AND frac( lv_real ) EQ 0.
                   result = true.
@@ -5689,9 +5686,9 @@
                 ENDIF.
 
               WHEN type_rational.
-                lo_rat_2 ?= lo_ptr->cdr->car.
-                IF lo_rat->integer = lo_rat_2->integer
-                  AND lo_rat->denominator EQ lo_rat_2->denominator.
+                lo_next_rat ?= lo_next.
+                IF lo_rat->integer = lo_next_rat->integer
+                  AND lo_rat->denominator EQ lo_next_rat->denominator.
                   result = true.
                 ELSE.
                   result = false.
@@ -7009,11 +7006,9 @@
     ENDMETHOD.
 
     METHOD proc_open_output_string.
-      result = lcl_lisp_new=>port( iv_port_type = lcl_lisp_port=>c_port_textual
-                                   iv_output = abap_true
-                                   iv_input = abap_false
-                                   iv_error = abap_false
-                                   iv_buffered = abap_true ).
+      result = lcl_lisp_new=>buffered_port( iv_output = abap_true
+                                            iv_input = abap_false
+                                            iv_error = abap_false ).
     ENDMETHOD.
 
     METHOD proc_open_input_string.
@@ -7021,12 +7016,11 @@
       _validate list.
       _validate_string list->car `open-input-string`.
 
-      lo_port = lcl_lisp_new=>port( iv_port_type = lcl_lisp_port=>c_port_textual
-                                    iv_output = abap_false
-                                    iv_input = abap_true
-                                    iv_error = abap_false
-                                    iv_buffered = abap_true   " only buffered input, but currently needed for peek_char
-                                    iv_string = abap_true ).
+      " only buffered input, but currently needed for peek_char
+      lo_port = lcl_lisp_new=>buffered_port( iv_output = abap_false
+                                             iv_input = abap_true
+                                             iv_error = abap_false
+                                             iv_string = abap_true ).
       lo_port->set_input_string( list->car->value ).
       result = lo_port.
     ENDMETHOD.
@@ -7326,26 +7320,26 @@
 
       lo_test = nil.
       IF lo_arg->type EQ type_pair AND lo_arg->car->type EQ &5.
-        lo_test = lo_arg->car.
-        lv_ref = &3( lo_test ).
-        lo_arg = lo_arg->cdr.
+      lo_test = lo_arg->car.
+      lv_ref = &3( lo_test ).
+      lo_arg = lo_arg->cdr.
       ENDIF.
       IF lo_test EQ nil OR lo_arg EQ nil.
       throw( |{ &1 } missing argument| ).
       ENDIF.
 
       WHILE lo_arg->type EQ type_pair AND lo_arg->car->type EQ &5.
-        lv_test = &3( lo_arg->car ).
-        IF lv_ref &2 lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
+      lv_test = &3( lo_arg->car ).
+      IF lv_ref &2 lv_test.
+      lv_ref = lv_test.
+      ELSE.
+      RETURN.
+      ENDIF.
+      lo_arg = lo_arg->cdr.
       ENDWHILE.
 
       IF lo_arg NE nil.
-        throw( |{ &1 } wrong argument in { lo_arg->car->to_string( ) }| ).
+      throw( |{ &1 } wrong argument in { lo_arg->car->to_string( ) }| ).
       ENDIF.
       CHECK lo_arg = nil.
       result = true.
@@ -9515,24 +9509,22 @@
       ENDIF.
     ENDMETHOD.
 
+    METHOD buffered_port.
+      CREATE OBJECT ro_port TYPE lcl_lisp_buffered_port
+        EXPORTING
+          iv_input     = iv_input
+          iv_output    = iv_output
+          iv_error     = iv_error
+          iv_string    = iv_string.
+    ENDMETHOD.
+
     METHOD port.
-      IF iv_buffered EQ abap_true.
-        CREATE OBJECT ro_port TYPE lcl_lisp_buffered_port
-          EXPORTING
-            iv_port_type = iv_port_type
-            iv_input     = iv_input
-            iv_output    = iv_output
-            iv_error     = iv_error
-            iv_separator = iv_separator
-            iv_string    = iv_string.
-      ELSE.
-        CREATE OBJECT ro_port
-          EXPORTING
-            iv_port_type = iv_port_type
-            iv_input     = iv_input
-            iv_output    = iv_output
-            iv_error     = iv_error.
-      ENDIF.
+      CREATE OBJECT ro_port
+        EXPORTING
+          iv_port_type = iv_port_type
+          iv_input     = iv_input
+          iv_output    = iv_output
+          iv_error     = iv_error.
     ENDMETHOD.
 
     METHOD rational.
@@ -9560,11 +9552,13 @@
       ENDTRY.
     ENDMETHOD.
 
+    METHOD sql_result.
+      result = NEW lcl_lisp_sql_result( io_result ).
+    ENDMETHOD.
+
     METHOD cons.
-      ro_cons = NEW lcl_lisp_pair( ).
-      ro_cons->type = type_pair.
-      ro_cons->car = io_car.
-      ro_cons->cdr = io_cdr.
+      ro_cons = NEW lcl_lisp_pair( io_car = io_car
+                                   io_cdr = io_cdr ).
     ENDMETHOD.                    "new_cons
 
     METHOD box.
@@ -9898,17 +9892,16 @@
     ENDMETHOD.
 
     METHOD set_shared_structure.
-      FIELD-SYMBOLS <lo_elem> TYPE REF TO lcl_lisp.
-
       CHECK mv_label IS NOT INITIAL.
 
       CASE type.
         WHEN type_vector.
-          LOOP AT vector ASSIGNING <lo_elem> WHERE table_line->type = type_symbol
-                                               AND table_line->value = mv_label.
+          ASSIGN vector[ table_line->type = type_symbol
+                         table_line->value = mv_label ] TO FIELD-SYMBOL(<lo_elem>).
+          IF sy-subrc EQ 0.
             <lo_elem> = me.
             RETURN.
-          ENDLOOP.
+          ENDIF.
 
         WHEN OTHERS.
           super->set_shared_structure( ).
@@ -9944,7 +9937,7 @@
                                            hold_cursor = mv_hold_cursor ).
 *     ELSE ? which query to execute
       ENDIF.
-      result = NEW lcl_lisp_sql_result( lo_set ).
+      result ?= lcl_lisp_new=>sql_result( lo_set ).
     ENDMETHOD.
 
   ENDCLASS.

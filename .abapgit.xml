@@ -7,12 +7,12 @@
    <FOLDER_LOGIC>PREFIX</FOLDER_LOGIC>
    <IGNORE>
     <item>/.gitignore</item>
+    <item>/.travis.yml</item>
     <item>/LICENSE</item>
     <item>/README.md</item>
-    <item>/package.json</item>
-    <item>/.travis.yml</item>
     <item>/_config.yml</item>
     <item>/img/abap_lisp_workbench.png</item>
+    <item>/package.json</item>
     <item>/src/.gitkeep</item>
    </IGNORE>
   </DATA>
