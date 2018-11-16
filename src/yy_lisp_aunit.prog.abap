@@ -2402,32 +2402,32 @@
 
      METHOD math_sin.
        scheme( code =  '(sin 0)'
-               expected = '0' ).
+               expected = '0.0' ).
      ENDMETHOD.                    "math_sin
 
      METHOD math_cos.
        scheme( code =  '(cos 0)'
-               expected = '1' ).
+               expected = '1.0' ).
      ENDMETHOD.                    "math_cos
 
      METHOD math_tan.
        scheme( code =  '(tan 0)'
-               expected = '0' ).
+               expected = '0.0' ).
      ENDMETHOD.                    "math_tan
 
      METHOD math_sinh.
        scheme( code =  '(sinh 0)'
-               expected = '0' ).
+               expected = '0.0' ).
      ENDMETHOD.                    "math_sinh
 
      METHOD math_cosh.
        scheme( code =  '(cosh 0)'
-               expected = '1' ).
+               expected = '1.0' ).
      ENDMETHOD.                    "math_cosh
 
      METHOD math_tanh.
        scheme( code =  '(tanh 0)'
-               expected = '0' ).
+               expected = '0.0' ).
      ENDMETHOD.                    "math_tanh
 
      METHOD math_sinh_1.
@@ -2447,44 +2447,44 @@
 
      METHOD math_asinh.
        code_test_f( code =  '(asinh 0)'
-                 expected = 0 ).
+                    expected = 0 ).
      ENDMETHOD.                    "math_asinh
 
      METHOD math_acosh.
        code_test_f( code =  '(acosh 1)'
-                 expected = 0 ).
+                    expected = 0 ).
      ENDMETHOD.                    "math_acosh
 
      METHOD math_atanh.
        code_test_f( code =  '(atanh 0)'
-                 expected = 0 ).
+                    expected = 0 ).
      ENDMETHOD.                    "math_atanh
 
      METHOD math_asin.
        code_test_f( code =  '(asin 1)'
-                 expected = '1.5707963267948966192313216916398' ) ##literal.
+                    expected = '1.5707963267948966192313216916398' ) ##literal.
      ENDMETHOD.                    "math_asin
 
      METHOD math_acos.
        code_test_f( code =  '(acos 0)'
-                 expected = '1.5707963267948966192313216916398' ) ##literal.
+                    expected = '1.5707963267948966192313216916398' ) ##literal.
      ENDMETHOD.                    "math_acos
 
      METHOD math_atan.
        code_test_f( code =  '(atan 1)'
-                 expected = '0.78539816339744830961566084581988' ) ##literal.
+                    expected = '0.78539816339744830961566084581988' ) ##literal.
      ENDMETHOD.                    "math_atan
 
      METHOD math_exp.
        code_test_f( code =  '(exp 2)'
-                 expected = '7.389056098930650227230427460575' ) ##literal.
+                    expected = '7.389056098930650227230427460575' ) ##literal.
      ENDMETHOD.                    "math_exp
 
      METHOD math_expt.
        scheme( code =  '(expt 2 10)'
                expected = '1024' ).
        code_test_f( code =  '(expt 2 0.5)'
-                 expected = '1.4142135623730950488016887242097' ) ##literal.
+                    expected = '1.4142135623730950488016887242097' ) ##literal.
      ENDMETHOD.                    "math_expt
 
      METHOD math_expt_1.
@@ -2494,12 +2494,12 @@
 
      METHOD math_sqrt.
        code_test_f( code =  '(sqrt 2)'
-                 expected = '1.4142135623730950488016887242097' ) ##literal.
+                    expected = '1.4142135623730950488016887242097' ) ##literal.
      ENDMETHOD.                    "math_sqrt
 
      METHOD math_log.
        code_test_f( code =  '(log 7.389056)'
-                 expected = '1.999999986611192' ) ##literal.
+                    expected = '1.999999986611192' ) ##literal.
      ENDMETHOD.                    "math_log
 
      METHOD math_floor.
@@ -2614,7 +2614,7 @@
                                                                       value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
          CATCH cx_root.
            scheme( code =  '(random 100000000000000)'
-                   expected = |Eval: 100000000000000 is not an integer in [random]| ).
+                   expected = |Eval: 100000000000000.0 is not an integer in [random]| ).
        ENDTRY.
      ENDMETHOD.                    "math_modulo
 
@@ -3547,7 +3547,7 @@
 
      METHOD string_to_number_3.
        scheme( code = |(string->number "1e2")|
-               expected = '100' ).
+               expected = '100.0' ).
      ENDMETHOD.                    "string_to_number_3
 
      METHOD string_to_number_4.
