@@ -2060,8 +2060,8 @@
                expected = |1| ).
        scheme( code = |(lcm 32 -36)|
                expected = |288| ).
-*       scheme( code = |(lcm 32.0 -36)|
-*               expected = |288.0| ).   " inexact
+       scheme( code = |(lcm 32.0 -36)|
+               expected = |288.0| ).   " inexact
      ENDMETHOD.                    "lcm_1
 
      METHOD to_exact_1.
@@ -2283,11 +2283,14 @@
        METHODS math_expt FOR TESTING.
        METHODS math_expt_1 FOR TESTING.
        METHODS math_sqrt FOR TESTING.
+       METHODS math_square FOR TESTING.
        METHODS math_log FOR TESTING.
 
        METHODS math_floor FOR TESTING.
+       METHODS math_floor_new FOR TESTING.
        METHODS math_ceiling FOR TESTING.
        METHODS math_truncate FOR TESTING.
+       METHODS math_truncate_new FOR TESTING.
        METHODS math_round FOR TESTING.
 
        METHODS math_numerator FOR TESTING.
@@ -2495,7 +2498,18 @@
      METHOD math_sqrt.
        code_test_f( code =  '(sqrt 2)'
                     expected = '1.4142135623730950488016887242097' ) ##literal.
+       scheme( code =  '(sqrt 9)'
+               expected = '3' ).
+*       scheme( code =  '(sqrt -1)'
+*               expected = '+i' ).
      ENDMETHOD.                    "math_sqrt
+
+     METHOD math_square.
+       scheme( code =  '(square 2.0)'
+               expected = '4.0' ).
+       scheme( code =  '(square 42)'
+               expected = '1764' ).
+     ENDMETHOD.
 
      METHOD math_log.
        code_test_f( code =  '(log 7.389056)'
@@ -2506,6 +2520,18 @@
        "(floor x) - This returns the largest integer that is no larger than x.
        scheme( code =  '(floor 7.3890560989306504)'
                expected = '7' ).
+     ENDMETHOD.                    "math_floor
+
+     METHOD math_floor_new.
+       "Integer division
+       scheme( code =  '(floor/ 5 2)'
+               expected = '2 1' ).
+       scheme( code =  '(floor/ -5 2)'
+               expected = '-3 1' ).
+       scheme( code =  '(floor/ 5 -2)'
+               expected = '-3 -1' ).
+       scheme( code =  '(floor/ -5 -2)'
+               expected = '2 -1' ).
      ENDMETHOD.                    "math_floor
 
      METHOD math_ceiling.
@@ -2520,6 +2546,20 @@
                expected = '-2' ).
      ENDMETHOD.                    "math_truncate
 
+     METHOD math_truncate_new.
+       "Integer division
+       scheme( code =  '(truncate/ 5 2)'
+               expected = '2 1' ).
+       scheme( code =  '(truncate/ -5 2)'
+               expected = '-2 -1' ).
+       scheme( code =  '(truncate/ 5 -2)'
+               expected = '-2 -1' ).
+       scheme( code =  '(truncate/ -5 -2)'
+               expected = '2 -1' ).
+       scheme( code =  '(truncate/ -5.0 -2)'
+               expected = '2.0 -1.0' ).
+     ENDMETHOD.                    "math_truncate
+
      METHOD math_round.
        "(round x) -
 *   This rounds value of x to the nearest integer as is usual in mathematics.
@@ -2530,6 +2570,8 @@
                expected = '8' ).
        scheme( code =  '(round -7.789056)'
                expected = '-8' ).
+       scheme( code =  '(round 3.5)'
+               expected = '4.0' ).   " inexact
      ENDMETHOD.                    "math_round
 
      METHOD math_remainder.

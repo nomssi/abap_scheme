@@ -115,6 +115,13 @@
                RAISING lcx_lisp_exception.
   END-OF-DEFINITION.
 
+  DEFINE _proc_meth_multiple.
+    METHODS &1 IMPORTING list TYPE REF TO lcl_lisp
+               EXPORTING et_result TYPE tt_lisp
+               RETURNING VALUE(result) TYPE REF TO lcl_lisp
+               RAISING lcx_lisp_exception.
+  END-OF-DEFINITION.
+
   DEFINE _assert_is_bound.
     IF &1 IS NOT BOUND.
       lcl_lisp=>throw( &2 ).
@@ -1556,6 +1563,7 @@
         define_value IMPORTING symbol         TYPE string
                                type           TYPE tv_type
                                value          TYPE any OPTIONAL
+                               exact_integer  TYPE flag DEFAULT abap_false
                      RETURNING VALUE(element) TYPE REF TO lcl_lisp.
 
       METHODS parameters_to_symbols IMPORTING io_pars TYPE REF TO lcl_lisp
@@ -1848,6 +1856,7 @@
       proc_expt,     ##called
       proc_log,      ##called
       proc_sqrt,     ##called
+      proc_square,   ##called
 
       proc_is_zero,      ##called
       proc_is_positive,  ##called
@@ -1855,10 +1864,20 @@
       proc_is_odd,       ##called
       proc_is_even,      ##called
 
-      proc_floor,        ##called
-      proc_ceiling,      ##called
-      proc_truncate,     ##called
-      proc_round,        ##called
+      proc_floor,           ##called
+      proc_ceiling,         ##called
+      proc_truncate,        ##called
+      proc_round.           ##called
+
+      _proc_meth_multiple:
+      proc_floor_new,      ##called
+      proc_truncate_new.   ##called
+
+      _proc_meth:
+      proc_floor_quotient,     ##called
+      proc_floor_remainder,    ##called
+      proc_truncate_quotient,  ##called
+      proc_truncate_remainder, ##called
 
       proc_numerator,    ##called
       proc_denominator,  ##called
@@ -1931,6 +1950,7 @@
 
 * Continuation
       proc_call_cc,              ##called
+      proc_call_with_values,     ##called
 * Exceptions
       proc_error,                ##called
       proc_raise,                ##called
@@ -2157,11 +2177,11 @@
                               RETURNING VALUE(result) TYPE REF TO lcl_lisp
                               RAISING   lcx_lisp_exception.
 
-      METHODS eval_list_tco IMPORTING VALUE(io_head) TYPE REF TO lcl_lisp
-                                      io_environment TYPE REF TO lcl_lisp_environment
-                            EXPORTING eo_elem        TYPE REF TO lcl_lisp
-                            RETURNING VALUE(result)  TYPE REF TO lcl_lisp
-                            RAISING   lcx_lisp_exception.
+      METHODS eval_continuation IMPORTING VALUE(io_cont) TYPE REF TO lcl_lisp
+                                          io_environment TYPE REF TO lcl_lisp_environment
+                                EXPORTING eo_elem        TYPE REF TO lcl_lisp
+                                RETURNING VALUE(result)  TYPE REF TO lcl_lisp
+                                RAISING   lcx_lisp_exception.
 
       METHODS lambda_environment IMPORTING io_head       TYPE REF TO lcl_lisp
                                            io_args       TYPE REF TO lcl_lisp
@@ -3167,14 +3187,12 @@
 
     ENDMETHOD.
 
-    METHOD eval_list_tco. " Tail Call Optimization
+    METHOD eval_continuation. " Tail Call Optimization
 *     Evaluate all expressions except the last one to be evaluated as a tail call
 *     ( eval LOOP for the last evaluation step )
-      _validate io_head.
+      _validate io_cont.
       result = nil.
-      eo_elem = io_head.
-
-      CHECK io_head NE nil.
+      eo_elem = io_cont.
 
       WHILE eo_elem IS BOUND AND eo_elem->type EQ pair
         AND eo_elem->cdr NE nil.  " Do not evaluate the last list element
@@ -3184,22 +3202,11 @@
         eo_elem = eo_elem->cdr.
       ENDWHILE.
 
-      _validate_tail eo_elem->cdr io_head space.
+      IF eo_elem->cdr NE nil.
+*       if the last element in the list is not a cons cell, we cannot append
+        _error_no_list io_cont space.
+      ENDIF.
     ENDMETHOD.
-
-*    METHOD eval_list.
-*      _validate io_head.
-*      result = nil.
-*
-*      DATA(elem) = io_head.
-*      WHILE elem IS BOUND AND elem->type EQ pair.
-*        result = eval_ast( element = elem->car
-*                           environment = io_environment ).
-*        elem = elem->cdr.
-*      ENDWHILE.
-*
-*      _validate_tail elem io_head space.
-*    ENDMETHOD.
 
     METHOD lambda_environment.
       DATA lo_args TYPE REF TO lcl_lisp.
@@ -3503,12 +3510,26 @@
 
     DEFINE _tail_sequence.
       IF lo_elem NE nil.
-*       result = eval_list( io_head = lo_elem
-*                           io_environment = lo_env ).
-        result = eval_list_tco( EXPORTING io_head = lo_elem
-                                          io_environment = lo_env
-                                IMPORTING eo_elem = lo_elem ).
-        _tail_expression lo_elem.
+        _validate lo_elem.
+        result = nil.
+
+        WHILE lo_elem IS BOUND AND lo_elem->type EQ pair
+          AND lo_elem->cdr NE nil.  " Do not evaluate the last list element
+
+          result = eval_ast( element = lo_elem->car
+                             environment = lo_env ).
+          lo_elem = lo_elem->cdr.
+        ENDWHILE.
+
+        IF lo_elem->cdr NE nil.
+*         if the last element in the list is not a cons cell, we cannot append
+          _error_no_list lo_elem space.
+        ENDIF.
+
+        IF lo_elem NE nil.
+          lo_elem = lo_elem->car.    " Tail context
+          CONTINUE.
+        ENDIF.
       ELSEIF lo_env->top_level EQ abap_false.
         throw( c_error_no_exp_in_body ).
       ELSE.  " empty (begin) ?
@@ -3824,9 +3845,9 @@
                     lo_elem = lr_tail.
 *                    _tail_sequence.
                     IF lo_elem NE nil.
-                      result = eval_list_tco( EXPORTING io_head = lo_elem
-                                                        io_environment = lo_env
-                                              IMPORTING eo_elem = lo_elem ).
+                      result = eval_continuation( EXPORTING io_cont = lo_elem
+                                                            io_environment = lo_env
+                                                  IMPORTING eo_elem = lo_elem ).
                       _tail_expression lo_elem.
                     ELSE.  " empty (begin) ?
                       CONTINUE.
@@ -3835,6 +3856,16 @@
                   WHEN 'let'.
                     lo_env = environment_named_let( EXPORTING io_env = lo_env
                                                     CHANGING co_head = lr_tail ).
+                    lo_elem = lr_tail->cdr.
+                    _tail_sequence.
+
+                  WHEN 'values'.
+                    lo_elem = lr_tail.  " TEST ???
+                    _tail_expression lo_elem.
+
+                  WHEN 'let-values'.
+                    lo_env = environment_named_let( EXPORTING io_env = lo_env
+                                                    CHANGING co_head = lr_tail ).  " TEST ???
                     lo_elem = lr_tail->cdr.
                     _tail_sequence.
 
@@ -3857,7 +3888,6 @@
                     lo_elem = lr_tail->cdr.
                     _tail_sequence.
 
-*                  WHEN 'let-values'.
 *                  WHEN 'let*-values'.
 *                  WHEN 'let-syntax'.
 *                  WHEN 'letrec-syntax'.
@@ -6206,6 +6236,39 @@
       _math sqrt '[sqrt]' number.
     ENDMETHOD.                    "proc_sqrt
 
+    METHOD proc_square.
+      DATA exp1 TYPE tv_real.
+      _data_local_numeric_cell.
+
+      result = nil.
+      _validate list.
+      _is_last_param list.
+
+      TRY.
+          cell = list->car.
+          CASE cell->type.
+            WHEN integer.
+              lo_int ?= cell.
+              result = lcl_lisp_new=>number( lo_int->int * lo_int->int ).
+            WHEN real.
+              lo_real ?= cell.
+              result = lcl_lisp_new=>number( lo_real->float * lo_real->float ).
+
+            WHEN rational.
+              lo_rat ?= cell.
+              result = lcl_lisp_new=>rational( nummer = lo_rat->int * lo_rat->int
+                                               denom = lo_rat->denominator * lo_rat->denominator ).
+            WHEN complex.
+              throw( |[square] not implemented yet for complex numbers| ).
+
+            WHEN OTHERS.
+              throw( |{ cell->to_string( ) } is not a number in [square]| ).
+          ENDCASE.
+
+          _catch_arithmetic_error.
+      ENDTRY.
+    ENDMETHOD.
+
     METHOD proc_floor.
       _math floor '[floor]' number.
     ENDMETHOD.                    "proc_floor
@@ -6327,6 +6390,108 @@
           _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_quotient
+
+    DEFINE _integer_division.
+*     takes two integers n1 and n2; returns two integers,
+*     nq (quotient) and nr (remainder), such that n1 = n2 nq + nr.
+      DATA n1 TYPE REF TO lcl_lisp_integer.
+      DATA n2 TYPE REF TO lcl_lisp_integer.
+      DATA lo_next TYPE REF TO lcl_lisp.
+
+      _validate list.
+      _validate_integer list->car &1.
+      n1 ?= list->car.
+      _validate list->cdr.
+      lo_next = list->cdr.
+      _validate lo_next->car.
+      IF lo_next->car->type NE integer.
+        throw( lo_next->car->to_string( ) && ` is not an integer in ` && &1 ) ##NO_TEXT.
+      ENDIF.
+      n2 ?= lo_next->car.
+*     It is an error if n2 is 0
+      IF n2->int = 0.
+        throw( `Second parameter is 0 in ` && &1 ) ##NO_TEXT.
+      ENDIF.
+      _is_last_param lo_next.
+    END-OF-DEFINITION.
+
+    METHOD proc_floor_new.
+      DATA nr TYPE REF TO lcl_lisp_integer.
+      DATA nq TYPE REF TO lcl_lisp_integer.
+      DATA carry TYPE tv_real.
+
+      result = nil.
+      _integer_division `[floor/]`.
+      TRY.
+          carry = n1->int / n2->int.
+          result = nr = lcl_lisp_new=>integer( floor( carry ) ).
+          nq = lcl_lisp_new=>integer( n1->int - nr->int * n2->int ).
+          et_result = VALUE #( ( nr ) ( nq ) ).
+        _catch_arithmetic_error.
+      ENDTRY.
+    ENDMETHOD.                    "proc_floor_new
+
+    METHOD proc_floor_quotient.
+      DATA carry TYPE tv_real.
+
+      result = nil.
+      _integer_division `[floor-quotient]`.
+      TRY.
+          carry = n1->int / n2->int.
+          result = lcl_lisp_new=>integer( floor( carry ) ).
+          _catch_arithmetic_error.
+      ENDTRY.
+    ENDMETHOD.                    "proc_floor_quotient
+
+    METHOD proc_floor_remainder.
+      DATA carry TYPE tv_real.
+
+      result = nil.
+      _integer_division `[floor-remainder]`.  " same as modulo for integer
+      TRY.
+          carry = n1->int / n2->int.
+          result = lcl_lisp_new=>integer( n1->int - floor( carry ) * n2->int ).
+          _catch_arithmetic_error.
+      ENDTRY.
+    ENDMETHOD.
+
+    METHOD proc_truncate_new.
+      DATA nr TYPE REF TO lcl_lisp_integer.
+      DATA nq TYPE REF TO lcl_lisp_integer.
+      DATA carry TYPE tv_real.
+
+      result = nil.
+      _integer_division `[truncate/]`.
+      TRY.
+          carry = n1->int / n2->int.
+          result = nr = lcl_lisp_new=>integer( trunc( carry ) ).
+          nq = lcl_lisp_new=>integer( n1->int - nr->int * n2->int ).
+          et_result = VALUE #( ( nr ) ( nq ) ).
+        _catch_arithmetic_error.
+      ENDTRY.
+    ENDMETHOD.                    "proc_truncate_new
+
+    METHOD proc_truncate_quotient.
+      DATA carry TYPE tv_real.
+      result = nil.
+      _integer_division `[truncate-quotient]`.
+      TRY.
+          carry = n1->int / n2->int.
+          result = lcl_lisp_new=>integer( trunc( carry ) ).
+          _catch_arithmetic_error.
+      ENDTRY.
+    ENDMETHOD.
+
+    METHOD proc_truncate_remainder.
+      DATA carry TYPE tv_real.
+      result = nil.
+      _integer_division `[truncate-remainder]`.
+      TRY.
+          carry = n1->int / n2->int.
+          result = lcl_lisp_new=>integer( n1->int - trunc( carry ) * n2->int ).
+          _catch_arithmetic_error.
+      ENDTRY.
+    ENDMETHOD.
 
     METHOD proc_modulo.
       DATA numerator TYPE tv_real.
@@ -7515,7 +7680,7 @@
 
 *implementation in terms of low-level procedures creg-get and creg-set!
 * A)creg-get - capture procedure - converts the implicit continuation passed to
-*             call-with-current-continuationinto some kind of Scheme object with unlimited extent
+*             call-with-current-continuation into some kind of Scheme object with unlimited extent
 *B) creg-set! - throw procedure - takes such an object and installs it as the continuation
 *      for the currently executing procedure overriding the previous implicit continuation.
 * f is called an escape procedure, because a call to the escape procedure will allow control
@@ -7530,6 +7695,20 @@
       _validate list.
       result = nil.
       throw( `call/cc not implemented yet` ).
+    ENDMETHOD.
+
+    METHOD proc_call_with_values.
+      DATA producer TYPE REF TO lcl_lisp.
+      DATA consumer TYPE REF TO lcl_lisp.
+
+      _validate: list, list->cdr.
+      _is_last_param list->cdr.
+
+      result = nil.
+      producer = list->car.
+      consumer = list->cdr->car.
+
+      throw( `call-with-values not implemented yet` ).
     ENDMETHOD.
 
 **********************************************************************
@@ -8397,6 +8576,9 @@
       define_value( symbol = 'do'       type = syntax value   = 'do' ).
       define_value( symbol = 'case'     type = syntax value   = 'case' ).
 
+      define_value( symbol = 'values'            type = syntax value   = 'values' ).
+      define_value( symbol = 'let-values'        type = syntax value   = 'let-values' ).
+
       define_value( symbol = c_eval_unquote          type = syntax value   = ',' ).
       define_value( symbol = c_eval_unquote_splicing type = syntax value   = ',@' ).
 
@@ -8406,9 +8588,9 @@
       define_value( symbol = 'map'          type = primitive value   = 'map' ).
 
 *     Add native functions to environment
-      define_value( symbol = '+'        type = native value   = 'PROC_ADD' ).
-      define_value( symbol = '-'        type = native value   = 'PROC_SUBTRACT' ).
-      define_value( symbol = '*'        type = native value   = 'PROC_MULTIPLY' ).
+      define_value( symbol = '+'        type = native value   = 'PROC_ADD'      exact_integer = abap_true ).
+      define_value( symbol = '-'        type = native value   = 'PROC_SUBTRACT' exact_integer = abap_true ).
+      define_value( symbol = '*'        type = native value   = 'PROC_MULTIPLY' exact_integer = abap_true ).
       define_value( symbol = '/'        type = native value   = 'PROC_DIVIDE' ).
       define_value( symbol = c_eval_append  type = native value   = 'PROC_APPEND' ).
       define_value( symbol = 'append!'      type = native value   = 'PROC_APPEND_UNSAFE' ).
@@ -8572,7 +8754,7 @@
       define_value( symbol = 'string-ci>=?'    type = native value   = 'PROC_STRING_CI_LIST_IS_GE' ).
 
 *     Math
-      define_value( symbol = 'abs'   type = native value = 'PROC_ABS' ).
+      define_value( symbol = 'abs'   type = native value = 'PROC_ABS' exact_integer = abap_true ).
       define_value( symbol = 'sin'   type = native value = 'PROC_SIN' ).
       define_value( symbol = 'cos'   type = native value = 'PROC_COS' ).
       define_value( symbol = 'tan'   type = native value = 'PROC_TAN' ).
@@ -8585,26 +8767,34 @@
       define_value( symbol = 'asinh' type = native value = 'PROC_ASINH' ).
       define_value( symbol = 'acosh' type = native value = 'PROC_ACOSH' ).
       define_value( symbol = 'atanh' type = native value = 'PROC_ATANH' ).
-      define_value( symbol = 'expt'  type = native value = 'PROC_EXPT' ).
+      define_value( symbol = 'expt'  type = native value = 'PROC_EXPT' exact_integer = abap_true ).
       define_value( symbol = 'exp'   type = native value = 'PROC_EXP' ).
       define_value( symbol = 'log'   type = native value = 'PROC_LOG' ).
       define_value( symbol = 'sqrt'  type = native value = 'PROC_SQRT' ).
+      define_value( symbol = 'square' type = native value = 'PROC_SQUARE' exact_integer = abap_true ).
 
       define_value( symbol = 'floor'    type = native value = 'PROC_FLOOR' ).
-      define_value( symbol = 'ceiling'  type = native value = 'PROC_CEILING' ).
+      define_value( symbol = 'ceiling'  type = native value = 'PROC_CEILING' exact_integer = abap_true ).
       define_value( symbol = 'truncate' type = native value = 'PROC_TRUNCATE' ).
       define_value( symbol = 'round'    type = native value = 'PROC_ROUND' ).
 
-      define_value( symbol = 'numerator'   type = native value = 'PROC_NUMERATOR' ).
-      define_value( symbol = 'denominator' type = native value = 'PROC_DENOMINATOR' ).
-      define_value( symbol = 'remainder' type = native value = 'PROC_REMAINDER' ).
-      define_value( symbol = 'modulo'    type = native value = 'PROC_MODULO' ).
-      define_value( symbol = 'quotient'  type = native value = 'PROC_QUOTIENT' ).
+      define_value( symbol = 'floor/'             type = native value = 'PROC_FLOOR_NEW'       exact_integer = abap_true ).
+      define_value( symbol = 'floor-quotient'     type = native value = 'PROC_FLOOR_QUOTIENT'  exact_integer = abap_true ).
+      define_value( symbol = 'floor-remainder'    type = native value = 'PROC_FLOOR_REMAINDER' exact_integer = abap_true ).
+      define_value( symbol = 'truncate/'          type = native value = 'PROC_TRUNCATE_NEW'       exact_integer = abap_true ).
+      define_value( symbol = 'truncate-quotient'  type = native value = 'PROC_TRUNCATE_QUOTIENT'  exact_integer = abap_true ).
+      define_value( symbol = 'truncate-remainder' type = native value = 'PROC_TRUNCATE_REMAINDER' exact_integer = abap_true ).
+
+      define_value( symbol = 'numerator'   type = native value = 'PROC_NUMERATOR'   exact_integer = abap_true ).
+      define_value( symbol = 'denominator' type = native value = 'PROC_DENOMINATOR' exact_integer = abap_true ).
+      define_value( symbol = 'remainder'   type = native value = 'PROC_REMAINDER'   exact_integer = abap_true ).
+      define_value( symbol = 'modulo'    type = native value = 'PROC_MODULO'   exact_integer = abap_true ).
+      define_value( symbol = 'quotient'  type = native value = 'PROC_QUOTIENT' exact_integer = abap_true ).
       define_value( symbol = 'random'    type = native value = 'PROC_RANDOM' ).
-      define_value( symbol = 'max'       type = native value = 'PROC_MAX' ).
-      define_value( symbol = 'min'       type = native value = 'PROC_MIN' ).
-      define_value( symbol = 'gcd'       type = native value = 'PROC_GCD' ).
-      define_value( symbol = 'lcm'       type = native value = 'PROC_LCM' ).
+      define_value( symbol = 'max'       type = native value = 'PROC_MAX' exact_integer = abap_true ).
+      define_value( symbol = 'min'       type = native value = 'PROC_MIN' exact_integer = abap_true ).
+      define_value( symbol = 'gcd'       type = native value = 'PROC_GCD' exact_integer = abap_true ).
+      define_value( symbol = 'lcm'       type = native value = 'PROC_LCM' exact_integer = abap_true ).
 
       define_value( symbol = 'zero?'     type = native value = 'PROC_IS_ZERO' ).
       define_value( symbol = 'positive?' type = native value = 'PROC_IS_POSITIVE' ).
@@ -8614,6 +8804,7 @@
 *     Continuation
       define_value( symbol = 'call-with-current-continuation' type = native value = 'PROC_CALL_CC' ).
       define_value( symbol = 'call/cc'                        type = native value = 'PROC_CALL_CC' ).
+      define_value( symbol = 'call-with-values'               type = native value = 'PROC_CALL_WITH_VALUES' ).
 
 *     Native functions for ABAP integration
       define_value( symbol = 'ab-data'       type = native value   = 'PROC_ABAP_DATA' ).
