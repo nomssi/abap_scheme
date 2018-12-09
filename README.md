@@ -5,6 +5,9 @@
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_fancy_128.png)](http://lisperati.com/logo.html)
 # LISP interpreter in ABAP with Workbench
 
+* For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
+* How to [enable the new editor](/editor)
+
 ## Overview 
 
 After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a> inspired by [Peter Norvig](http://norvig.com/lispy2.html).
@@ -87,6 +90,3 @@ The result on the expression either `#t` or `#f`.
                         RAISING   lcx_lisp_exception.
       ENDINTERFACE.
 
-## FAQ
-* How to [enable the new editor](/editor)
-* For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
