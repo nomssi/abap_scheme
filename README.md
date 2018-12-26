@@ -1,7 +1,7 @@
 # abap_scheme
 [![Language: ABAP](https://img.shields.io/badge/Language-ABAP-blue.svg?style=flat)](https://www.sap.com/developer/topics/abap-platform.html)
 [![License: MIT](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat)](https://opensource.org/licenses/MIT)
-[![abaplint](https://abaplint.org/badges/nomssi/abap_scheme)](https://abaplint.org/project/nomssi/abap_scheme)
+[![abaplint](https://travis-ci.org/nomssi/abap_scheme.svg?branch=master)](https://abaplint.org/project/nomssi/abap_scheme)
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_fancy_128.png)](http://lisperati.com/logo.html)
 # LISP interpreter in ABAP with Workbench
 
