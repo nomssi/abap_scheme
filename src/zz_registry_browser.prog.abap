@@ -13,9 +13,9 @@ REPORT zz_registry_browser.
 INCLUDE yy_lib_registry.
 
 * For tree control:
-DATA: gr_tree TYPE REF TO cl_gui_alv_tree.
-DATA: gr_tree_toolbar TYPE REF TO cl_gui_toolbar.
-DATA: gs_node_layout TYPE lvc_s_layn. "Layout for new nodes
+DATA go_tree TYPE REF TO cl_gui_alv_tree.
+DATA gr_tree_toolbar TYPE REF TO cl_gui_toolbar.
+DATA gs_node_layout TYPE lvc_s_layn. "Layout for new nodes
 * Table for registry entries on tree
 TYPES: BEGIN OF ts_tab,
          key       TYPE string,
@@ -25,21 +25,21 @@ TYPES: BEGIN OF ts_tab,
 DATA: gt_tab TYPE TABLE OF ts_tab.
 
 * For maintaining registry values in an an entry (ALV control):
-DATA: gr_table   TYPE REF TO cl_gui_alv_grid.
-DATA: gt_value   TYPE STANDARD TABLE OF lcl_registry_entry=>ts_keyval.
-DATA: gt_value_ori TYPE STANDARD TABLE OF lcl_registry_entry=>ts_keyval. "Original data
+DATA gr_table   TYPE REF TO cl_gui_alv_grid.
+DATA gt_value   TYPE STANDARD TABLE OF lcl_registry_entry=>ts_keyval.
+DATA gt_value_ori TYPE STANDARD TABLE OF lcl_registry_entry=>ts_keyval. "Original data
 
 * For splitter container
-DATA: gr_splitter TYPE REF TO cl_gui_easy_splitter_container.
+DATA gr_splitter TYPE REF TO cl_gui_easy_splitter_container.
 
 * For registry access:
-DATA: gr_reg_root TYPE REF TO lcl_registry_entry.
+DATA gr_reg_root TYPE REF TO lcl_registry_entry.
 
-DATA: gr_sel_reg_entry TYPE REF TO lcl_registry_entry. "Selected reg. entry
-DATA: gv_sel_node_key TYPE lvc_nkey. "Tree node key of currently selected node
+DATA gr_sel_reg_entry TYPE REF TO lcl_registry_entry. "Selected reg. entry
+DATA gv_sel_node_key TYPE lvc_nkey. "Tree node key of currently selected node
 
 * Single statement to generate a selection screen
-PARAMETERS: dummy.
+PARAMETERS dummy.
 
 *----------------------------------------------------------------------*
 *       CLASS event_handler DEFINITION
@@ -69,12 +69,12 @@ CLASS event_handler IMPLEMENTATION.
 
 * Handle commands to the tree toolbar
   METHOD handle_tree_command.
-    DATA: lv_new_key TYPE string.
-    DATA: lr_reg_entry TYPE REF TO lcl_registry_entry.
-    DATA: lv_node_key TYPE lvc_nkey.
-    DATA: lv_rc TYPE char1.
-    DATA: lv_ntext TYPE lvc_value.
-    DATA: ls_tab TYPE ts_tab.
+    DATA lv_new_key TYPE string.
+    DATA lr_reg_entry TYPE REF TO lcl_registry_entry.
+    DATA lv_node_key TYPE lvc_nkey.
+    DATA lv_rc TYPE char1.
+    DATA lv_ntext TYPE lvc_value.
+    DATA ls_tab TYPE ts_tab.
 
     IF gr_sel_reg_entry IS NOT BOUND.
       MESSAGE 'Select a node from the tree first' TYPE 'I'.
@@ -110,17 +110,17 @@ CLASS event_handler IMPLEMENTATION.
 
 * Perform deep copy of source to target node
       IF lv_rc = space.
-        DATA: lr_parent TYPE REF TO lcl_registry_entry.
+        DATA lr_parent TYPE REF TO lcl_registry_entry.
         TRY.
             lr_parent = gr_sel_reg_entry->get_parent( ).
             lr_parent->copy_subentry( source_key = gr_sel_reg_entry->entry_id target_key = lv_new_key ).
 
 * Get the parent node in the tree to refresh it
-            CALL METHOD gr_tree->get_parent
+            go_tree->get_parent(
               EXPORTING
                 i_node_key        = gv_sel_node_key
               IMPORTING
-                e_parent_node_key = lv_node_key.
+                e_parent_node_key = lv_node_key ).
 
 * Refresh the parent node
             PERFORM refresh_subnodes USING lv_node_key.
@@ -165,11 +165,11 @@ CLASS event_handler IMPLEMENTATION.
       lr_reg_entry->remove_subentry( gr_sel_reg_entry->entry_id ).
 
 * Get the parent node in the tree to refresh it
-      CALL METHOD gr_tree->get_parent
+      go_tree->get_parent(
         EXPORTING
           i_node_key        = gv_sel_node_key
         IMPORTING
-          e_parent_node_key = lv_node_key.
+          e_parent_node_key = lv_node_key ).
 
 * Refresh the parent node
       PERFORM refresh_subnodes USING lv_node_key.
@@ -180,12 +180,7 @@ CLASS event_handler IMPLEMENTATION.
 
 * Handle commands on the values table
   METHOD handle_table_command.
-    DATA: lv_node_key TYPE lvc_nkey.
-    DATA: ls_tab TYPE ts_tab.
-    DATA: lt_value TYPE lcl_registry_entry=>tt_keyval.
-    DATA: ls_value TYPE lcl_registry_entry=>ts_keyval.
-
-* Save current values
+    " Save current values
     IF e_ucomm = 'SAVE'.
       PERFORM save_values.
     ENDIF.
@@ -193,19 +188,19 @@ CLASS event_handler IMPLEMENTATION.
 
 * Handle selection of a node in the tree
   METHOD handle_node_selected.
-    DATA: ls_tab TYPE ts_tab.
-    DATA: lt_val TYPE lcl_registry_entry=>tt_keyval.
+    DATA ls_tab TYPE ts_tab.
+    DATA lt_val TYPE lcl_registry_entry=>tt_keyval.
 
 * Check whether data has changed before
-    DATA: lv_answer TYPE char01.
-    DATA: lv_refresh TYPE char01.
+    DATA lv_answer TYPE char01.
+    DATA lv_refresh TYPE char01.
 * Check for changed data. The CHECK_CHANGED_DATA() method and
 * neither the DATA_CHANGED or DATA_CHANGED_FINISHED
 * events of CL_GUI_ALV_GRID seem to fit the bill, so we keep our own copy
 * of the original data and compare it
     IF gr_table IS BOUND.
 * Refresh data in local table (GT_VALUE)
-      CALL METHOD gr_table->check_changed_data.
+      gr_table->check_changed_data( ).
 
       IF gt_value NE gt_value_ori.
         CALL FUNCTION 'POPUP_TO_CONFIRM'
@@ -235,14 +230,14 @@ CLASS event_handler IMPLEMENTATION.
       PERFORM create_table.
     ENDIF.
 
-    CALL METHOD gr_tree->get_outtab_line
+    go_tree->get_outtab_line(
       EXPORTING
         i_node_key     = node_key
       IMPORTING
         e_outtab_line  = ls_tab    " Line of Outtab
       EXCEPTIONS
         node_not_found = 1
-        OTHERS         = 2.
+        OTHERS         = 2 ).
     IF sy-subrc <> 0.
       MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
                  WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
@@ -268,14 +263,14 @@ CLASS event_handler IMPLEMENTATION.
     DATA: lr_reg_entry TYPE REF TO lcl_registry_entry.
     DATA: ls_tab TYPE ts_tab.
 
-    CALL METHOD sender->get_outtab_line
+    sender->get_outtab_line(
       EXPORTING
         i_node_key     = node_key
       IMPORTING
         e_outtab_line  = ls_tab    " Line of Outtab
       EXCEPTIONS
         node_not_found = 1
-        OTHERS         = 2.
+        OTHERS         = 2 ).
     IF sy-subrc <> 0.
       MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
                  WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
@@ -330,7 +325,7 @@ FORM refresh_subnodes USING pv_nkey TYPE lvc_nkey.
 
 * Delete subnodes of node. This means: getting all children and deleting
 * them individually!
-  CALL METHOD gr_tree->get_children
+  go_tree->get_children(
     EXPORTING
       i_node_key         = pv_nkey
     IMPORTING
@@ -338,20 +333,20 @@ FORM refresh_subnodes USING pv_nkey TYPE lvc_nkey.
     EXCEPTIONS
       historic_error     = 1
       node_key_not_found = 2
-      OTHERS             = 3.
+      OTHERS             = 3 ).
   IF sy-subrc <> 0.
     MESSAGE 'Error building tree'(014) TYPE 'E'.
   ENDIF.
 
   LOOP AT lt_children INTO lv_nkey.
 
-    CALL METHOD gr_tree->delete_subtree
+    go_tree->delete_subtree(
       EXPORTING
         i_node_key                = lv_nkey
         i_update_parents_expander = abap_true
       EXCEPTIONS
         node_key_not_in_model     = 1
-        OTHERS                    = 2.
+        OTHERS                    = 2 ).
     IF sy-subrc <> 0.
       MESSAGE 'Error building tree'(014) TYPE 'E'.
     ENDIF.
@@ -361,14 +356,14 @@ FORM refresh_subnodes USING pv_nkey TYPE lvc_nkey.
 * With the children deleted, proceed to re-add registry entries
 
 * Get the registry entry on the node
-  CALL METHOD gr_tree->get_outtab_line
+  go_tree->get_outtab_line(
     EXPORTING
       i_node_key     = pv_nkey
     IMPORTING
       e_outtab_line  = ls_tab
     EXCEPTIONS
       node_not_found = 1
-      OTHERS         = 2.
+      OTHERS         = 2 ).
   IF sy-subrc NE 0.
     MESSAGE 'Error building tree'(014) TYPE 'E'.
   ENDIF.
@@ -378,7 +373,7 @@ FORM refresh_subnodes USING pv_nkey TYPE lvc_nkey.
     PERFORM add_node USING pv_nkey lr_reg_entry.
   ENDLOOP.
 * Expand parent node
-  CALL METHOD gr_tree->expand_node
+  go_tree->expand_node(
     EXPORTING
       i_node_key          = pv_nkey
     EXCEPTIONS
@@ -387,7 +382,7 @@ FORM refresh_subnodes USING pv_nkey TYPE lvc_nkey.
       cntl_system_error   = 3
       node_not_found      = 4
       cannot_expand_leaf  = 5
-      OTHERS              = 6.
+      OTHERS              = 6 ).
   IF sy-subrc <> 0.
     MESSAGE 'Error building tree'(014) TYPE 'E'.
   ENDIF.
@@ -403,9 +398,9 @@ ENDFORM.                    "refresh_subnodes
 *----------------------------------------------------------------------*
 FORM save_values.
   IF gr_table IS BOUND AND gr_sel_reg_entry IS BOUND.
-    DATA: lt_value TYPE lcl_registry_entry=>tt_keyval.
-    DATA: ls_value TYPE lcl_registry_entry=>ts_keyval.
-* Normalize the values; duplicate keys are overwritten, with possible loss of data!
+    DATA lt_value TYPE lcl_registry_entry=>tt_keyval.
+    DATA ls_value TYPE lcl_registry_entry=>ts_keyval.
+*   Normalize the values; duplicate keys are overwritten, with possible loss of data!
     LOOP AT gt_value INTO ls_value.
       INSERT ls_value INTO TABLE lt_value.
     ENDLOOP.
@@ -454,7 +449,7 @@ FORM add_node
 
   lv_node_text = pr_regentry->entry_id.
 
-  CALL METHOD gr_tree->add_node
+  go_tree->add_node(
     EXPORTING
       i_relat_node_key     = pv_nkey
       i_relationship       = cl_gui_column_tree=>relat_last_child
@@ -464,7 +459,7 @@ FORM add_node
     EXCEPTIONS
       relat_node_not_found = 1
       node_not_found       = 2
-      OTHERS               = 3.
+      OTHERS               = 3 ).
   IF sy-subrc <> 0.
     MESSAGE 'Error building tree'(014) TYPE 'E'.
   ENDIF.
@@ -554,7 +549,7 @@ FORM create_tree.
   gr_reg_root = lcl_registry_entry=>get_root( ).
 
 * Create tree
-  CREATE OBJECT gr_tree
+  CREATE OBJECT go_tree
     EXPORTING
       parent                      = gr_splitter->top_left_container
       node_selection_mode         = cl_gui_column_tree=>node_sel_mode_single
@@ -580,15 +575,15 @@ FORM create_tree.
   ls_fcat-no_out    = abap_true.
   APPEND ls_fcat TO lt_fcat.
 
-  CALL METHOD gr_tree->set_table_for_first_display
+  go_tree->set_table_for_first_display(
     CHANGING
       it_outtab       = gt_tab
-      it_fieldcatalog = lt_fcat.
+      it_fieldcatalog = lt_fcat ).
 
 * Get handle on tree toolbar
-  DATA: lt_ttb TYPE ttb_button.
-  DATA: ls_ttb TYPE stb_button.
-  gr_tree->get_toolbar_object( IMPORTING er_toolbar = gr_tree_toolbar ).
+  DATA lt_ttb TYPE ttb_button.
+  DATA ls_ttb TYPE stb_button.
+  go_tree->get_toolbar_object( IMPORTING er_toolbar = gr_tree_toolbar ).
   gr_tree_toolbar->delete_all_buttons( ).
 * Add custom buttons for registry entry operations
   ls_ttb-function = 'INSE'. "Insert entry
@@ -600,13 +595,13 @@ FORM create_tree.
   ls_ttb-function = 'COPY'. "Copy Entry
   ls_ttb-icon     = '@14@'. "ICON_COPY_OBJECT
   APPEND ls_ttb TO lt_ttb.
-  CALL METHOD gr_tree_toolbar->add_button_group
+  gr_tree_toolbar->add_button_group(
     EXPORTING
       data_table       = lt_ttb
     EXCEPTIONS
       dp_error         = 1
       cntb_error_fcode = 2
-      OTHERS           = 3.
+      OTHERS           = 3 ).
   IF sy-subrc <> 0.
     MESSAGE 'Error when setting up registry toolbar'(005) TYPE 'E'.
   ENDIF.
@@ -622,23 +617,23 @@ FORM create_tree.
   ls_event-eventid = cl_gui_simple_tree=>eventid_expand_no_children.
   ls_event-appl_event = 'X'.
   APPEND ls_event TO lt_event.
-  CALL METHOD gr_tree->set_registered_events
+  go_tree->set_registered_events(
     EXPORTING
       events                    = lt_event
     EXCEPTIONS
       cntl_error                = 1
       cntl_system_error         = 2
-      illegal_event_combination = 3.
+      illegal_event_combination = 3 ).
   IF sy-subrc <> 0.
     MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
                WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
   ENDIF.
 
-  SET HANDLER event_handler=>handle_node_expand FOR gr_tree.
-  SET HANDLER event_handler=>handle_node_selected FOR gr_tree.
+  SET HANDLER event_handler=>handle_node_expand FOR go_tree.
+  SET HANDLER event_handler=>handle_node_selected FOR go_tree.
   SET HANDLER event_handler=>handle_tree_command FOR gr_tree_toolbar.
 
-  CALL METHOD gr_tree->frontend_update.
+  go_tree->frontend_update( ).
 
 ENDFORM.                    "create_tree
 
@@ -648,8 +643,8 @@ ENDFORM.                    "create_tree
 *       Get single value from user
 *----------------------------------------------------------------------*
 FORM value_input_dialog USING title CHANGING value returncode.
-  DATA: lt_fld TYPE TABLE OF sval.
-  DATA: ls_fld TYPE sval.
+  DATA lt_fld TYPE TABLE OF sval.
+  DATA ls_fld TYPE sval.
 
   ls_fld-tabname = 'OJFIELDS'.
   ls_fld-fieldname = 'INPUT'.

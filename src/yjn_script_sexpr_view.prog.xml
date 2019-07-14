@@ -4,8 +4,6 @@
   <asx:values>
    <PROGDIR>
     <NAME>YJN_SCRIPT_SEXPR_VIEW</NAME>
-    <STATE>A</STATE>
-    <VARCL>X</VARCL>
     <DBAPL>S</DBAPL>
     <SUBC>S</SUBC>
     <APPL>X</APPL>

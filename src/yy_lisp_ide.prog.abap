@@ -25,7 +25,7 @@ TYPES: BEGIN OF ts_settings,
          new_editor TYPE flag,
        END OF ts_settings.
 
-CLASS lcl_stack DEFINITION FRIENDS lif_unit_test.
+CLASS lcl_ide_stack DEFINITION FRIENDS lif_unit_test.
   PUBLIC SECTION.
     TYPES tv_data TYPE string.
 
@@ -88,7 +88,7 @@ CLASS lcl_source DEFINITION INHERITING FROM cl_gui_sourceedit.
                                   iv_toolbar   TYPE flag DEFAULT abap_false.
     INTERFACES lif_source_editor.
   PRIVATE SECTION.
-    DATA mo_stack TYPE REF TO lcl_stack.
+    DATA mo_stack TYPE REF TO lcl_ide_stack.
 ENDCLASS.
 
 *----------------------------------------------------------------------*
@@ -109,7 +109,7 @@ CLASS lcl_editor DEFINITION INHERITING FROM cl_gui_textedit.
     METHODS append_string IMPORTING iv_text TYPE string.
   PROTECTED SECTION.
     DATA mv_counter TYPE i.
-    DATA mo_stack TYPE REF TO lcl_stack.
+    DATA mo_stack TYPE REF TO lcl_ide_stack.
 
     METHODS format_input IMPORTING code           TYPE string
                          RETURNING VALUE(rv_text) TYPE string.
@@ -126,7 +126,7 @@ CLASS lcl_console DEFINITION INHERITING FROM lcl_editor.
     DATA mv_content TYPE string.
 ENDCLASS.
 
-CLASS lcl_stack IMPLEMENTATION.
+CLASS lcl_ide_stack IMPLEMENTATION.
 
   METHOD push.
     DATA lr_new TYPE REF TO ts_node.
@@ -1504,9 +1504,9 @@ CLASS ltc_stack DEFINITION FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
     INTERFACES lif_unit_test.
   PRIVATE SECTION.
     CONSTANTS:
-      c_pi TYPE lcl_stack=>tv_data VALUE `Que j'aime a faire connaitre ce nombre si utile aux sages` ##NO_TEXT,
-      c_euler TYPE lcl_stack=>tv_data VALUE `2.71828182845985`.
-    DATA mo_stack TYPE REF TO lcl_stack.
+      c_pi TYPE lcl_ide_stack=>tv_data VALUE `Que j'aime a faire connaitre ce nombre si utile aux sages` ##NO_TEXT,
+      c_euler TYPE lcl_ide_stack=>tv_data VALUE `2.71828182845985`.
+    DATA mo_stack TYPE REF TO lcl_ide_stack.
 
     METHODS setup.
     METHODS empty FOR TESTING.
@@ -1539,8 +1539,8 @@ CLASS ltc_stack IMPLEMENTATION.
    ENDMETHOD.
 
    METHOD push_2.
-     DATA lv_next TYPE lcl_stack=>tv_data.
-     DATA lv_prev TYPE lcl_stack=>tv_data.
+     DATA lv_next TYPE lcl_ide_stack=>tv_data.
+     DATA lv_prev TYPE lcl_ide_stack=>tv_data.
 
      mo_stack->push( c_pi ).
      mo_stack->push( c_euler ).

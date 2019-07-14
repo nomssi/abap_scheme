@@ -5,6 +5,7 @@
 * Implementation of a registry for storing arbitrary values (similar to the MS Windows registry)
 * Author: Martin Ceronio (2015), http://ceronio.net
 * Released under MIT License: http://opensource.org/licenses/MIT
+* Updated by Jacques Nomssi Nzali
 
 CLASS lcx_registry_err DEFINITION INHERITING FROM cx_dynamic_check.
 ENDCLASS.                    "lcx_registry_err DEFINITION
@@ -288,7 +289,7 @@ CLASS lcl_registry_entry IMPLEMENTATION.
 * GET_PARENT - retrieve parent entry of this entry
 *--------------------------------------------------------------------*
   METHOD get_parent.
-*   Return the parent of the current key
+    " Return the parent of the current key
     parent = get_entry_by_internal_key( parent_key ).
   ENDMETHOD.                    "get_parent
 
@@ -402,16 +403,16 @@ CLASS lcl_registry_entry IMPLEMENTATION.
 *--------------------------------------------------------------------*
   METHOD copy_subentry_deep.
 
-*     Copy values from source to target
+*   Copy values from source to target
     target->values = source->values.
 
-*     Copy sub-entries from source to target
+*   Copy sub-entries from source to target
     LOOP AT source->sub_entries INTO DATA(ls_subentry).
       copy_subentry_deep( source = source->get_subentry( ls_subentry-key )
                           target = target->add_subentry( ls_subentry-key ) ).
     ENDLOOP.
 
-*     Ensure that values are also saved
+*   Ensure that values are also saved
     save( ).
 
   ENDMETHOD.                    "copy_subentry_deep

@@ -376,6 +376,7 @@
 
        METHODS call_cc_0 FOR TESTING.
        METHODS call_cc_1 FOR TESTING.
+       METHODS call_cc_2 FOR TESTING.
        METHODS call_cc_values FOR TESTING.
 
        METHODS is_symbol_true_1 FOR TESTING.
@@ -926,46 +927,51 @@
 
 **      evaluating (means '(3 (1 4))) returns three values:
 **       8/3, 2.28942848510666 (approximately), and 36/19.
-*       scheme( code = |(means '(3 (1 4)))|
-*               expected = |8/3 2.28942848510666 36/19| ).
+       scheme( code = |(means '(3 (1 4)))|
+               expected = |8/3 2.28942848510666 36/19| ).
      ENDMETHOD.                    "values_0
 
      METHOD call_cc_0.
-*       scheme( code = |(call-with-current-continuation | &
-*                         |  (lambda (exit)           | &
-*                         |    (for-each (lambda (x)  | &
-*                         |       (if (negative? x)   | &
-*                         |         (exit x)))        | &
-*                         |      '(54 0 37 -3 245 19))| &
-*                         |  #t))|
-*               expected = '-3' ).
+       scheme( code = |(call-with-current-continuation | &
+                         |  (lambda (exit)           | &
+                         |    (for-each (lambda (x)  | &
+                         |       (if (negative? x)   | &
+                         |         (exit x)))        | &
+                         |      '(54 0 37 -3 245 19))| &
+                         |  #t))|
+               expected = '-3' ).
      ENDMETHOD.                    "call_cc_0
 
      METHOD call_cc_1.
-*       scheme( code = |(define list-length                              | &
-*                         |  (lambda (obj)                                  | &
-*                         |    (call-with-current-continuation              | &
-*                         |       (lambda (return)                          | &
-*                         |         (letrec ((r                             | &
-*                         |                   (lambda (obj)                 | &
-*                         |                     (cond ((null? obj) 0)       | &
-*                         |                           ((pair? obj)          | &
-*                         |                             (+ (r (cdr obj)) 1))| &
-*                         |                           (else (return #f))))))| &
-*                         |          (r obj)))))) |
-*               expected = 'list-length' ).
-*
-*       scheme( code = |(list-length '(1 2 3 4))|
-*               expected = '4' ).
-*       scheme( code = |(list-length '(a b . c))|
-*               expected = '#f' ).
+       scheme( code = |(define list-length                              | &
+                         |  (lambda (obj)                                  | &
+                         |    (call-with-current-continuation              | &
+                         |       (lambda (return)                          | &
+                         |         (letrec ((r                             | &
+                         |                   (lambda (obj)                 | &
+                         |                     (cond ((null? obj) 0)       | &
+                         |                           ((pair? obj)          | &
+                         |                             (+ (r (cdr obj)) 1))| &
+                         |                           (else (return #f))))))| &
+                         |          (r obj)))))) |
+               expected = 'list-length' ).
+
+       scheme( code = |(list-length '(1 2 3 4))|
+               expected = '4' ).
+       scheme( code = |(list-length '(a b . c))|
+               expected = '#f' ).
      ENDMETHOD.                    "call_cc_1
 
+     METHOD call_cc_2.
+       scheme( code = |(+ 4 (call/cc (lambda (cont) (cont (+ 1 2)))))|
+               expected = 7 ).
+     ENDMETHOD.
+
      METHOD call_cc_values.
-*       scheme( code = |(define (values . things)                 | &
-*                         |  (call-with-current-continuation          | &
-*                         |     (lambda (cont) (apply cont things)))) |
-*               expected = 'values' ).
+       scheme( code = |(define (values . things)                 | &
+                         |  (call-with-current-continuation          | &
+                         |     (lambda (cont) (apply cont things)))) |
+               expected = 'values' ).
      ENDMETHOD.                    "call_cc_values
 
      METHOD is_symbol_true_1.
@@ -1887,7 +1893,9 @@
      ENDMETHOD.                    "teardown
 
      METHOD combine.
-       scheme( code = '(define combine (lambda (f) (lambda (x y) (if (nil? x) (quote ()) (f (list (car x) (car y)) ((combine f) (cdr x) (cdr y)))))))'
+       scheme( code = |(define combine (lambda (f) (lambda (x y) (if (nil? x) | &
+                         |(quote ()) | &
+                         |(f (list (car x) (car y)) ((combine f) (cdr x) (cdr y)))))))|
                expected = 'combine' ).
      ENDMETHOD.                    "combine
 
@@ -1919,7 +1927,8 @@
      ENDMETHOD.                    "functional_compose
 
      METHOD functional_fact_accum.
-       scheme( code = '(define (fact x) (define (fact-tail x accum) (if (= x 0) accum (fact-tail (- x 1) (* x accum)))) (fact-tail x 1))'
+       scheme( code = |(define (fact x) (define (fact-tail x accum)  | &
+                        |(if (= x 0) accum (fact-tail (- x 1) (* x accum)))) (fact-tail x 1))|
                expected = 'fact' ).
        scheme( code = '(fact 8)' "FIXME: returns fact-tail
                expected = '40320' ).
@@ -2525,13 +2534,13 @@
      METHOD math_floor_new.
        "Integer division
        scheme( code =  '(floor/ 5 2)'
-               expected = '2 1' ).
+               expected = ' 2 1' ).
        scheme( code =  '(floor/ -5 2)'
-               expected = '-3 1' ).
+               expected = ' -3 1' ).
        scheme( code =  '(floor/ 5 -2)'
-               expected = '-3 -1' ).
+               expected = ' -3 -1' ).
        scheme( code =  '(floor/ -5 -2)'
-               expected = '2 -1' ).
+               expected = ' 2 -1' ).
      ENDMETHOD.                    "math_floor
 
      METHOD math_ceiling.
@@ -2549,15 +2558,15 @@
      METHOD math_truncate_new.
        "Integer division
        scheme( code =  '(truncate/ 5 2)'
-               expected = '2 1' ).
+               expected = ' 2 1' ).
        scheme( code =  '(truncate/ -5 2)'
-               expected = '-2 -1' ).
+               expected = ' -2 -1' ).
        scheme( code =  '(truncate/ 5 -2)'
-               expected = '-2 -1' ).
+               expected = ' -2 1' ).
        scheme( code =  '(truncate/ -5 -2)'
-               expected = '2 -1' ).
+               expected = ' 2 -1' ).
        scheme( code =  '(truncate/ -5.0 -2)'
-               expected = '2.0 -1.0' ).
+               expected = ' 2.0 -1.0' ).
      ENDMETHOD.                    "math_truncate
 
      METHOD math_round.
@@ -2652,8 +2661,9 @@
        TRY.
            lv_int = '100000000000000'.
            scheme( code =  '(random 100000000000000)'
-                   expected = |Eval: { NEW cx_sy_conversion_overflow( textid = '5E429A39EE412B43E10000000A11447B'
-                                                                      value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
+                   expected = |Eval: { NEW cx_sy_conversion_overflow(
+                         textid = '5E429A39EE412B43E10000000A11447B'
+                         value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
          CATCH cx_root.
            scheme( code =  '(random 100000000000000)'
                    expected = |Eval: 100000000000000.0 is not an integer in [random]| ).
