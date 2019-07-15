@@ -1,0 +1,58 @@
+{
+  "global": {
+    "version": "v740sp08"
+  },
+  "rules": {
+    "keywords_upper": {
+      "enabled": true,
+      "ignoreExceptions": true
+    },
+    "line_length": {
+      "enabled": true,
+      "length": 120
+    },
+    "contains_tab":{  
+      "enabled": true
+    },
+    "functional_writing":{  
+      "enabled": true
+    },
+    "max_one_statement":{  
+      "enabled": true
+    },
+    "parser_error":{  
+      "enabled": true
+    },
+    "space_before_colon":{  
+      "enabled": true
+    },
+    "colon_missing_space":{  
+      "enabled": true
+    },
+    "exit_or_check":{  
+      "enabled": false
+    },
+    "obsolete_statement":{  
+      "enabled": true
+    },
+    "start_at_tab":{  
+      "enabled": false
+    },
+    "whitespace_end":{  
+      "enabled": true
+    },
+    "exporting":{  
+      "enabled": true
+    },
+    "empty_statement":{  
+      "enabled": true
+    },
+    "sequential_blank":{  
+      "enabled": true,
+      "lines":4
+    },
+    "definitions_top":{  
+      "enabled": false
+    }
+   }
+}
