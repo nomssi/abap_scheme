@@ -9,4 +9,4 @@ script:
   - abaplint "src/**/*.*"
 branches:
   only: 
-    - master
+    - netweaver752
