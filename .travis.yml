@@ -10,3 +10,4 @@ script:
 branches:
   only: 
     - Netweaver-7.52
+    - master
