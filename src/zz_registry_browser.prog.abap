@@ -113,7 +113,8 @@ CLASS event_handler IMPLEMENTATION.
         DATA lr_parent TYPE REF TO lcl_registry_entry.
         TRY.
             lr_parent = gr_sel_reg_entry->get_parent( ).
-            lr_parent->copy_subentry( source_key = gr_sel_reg_entry->entry_id target_key = lv_new_key ).
+            lr_parent->copy_subentry( source_key = gr_sel_reg_entry->entry_id
+                                       target_key = lv_new_key ).
 
 * Get the parent node in the tree to refresh it
             go_tree->get_parent(
@@ -180,10 +181,8 @@ CLASS event_handler IMPLEMENTATION.
 
 * Handle commands on the values table
   METHOD handle_table_command.
-    " Save current values
-    IF e_ucomm = 'SAVE'.
-      PERFORM save_values.
-    ENDIF.
+    CHECK e_ucomm = 'SAVE'.
+    PERFORM save_values.
   ENDMETHOD.                    "handle_table_command
 
 * Handle selection of a node in the tree
@@ -397,23 +396,22 @@ ENDFORM.                    "refresh_subnodes
 *       Save current values in table to currently selected reg. node
 *----------------------------------------------------------------------*
 FORM save_values.
-  IF gr_table IS BOUND AND gr_sel_reg_entry IS BOUND.
-    DATA lt_value TYPE lcl_registry_entry=>tt_keyval.
-    DATA ls_value TYPE lcl_registry_entry=>ts_keyval.
-*   Normalize the values; duplicate keys are overwritten, with possible loss of data!
-    LOOP AT gt_value INTO ls_value.
-      INSERT ls_value INTO TABLE lt_value.
-    ENDLOOP.
-    gr_sel_reg_entry->set_values( lt_value ).
-    TRY.
-        gr_sel_reg_entry->save( ).
-      CATCH lcx_registry_lock.
-        MESSAGE 'Values have been overwritten since last change and are refreshed'(004) TYPE 'I'.
-        gr_sel_reg_entry->reload( ).
-        gt_value = gr_sel_reg_entry->get_values( ).
-    ENDTRY.
-    gr_table->refresh_table_display( ).
-  ENDIF.
+  DATA lt_value TYPE lcl_registry_entry=>tt_keyval.
+
+  CHECK gr_table IS BOUND AND gr_sel_reg_entry IS BOUND.
+* Normalize the values; duplicate keys are overwritten, with possible loss of data!
+  LOOP AT gt_value INTO DATA(ls_value).
+    INSERT ls_value INTO TABLE lt_value.
+  ENDLOOP.
+  gr_sel_reg_entry->set_values( lt_value ).
+  TRY.
+      gr_sel_reg_entry->save( ).
+    CATCH lcx_registry_lock.
+      MESSAGE 'Values have been overwritten since last change and are refreshed'(004) TYPE 'I'.
+      gr_sel_reg_entry->reload( ).
+      gt_value = gr_sel_reg_entry->get_values( ).
+  ENDTRY.
+  gr_table->refresh_table_display( ).
 
 ENDFORM.                    "save_values
 
@@ -472,11 +470,8 @@ ENDFORM.                    "add_node
 *       Initialize table for showing values in a registry entry
 *----------------------------------------------------------------------*
 FORM create_table RAISING cx_salv_msg.
-  DATA: lr_func TYPE REF TO cl_salv_functions_list.
-  DATA: lr_cols TYPE REF TO cl_salv_columns_table.
-
-  DATA: lt_fcat TYPE lvc_t_fcat.
-  DATA: ls_fcat TYPE lvc_s_fcat.
+  DATA lr_func TYPE REF TO cl_salv_functions_list.
+  DATA lr_cols TYPE REF TO cl_salv_columns_table.
 
   CREATE OBJECT gr_table
     EXPORTING
@@ -495,18 +490,17 @@ FORM create_table RAISING cx_salv_msg.
   ENDIF.
 
 * Add fields to catalog
-  ls_fcat-fieldname = 'KEY'.
-  ls_fcat-edit      = abap_true.
-  ls_fcat-key       = abap_true.
-  ls_fcat-scrtext_s = 'Key'(001).
-  ls_fcat-outputlen = 35. "Because colwidth opt is not always great
-  APPEND ls_fcat TO lt_fcat.
-  ls_fcat-fieldname = 'VALUE'.
-  ls_fcat-edit      = abap_true.
-  ls_fcat-key       = abap_false.
-  ls_fcat-scrtext_s = 'Value'(002).
-  ls_fcat-outputlen = 35. "Because colwidth opt is not always great
-  APPEND ls_fcat TO lt_fcat.
+  DATA(lt_fcat) = VALUE lvc_t_fcat(
+              ( fieldname = 'KEY'
+                edit      = abap_true
+                key       = abap_true
+                scrtext_s = 'Key'(001)
+                outputlen = 35 ) "Because colwidth opt is not always great
+              ( fieldname = 'VALUE'
+                edit      = abap_true
+                key       = abap_false
+                scrtext_s = 'Value'(002)
+                outputlen = 35 ) ). "Because colwidth opt is not always great
 
   gr_table->set_table_for_first_display(
     CHANGING

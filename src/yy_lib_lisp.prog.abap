@@ -3978,10 +3978,12 @@
 
                     CASE result->type.
                       WHEN symbol.
-*                       re-define symbol in the original environment, but evaluate parameters in the current environment
-                        ls_frame-env->scope_of( result->value )->set( symbol  = result->value
-                                                                      element = eval( VALUE #( BASE ls_frame
-                                                                                               elem = lr_tail->cdr->car ) ) ).
+*                       re-define symbol in the original environment,
+*                       but evaluate parameters in the current environment
+                        ls_frame-env->scope_of( result->value )->set(
+                           symbol  = result->value
+                           element = eval( VALUE #( BASE ls_frame
+                                                    elem = lr_tail->cdr->car ) ) ).
                       WHEN OTHERS.
                         throw( |{ result->to_string( ) } is not a bound symbol| ).
                     ENDCASE.
@@ -4264,7 +4266,7 @@
                     TRY.
                     ls_frame = VALUE #(  elem = lr_tail
                                          env = CAST #( lr_tail->cdr ) ).
-                      CATCH  CX_SY_MOVE_CAST_ERROR.
+                      CATCH cx_sy_move_cast_error.
                         throw( |{ lr_tail->cdr->to_string( ) } not a valid environment| ).
                     ENDTRY.
                     CONTINUE.
@@ -4320,8 +4322,8 @@
 
                       WHEN abap_function.
 *              >> TEST: Support evaluation of ABAP function directly
-*                       Recompose as if calling a PROC (which we are). This is part of the test. If we make an ABAP function
-*                       call first-class, then we would need to revisit evaluating the whole of ELEMENT in one shot
+*              Recompose as if calling a PROC (which we are). This is part of the test. If we make an ABAP function
+*             call first-class, then we would need to revisit evaluating the whole of ELEMENT in one shot
                         result = proc_abap_function_call( lcl_lisp_new=>cons( io_car = lo_proc
                                                                               io_cdr = lr_tail ) ).
 *              << TEST
@@ -9103,12 +9105,18 @@
       define_value( symbol = 'truncate' type = native value = 'PROC_TRUNCATE' ).
       define_value( symbol = 'round'    type = native value = 'PROC_ROUND' ).
 
-      define_value( symbol = 'floor/'             type = native value = 'PROC_FLOOR_NEW'       exact_integer = abap_true ).
-      define_value( symbol = 'floor-quotient'     type = native value = 'PROC_FLOOR_QUOTIENT'  exact_integer = abap_true ).
-      define_value( symbol = 'floor-remainder'    type = native value = 'PROC_FLOOR_REMAINDER' exact_integer = abap_true ).
-      define_value( symbol = 'truncate/'          type = native value = 'PROC_TRUNCATE_NEW'       exact_integer = abap_true ).
-      define_value( symbol = 'truncate-quotient'  type = native value = 'PROC_TRUNCATE_QUOTIENT'  exact_integer = abap_true ).
-      define_value( symbol = 'truncate-remainder' type = native value = 'PROC_TRUNCATE_REMAINDER' exact_integer = abap_true ).
+      define_value( symbol = 'floor/'             type = native value = 'PROC_FLOOR_NEW'
+        exact_integer = abap_true ).
+      define_value( symbol = 'floor-quotient'     type = native value = 'PROC_FLOOR_QUOTIENT'
+        exact_integer = abap_true ).
+      define_value( symbol = 'floor-remainder'    type = native value = 'PROC_FLOOR_REMAINDER'
+        exact_integer = abap_true ).
+      define_value( symbol = 'truncate/'          type = native value = 'PROC_TRUNCATE_NEW'
+        exact_integer = abap_true ).
+      define_value( symbol = 'truncate-quotient'  type = native value = 'PROC_TRUNCATE_QUOTIENT'
+        exact_integer = abap_true ).
+      define_value( symbol = 'truncate-remainder' type = native value = 'PROC_TRUNCATE_REMAINDER'
+        exact_integer = abap_true ).
 
       define_value( symbol = 'numerator'   type = native value = 'PROC_NUMERATOR'   exact_integer = abap_true ).
       define_value( symbol = 'denominator' type = native value = 'PROC_DENOMINATOR' exact_integer = abap_true ).
@@ -9329,7 +9337,8 @@
             AND lo_lambda->category EQ lo_l_b->category AND lo_lambda->environment = b->environment.
 
         WHEN OTHERS.
-* obj1 and obj2 are pairs, vectors, bytevectors, records, or strings that denote the same location in the store (section 3.4).
+* obj1 and obj2 are pairs, vectors, bytevectors, records, or strings that denote the same location in the store
+*         (section 3.4).
 
           CHECK me = b.
       ENDCASE.

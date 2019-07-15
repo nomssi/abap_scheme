@@ -26,7 +26,9 @@ START-OF-SELECTION.
 * Retrieval of a specific entry. If we did not have the above line,
 * we would have to check that the result of each call to GET_SUBENTRY( )
 * to ensure it is bound.
-  reg_entry = reg_root->get_subentry( 'Sales' )->get_subentry( 'Enhancements' )->get_subentry( 'Process_XYZ' ).
+  reg_entry = reg_root->get_subentry( 'Sales'
+                )->get_subentry( 'Enhancements'
+                )->get_subentry( 'Process_XYZ' ).
 
 * Getting a specific value from the entry:
   lv_customer = reg_entry->get_value( 'Process_XYZ' ).
