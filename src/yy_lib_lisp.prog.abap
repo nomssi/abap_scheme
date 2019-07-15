@@ -3730,7 +3730,7 @@
         result = lcl_lisp_new=>box( io_proc = lcl_lisp=>list
                                     io_elem = left ).
       ELSEIF right->type = pair AND right->car = lcl_lisp=>list.
-*       ((and (pair? right) (eq? (car right) 'list))
+*     ((and (pair? right) (eq? (car right) 'list))
 *        (cons 'list (cons left (cdr right))))
         result = lcl_lisp_new=>cons( io_car = lcl_lisp=>list
                                      io_cdr = lcl_lisp_new=>cons( io_car = left
@@ -3800,9 +3800,9 @@
           ELSEIF lo_first->type EQ pair AND
             ( lo_first->car = lcl_lisp=>unquote_splicing OR lo_first->car->value EQ c_eval_unquote_splicing )
             AND list_length( lo_first ) EQ 2.
-*           ((and (pair? (car exp))
-*          	     (eq? (caar exp) 'unquote-splicing)
-*          	     (= (length (car exp)) 2))
+*          ((and (pair? (car exp))
+*                (eq? (caar exp) 'unquote-splicing)
+*                (= (length (car exp)) 2))
             _validate_quote lo_first c_eval_unquote_splicing.
 
             IF nesting = 0.
