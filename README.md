@@ -4,13 +4,11 @@
 # LISP interpreter in ABAP with Workbench
 
 ## Installation
-The code can be cloned with [ABAP GIT](http://docs.abapgit.org/) 
+The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for known issues [#28](https://github.com/nomssi/abap_scheme/issues/28) if you experience trouble.
 
-- The main version is developed on Netweaver 7.5 and should work on ABAP Netweaver 7.4. Milestones are downported - use the 7.02 branch 
-      Note the Eval. with Trace is not supported in this version
-- There is legacy code on the [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP) that should work on older releases.
+- The main version is developed on Netweaver 7.5 and should work on ABAP Netweaver 7.4. Milestones are downported to other branches (7.02). The legacy code on [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP) should work on older releases.
 
-- After installation, try this <i>guess my number</i> game
+- After installation, the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) are a good place to start. Try this <i>guess my number</i> game
 
       (begin (display "Please enter a number between 1 - 99: ")
           (do ((quit #f)
@@ -22,8 +20,6 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/)
                 ((and (number? guess) (> guess answer)) (display "Too high. Please guess again: ") )
                 (else (set! quit #t) (if (number? guess) (display "Correct!")
                                                          (display "Good bye...") ) ) ) ) )
-
-- the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) is a good place to start.
 
 * For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
 * How to [enable the new editor](/editor)
