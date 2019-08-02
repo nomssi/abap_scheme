@@ -10,6 +10,7 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for know
 
 - After installation, the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) are a good place to start. Try this <i>guess my number</i> game
 
+```Scheme
       (begin (display "Please enter a number between 1 - 99: ")
           (do ((quit #f)
                (guess 0)   
@@ -20,6 +21,7 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for know
                 ((and (number? guess) (> guess answer)) (display "Too high. Please guess again: ") )
                 (else (set! quit #t) (if (number? guess) (display "Correct!")
                                                          (display "Good bye...") ) ) ) ) )
+```
 
 * For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
 * How to [enable the new editor](/editor)
