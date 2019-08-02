@@ -4,7 +4,7 @@
 # LISP interpreter in ABAP with Workbench
 
 ## Installation
-The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for known issues [#28](https://github.com/nomssi/abap_scheme/issues/28) if you experience trouble.
+The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for known issues #28 if you experience trouble.
 
 - The main version is developed on Netweaver 7.5 and should work on ABAP Netweaver 7.4. Milestones are downported to other branches (7.02). The legacy code on [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP) should work on older releases.
 
@@ -30,8 +30,9 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for know
 
 - The LISP familly of  programming language represent both source code and data using a tree data structure (s-expressions).
 
-S-expression for (* 2 (+ 3 4))
-[![as tree](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png)] [![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sample_sexp.png)]
+S-expression for (* 2 (+ 3 4)) | workbench view
+--- | ---
+[![as tree](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png)] |  [![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sample_sexp.png)]
 
 In constrast to ABAP, Scheme is lexically scoped with proper tail call optimization.
 
