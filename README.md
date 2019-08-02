@@ -30,10 +30,11 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for know
 
 - The LISP familly of  programming language represent both source code and data using a tree data structure (s-expressions).
 
-S-Expression
-https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png
+S-expression for (* 2 (+ 3 4))
+[![as tree](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png)]
 
-s-expression for (* 2 (+ 3 4))	workbench view (* 2 (+ 3 4))
+[![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sample_sexp.png)]
+
 In constrast to ABAP, Scheme is lexically scoped with proper tail call optimization.
 
 Any valid Scheme code is also a valid tree structure. You can assign program code to a variable and execute it. Code is data, data is code. It is a common pattern to use the quote command to say just don’t execute this code yet, treat it as data. 
