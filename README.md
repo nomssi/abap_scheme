@@ -11,15 +11,28 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/)
       Note the Eval. with Trace is not supported in this version
 - A version is available that should work on older releases, but is not maintained anymore
       Note: check the [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP).
+- To test it, run this <i>guess my number game</i>
+
+      (begin (display "Please enter a number between 1 - 99: ")
+          (do ((quit #f)
+               (guess 0)   
+               (answer (+ 1 (random 100))) )
+          (quit)
+          (set! guess (read))
+          (cond ((and (number? guess) (< guess answer)) (display "Too low. Please guess again: ") )
+                ((and (number? guess) (> guess answer)) (display "Too high. Please guess again: ") )
+                (else (set! quit #t) (if (number? guess) (display "Correct!")
+                                                         (display "Good bye...") ) ) ) ) )
+
 
 * For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
 * How to [enable the new editor](/editor)
 
 ## What is LISP or Scheme?
 
-- Scheme is a functional programming language and one of the two main dialects of the programming language Lisp.
+- Scheme is a functional programming language with a small standard core, one of the two main dialects of the LISP familly of functional programming languages. 
+                                                   
 - the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) is a good place to start.
-- Scheme follows a minimalist design philosophy specifying a small standard core with powerful tools for language extension.
 
 
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
