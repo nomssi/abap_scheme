@@ -37,7 +37,7 @@ S-expression for (* 2 (+ 3 4)) | workbench view
 that can be passed to a logic (functional programming). Code is data, data is code. It is a common pattern to use the quote command to say just don’t execute this code yet, treat it as data. I suggest you
 - [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand how an interpreter works
 - read the _Revised <sup>7</sup> Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) or 
-- Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> to understand the power of lisp.
+- Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> to understand the power of Lisp.
 
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
@@ -53,8 +53,6 @@ After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> 
 - Include YY_LIB_LISP - Complete ABAP LISP library
 - Include YY_LISP_AUNIT - a large _ABAP Unit_ regression test suite
 - Include YY_LISP_IDE - Editor/Tools
-
-![class_diagram](https://github.com/nomssi/abap_scheme/blob/master/img/zz_lisp_uml.png)
 
 ### ABAP Integration
 #### Interpreter
@@ -104,9 +102,10 @@ The result on the expression either `#t` or `#f`.
                         RAISING   lcx_lisp_exception.
       ENDINTERFACE.
 
+### Workbench
 ![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_scheme_workbench.png)
 ![abap_trace](https://github.com/nomssi/abap_scheme/blob/master/img/abap_lisp_trace.png)
 ![abap_expression](https://github.com/nomssi/abap_scheme/blob/master/img/SExpressionViewer.png)
 
 
-Capturing our 15 minutes of fame: The ABAP Scheme [announcement](https://blogs.sap.com/2018/02/01/announcing-the-abap-scheme-workbench/) was popular in the SAP Community ![SAP Community](https://github.com/nomssi/abap_scheme/blob/master/img/popular_blogs.png)
+Read the ABAP Scheme [announcement](https://blogs.sap.com/2018/02/01/announcing-the-abap-scheme-workbench/) blog
