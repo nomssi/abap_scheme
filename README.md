@@ -1,7 +1,6 @@
 # abap_scheme
 [![Language: ABAP](https://img.shields.io/badge/Language-ABAP-blue.svg?style=flat)](https://www.sap.com/developer/topics/abap-platform.html)
 [![License: MIT](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat)](https://opensource.org/licenses/MIT)
-[![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_fancy_128.png)](http://lisperati.com/logo.html)
 # LISP interpreter in ABAP with Workbench
 
 * For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
@@ -16,13 +15,8 @@ My contributions:
 - target the _Revised <sup>7</sup> Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) including proper treatment of tail calls
 - a programming environment to make it fun to use, featuring the editor and console views, a trace view, a graphical S-Expression viewer
 
-![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_scheme_workbench.png)
-![abap_trace](https://github.com/nomssi/abap_scheme/blob/master/img/abap_lisp_trace.png)
-![abap_expression](https://github.com/nomssi/abap_scheme/blob/master/img/SExpressionViewer.png)
-
 Check the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) for documentation.
-
-Capturing our 15 minutes of fame: The ABAP Scheme [announcement](https://blogs.sap.com/2018/02/01/announcing-the-abap-scheme-workbench/) was popular in the SAP Community ![SAP Community](https://github.com/nomssi/abap_scheme/blob/master/img/popular_blogs.png)
+[![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_fancy_128.png)](http://lisperati.com/logo.html)
 
 ### Architecture
 
@@ -89,3 +83,9 @@ The result on the expression either `#t` or `#f`.
                         RAISING   lcx_lisp_exception.
       ENDINTERFACE.
 
+![abap_scheme](https://github.com/nomssi/abap_scheme/blob/master/img/abap_scheme_workbench.png)
+![abap_trace](https://github.com/nomssi/abap_scheme/blob/master/img/abap_lisp_trace.png)
+![abap_expression](https://github.com/nomssi/abap_scheme/blob/master/img/SExpressionViewer.png)
+
+
+Capturing our 15 minutes of fame: The ABAP Scheme [announcement](https://blogs.sap.com/2018/02/01/announcing-the-abap-scheme-workbench/) was popular in the SAP Community ![SAP Community](https://github.com/nomssi/abap_scheme/blob/master/img/popular_blogs.png)
