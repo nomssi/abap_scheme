@@ -26,17 +26,18 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for know
 
 ## What is LISP or Scheme?
 
-- Scheme is a functional programming language with a small standard core, one of the two main dialects of the LISP familly of functional programming languages. 
-                                                   
+- LISP is a familly of  programming language based on function application [lambda calculus](https://en.wikipedia.org/wiki/Lambda_calculus).
+You can [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand how an interpreter works.
+- The main dialects are the minimalistic Scheme with the _Revised <sup>7</sup> Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) as the de facto standard, Common Lisp and Clojure. 
+
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
-## Motivation
-
 After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a> inspired by [Peter Norvig](http://norvig.com/lispy2.html).
-So I started my [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) project based on [https://github.com/mydoghasworms/abap-lisp](https://github.com/mydoghasworms/abap-lisp). 
+
+So I started my project based on [https://github.com/mydoghasworms/abap-lisp](https://github.com/mydoghasworms/abap-lisp). 
 
 ## My contributions
-- target the _Revised <sup>7</sup> Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) including proper treatment of tail calls
+- target [R7RS](http://www.r7rs.org/) including proper treatment of tail calls
 - a programming environment to make it fun to use, featuring the editor and console views, a trace view, a graphical S-Expression viewer
 
 ### Architecture
