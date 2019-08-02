@@ -18,7 +18,7 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/)
 ## What is LISP or Scheme?
 
 Check the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) for documentation.
-[![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_fancy_128.png)](http://lisperati.com/logo.html)
+[![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
 ## Motivation
 
