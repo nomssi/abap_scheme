@@ -75,7 +75,7 @@ we concatenate the following Scheme expression in a string variable `code` and e
          (DELKZ (ab-data "GS_MDPS-DELKZ" ))
          (LIFNR (ab-data "GS_MDPS-LIFNR" ))
          (PLUMI (ab-data "GS_MDPS-PLUMI" )))
-      (and (= PLAAB '02') (= DELKZ 'BB') (> LIFNR '') (= PLUMI '-')) ))
+      (and (= PLAAB '02') (= DELKZ 'BB') (> LIFNR '') (= PLUMI '-')) )
 ```
 
 The result on the expression either `#t` or `#f`.
