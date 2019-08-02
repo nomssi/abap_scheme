@@ -38,6 +38,7 @@ that can be passed to a logic (functional programming). Code is data, data is co
 - [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand how an interpreter works
 - read the _Revised <sup>7</sup> Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) or 
 - Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> to understand the power of lisp.
+
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
 ### Features
