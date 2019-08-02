@@ -24,19 +24,31 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for know
 * For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
 * How to [enable the new editor](/editor)
 
-## What is LISP or Scheme?
+## What is Scheme?
 
-- LISP is a familly of  programming language based on function application [lambda calculus](https://en.wikipedia.org/wiki/Lambda_calculus).
+- from Wikipedia: [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is a programming language that supports multiple paradigms, including functional and imperative programming. It is one of the three main dialects of Lisp, alongside Common Lisp and Clojure.
+
+- The LISP familly of  programming language represent both source code and data using a tree data structure (s-expressions).
+
+S-Expression
+https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png
+
+s-expression for (* 2 (+ 3 4))	workbench view (* 2 (+ 3 4))
+In constrast to ABAP, Scheme is lexically scoped with proper tail call optimization.
+
+Any valid Scheme code is also a valid tree structure. You can assign program code to a variable and execute it. Code is data, data is code. It is a common pattern to use the quote command to say just don’t execute this code yet, treat it as data. 
+
+
 You can [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand how an interpreter works.
 - The main dialects are the minimalistic Scheme with the _Revised <sup>7</sup> Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) as the de facto standard, Common Lisp and Clojure. 
 
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
-After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a> inspired by [Peter Norvig](http://norvig.com/lispy2.html).
-
-So I started my project based on [https://github.com/mydoghasworms/abap-lisp](https://github.com/mydoghasworms/abap-lisp). 
 
 ## My contributions
+After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a> inspired by [Peter Norvig](http://norvig.com/lispy2.html). So I started my project based on [https://github.com/mydoghasworms/abap-lisp](https://github.com/mydoghasworms/abap-lisp). 
+
+### Features
 - target [R7RS](http://www.r7rs.org/) including proper treatment of tail calls
 - a programming environment to make it fun to use, featuring the editor and console views, a trace view, a graphical S-Expression viewer
 
