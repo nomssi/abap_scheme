@@ -31,9 +31,7 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for know
 - The LISP familly of  programming language represent both source code and data using a tree data structure (s-expressions).
 
 S-expression for (* 2 (+ 3 4))
-[![as tree](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png)]
-
-[![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sample_sexp.png)]
+[![as tree](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png)] [![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sample_sexp.png)]
 
 In constrast to ABAP, Scheme is lexically scoped with proper tail call optimization.
 
@@ -45,11 +43,9 @@ You can [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/g
 
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
-
-## My contributions
+### Features
 After reading Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> I was curious to understand Martin Ceronio's <a href="https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/">LISP interpreter in ABAP</a> inspired by [Peter Norvig](http://norvig.com/lispy2.html). So I started my project based on [https://github.com/mydoghasworms/abap-lisp](https://github.com/mydoghasworms/abap-lisp). 
 
-### Features
 - target [R7RS](http://www.r7rs.org/) including proper treatment of tail calls
 - a programming environment to make it fun to use, featuring the editor and console views, a trace view, a graphical S-Expression viewer
 
