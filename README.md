@@ -34,11 +34,10 @@ S-expression for (* 2 (+ 3 4)) | workbench view
 --- | ---
 [![as tree](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png)] |  [![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sample_sexp.png)]
 
-that can be passed to a logic (functional programming). Code is data, data is code. It is a common pattern to use the quote command to say just don’t execute this code yet, treat it as data. 
-
-You can [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand how an interpreter works.
-
-Read the _Revised <sup>7</sup> Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) or Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> to understand the power of lisp.
+that can be passed to a logic (functional programming). Code is data, data is code. It is a common pattern to use the quote command to say just don’t execute this code yet, treat it as data. I suggest you
+- [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand how an interpreter works
+- read the _Revised <sup>7</sup> Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) or 
+- Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> to understand the power of lisp.
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
 ### Features
