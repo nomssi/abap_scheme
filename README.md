@@ -6,12 +6,11 @@
 ## Installation
 The code can be cloned with [ABAP GIT](http://docs.abapgit.org/) 
 
-- The main version is developed on Netweaver 7.5 and should work on ABAP Netweaver 7.4
-- Milestones are downported to ABAP Netweaver 7.02 - use the 7.02 branch 
+- The main version is developed on Netweaver 7.5 and should work on ABAP Netweaver 7.4. Milestones are downported - use the 7.02 branch 
       Note the Eval. with Trace is not supported in this version
-- A version is available that should work on older releases, but is not maintained anymore
-      Note: check the [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP).
-- To test it, run this <i>guess my number game</i>
+- There is legacy code on the [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP) that should work on older releases.
+
+- After installation, try this <i>guess my number</i> game
 
       (begin (display "Please enter a number between 1 - 99: ")
           (do ((quit #f)
@@ -24,6 +23,7 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/)
                 (else (set! quit #t) (if (number? guess) (display "Correct!")
                                                          (display "Good bye...") ) ) ) ) )
 
+- the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) is a good place to start.
 
 * For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
 * How to [enable the new editor](/editor)
@@ -32,9 +32,6 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/)
 
 - Scheme is a functional programming language with a small standard core, one of the two main dialects of the LISP familly of functional programming languages. 
                                                    
-- the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) is a good place to start.
-
-
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
 ## Motivation
