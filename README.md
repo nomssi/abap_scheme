@@ -3,9 +3,6 @@
 [![License: MIT](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat)](https://opensource.org/licenses/MIT)
 # LISP interpreter in ABAP with Workbench
 
-* For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
-* How to [enable the new editor](/editor)
-
 ## Installation
 The code can be cloned with [ABAP GIT](http://docs.abapgit.org/) 
 
@@ -14,6 +11,9 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/)
       Note the Eval. with Trace is not supported in this version
 - A version is available that should work on older releases, but is not maintained anymore
       Note: check the [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP).
+
+* For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
+* How to [enable the new editor](/editor)
 
 ## What is LISP or Scheme?
 
