@@ -17,7 +17,11 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/)
 
 ## What is LISP or Scheme?
 
-Check the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) for documentation.
+- Scheme is a functional programming language and one of the two main dialects of the programming language Lisp.
+- the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) is a good place to start.
+- Scheme follows a minimalist design philosophy specifying a small standard core with powerful tools for language extension.
+
+
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
 ## Motivation
