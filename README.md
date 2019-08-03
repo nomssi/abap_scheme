@@ -28,15 +28,16 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for know
 
 ## What is Scheme?
 
-- from Wikipedia: [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is a programming language that supports multiple paradigms, including functional and imperative programming. It is one of the three main dialects of Lisp, alongside Common Lisp and Clojure.
+- the [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) Scheme programming language is one of the three main dialects of Lisp, alongside Common Lisp and Clojure. Scheme supports multiple paradigms, including functional and imperative programming. [The Little Schemer](https://www.amazon.com/Little-Schemer-Daniel-P-Friedman/dp/0262560992) teaches 10 Commandments and 5 Rules to understand Scheme.
 
-- any valid Scheme source code or data is represented using a tree structure (s-expression). e.g. 
+- Symbolic expressions (S-expressions, sexps) are the data structure used to represent both code or data e.g. 
 
 S-expression for (* 2 (+ 3 4)) | workbench view
 --- | ---
 ![s-exp](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png) |  ![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sample_sexp.png)
 
-that can be passed to a logic (functional programming). Code is data, data is code. It is a common pattern to use the quote command to say just don’t execute this code yet, treat it as data. I suggest you
+I suggest you
+- [Try Scheme](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) or
 - [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand how an interpreter works
 - read the _Revised <sup>7</sup> Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) or 
 - Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> to understand the power of Lisp.
