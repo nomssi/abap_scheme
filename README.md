@@ -36,6 +36,16 @@ S-expression for (* 2 (+ 3 4)) | workbench view
 --- | ---
 ![s-exp](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png) |  ![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sample_sexp.png)
 
+It is quite common for Scheme programs to manipulate, transform and produce other programs.
+
+ABAP Scheme is an interpreter. The reader parses the input and produce the data structure the interpreter will see. Check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Features)
+
+      x             ; the symbol X
+      ()            ; the empty list
+      (8 2 -1/5)    ; a list of three numbers
+      ("foo" "bar") ; a list of two strings
+      (+ (* 2 3) 4) ; a list of a symbol, a list, and a number.
+
 I suggest you
 - [Try Scheme](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) or
 - [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand how an interpreter works
