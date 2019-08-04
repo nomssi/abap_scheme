@@ -30,15 +30,13 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for know
 
 - the [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) Scheme programming language is one of the three main dialects of Lisp, alongside Common Lisp and Clojure. Scheme supports multiple paradigms, including functional and imperative programming. [The Little Schemer](https://www.amazon.com/Little-Schemer-Daniel-P-Friedman/dp/0262560992) teaches 10 Commandments and 5 Rules to understand Scheme.
 
-- Symbolic expressions (S-expressions, sexps) are the data structure used to represent both code or data e.g. 
+- ABAP Scheme is an interpreter: the reader parses the input and produce symbolic expressions (S-expressions, sexps), the data structure used to represent both code or data. It is quite common for Scheme programs to manipulate, transform and produce other programs.
 
 S-expression for (* 2 (+ 3 4)) | workbench view
 --- | ---
 ![s-exp](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png) |  ![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sample_sexp.png)
 
-It is quite common for Scheme programs to manipulate, transform and produce other programs.
-
-ABAP Scheme is an interpreter. The reader parses the input and produce the data structure the interpreter will see. Check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Features)
+Check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Features)
 
       x             ; the symbol X
       ()            ; the empty list
