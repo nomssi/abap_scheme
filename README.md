@@ -28,7 +28,8 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for know
 
 ## What is Scheme?
 
-- the [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) Scheme programming language is one of the three main dialects of Lisp, alongside Common Lisp and Clojure. Scheme supports multiple paradigms, including functional and imperative programming. [The Little Schemer](https://www.amazon.com/Little-Schemer-Daniel-P-Friedman/dp/0262560992) teaches 10 Commandments and 5 Rules to understand Scheme.
+- [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the three main dialects of the Lisp programming, alongside Common Lisp and Clojure. Scheme supports multiple paradigms, including functional and imperative programming. 
+Check the [Racket](https://docs.racket-lang.org/reference/eval-model.html) documentation or use the Q&A format of [The Little Schemer](https://www.amazon.com/Little-Schemer-Daniel-P-Friedman/dp/0262560992) to get used to the language.
 
 - ABAP Scheme is an interpreter: the reader parses the input and produce symbolic expressions (S-expressions, sexps), the data structure used to represent both code or data. It is quite common for Scheme programs to manipulate, transform and produce other programs.
 
