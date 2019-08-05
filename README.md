@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat)](https://opensource.org/licenses/MIT)
 # LISP interpreter in ABAP with Workbench
 
-## Installation
+## Getting Started
 The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for known issues #28 if you experience trouble.
 
 - The main version is developed on Netweaver 7.5 and should work on ABAP Netweaver 7.4. Milestones are downported to other branches (7.02). The legacy code on [SCN Code Gallery](https://wiki.scn.sap.com/wiki/display/Snippets/Lisp+Interpreter+in+ABAP) should work on older releases.
@@ -28,10 +28,8 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for know
 
 ## What is Scheme?
 
-- [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the three main dialects of the Lisp programming, alongside Common Lisp and Clojure. Scheme supports multiple paradigms, including functional and imperative programming. 
-Check the [Racket](https://docs.racket-lang.org/reference/eval-model.html) documentation or use the Q&A format of [The Little Schemer](https://www.amazon.com/Little-Schemer-Daniel-P-Friedman/dp/0262560992) to get used to the language.
-
-- ABAP Scheme is an interpreter: the reader parses the input and produce symbolic expressions (S-expressions, sexps), the data structure used to represent both code or data. It is quite common for Scheme programs to manipulate, transform and produce other programs.
+- [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the three main dialects of the Lisp programming, alongside Common Lisp and Clojure. 
+- The ABAP Scheme interpreter parses the input into symbolic expressions (s-exps), a data structure used to represent both code or data. S-exps are then [evaluated](https://docs.racket-lang.org/reference/eval-model.html).
 
 S-expression for (* 2 (+ 3 4)) | workbench view
 --- | ---
@@ -47,9 +45,11 @@ Check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Features)
 
 I suggest you
 - [Try Scheme](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) or
+- use the Q&A format of [The Little Schemer](https://www.amazon.com/Little-Schemer-Daniel-P-Friedman/dp/0262560992) 
 - [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand how an interpreter works
 - read the _Revised <sup>7</sup> Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) or 
 - Conrad Barski's <a href="http://landoflisp.com/">Land of Lisp</a> to understand the power of Lisp.
+to get used this powerfull language.
 
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
