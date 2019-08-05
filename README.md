@@ -39,10 +39,10 @@ S-expression for (* 2 (+ 3 4)) | workbench view
 Check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Features)
 
       x             ; the symbol X
-      ()            ; the empty list
+      ()            ; the empty list is the constant null in Scheme
       (8 2 -1/5)    ; a list of three numbers
       ("foo" "bar") ; a list of two strings
-      (+ (* 2 3) 4) ; a list of a symbol, a list, and a number.
+      (+ (* 2 3) 4) ; a list of a symbol, a list, and a number.      
 
 I suggest you
 - [Try Scheme](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) or
