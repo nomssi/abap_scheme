@@ -30,7 +30,7 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for know
 
 - As stated by [Greenspun](http://www.paulgraham.com/quotes.html) some concepts cannot be expressed in ABAP, except by implementing Lisp in ABAP first.
 - [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the three main dialects of the Lisp programming, alongside Common Lisp and Clojure.
-- So here is my ad hoc informally-specified bug-ridden slow implementation of Scheme. It is good enough to assist you in thinking previously impossible thoughts. I hope will spend more time thinking than typing.
+- So here is my ad hoc informally-specified bug-ridden slow implementation of Scheme. It is good enough to assist you in thinking previously impossible thoughts.
 - The ABAP Scheme interpreter parses the input into symbolic expressions (s-exps), a data structure used to represent both code or data. S-exps are then [evaluated](https://docs.racket-lang.org/reference/eval-model.html).
 
 S-expression for (* 2 (+ 3 4)) | workbench view
