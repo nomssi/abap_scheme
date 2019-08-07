@@ -40,17 +40,19 @@ I suggest you check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Lear
 
 So Scheme assisted me in thinking previously impossible thoughts.
 
-- Scheme is a practical language with a very small number of rules for forming expressions that can be composed without restrictions. My initial plan was to write a Lisp workbench for [Martin's Lisp interpreter](https://github.com/mydoghasworms/abap-lisp), but I changed the target language after reading the *Revised <sup>7</sup> Report on the Algorithmic Language Scheme* aka [R7RS](http://www.r7rs.org/). This documentation is the source of many of the 500+ tests implemented in the ABAP unit test suite. The alignment also makes it easier to run open source code in ABAP Scheme.
+- Scheme is a practical language with a very small number of rules for forming expressions that can be composed without restrictions. My initial plan was to write a Lisp workbench for [Martin's Lisp interpreter](https://github.com/mydoghasworms/abap-lisp), but I changed the target language after reading the *Revised <sup>7</sup> Report on the Algorithmic Language Scheme* aka [R7RS](http://www.r7rs.org/).
 
 ### Features
 - Check the current [list of features](https://github.com/nomssi/abap_scheme/wiki/Features)
+- This documentation is the source of many of the 500+ tests implemented in the ABAP unit test suite. 
+- Access to ABAP global fields and function modules
 - a programming environment to make it fun to use, featuring the editor and console views, a trace view, a graphical S-Expression viewer
 
 S-expression for (* 2 (+ 3 4)) | workbench view
 --- | ---
 ![s-exp](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png) |  ![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sample_sexp.png)
 
-- What is missing: first class continuations and hygienic macros for reals language-oriented programming
+- R7RS alignment makes it easier to run open source Scheme code. This is however limited, as *first class continuations* (call cc) and *hygienic macros* (define-syntax) are missing
 
 ### Architecture
 
