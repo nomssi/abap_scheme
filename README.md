@@ -30,13 +30,15 @@ After installation, the [wiki pages](https://github.com/nomssi/abap_scheme/wiki)
 
 ## Why Scheme? 
 - some concepts cannot be expressed in ABAP, except by first implementing Lisp in ABAP (cf. [Greenspun 10th rule](http://www.paulgraham.com/quotes.html) ). You need Lisp to assist you in thinking previously impossible thoughts.
-- Conrad Barski's [Land of Lisp](http://landoflisp.com), Martin Ceronio's [LISP interpreter in ABAP](https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/) and [Peter Norvig](http://norvig.com/lispy2.html) inspired me to learn Lisp.
-- My project started as a Lisp workbench for [Martin's code](https://github.com/mydoghasworms/abap-lisp), but I changed the target language after reading Scheme's revised report [R<sup>7</sup>RS](http://www.r7rs.org/). 
-- [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the three main dialects of the Lisp programming, alongside Common Lisp and Clojure. Scheme's is a practical programming language with a very small number of rules for forming expressions that can be composed without restrictions. In constrast to ABAP, Scheme is lexically scoped and requires proper tail call optimization. 
-
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
-- Scheme's uses *symbolic expressions* (S-exps) to represent code *and* data. Expressions are then [evaluated](https://docs.racket-lang.org/reference/eval-model.html).
+- They are many dialects of Lisp, it is common to [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand programming languages. [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the three main dialects of the Lisp programming, alongside Common Lisp and Clojure.
+
+- Conrad Barski's [Land of Lisp](http://landoflisp.com), Martin Ceronio's [LISP interpreter in ABAP](https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/) and [Peter Norvig](http://norvig.com/lispy2.html) inspired me to learn Lisp.
+
+- My project started as a Lisp workbench for [Martin's code](https://github.com/mydoghasworms/abap-lisp), but I changed the target language after reading Scheme's revised report [R<sup>7</sup>RS](http://www.r7rs.org/). Scheme is a practical programming language with a very small number of rules for forming expressions that can be composed without restrictions. 
+
+- In constrast to ABAP, Scheme is lexically scoped and requires proper tail call optimization. Scheme's uses *symbolic expressions* (S-exps) to represent code *and* data. Expressions are then [evaluated](https://docs.racket-lang.org/reference/eval-model.html).
 
 ### Features
 - check the current [features](https://github.com/nomssi/abap_scheme/wiki/Features)
@@ -51,7 +53,6 @@ S-expression for (* 2 (+ 3 4)) | workbench view
 To get used to the language, I suggest you
 - first check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) and understand [Lists](https://www.gnu.org/software/mit-scheme/documentation/mit-scheme-ref/Lists.html#Lists).
 - use the Q&A format of [The Little Schemer](https://www.amazon.com/Little-Schemer-Daniel-P-Friedman/dp/0262560992) 
-- [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand how an interpreter works
 
 ### Architecture
 
