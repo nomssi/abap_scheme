@@ -29,7 +29,7 @@ After installation, the [wiki pages](https://github.com/nomssi/abap_scheme/wiki)
 * How to [enable the new editor](/editor)
 
 ## Why Scheme? 
-- some concepts cannot be expressed in ABAP, except by first implementing Lisp in ABAP (cf. [Greenspun 10th rule](http://www.paulgraham.com/quotes.html) ). You need Lisp to assist you in thinking previously impossible thoughts.
+- some concepts cannot be expressed in ABAP, except by first implementing Lisp in ABAP (cf. [Greenspun 10th rule](http://www.paulgraham.com/quotes.html) ). Lisp assists you in thinking previously impossible thoughts.
 
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
