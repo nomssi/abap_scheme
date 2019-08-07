@@ -33,7 +33,7 @@ After installation, the [wiki pages](https://github.com/nomssi/abap_scheme/wiki)
 
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
-- They are many dialects of Lisp, it is common to [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand programming languages. [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the three main dialects of the Lisp programming, alongside Common Lisp and Clojure.
+- [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the three main dialects of the Lisp programming, alongside Common Lisp and Clojure. It is common to [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand Lisp's core concepts. 
 
 - Conrad Barski's [Land of Lisp](http://landoflisp.com), Martin Ceronio's [LISP interpreter in ABAP](https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/) and [Peter Norvig](http://norvig.com/lispy2.html) inspired me to learn Lisp.
 
