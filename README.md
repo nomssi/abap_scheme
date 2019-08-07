@@ -27,7 +27,6 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for know
 * How to [enable the new editor](/editor)
 
 ## Why Scheme?
-
 - some concepts cannot be expressed in ABAP, except by first implementing Lisp in ABAP (cf. [Greenspun 10th rule](http://www.paulgraham.com/quotes.html) ).
 - [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the three main dialects of the Lisp programming, alongside Common Lisp and Clojure.
 - Scheme's reader parses an input into *symbolic expressions* (S-exps), a tree data structure used to represent both code or data. S-exps are then [evaluated](https://docs.racket-lang.org/reference/eval-model.html).
@@ -36,8 +35,11 @@ S-expression for (* 2 (+ 3 4)) | workbench view
 --- | ---
 ![s-exp](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png) |  ![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sample_sexp.png)
 
-So here is my ABAP Scheme interpreter to assist you in thinking previously impossible thoughts. I suggest you
-- check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) or
+- So here is my ABAP Scheme interpreter to assist you in thinking previously impossible thoughts. 
+
+I suggest you
+- check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) orSo here is my ABAP Scheme interpreter to assist you in thinking previously impossible thoughts. 
+
 - check the [features](https://github.com/nomssi/abap_scheme/wiki/Features)
 - use the Q&A format of [The Little Schemer](https://www.amazon.com/Little-Schemer-Daniel-P-Friedman/dp/0262560992) 
 - [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand how an interpreter works
