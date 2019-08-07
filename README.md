@@ -37,10 +37,10 @@ After installation, the [wiki pages](https://github.com/nomssi/abap_scheme/wiki)
 
 So Scheme assisted me in thinking previously impossible thoughts.
 
-- My initial plan was to write a Lisp workbench for [Martin's Lisp interpreter](https://github.com/mydoghasworms/abap-lisp), but after reading Scheme's revised report [R<sup>7</sup>RS](http://www.r7rs.org/) I changed the target language. Scheme is a practical programming language with a very small number of rules for forming expressions that can be composed without restrictions. 
+- Scheme is a practical language with a very small number of rules for forming expressions that can be composed without restrictions. My initial plan was to write a Lisp workbench for [Martin's Lisp interpreter](https://github.com/mydoghasworms/abap-lisp), but I changed the target language after reading the *Revised <sup>7</sup> Report on the Algorithmic Language Scheme* aka [R7RS](http://www.r7rs.org/). The documentation is the source of many of the 500+ tests implemented in the ABAP unit test suite.
 
 ### Features
-- check the current [features](https://github.com/nomssi/abap_scheme/wiki/Features)
+- Check the current [list of features](https://github.com/nomssi/abap_scheme/wiki/Features)
 - a programming environment to make it fun to use, featuring the editor and console views, a trace view, a graphical S-Expression viewer
 
 S-expression for (* 2 (+ 3 4)) | workbench view
