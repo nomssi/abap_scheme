@@ -31,15 +31,15 @@ After installation, the [wiki pages](https://github.com/nomssi/abap_scheme/wiki)
 ## Why Scheme? 
 - [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the three main dialects of the Lisp programming, alongside Common Lisp and Clojure. It is common to [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand Lisp's core concepts. 
 
-- some concepts cannot be expressed in ABAP, except by first implementing Lisp in ABAP ([Greenspun 10th rule](http://www.paulgraham.com/quotes.html) ). Lisp assists you in thinking previously impossible thoughts.
-
-[![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
-
 - Conrad Barski's [Land of Lisp](http://landoflisp.com), Martin Ceronio's [LISP interpreter in ABAP](https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/) and [Peter Norvig](http://norvig.com/lispy2.html) inspired me to learn Lisp.
 
-- My project started as a Lisp workbench for [Martin's code](https://github.com/mydoghasworms/abap-lisp), but I changed the target language after reading Scheme's revised report [R<sup>7</sup>RS](http://www.r7rs.org/). Scheme is a practical programming language with a very small number of rules for forming expressions that can be composed without restrictions. 
+- Some concepts cannot be expressed in ABAP, except by first implementing Lisp in ABAP ([Greenspun 10th rule](http://www.paulgraham.com/quotes.html) ). In constrast to ABAP, Scheme is lexically scoped and requires proper tail call optimization. Scheme's uses *symbolic expressions* (S-exps) to represent code *and* data. Expressions are then [evaluated](https://docs.racket-lang.org/reference/eval-model.html).
+ 
+[![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
-- In constrast to ABAP, Scheme is lexically scoped and requires proper tail call optimization. Scheme's uses *symbolic expressions* (S-exps) to represent code *and* data. Expressions are then [evaluated](https://docs.racket-lang.org/reference/eval-model.html).
+So Scheme assisted me in thinking previously impossible thoughts.
+
+- My project started as a Lisp workbench for [Martin's code](https://github.com/mydoghasworms/abap-lisp), but I changed the target language after reading Scheme's revised report [R<sup>7</sup>RS](http://www.r7rs.org/). Scheme is a practical programming language with a very small number of rules for forming expressions that can be composed without restrictions. 
 
 ### Features
 - check the current [features](https://github.com/nomssi/abap_scheme/wiki/Features)
