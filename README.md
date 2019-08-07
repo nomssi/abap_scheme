@@ -36,18 +36,9 @@ S-expression for (* 2 (+ 3 4)) | workbench view
 --- | ---
 ![s-exp](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png) |  ![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sample_sexp.png)
 
-Check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Features)
-
-      x             ; the symbol X
-      ()            ; the empty list is the constant null in Scheme
-      (8 2 -1/5)    ; a list of three numbers
-      ("foo" "bar") ; a list of two strings
-      (+ (* 2 3) 4) ; a list of a symbol, a list, and a number.      
-
-So here is my ~~ad hoc informally-specified bug-ridden slow~~ ABAP Scheme interpreter to assist you in thinking previously impossible thoughts. 
-
-I suggest you
-- [Try Scheme](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) or
+So here is my ABAP Scheme interpreter to assist you in thinking previously impossible thoughts. I suggest you
+- check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) or
+- check the [features](https://github.com/nomssi/abap_scheme/wiki/Features)
 - use the Q&A format of [The Little Schemer](https://www.amazon.com/Little-Schemer-Daniel-P-Friedman/dp/0262560992) 
 - [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand how an interpreter works
 - read the _Revised <sup>7</sup> Report on the Algorithmic Language Scheme_, aka [R7RS](http://www.r7rs.org/) or 
