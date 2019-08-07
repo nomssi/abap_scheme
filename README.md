@@ -35,11 +35,10 @@ S-expression for (* 2 (+ 3 4)) | workbench view
 --- | ---
 ![s-exp](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png) |  ![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sample_sexp.png)
 
-- So here is my ABAP Scheme interpreter to assist you in thinking previously impossible thoughts. 
+So here is my ABAP Scheme interpreter to assist you in thinking previously impossible thoughts. 
 
 I suggest you
-- check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) orSo here is my ABAP Scheme interpreter to assist you in thinking previously impossible thoughts. 
-
+- first check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) and understand [Lists](https://www.gnu.org/software/mit-scheme/documentation/mit-scheme-ref/Lists.html#Lists).
 - check the [features](https://github.com/nomssi/abap_scheme/wiki/Features)
 - use the Q&A format of [The Little Schemer](https://www.amazon.com/Little-Schemer-Daniel-P-Friedman/dp/0262560992) 
 - [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand how an interpreter works
