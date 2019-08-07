@@ -30,6 +30,7 @@ After installation, the [wiki pages](https://github.com/nomssi/abap_scheme/wiki)
 
 ## Why Scheme? 
 - some concepts cannot be expressed in ABAP, except by first implementing Lisp in ABAP (cf. [Greenspun 10th rule](http://www.paulgraham.com/quotes.html) ). You need Lisp to assist you in thinking previously impossible thoughts.
+
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
 - They are many dialects of Lisp, it is common to [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand programming languages. [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the three main dialects of the Lisp programming, alongside Common Lisp and Clojure.
