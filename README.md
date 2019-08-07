@@ -29,11 +29,11 @@ After installation, the [wiki pages](https://github.com/nomssi/abap_scheme/wiki)
 * How to [enable the new editor](/editor)
 
 ## Why Scheme? 
-- some concepts cannot be expressed in ABAP, except by first implementing Lisp in ABAP (cf. [Greenspun 10th rule](http://www.paulgraham.com/quotes.html) ). Lisp assists you in thinking previously impossible thoughts.
+- [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the three main dialects of the Lisp programming, alongside Common Lisp and Clojure. It is common to [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand Lisp's core concepts. 
+
+- some concepts cannot be expressed in ABAP, except by first implementing Lisp in ABAP ([Greenspun 10th rule](http://www.paulgraham.com/quotes.html) ). Lisp assists you in thinking previously impossible thoughts.
 
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
-
-- [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the three main dialects of the Lisp programming, alongside Common Lisp and Clojure. It is common to [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand Lisp's core concepts. 
 
 - Conrad Barski's [Land of Lisp](http://landoflisp.com), Martin Ceronio's [LISP interpreter in ABAP](https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/) and [Peter Norvig](http://norvig.com/lispy2.html) inspired me to learn Lisp.
 
