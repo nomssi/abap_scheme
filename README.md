@@ -28,7 +28,7 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/). Check for know
 
 ## Why Scheme?
 
-- As stated by [Greenspun](http://www.paulgraham.com/quotes.html) some concepts cannot be expressed in ABAP, except by implementing Lisp in ABAP first.
+- some concepts cannot be expressed in ABAP, except by first implementing Lisp in ABAP (cf. [Greenspun 10th rule](http://www.paulgraham.com/quotes.html) ).
 - [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the three main dialects of the Lisp programming, alongside Common Lisp and Clojure.
 - Scheme's reader parses an input into *symbolic expressions* (S-exps), a tree data structure used to represent both code or data. S-exps are then [evaluated](https://docs.racket-lang.org/reference/eval-model.html).
 
@@ -44,7 +44,7 @@ Check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Features)
       ("foo" "bar") ; a list of two strings
       (+ (* 2 3) 4) ; a list of a symbol, a list, and a number.      
 
-- So here is my ~~ad hoc informally-specified bug-ridden slow~~ ABAP Scheme interpreter to assist you in thinking previously impossible thoughts. 
+So here is my ~~ad hoc informally-specified bug-ridden slow~~ ABAP Scheme interpreter to assist you in thinking previously impossible thoughts. 
 
 I suggest you
 - [Try Scheme](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) or
