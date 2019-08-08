@@ -1,7 +1,10 @@
-# abap_scheme
+# ABAP Scheme
 [![Language: ABAP](https://img.shields.io/badge/Language-ABAP-blue.svg?style=flat)](https://www.sap.com/developer/topics/abap-platform.html)
 [![License: MIT](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat)](https://opensource.org/licenses/MIT)
-# LISP interpreter in ABAP with Workbench
+
+- is an interpreter for the Scheme dialect of Lisp programming language
+- provides a SAP GUI based development environment (workbench) for Scheme
+- is written in, and can be called from ABAP
 
 ## Getting Started
 The code can be cloned with [ABAP GIT](http://docs.abapgit.org/).
