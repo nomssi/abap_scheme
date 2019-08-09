@@ -41,7 +41,7 @@ I suggest you check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Lear
  
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
-So Scheme assisted me in thinking previously impossible thoughts.
+Scheme's strength in manulipating symbols is shown in this code to perform [symbolic differentiation](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Symbolic-Derivation).
 
 - Scheme is a practical language with a very small number of rules for forming expressions that can be composed without restrictions. My initial plan was to write a Lisp workbench for [Martin's Lisp interpreter](https://github.com/mydoghasworms/abap-lisp), but I changed the target language after reading the *Revised <sup>7</sup> Report on the Algorithmic Language Scheme* aka [R7RS](http://www.r7rs.org/).
 
