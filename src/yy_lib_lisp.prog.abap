@@ -66,7 +66,7 @@
     c_eval_unquote_splicing TYPE string VALUE 'unquote-splicing' ##NO_TEXT.
   CONSTANTS:
     c_decimal_digits TYPE char10 VALUE '0123456789',
-    c_hex_digits TYPE c LENGTH 16 VALUE '0123456789ABCDEF'.
+    c_hex_digits     TYPE c LENGTH 16 VALUE '0123456789ABCDEF'.
 
   TYPES tv_int TYPE i.            " integer data type, use int8 if available
   TYPES tv_index TYPE tv_int.
@@ -254,7 +254,7 @@
       WHEN lcl_lisp=>type_rational.
         lo_rat ?= cell.
         carry = lo_rat->integer / lo_rat->denominator.
-*        WHEN lcl_lisp=>type_complex.
+*          WHEN lcl_lisp=>type_complex.
       WHEN OTHERS.
         throw( |{ cell->to_string( ) } is not a number in { &2 }| ).
     ENDCASE.
@@ -294,7 +294,7 @@
           ENDIF.
           carry = lo_rat->integer / lo_rat->denominator.
 
-*           WHEN lcl_lisp=>type_complex.
+*               WHEN lcl_lisp=>type_complex.
         WHEN OTHERS.
           throw( |{ cell->car->to_string( ) } is not a number in { &2 }| ).
       ENDCASE.
@@ -348,7 +348,7 @@
         _get_number carry list->car &2.
         _is_last_param list.
         result = lcl_lisp_new=>&3( &1( carry ) ).
-    _catch_arithmetic_error.
+      _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
 
@@ -362,7 +362,7 @@
         _get_number carry list->car &2.
         _is_last_param list.
         result = lcl_lisp_new=>real( &1( carry ) ).
-    _catch_arithmetic_error.
+      _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
 
@@ -444,6 +444,10 @@
         type_abap_function TYPE tv_type VALUE 'F'.
 *        type_abap_class    TYPE tv_type VALUE 'a',
 *        type_abap_method   TYPE tv_type VALUE 'm'.
+
+*      Types for Turtles graphic:
+      CONSTANTS:
+        type_abap_turtle TYPE tv_type VALUE 't'.
 
       DATA type TYPE char1.
   ENDCLASS.
@@ -726,7 +730,7 @@
       WHILE den NE 0.
         lv_save = den.
         TRY.
-            den = num mod den.  " num - den * trunc( num / den ).
+            den = num MOD den.  " num - den * trunc( num / den ).
           CATCH cx_sy_arithmetic_error INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
@@ -802,7 +806,7 @@
       WHILE NOT den->float_eq( 0 ).
         lo_save = den.
         TRY.
-            den = NEW #( num->real mod den->real ).
+            den = NEW #( num->real MOD den->real ).
 *            den = NEW #( num->real - den->real * trunc( num->real / den->real ) ).
           CATCH cx_sy_arithmetic_error INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
@@ -829,7 +833,7 @@
     PUBLIC SECTION.
       METHODS match IMPORTING args          TYPE REF TO lcl_lisp
                     RETURNING VALUE(result) TYPE REF TO lcl_lisp_lambda
-                    RAISING lcx_lisp_exception.
+                    RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
       DATA clauses TYPE tt_lisp.
   ENDCLASS.
@@ -1011,6 +1015,21 @@
       METHODS add IMPORTING text TYPE string.
   ENDCLASS.
 
+  INCLUDE yy_lib_turtle.
+
+  CLASS lcl_lisp_turtle DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
+    PUBLIC SECTION.
+      METHODS constructor IMPORTING width TYPE REF TO lcl_lisp_integer
+                                    height TYPE REF TO lcl_lisp_integer.
+      DATA width TYPE REF TO lcl_lisp_integer.
+      DATA height TYPE REF TO lcl_lisp_integer.
+      DATA turtle TYPE REF TO lcl_turtle.
+    PROTECTED SECTION.
+      DATA x TYPE tv_int.
+      DATA y TYPE tv_int.
+      DATA angle TYPE tv_real.
+  ENDCLASS.
+
   CLASS lcl_lisp_new DEFINITION.
     PUBLIC SECTION.
       CLASS-METHODS atom IMPORTING value          TYPE string
@@ -1101,7 +1120,7 @@
                                      io_env              TYPE REF TO lcl_lisp_environment
                                      iv_macro            TYPE flag DEFAULT abap_false
                                      iv_parameter_object TYPE flag DEFAULT abap_false
-                           RETURNING VALUE(ro_lambda) TYPE REF TO lcl_lisp.
+                           RETURNING VALUE(ro_lambda)    TYPE REF TO lcl_lisp.
 
       CLASS-METHODS case_lambda IMPORTING it_clauses       TYPE tt_lisp
                                 RETURNING VALUE(ro_lambda) TYPE REF TO lcl_lisp.
@@ -1133,6 +1152,9 @@
       CLASS-METHODS splice_unquote IMPORTING io_elem        TYPE REF TO lcl_lisp
                                    RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
 
+      CLASS-METHODS turtles IMPORTING width            TYPE REF TO lcl_lisp_integer
+                                      height           TYPE REF TO lcl_lisp_integer
+                            RETURNING VALUE(ro_turtle) TYPE REF TO lcl_lisp_turtle.
   ENDCLASS.
 
   CLASS lcl_port_dummy DEFINITION INHERITING FROM lcl_lisp_port.
@@ -1941,6 +1963,16 @@
       proc_string_to_list,       ##called
       proc_string_to_symbol,     ##called
 
+* Turtle library
+      proc_turtle_new,            ##called "turtles
+      proc_turtle_exist,          ##called "turtles?
+      proc_turtle_move,           ##called "move
+      proc_turtle_draw,           ##called "draw
+      proc_turtle_turn_degrees,   ##called "turn
+      proc_turtle_turn_radians,   ##called "turn/radians
+      proc_turtle_set_pen_width,  ##called "set-pen-width
+      proc_turtle_set_pen_color,  ##called "set-pen-color
+
 * Continuation
       proc_call_cc,              ##called
 * Exceptions
@@ -2229,9 +2261,9 @@
                                     CHANGING  co_head       TYPE REF TO lcl_lisp
                                     RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
                                     RAISING   lcx_lisp_exception.
-      METHODS environment_parameterize IMPORTING VALUE(io_env) TYPE REF TO lcl_lisp_environment
+      METHODS environment_parameterize IMPORTING VALUE(io_env)  TYPE REF TO lcl_lisp_environment
                                                  VALUE(io_head) TYPE REF TO lcl_lisp
-                                       RETURNING VALUE(ro_env) TYPE REF TO lcl_lisp_environment
+                                       RETURNING VALUE(ro_env)  TYPE REF TO lcl_lisp_environment
                                        RAISING   lcx_lisp_exception.
 
       METHODS table_of_lists IMPORTING io_head         TYPE REF TO lcl_lisp
@@ -4153,14 +4185,14 @@
       DATA li_port TYPE REF TO lif_&2_port.
 
       TRY.
-      IF &1->type EQ lcl_lisp=>type_pair.
-        _validate_port &1->car &3.
-        li_port ?= &1->car.
-      ELSE.
-        li_port ?= proc_current_&2_port( nil ).
-      ENDIF.
-      CATCH cx_root INTO DATA(lx_error).
-        throw( lx_error->get_text( ) ).
+          IF &1->type EQ lcl_lisp=>type_pair.
+            _validate_port &1->car &3.
+            li_port ?= &1->car.
+          ELSE.
+            li_port ?= proc_current_&2_port( nil ).
+          ENDIF.
+        CATCH cx_root INTO DATA(lx_error).
+          throw( lx_error->get_text( ) ).
       ENDTRY.
     END-OF-DEFINITION.
 
@@ -5534,7 +5566,7 @@
 
             ENDWHILE.
           ENDIF.
-          _catch_arithmetic_error.
+        _catch_arithmetic_error.
       ENDTRY.
 
       _result_arith `[/]`.
@@ -6082,7 +6114,7 @@
               throw( |{ list->car->to_string( ) } is not a number in [abs]| ).
           ENDCASE.
 
-          _catch_arithmetic_error.
+        _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_abs
 
@@ -6132,7 +6164,7 @@
           _get_number carry list->car '[asinh]'.
           _is_last_param list.
           result = lcl_lisp_new=>real( log( carry + sqrt( carry ** 2 + 1 ) ) ).
-          _catch_arithmetic_error.
+        _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_asinh
 
@@ -6146,7 +6178,7 @@
           _get_number carry list->car '[acosh]'.
           _is_last_param list.
           result = lcl_lisp_new=>real( log( carry + sqrt( carry ** 2 - 1 ) ) ).
-          _catch_arithmetic_error.
+        _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_acosh
 
@@ -6160,7 +6192,7 @@
           _get_number carry list->car '[atanh]'.
           _is_last_param list.
           result = lcl_lisp_new=>real( ( log( 1 + carry ) - log( 1 - carry ) ) / 2 ).
-          _catch_arithmetic_error.
+        _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_atanh
 
@@ -6195,7 +6227,7 @@
               throw( |{ cell->to_string( ) } is not a number in [expt]| ).
           ENDCASE.
 
-          _catch_arithmetic_error.
+        _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_expt
 
@@ -6233,7 +6265,7 @@
       _is_last_param list.
       TRY.
           result = lcl_lisp_new=>number( round( val = carry dec = 0 ) ).
-          _catch_arithmetic_error.
+        _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_round
 
@@ -6254,7 +6286,7 @@
               _to_real cell lv_num.
               result = lcl_lisp_new=>number( lcl_lisp_real=>gcd( n = lv_num
                                                                  d = 1 ) * lv_num ).
-              _catch_arithmetic_error.
+            _catch_arithmetic_error.
           ENDTRY.
 
         WHEN lcl_lisp=>type_rational.
@@ -6287,7 +6319,7 @@
               ELSE.
                 result = lcl_lisp_new=>real( 1 / lo_frac->real ).
               ENDIF.
-              _catch_arithmetic_error.
+            _catch_arithmetic_error.
           ENDTRY.
 
         WHEN lcl_lisp=>type_rational.
@@ -6311,7 +6343,7 @@
       _is_last_param list->cdr.
       TRY.
           result = lcl_lisp_new=>number( numerator - denominator * trunc( numerator / denominator ) ).
-          _catch_arithmetic_error.
+        _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_remainder
 
@@ -6327,7 +6359,7 @@
       _is_last_param list->cdr.
       TRY.
           result = lcl_lisp_new=>number( trunc( numerator / denominator ) ).
-          _catch_arithmetic_error.
+        _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_quotient
 
@@ -6348,7 +6380,7 @@
             mod = mod + base.
           ENDIF.
           result = lcl_lisp_new=>number( mod ).
-          _catch_arithmetic_error.
+        _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_modulo
 
@@ -8072,6 +8104,83 @@
       ENDTRY.
     ENDMETHOD.
 
+" Turtle library
+    METHOD proc_turtle_new. "turtles
+      _validate: list, list->cdr, list->cdr->cdr.
+      _validate_integer list->cdr->car `turtles`.
+      _validate_integer list->cdr->cdr->car `turtles`.
+
+      result = lcl_lisp_new=>turtles( width = lcl_lisp_new=>integer( list->cdr->car )
+                                      height = lcl_lisp_new=>integer( list->cdr->cdr->car ) ).
+*    (turtles	 	width
+*         height
+*        [  init-x
+*         init-y
+*         init-angle])    →   turtles?
+*      width : real?
+*      height : real?
+*      init-x : real? = (/ width 2)
+*      init-y : real? = (/ height 2)
+*      init-angle : real? = 0
+    ENDMETHOD.
+
+    METHOD proc_turtle_exist. "turtles?
+      _validate list.
+      "(turtles? v) → boolean?
+      IF list->type EQ lcl_lisp=>type_abap_turtle.
+        result = true.
+      ELSE.
+        result = false.
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD proc_turtle_move. "move
+      _validate: list, list->cdr.
+*    (move n turtles) → turtles?
+*
+*      n : real?
+*      turtles : turtles?
+    ENDMETHOD.
+
+    METHOD proc_turtle_draw. "draw
+      _validate: list, list->cdr.
+*    (draw n turtles) → turtles?
+*
+*      n : real?
+*      turtles : turtles?
+    ENDMETHOD.
+
+    METHOD proc_turtle_turn_degrees. "turn
+      _validate: list, list->cdr.
+*(turn theta turtles) → turtles?
+*
+*  theta : real?
+*  turtles : turtles?
+    ENDMETHOD.
+
+    METHOD proc_turtle_turn_radians. "turn/radians
+      _validate: list, list->cdr.
+*(turn/radians theta turtles) → turtles?
+*
+*  theta : real?
+*  turtles : turtles?
+    ENDMETHOD.
+
+    METHOD proc_turtle_set_pen_width. "set-pen-width
+*(set-pen-width turtles width) → turtles?
+*
+*  turtles : turtles?
+*  width : (real-in 0 255)
+    ENDMETHOD.
+
+    METHOD proc_turtle_set_pen_color. "set-pen-color
+*(set-pen-color turtles color) → turtles?
+*
+*  turtles : turtles?
+*  color : (or/c string? (is-a?/c color%))
+    ENDMETHOD.
+
+
   ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
 
 *----------------------------------------------------------------------*
@@ -8682,6 +8791,15 @@
       define_value( symbol = 'sql-query'         type = lcl_lisp=>type_native value   = 'PROC_SQL_QUERY' ).
       define_value( symbol = 'define-query'      type = lcl_lisp=>type_native value   = 'PROC_SQL_PREPARE' ).
 
+      define_value( symbol = 'turtles'       type = lcl_lisp=>type_native value   = 'PROC_TURTLE_NEW' ).
+      define_value( symbol = 'turtles?'      type = lcl_lisp=>type_native value   = 'PROC_TURTLE_EXIST' ).
+      define_value( symbol = 'move'          type = lcl_lisp=>type_native value   = 'PROC_TURTLE_MOVE' ).
+      define_value( symbol = 'draw'          type = lcl_lisp=>type_native value   = 'PROC_TURTLE_DRAW' ).
+      define_value( symbol = 'turn'          type = lcl_lisp=>type_native value   = 'PROC_TURTLE_TURN_DEGREES' ).
+      define_value( symbol = 'turn/radians'  type = lcl_lisp=>type_native value   = 'PROC_TURTLE_TURN_RADIANS' ).
+      define_value( symbol = 'set-pen-width' type = lcl_lisp=>type_native value   = 'PROC_TURTLE_SET_PEN_WIDTH' ).
+      define_value( symbol = 'set-pen-color' type = lcl_lisp=>type_native value   = 'PROC_TURTLE_SET_PEN_COLOR' ).
+
       DATA lr_ref TYPE REF TO data.
 *     Define a value in the environment for SYST
       GET REFERENCE OF syst INTO lr_ref.
@@ -9105,6 +9223,10 @@
           str = |<ABAP Query>|.
         WHEN type_abap_sql_set.
           str = |<ABAP Query Result Set>|.
+
+        WHEN type_abap_turtle.
+          DATA lo_turtle TYPE REF TO lcl_lisp_turtle.
+          str = |<turtle { lo_turtle->width->to_string( ) } x { lo_turtle->height->to_string( ) }>|.
       ENDCASE.
     ENDMETHOD.                    "to_string
 
@@ -9590,6 +9712,11 @@
       ro_vec->mo_length = number( lines( it_vector ) ).
     ENDMETHOD.
 
+    METHOD turtles.
+      ro_turtle = NEW lcl_lisp_turtle( width = width
+                                       height = height ).
+    ENDMETHOD.
+
     METHOD lambda.
 *     The lambda is a special cell that stores a pointer to a list of parameters
 *     and a pointer to a list which is the body to be evaluated later on
@@ -9971,4 +10098,20 @@
       result_set->close( ).
       FREE result_set.
     ENDMETHOD.
+  ENDCLASS.
+
+  CLASS lcl_lisp_turtle IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( ).
+      type = type_abap_turtle.
+      me->width = width.
+      me->height = height.
+      me->x = width->integer div 2.
+      me->y = height->integer div 2.
+      me->angle = 0.
+      turtle = lcl_turtle=>new( height = height->integer
+                                width = width->integer ).
+    ENDMETHOD.
+
   ENDCLASS.

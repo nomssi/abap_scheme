@@ -3,19 +3,18 @@
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
    <PROGDIR>
-    <NAME>ZZ_REGISTRY_TEST</NAME>
-    <SUBC>1</SUBC>
+    <NAME>YY_LISP_TURTLE</NAME>
+    <SUBC>I</SUBC>
     <APPL>*</APPL>
     <RSTAT>K</RSTAT>
     <RLOAD>E</RLOAD>
-    <FIXPT>X</FIXPT>
     <UCCHECK>X</UCCHECK>
    </PROGDIR>
    <TPOOL>
     <item>
      <ID>R</ID>
-     <ENTRY>Program ZZ_REGISTRY_TEST</ENTRY>
-     <LENGTH>24</LENGTH>
+     <ENTRY>Include YY_LISP_TURTLE</ENTRY>
+     <LENGTH>22</LENGTH>
     </item>
    </TPOOL>
   </asx:values>
