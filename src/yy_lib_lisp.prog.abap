@@ -1021,13 +1021,7 @@
     PUBLIC SECTION.
       METHODS constructor IMPORTING width TYPE REF TO lcl_lisp_integer
                                     height TYPE REF TO lcl_lisp_integer.
-      DATA width TYPE REF TO lcl_lisp_integer.
-      DATA height TYPE REF TO lcl_lisp_integer.
       DATA turtle TYPE REF TO lcl_turtle.
-    PROTECTED SECTION.
-      DATA x TYPE tv_int.
-      DATA y TYPE tv_int.
-      DATA angle TYPE tv_real.
   ENDCLASS.
 
   CLASS lcl_lisp_new DEFINITION.
@@ -8106,12 +8100,16 @@
 
 " Turtle library
     METHOD proc_turtle_new. "turtles
-      _validate: list, list->cdr, list->cdr->cdr.
+      DATA lo_width TYPE REF TO lcl_lisp_integer.
+      DATA lo_height TYPE REF TO lcl_lisp_integer.
+      _validate: list, list->cdr.
+      _validate_integer list->car `turtles`.
+      lo_width ?= list->car.
       _validate_integer list->cdr->car `turtles`.
-      _validate_integer list->cdr->cdr->car `turtles`.
+      lo_height ?= list->cdr->car.
 
-      result = lcl_lisp_new=>turtles( width = lcl_lisp_new=>integer( list->cdr->car )
-                                      height = lcl_lisp_new=>integer( list->cdr->cdr->car ) ).
+      result = lcl_lisp_new=>turtles( width = lo_width
+                                      height = lo_height ).
 *    (turtles	 	width
 *         height
 *        [  init-x
@@ -9225,8 +9223,7 @@
           str = |<ABAP Query Result Set>|.
 
         WHEN type_abap_turtle.
-          DATA lo_turtle TYPE REF TO lcl_lisp_turtle.
-          str = |<turtle { lo_turtle->width->to_string( ) } x { lo_turtle->height->to_string( ) }>|.
+          str = |<ABAP turtle>|.
       ENDCASE.
     ENDMETHOD.                    "to_string
 
@@ -10105,13 +10102,9 @@
     METHOD constructor.
       super->constructor( ).
       type = type_abap_turtle.
-      me->width = width.
-      me->height = height.
-      me->x = width->integer div 2.
-      me->y = height->integer div 2.
-      me->angle = 0.
       turtle = lcl_turtle=>new( height = height->integer
-                                width = width->integer ).
+                                width = width->integer
+                                title = `SchemeTurtle` ).
     ENDMETHOD.
 
   ENDCLASS.

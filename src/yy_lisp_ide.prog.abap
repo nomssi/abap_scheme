@@ -621,11 +621,18 @@ CLASS lcl_ide IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD display.
-    DATA lo_table TYPE REF TO lcl_lisp_table.
     CASE element->type.
       WHEN lcl_lisp=>type_abap_table.
+        DATA lo_table TYPE REF TO lcl_lisp_table.
+
         lo_table ?= element.
         view_table( lo_table ).
+
+      WHEN lcl_lisp=>type_abap_turtle.
+        DATA lo_turtle TYPE REF TO lcl_lisp_turtle.
+
+        lo_turtle ?= element.
+        lo_turtle->turtle->show( ).
 
       WHEN OTHERS.
         super->display( element ).

@@ -1,6 +1,7 @@
 *&---------------------------------------------------------------------*
 *&  Include           YY_LISP_TURTLE
 *&---------------------------------------------------------------------*
+* Ported from https://github.com/FreHu/abap-turtle-graphics
 
 CLASS lcl_turtle_examples DEFINITION.
   PUBLIC SECTION.
@@ -36,15 +37,13 @@ CLASS lcl_turtle_examples IMPLEMENTATION.
       ( start )
       ( x = start-x + side_length y = start-y )
       ( x = start-x + side_length y = start-y + side_length )
-      ( x = start-x y = start-y + side_length )
-    ).
+      ( x = start-x y = start-y + side_length ) ).
 
-    turtle->polyline( points ).
+    turtle->append_svg( turtle->svg_builder->polyline( VALUE #( points = points ) )  ).
   ENDMETHOD.
 
   METHOD polygon_flower.
-    turtle = lcl_turtle=>new( height = 800 width = 800 ).
-    turtle->text( |Polygons:{ polygons } Sides: { polygon_sides }| ).
+    turtle = lcl_turtle=>new( height = 800 width = 800 title = |Polygons:{ polygons } Sides: { polygon_sides }| ).
 
     turtle->goto( x = 200 y = 200 ).
     turtle->set_pen( VALUE #(
@@ -71,7 +70,6 @@ CLASS lcl_turtle_examples IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD polygon_using_lines.
-
     turtle = lcl_turtle=>new( height = 800 width = 800 ).
     turtle->goto( x = 200 y = 200 ).
 
@@ -100,23 +98,22 @@ ENDCLASS.
 CLASS lcl_turtle_lsystem_examples IMPLEMENTATION.
 
   METHOD koch_curve.
-    DATA(turtle) = lcl_turtle=>new( height = 800 width = 600 ).
+    DATA(turtle) = lcl_turtle=>new( height = 800 width = 600 title = |Koch curve| ).
     turtle->goto( x = 200 y = 200 ).
     DATA(parameters) = VALUE lcl_turtle_lsystem=>params(
       initial_state = `F`
-      move_distance = 10
-      rotate_by = 90
+      " Move distance 10, Rotate right by 90, Rotate left by 90
+      instructions = VALUE #(
+        ( symbol = 'F' kind = lcl_turtle_lsystem=>instruction_kind-forward amount = 10 )
+        ( symbol = '+' kind = lcl_turtle_lsystem=>instruction_kind-right amount = 90 )
+        ( symbol = '-' kind = lcl_turtle_lsystem=>instruction_kind-left amount = 90 ) )
       num_iterations = 3
-      rewrite_rules = VALUE #(
-        ( from = `F` to = `F+F-F-F+F` ) ) ).
+      rewrite_rules = VALUE #( ( from = `F` to = `F+F-F-F+F` ) ) ).
 
-    DATA(lsystem) = lcl_turtle_lsystem=>new(
-      turtle = turtle
-      parameters = parameters ).
-
+    DATA(lsystem) = lcl_turtle_lsystem=>new( turtle = turtle
+                                             parameters = parameters ).
     lsystem->execute( ).
     lsystem->show( ).
-
   ENDMETHOD.
 
 
@@ -126,16 +123,15 @@ CLASS lcl_turtle_lsystem_examples IMPLEMENTATION.
 
     DATA(parameters) = VALUE lcl_turtle_lsystem=>params(
       initial_state = `F-F-F-F`
-      move_distance = 10
-      rotate_by = 90
+      instructions = VALUE #(
+        ( symbol = 'F' kind = lcl_turtle_lsystem=>instruction_kind-forward amount = 10 )
+        ( symbol = '+' kind = lcl_turtle_lsystem=>instruction_kind-right amount = 90 )
+        ( symbol = '-' kind = lcl_turtle_lsystem=>instruction_kind-left amount = 90 ) )
       num_iterations = 3
-      rewrite_rules = VALUE #( ( from = `F`
-                                 to = `FF-F+F-F-FF` ) ) ).
+      rewrite_rules = VALUE #( ( from = `F` to = `FF-F+F-F-FF` ) ) ).
 
-    DATA(lsystem) = lcl_turtle_lsystem=>new(
-      turtle = turtle
-      parameters = parameters ).
-
+    DATA(lsystem) = lcl_turtle_lsystem=>new( turtle = turtle
+                                             parameters = parameters ).
     lsystem->execute( ).
     lsystem->show( ).
   ENDMETHOD.
@@ -146,12 +142,17 @@ CLASS lcl_turtle_lsystem_examples IMPLEMENTATION.
     turtle->set_angle( -90 ).
 
     DATA(parameters) = VALUE lcl_turtle_lsystem=>params(
+      LET distance = 10
+          rotation = 25 IN
       initial_state = `F`
-      move_distance = 10
-      rotate_by = 25
+      instructions = VALUE #(
+        ( symbol = `F` kind = lcl_turtle_lsystem=>instruction_kind-forward amount = distance )
+        ( symbol = `+` kind = lcl_turtle_lsystem=>instruction_kind-right amount = rotation )
+        ( symbol = `-` kind = lcl_turtle_lsystem=>instruction_kind-left amount = rotation )
+        ( symbol = `[` kind = lcl_turtle_lsystem=>instruction_kind-stack_push )
+        ( symbol = `]` kind = lcl_turtle_lsystem=>instruction_kind-stack_pop ) )
       num_iterations = 5
-      rewrite_rules = VALUE #( ( from = `F`
-                                 to = `F[+F]F[-F][F]` ) ) ).
+      rewrite_rules = VALUE #( ( from = `F` to = `F[+F]F[-F][F]` ) ) ).
 
     DATA(lsystem) = lcl_turtle_lsystem=>new( turtle = turtle
                                              parameters = parameters ).
@@ -166,16 +167,17 @@ CLASS lcl_turtle_lsystem_examples IMPLEMENTATION.
 
     DATA(parameters) = VALUE lcl_turtle_lsystem=>params(
       initial_state = `F`
-      move_distance = 10
-      rotate_by = 21
+      instructions = VALUE #(
+        ( symbol = `F` kind = lcl_turtle_lsystem=>instruction_kind-forward amount = 10 )
+        ( symbol = `+` kind = lcl_turtle_lsystem=>instruction_kind-right amount = 21 )
+        ( symbol = `-` kind = lcl_turtle_lsystem=>instruction_kind-left amount = 21 )
+        ( symbol = `[` kind = lcl_turtle_lsystem=>instruction_kind-stack_push )
+        ( symbol = `]` kind = lcl_turtle_lsystem=>instruction_kind-stack_pop ) )
       num_iterations = 4
-      rewrite_rules = VALUE #( ( from = `F`
-                                 to = `FF-[+F+F+F]+[-F-F+F]` ) ) ).
+      rewrite_rules = VALUE #( ( from = `F` to = `FF-[+F+F+F]+[-F-F+F]` ) ) ).
 
-    DATA(lsystem) = lcl_turtle_lsystem=>new(
-      turtle = turtle
-      parameters = parameters ).
-
+    DATA(lsystem) = lcl_turtle_lsystem=>new( turtle = turtle
+                                             parameters = parameters ).
     lsystem->execute( ).
     lsystem->show( ).
   ENDMETHOD.
