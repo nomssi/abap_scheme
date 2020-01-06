@@ -130,7 +130,6 @@ CLASS lcl_stack IMPLEMENTATION.
 
   METHOD push.
     DATA lr_new TYPE REF TO ts_node.
-    DATA ls_node TYPE ts_node.
 
     CREATE DATA lr_new.
     lr_new->data = iv_key.

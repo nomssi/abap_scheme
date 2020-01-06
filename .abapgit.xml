@@ -14,6 +14,7 @@
     <item>/_config.yml</item>
     <item>/img/abap_lisp_workbench.png</item>
     <item>/src/.gitkeep</item>
+    <item>/abaplint.json</item>
    </IGNORE>
   </DATA>
  </asx:values>

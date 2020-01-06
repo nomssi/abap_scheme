@@ -169,6 +169,10 @@
     _validate_type &1 &2 port `port`.
   END-OF-DEFINITION.
 
+  DEFINE _validate_turtle.
+    _validate_type &1 &2 abap_turtle `turtle`.
+  END-OF-DEFINITION.
+
   DEFINE _validate_number.
     _validate &1.
     CASE &1->type.
@@ -1020,7 +1024,10 @@
   CLASS lcl_lisp_turtle DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
       METHODS constructor IMPORTING width TYPE REF TO lcl_lisp_integer
-                                    height TYPE REF TO lcl_lisp_integer.
+                                    height TYPE REF TO lcl_lisp_integer
+                                    init_x TYPE REF TO lcl_lisp_integer
+                                    init_y TYPE REF TO lcl_lisp_integer
+                                    init_angle TYPE REF TO lcl_lisp_real.
       DATA turtle TYPE REF TO lcl_turtle.
   ENDCLASS.
 
@@ -1148,6 +1155,9 @@
 
       CLASS-METHODS turtles IMPORTING width            TYPE REF TO lcl_lisp_integer
                                       height           TYPE REF TO lcl_lisp_integer
+                                      init_x           TYPE REF TO lcl_lisp_integer
+                                      init_y           TYPE REF TO lcl_lisp_integer
+                                      init_angle       TYPE REF TO lcl_lisp_real
                             RETURNING VALUE(ro_turtle) TYPE REF TO lcl_lisp_turtle.
   ENDCLASS.
 
@@ -1962,10 +1972,22 @@
       proc_turtle_exist,          ##called "turtles?
       proc_turtle_move,           ##called "move
       proc_turtle_draw,           ##called "draw
+      proc_turtle_erase,          ##called "erase
+      proc_turtle_move_offset,    ##called "move-offset
+      proc_turtle_draw_offset,    ##called "draw-offset
+      proc_turtle_erase_offset,   ##called "erase-offset
       proc_turtle_turn_degrees,   ##called "turn
       proc_turtle_turn_radians,   ##called "turn/radians
       proc_turtle_set_pen_width,  ##called "set-pen-width
       proc_turtle_set_pen_color,  ##called "set-pen-color
+      proc_turtle_merge,          ##called
+      proc_turtle_clean,          ##called
+      proc_turtle_width,          ##called
+      proc_turtle_height,         ##called
+      proc_turtle_pen_width,      ##called
+      proc_turtle_pen_color,      ##called
+      proc_turtle_regular_poly,   ##called
+      proc_turtle_regular_polys,  ##called
 
 * Continuation
       proc_call_cc,              ##called
@@ -3067,8 +3089,9 @@
 *     Proc should accept as many arguments as there are lists and return a single value.
 *     Proc should not mutate any of the lists.
 * The map procedure applies proc element-wise to the elements of the lists and returns a list of the results, in order.
-* Proc is always called in the same dynamic environment as map itself. The order in which proc is applied to the elements of the
-* list s is unspecified. If multiple returns occur from map, the values returned by earlier returns are not mutated.
+* Proc is always called in the same dynamic environment as map itself. The order in which proc is applied to the
+* elements of the list s is unspecified. If multiple returns occur from map, the values returned by earlier returns
+* are not mutated.
       DATA lo_map TYPE REF TO lcl_lisp.
       _validate: io_list, io_list->car.
 
@@ -3627,7 +3650,7 @@
           IF ( lo_first = lcl_lisp=>unquote
               OR ( lo_first->type EQ lcl_lisp=>type_symbol AND lo_first->value EQ c_eval_unquote ) )
               AND list_length( exp ) EQ 2.
-*          ((and (eq? (first = 'unquote) (= (length exp) 2))
+*           ((and (eq? (first = 'unquote) (= (length exp) 2))
             _validate_quote lo_ptr c_eval_unquote.
 
             IF nesting = 0.
@@ -4134,8 +4157,8 @@
 
                       WHEN lcl_lisp=>type_abap_function.
 *              >> TEST: Support evaluation of ABAP function directly
-*                       Recompose as if calling a PROC (which we are). This is part of the test. If we make an ABAP function
-*                       call first-class, then we would need to revisit evaluating the whole of ELEMENT in one shot
+*  Recompose as if calling a PROC (which we are). This is part of the test. If we make an ABAP function call
+*  first-class, then we would need to revisit evaluating the whole of ELEMENT in one shot
                         result = proc_abap_function_call( lcl_lisp_new=>cons( io_car = lo_proc
                                                                               io_cdr = lr_tail ) ).
 *              << TEST
@@ -8100,18 +8123,8 @@
 
 " Turtle library
     METHOD proc_turtle_new. "turtles
-      DATA lo_width TYPE REF TO lcl_lisp_integer.
-      DATA lo_height TYPE REF TO lcl_lisp_integer.
-      _validate: list, list->cdr.
-      _validate_integer list->car `turtles`.
-      lo_width ?= list->car.
-      _validate_integer list->cdr->car `turtles`.
-      lo_height ?= list->cdr->car.
-
-      result = lcl_lisp_new=>turtles( width = lo_width
-                                      height = lo_height ).
-*    (turtles	 	width
-*         height
+*    (turtles width
+*          height
 *        [  init-x
 *         init-y
 *         init-angle])    →   turtles?
@@ -8120,6 +8133,87 @@
 *      init-x : real? = (/ width 2)
 *      init-y : real? = (/ height 2)
 *      init-angle : real? = 0
+      DATA lo_width TYPE REF TO lcl_lisp_integer.
+      DATA lo_height TYPE REF TO lcl_lisp_integer.
+      DATA lo_init_x TYPE REF TO lcl_lisp_integer.
+      DATA lo_init_y TYPE REF TO lcl_lisp_integer.
+      DATA lo_init_angle TYPE REF TO lcl_lisp_real.
+
+      _validate: list, list->cdr.
+      _validate_integer list->car `turtles`.
+      lo_width ?= list->car.
+      _validate_integer list->cdr->car `turtles`.
+      lo_height ?= list->cdr->car.
+
+      IF list->cdr->cdr->car IS BOUND.
+        IF list->cdr->cdr->car->type EQ lcl_lisp=>type_integer.
+          lo_init_x ?= list->cdr->cdr->car.
+
+          IF list->cdr->cdr->cdr->car IS BOUND.
+            IF list->cdr->cdr->cdr->car->type EQ lcl_lisp=>type_integer.
+              lo_init_y ?= list->cdr->cdr->cdr->car.
+
+              IF list->cdr->cdr->cdr->cdr->car IS BOUND.
+                IF list->cdr->cdr->cdr->cdr->car->type EQ lcl_lisp=>type_real.
+                  lo_init_angle ?= list->cdr->cdr->cdr->cdr->car.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+      IF lo_init_x IS NOT BOUND.
+        lo_init_x = lcl_lisp_new=>integer( lo_width->integer div 2 ).
+      ENDIF.
+
+      IF lo_init_y IS NOT BOUND.
+        lo_init_y = lcl_lisp_new=>integer( lo_height->integer div 2 ).
+      ENDIF.
+
+      IF lo_init_angle IS NOT BOUND.
+        lo_init_angle = lcl_lisp_new=>real( 0 ).
+      ENDIF.
+
+      result = lcl_lisp_new=>turtles( width = lo_width
+                                      height = lo_height
+                                      init_x = lo_init_x
+                                      init_y = lo_init_y
+                                      init_angle = lo_init_angle ).
+    ENDMETHOD.
+
+    METHOD proc_turtle_merge.
+      DATA lo_width TYPE REF TO lcl_lisp_integer.
+      DATA lo_height TYPE REF TO lcl_lisp_integer.
+      DATA lo_init_x TYPE REF TO lcl_lisp_integer.
+      DATA lo_init_y TYPE REF TO lcl_lisp_integer.
+      DATA lo_init_angle TYPE REF TO lcl_lisp_real.
+      _validate: list, list->cdr.
+*    (merge turtles1 turtles2) → turtles?
+*      turtles1 : turtles?
+*      turtles2 : turtles?
+      _validate_turtle list->car `merge`.
+      DATA lo_turtle1 TYPE REF TO lcl_lisp_turtle.
+      lo_turtle1 ?= list->car.
+      _validate_turtle list->cdr->car `merge`.
+      DATA lo_turtle2 TYPE REF TO lcl_lisp_turtle.
+      lo_turtle2 ?= list->cdr->car.
+
+      DATA(lo_turtles) = lcl_turtle=>compose( VALUE #( ( lo_turtle1->turtle ) ( lo_turtle2->turtle ) ) ).
+
+      lo_width = lcl_lisp_new=>integer( nmax( val1 = lo_turtle1->turtle->width
+                                              val2 = lo_turtle2->turtle->width ) ).
+      lo_height = lcl_lisp_new=>integer( nmax( val1 = lo_turtle1->turtle->height
+                                               val2 = lo_turtle2->turtle->height ) ).
+
+      lo_init_x = lcl_lisp_new=>integer( lo_width->integer div 2 ).
+      lo_init_y = lcl_lisp_new=>integer( lo_height->integer div 2 ).
+      lo_init_angle = lcl_lisp_new=>real( 0 ).
+      result = lcl_lisp_new=>turtles( width = lo_width
+                                      height = lo_height
+                                      init_x = lo_init_x
+                                      init_y = lo_init_y
+                                      init_angle = lo_init_angle ).
     ENDMETHOD.
 
     METHOD proc_turtle_exist. "turtles?
@@ -8135,49 +8229,304 @@
     METHOD proc_turtle_move. "move
       _validate: list, list->cdr.
 *    (move n turtles) → turtles?
-*
-*      n : real?
+*      n : real?  (integer)
 *      turtles : turtles?
+      DATA lo_dist_n TYPE REF TO lcl_lisp_integer.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+
+      _validate_integer list->car `turtles move n`.
+      _validate_turtle list->cdr->car `turtles move`.
+      lo_dist_n ?= list->car.
+      lo_turtles ?= list->cdr->car.
+      result = lo_turtles.
+
+      lo_turtles->turtle->pen_up( ).
+      lo_turtles->turtle->forward( lo_dist_n->integer ).
     ENDMETHOD.
 
     METHOD proc_turtle_draw. "draw
       _validate: list, list->cdr.
 *    (draw n turtles) → turtles?
+*      n : real? (integer)
+*      turtles : turtles?
+      DATA lo_dist_n TYPE REF TO lcl_lisp_integer.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+
+      _validate_integer list->car `turtles draw n`.
+      _validate_turtle list->cdr->car `turtles draw`.
+      lo_dist_n ?= list->car.
+      lo_turtles ?= list->cdr->car.
+      result = lo_turtles.
+
+      lo_turtles->turtle->pen_down( ).
+      lo_turtles->turtle->forward( lo_dist_n->integer ).
+    ENDMETHOD.
+
+    METHOD proc_turtle_erase.
+      _validate: list, list->cdr.
+*    (erase n turtles) → turtles?
 *
 *      n : real?
 *      turtles : turtles?
+      DATA lo_dist_n TYPE REF TO lcl_lisp_integer.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+
+      _validate_integer list->car `turtles erase n`.
+      _validate_turtle list->cdr->car `turtles erase`.
+      lo_dist_n ?= list->car.
+      lo_turtles ?= list->cdr->car.
+      result = lo_turtles.
+
+      lo_turtles->turtle->pen_down( ).
+      lo_turtles->turtle->forward( lo_dist_n->integer ).
+    ENDMETHOD.
+
+    METHOD proc_turtle_move_offset.
+      _validate: list, list->cdr, list->cdr->cdr.
+*    (move-offset h v turtles) → turtles?
+*      h : real? (integer)
+*      v : real? (integer)
+*      turtles : turtles?
+      DATA lo_off_h TYPE REF TO lcl_lisp_integer.
+      DATA lo_off_v TYPE REF TO lcl_lisp_integer.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+
+      _validate_integer list->car `turtles move-offset h`.
+      _validate_integer list->cdr->car `turtles move-offset v`.
+      _validate_turtle list->cdr->cdr->car `move-offset`.
+      lo_off_h ?= list->car.
+      lo_off_v ?= list->cdr->car.
+      lo_turtles ?= list->cdr->cdr->car.
+      result = lo_turtles.
+
+      lo_turtles->turtle->pen_up( ).
+      lo_turtles->turtle->to_offset( delta_x = lo_off_h->integer
+                                     delta_y = lo_off_v->integer ).
+    ENDMETHOD.
+
+    METHOD proc_turtle_draw_offset.
+      _validate: list, list->cdr, list->cdr->cdr.
+*    (draw-offset h v turtles) → turtles?
+*      h : real? (integer)
+*      v : real? (integer)
+*      turtles : turtles?
+      DATA lo_off_h TYPE REF TO lcl_lisp_integer.
+      DATA lo_off_v TYPE REF TO lcl_lisp_integer.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+
+      _validate_integer list->car `turtles draw-offset h`.
+      _validate_integer list->cdr->car `turtles move-offset v`.
+      _validate_turtle list->cdr->cdr->car `draw-offset`.
+      lo_off_h ?= list->car.
+      lo_off_v ?= list->cdr->car.
+      lo_turtles ?= list->cdr->cdr->car.
+
+      lo_turtles->turtle->pen_down( ).
+      lo_turtles->turtle->to_offset( delta_x = lo_off_h->integer
+                                     delta_y = lo_off_v->integer ).
+    ENDMETHOD.
+
+    METHOD proc_turtle_erase_offset.
+      _validate: list, list->cdr, list->cdr->cdr.
+*    (erase-offset n turtles) → turtles?
+*      n : real?
+*      turtles : turtles?
+      DATA lo_off_h TYPE REF TO lcl_lisp_integer.
+      DATA lo_off_v TYPE REF TO lcl_lisp_integer.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+
+      _validate_integer list->car `turtles erase-offset h`.
+      _validate_integer list->cdr->car `turtles erase-offset v`.
+      _validate_turtle list->cdr->cdr->car `erase-offset`.
+      lo_off_h ?= list->car.
+      lo_off_v ?= list->cdr->car.
+      lo_turtles ?= list->cdr->cdr->car.
+
+      lo_turtles->turtle->pen_down( ).
+      lo_turtles->turtle->to_offset( delta_x = lo_off_h->integer
+                                     delta_y = lo_off_v->integer ).
     ENDMETHOD.
 
     METHOD proc_turtle_turn_degrees. "turn
       _validate: list, list->cdr.
-*(turn theta turtles) → turtles?
-*
-*  theta : real?
-*  turtles : turtles?
+*      (turn theta turtles) → turtles?
+*        theta : real?
+*        turtles : turtles?
+      _validate_number list->car `turtles turn`.
+      DATA lo_theta TYPE REF TO lcl_lisp_real.
+      lo_theta ?= list->car.
+
+      _validate_turtle list->cdr->car `turn`.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      lo_turtles ?= list->cdr->car.
+
+      DATA(angle) = ( lo_turtles->turtle->position-angle + lo_theta->real ) MOD 360.
+      lo_turtles->turtle->set_position( VALUE #( x = lo_turtles->turtle->position-x
+                                                 y = lo_turtles->turtle->position-y
+                                                 angle = angle ) ).
+      result = lo_turtles.
     ENDMETHOD.
 
     METHOD proc_turtle_turn_radians. "turn/radians
       _validate: list, list->cdr.
-*(turn/radians theta turtles) → turtles?
-*
-*  theta : real?
-*  turtles : turtles?
+*      (turn/radians theta turtles) → turtles?
+*        theta : real?
+*        turtles : turtles?
+      _validate_number list->car `turn/radians theta`.
+      DATA lo_theta TYPE REF TO lcl_lisp_real.
+      lo_theta ?= list->car.
+
+      _validate_turtle list->cdr->car `turn/radians`.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      lo_turtles ?= list->cdr->car.
+
+      DATA(angle) = lcl_turtle_convert=>degrees_to_radians( lo_turtles->turtle->position-angle MOD 360 ) + lo_theta->real.
+      angle = lcl_turtle_convert=>radians_to_degrees( angle ) MOD 360.
+
+      lo_turtles->turtle->set_position( VALUE #( x = lo_turtles->turtle->position-x
+                                                 y = lo_turtles->turtle->position-y
+                                                 angle = angle ) ).
+      result = lo_turtles.
     ENDMETHOD.
 
     METHOD proc_turtle_set_pen_width. "set-pen-width
-*(set-pen-width turtles width) → turtles?
-*
-*  turtles : turtles?
-*  width : (real-in 0 255)
+      _validate: list, list->cdr.
+*      (set-pen-width turtles width) → turtles?
+*        turtles : turtles?
+*        width : (real-in 0 255)
+      _validate_turtle list->car `set-pen-width`.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      lo_turtles ?= list->car.
+
+      _validate_index list->cdr->car `set-pen-width`.
+      DATA lo_width TYPE REF TO lcl_lisp_integer.
+      lo_width ?= list->cdr->car.
+
+      lo_turtles->turtle->set_pen( VALUE #( BASE lo_turtles->turtle->pen
+                                            stroke_width = lo_width->integer ) ).
+      result = lo_turtles.
     ENDMETHOD.
 
     METHOD proc_turtle_set_pen_color. "set-pen-color
-*(set-pen-color turtles color) → turtles?
-*
-*  turtles : turtles?
-*  color : (or/c string? (is-a?/c color%))
+      _validate: list, list->cdr.
+*    (set-pen-color turtles color) → turtles?
+*      turtles : turtles?
+*      color : (or/c string? (is-a?/c color%))
+      _validate_turtle list->car `set-pen-color`.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      lo_turtles ?= list->car.
+
+      _validate_string list->cdr->car `set-pen-color`.
+      DATA lo_color TYPE REF TO lcl_lisp_string.
+      lo_color ?= list->cdr->car.
+
+      lo_turtles->turtle->set_pen( VALUE #( BASE lo_turtles->turtle->pen
+                                            stroke_color = lo_color->value ) ).
+      result = lo_turtles.
     ENDMETHOD.
 
+    METHOD proc_turtle_clean.
+      _validate list.
+*    (clean turtles) → turtles?
+*      turtles : turtles?
+      _validate_turtle list->car `clean`.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      lo_turtles ?= list->car.
+      throw( `turtle clean not implemented yet` ).
+      result = lo_turtles.
+    ENDMETHOD.
+
+    METHOD proc_turtle_width.
+*    (turtles-width turtles) → (and/c real? positive?)
+*      turtles : turtles?
+      _validate list.
+      _validate_turtle list->car `turtles-width`.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      lo_turtles ?= list->car.
+
+      result = lcl_lisp_new=>integer( lo_turtles->turtle->width ).
+    ENDMETHOD.
+
+    METHOD proc_turtle_height.
+*    (turtles-height turtles) → (and/c real? positive?)
+*      turtles : turtles?
+      _validate list.
+      _validate_turtle list->car `turtles-height`.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      lo_turtles ?= list->car.
+
+      result = lcl_lisp_new=>integer( lo_turtles->turtle->height ).
+    ENDMETHOD.
+
+    METHOD proc_turtle_pen_width.
+*      (turtles-pen-width turtles) → (real-in 0 255)
+*        turtles : turtles?
+      _validate list.
+      _validate_turtle list->car `turtles-pen-width`.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      lo_turtles ?= list->car.
+
+      result = lcl_lisp_new=>integer( lo_turtles->turtle->pen-stroke_width ).
+    ENDMETHOD.
+
+    METHOD proc_turtle_pen_color.
+*     (turtles-pen-color turtles) → (is-a?/c color%)
+*       turtles : turtles?
+      _validate list.
+      _validate_turtle list->car `turtles-pen-color`.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      lo_turtles ?= list->car.
+
+      result = lcl_lisp_new=>string( lo_turtles->turtle->pen-stroke_color ).
+    ENDMETHOD.
+
+    METHOD proc_turtle_regular_poly.
+      _validate: list, list->cdr, list->cdr->cdr.
+*      (regular-poly sides radius turtles) → turtles?
+*        sides : exact-nonnegative-integer?
+*        radius : real?
+*        turtles : turtles?
+      _validate_index list->car `regular-poly sides`.
+      DATA lo_sides TYPE REF TO lcl_lisp_integer.
+      lo_sides ?= list->car.
+
+      _validate_integer list->cdr->car `regular-poly radius`.
+      DATA lo_radius TYPE REF TO lcl_lisp_integer.
+      lo_radius ?= list->cdr->car.
+
+      _validate_turtle list->cdr->cdr->car `regular-poly`.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      lo_turtles ?= list->cdr->cdr->car.
+
+      lo_turtles->turtle->regular_polygon( num_sides = lo_sides->integer
+                                           side_length = lo_radius->integer ).
+      result = lo_turtles.
+    ENDMETHOD.
+
+    METHOD proc_turtle_regular_polys.
+      _validate: list, list->cdr, list->cdr->cdr.
+*      Draws n regular polys each with n sides centered at the turtle.
+*      (regular-polys n s turtles) → turtles?
+*        n : exact-nonnegative-integer?
+*        s : any/c
+*        turtles : turtles?
+      _validate_integer list->car `regular-polys n`.
+      DATA lo_n TYPE REF TO lcl_lisp_integer.
+      lo_n ?= list->car.
+
+      _validate_index list->cdr->car `regular-polys s`.
+      DATA lo_side TYPE REF TO lcl_lisp_integer.
+      lo_side ?= list->cdr->car.
+
+      _validate_turtle list->cdr->cdr->car `regular-polys`.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      lo_turtles ?= list->cdr->cdr->car.
+
+      lo_turtles->turtle->polygon_flower( number_of_polygons = lo_n->integer
+                                          polygon_sides = lo_n->integer
+                                          side_length = lo_side->integer ).
+      result = lo_turtles.
+    ENDMETHOD.
 
   ENDCLASS.                    "lcl_lisp_interpreter IMPLEMENTATION
 
@@ -8793,10 +9142,23 @@
       define_value( symbol = 'turtles?'      type = lcl_lisp=>type_native value   = 'PROC_TURTLE_EXIST' ).
       define_value( symbol = 'move'          type = lcl_lisp=>type_native value   = 'PROC_TURTLE_MOVE' ).
       define_value( symbol = 'draw'          type = lcl_lisp=>type_native value   = 'PROC_TURTLE_DRAW' ).
+      define_value( symbol = 'erase'         type = lcl_lisp=>type_native value   = 'PROC_TURTLE_ERASE' ).
+      define_value( symbol = 'move-offset'   type = lcl_lisp=>type_native value   = 'PROC_TURTLE_MOVE_OFFSET' ).
+      define_value( symbol = 'draw-offset'   type = lcl_lisp=>type_native value   = 'PROC_TURTLE_DRAW_OFFSET' ).
+      define_value( symbol = 'erase-offset'  type = lcl_lisp=>type_native value   = 'PROC_TURTLE_ERASE_OFFSET' ).
       define_value( symbol = 'turn'          type = lcl_lisp=>type_native value   = 'PROC_TURTLE_TURN_DEGREES' ).
       define_value( symbol = 'turn/radians'  type = lcl_lisp=>type_native value   = 'PROC_TURTLE_TURN_RADIANS' ).
       define_value( symbol = 'set-pen-width' type = lcl_lisp=>type_native value   = 'PROC_TURTLE_SET_PEN_WIDTH' ).
       define_value( symbol = 'set-pen-color' type = lcl_lisp=>type_native value   = 'PROC_TURTLE_SET_PEN_COLOR' ).
+
+      define_value( symbol = 'merge'             type = lcl_lisp=>type_native value = 'PROC_TURTLE_MERGE' ).
+      define_value( symbol = 'clean'             type = lcl_lisp=>type_native value = 'PROC_TURTLE_CLEAN' ).
+      define_value( symbol = 'turtles-height'    type = lcl_lisp=>type_native value = 'PROC_TURTLE_HEIGHT' ).
+      define_value( symbol = 'turtles-width'     type = lcl_lisp=>type_native value = 'PROC_TURTLE_WIDTH' ).
+      define_value( symbol = 'turtles-pen-color' type = lcl_lisp=>type_native value = 'PROC_TURTLE_PEN_COLOR' ).
+      define_value( symbol = 'turtles-pen-width' type = lcl_lisp=>type_native value = 'PROC_TURTLE_PEN_WIDTH' ).
+      define_value( symbol = 'regular-poly'      type = lcl_lisp=>type_native value = 'PROC_TURTLE_REGULAR_POLY' ).
+      define_value( symbol = 'regular-polys'     type = lcl_lisp=>type_native value = 'PROC_TURTLE_REGULAR_POLYS' ).
 
       DATA lr_ref TYPE REF TO data.
 *     Define a value in the environment for SYST
@@ -9711,7 +10073,10 @@
 
     METHOD turtles.
       ro_turtle = NEW lcl_lisp_turtle( width = width
-                                       height = height ).
+                                       height = height
+                                       init_x = init_x
+                                       init_y = init_y
+                                       init_angle = init_angle ).
     ENDMETHOD.
 
     METHOD lambda.
@@ -9738,7 +10103,7 @@
         DATA(lo_lambda) = NEW lcl_lisp_case_lambda( ).
         lo_lambda->type = lcl_lisp=>type_case_lambda.
         lo_lambda->clauses = it_clauses.
-        ro_lambda ?= lo_lambda.
+        ro_lambda = lo_lambda.
       ENDIF.
     ENDMETHOD.
 
@@ -10105,6 +10470,9 @@
       turtle = lcl_turtle=>new( height = height->integer
                                 width = width->integer
                                 title = `SchemeTurtle` ).
+      turtle->set_position( VALUE #( x = init_x->integer
+                                     y = init_y->integer
+                                     angle = init_angle->real ) ).
     ENDMETHOD.
 
   ENDCLASS.

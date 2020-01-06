@@ -5,6 +5,9 @@
 
 CLASS lcl_turtle_examples DEFINITION.
   PUBLIC SECTION.
+    CLASS-METHODS create IMPORTING title TYPE string OPTIONAL
+                         RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
+
     CLASS-METHODS polygon_flower
       IMPORTING polygons      TYPE i
                 polygon_sides TYPE i
@@ -21,69 +24,36 @@ ENDCLASS.
 
 CLASS lcl_turtle_examples IMPLEMENTATION.
 
-  METHOD filled_square.
-    turtle = lcl_turtle=>new( height = 800 width = 800 ).
+  METHOD create.
+    turtle = lcl_turtle=>new( height = 800 width = 800 title = title ).
     turtle->goto( x = 200 y = 200 ).
 
     turtle->set_pen( VALUE #(
             fill_color = `#FF0000`
             stroke_color = `#FF00FF`
             stroke_width = 2 ) ).
+  ENDMETHOD.
 
-    DATA(start) = VALUE lcl_turtle=>t_point( x = 100 y = 100 ).
-    DATA(side_length) = 100.
+  METHOD filled_square.
+    turtle = create( ).
 
-    DATA(points) = VALUE lcl_turtle=>t_points(
-      ( start )
-      ( x = start-x + side_length y = start-y )
-      ( x = start-x + side_length y = start-y + side_length )
-      ( x = start-x y = start-y + side_length ) ).
-
-    turtle->append_svg( turtle->svg_builder->polyline( VALUE #( points = points ) )  ).
+    turtle->filled_square( side_length = 100
+                           start = VALUE lcl_turtle=>t_point( x = 100 y = 100 ) ).
   ENDMETHOD.
 
   METHOD polygon_flower.
-    turtle = lcl_turtle=>new( height = 800 width = 800 title = |Polygons:{ polygons } Sides: { polygon_sides }| ).
+    turtle = create( title = |Polygons:{ polygons } Sides: { polygon_sides }| ).
 
-    turtle->goto( x = 200 y = 200 ).
-    turtle->set_pen( VALUE #(
-            stroke_color = `#FF00FF`
-            stroke_width = 2 ) ).
-
-    DATA(current_polygon) = 0.
-    WHILE current_polygon < polygons.
-
-      " draw a regular polygon
-      DATA(current_polygon_side) = 0.
-      DATA(side_length) = 50.
-      WHILE current_polygon_side < polygon_sides.
-        turtle->forward( side_length ).
-        turtle->right( 360 / polygon_sides ).
-        current_polygon_side = current_polygon_side + 1.
-      ENDWHILE.
-
-      " rotate before painting next polygon
-      turtle->right( 360 / polygons ).
-
-      current_polygon = current_polygon + 1.
-    ENDWHILE.
+    turtle->polygon_flower( number_of_polygons = polygons
+                            polygon_sides = polygon_sides
+                            side_length = 50 ).
   ENDMETHOD.
 
   METHOD polygon_using_lines.
-    turtle = lcl_turtle=>new( height = 800 width = 800 ).
-    turtle->goto( x = 200 y = 200 ).
+    turtle = create( ).
 
-    turtle->set_pen( VALUE #(
-            stroke_color = `#FF00FF`
-            stroke_width = 2 ) ).
-
-    DATA(i) = 0.
-    WHILE i < num_sides.
-      turtle->forward( side_length ).
-      turtle->right( 360 / num_sides ).
-
-      i = i + 1.
-    ENDWHILE.
+    turtle->regular_polygon( num_sides = num_sides
+                             side_length = side_length ).
   ENDMETHOD.
 ENDCLASS.
 
@@ -93,9 +63,19 @@ CLASS lcl_turtle_lsystem_examples DEFINITION.
     CLASS-METHODS pattern.
     CLASS-METHODS plant.
     CLASS-METHODS plant_2.
+  PRIVATE SECTION.
+    CLASS-METHODS execute IMPORTING turtle TYPE REF TO lcl_turtle
+                                    parameters TYPE lcl_turtle_lsystem=>params.
 ENDCLASS.
 
 CLASS lcl_turtle_lsystem_examples IMPLEMENTATION.
+
+  METHOD execute.
+    DATA(lsystem) = lcl_turtle_lsystem=>new( turtle = turtle
+                                             parameters = parameters ).
+    lsystem->execute( ).
+    lsystem->show( ).
+  ENDMETHOD.
 
   METHOD koch_curve.
     DATA(turtle) = lcl_turtle=>new( height = 800 width = 600 title = |Koch curve| ).
@@ -110,10 +90,8 @@ CLASS lcl_turtle_lsystem_examples IMPLEMENTATION.
       num_iterations = 3
       rewrite_rules = VALUE #( ( from = `F` to = `F+F-F-F+F` ) ) ).
 
-    DATA(lsystem) = lcl_turtle_lsystem=>new( turtle = turtle
-                                             parameters = parameters ).
-    lsystem->execute( ).
-    lsystem->show( ).
+     execute( turtle = turtle
+              parameters = parameters ).
   ENDMETHOD.
 
 
@@ -130,10 +108,8 @@ CLASS lcl_turtle_lsystem_examples IMPLEMENTATION.
       num_iterations = 3
       rewrite_rules = VALUE #( ( from = `F` to = `FF-F+F-F-FF` ) ) ).
 
-    DATA(lsystem) = lcl_turtle_lsystem=>new( turtle = turtle
-                                             parameters = parameters ).
-    lsystem->execute( ).
-    lsystem->show( ).
+    execute( turtle = turtle
+             parameters = parameters ).
   ENDMETHOD.
 
   METHOD plant.
@@ -154,10 +130,8 @@ CLASS lcl_turtle_lsystem_examples IMPLEMENTATION.
       num_iterations = 5
       rewrite_rules = VALUE #( ( from = `F` to = `F[+F]F[-F][F]` ) ) ).
 
-    DATA(lsystem) = lcl_turtle_lsystem=>new( turtle = turtle
-                                             parameters = parameters ).
-    lsystem->execute( ).
-    lsystem->show( ).
+    execute( turtle = turtle
+             parameters = parameters ).
   ENDMETHOD.
 
   METHOD plant_2.
