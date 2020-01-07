@@ -1984,6 +1984,7 @@
       proc_turtle_clean,          ##called
       proc_turtle_width,          ##called
       proc_turtle_height,         ##called
+      proc_turtle_state,          ##called
       proc_turtle_pen_width,      ##called
       proc_turtle_pen_color,      ##called
       proc_turtle_regular_poly,   ##called
@@ -8134,10 +8135,12 @@
 *      init-y : real? = (/ height 2)
 *      init-angle : real? = 0
       DATA lo_width TYPE REF TO lcl_lisp_integer.
+      DATA lo_next TYPE REF TO lcl_lisp.
       DATA lo_height TYPE REF TO lcl_lisp_integer.
       DATA lo_init_x TYPE REF TO lcl_lisp_integer.
       DATA lo_init_y TYPE REF TO lcl_lisp_integer.
       DATA lo_init_angle TYPE REF TO lcl_lisp_real.
+      _data_local_numeric_cell.
 
       _validate: list, list->cdr.
       _validate_integer list->car `turtles`.
@@ -8145,18 +8148,23 @@
       _validate_integer list->cdr->car `turtles`.
       lo_height ?= list->cdr->car.
 
-      IF list->cdr->cdr->car IS BOUND.
-        IF list->cdr->cdr->car->type EQ lcl_lisp=>type_integer.
-          lo_init_x ?= list->cdr->cdr->car.
+      lo_next = list->cdr->cdr.
 
-          IF list->cdr->cdr->cdr->car IS BOUND.
-            IF list->cdr->cdr->cdr->car->type EQ lcl_lisp=>type_integer.
-              lo_init_y ?= list->cdr->cdr->cdr->car.
+      IF lo_next->car IS BOUND.
+        IF lo_next->car->type EQ lcl_lisp=>type_integer.
+          lo_init_x ?= lo_next->car.
 
-              IF list->cdr->cdr->cdr->cdr->car IS BOUND.
-                IF list->cdr->cdr->cdr->cdr->car->type EQ lcl_lisp=>type_real.
-                  lo_init_angle ?= list->cdr->cdr->cdr->cdr->car.
-                ENDIF.
+          lo_next = lo_next->cdr.
+          IF lo_next->car IS BOUND.
+            IF lo_next->car->type EQ lcl_lisp=>type_integer.
+              lo_init_y ?= lo_next->car.
+
+              lo_next = lo_next->cdr.
+              IF lo_next->car IS BOUND.
+                DATA lv_real TYPE tv_real.
+
+                _get_number lv_real lo_next->car `turtles`.
+                lo_init_angle = lcl_lisp_new=>real( lv_real ).
               ENDIF.
             ENDIF.
           ENDIF.
@@ -8217,9 +8225,9 @@
     ENDMETHOD.
 
     METHOD proc_turtle_exist. "turtles?
-      _validate list.
+      _validate: list, list->car.
       "(turtles? v) → boolean?
-      IF list->type EQ lcl_lisp=>type_abap_turtle.
+      IF list->car->type EQ lcl_lisp=>type_abap_turtle.
         result = true.
       ELSE.
         result = false.
@@ -8423,6 +8431,21 @@
       lo_turtles->turtle->set_pen( VALUE #( BASE lo_turtles->turtle->pen
                                             stroke_color = lo_color->value ) ).
       result = lo_turtles.
+    ENDMETHOD.
+
+    METHOD proc_turtle_state.
+      _validate list.
+*    (turtle-state turtles) → (listof (vector/c real? real? real?)
+      _validate_turtle list->car `turtle-state`.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      lo_turtles ?= list->car.
+      DATA(position) = lo_turtles->turtle->get_position( ).
+
+      result = lcl_lisp_new=>cons( io_car = lcl_lisp_new=>vector(
+                  it_vector = VALUE tt_lisp( ( lcl_lisp_new=>integer( position-x ) )
+                                             ( lcl_lisp_new=>integer( position-y ) )
+                                             ( lcl_lisp_new=>real( position-angle ) )  )
+                  iv_mutable = abap_false ) ).
     ENDMETHOD.
 
     METHOD proc_turtle_clean.
@@ -9153,6 +9176,7 @@
 
       define_value( symbol = 'merge'             type = lcl_lisp=>type_native value = 'PROC_TURTLE_MERGE' ).
       define_value( symbol = 'clean'             type = lcl_lisp=>type_native value = 'PROC_TURTLE_CLEAN' ).
+      define_value( symbol = 'turtle-state'      type = lcl_lisp=>type_native value = 'PROC_TURTLE_STATE' ).
       define_value( symbol = 'turtles-height'    type = lcl_lisp=>type_native value = 'PROC_TURTLE_HEIGHT' ).
       define_value( symbol = 'turtles-width'     type = lcl_lisp=>type_native value = 'PROC_TURTLE_WIDTH' ).
       define_value( symbol = 'turtles-pen-color' type = lcl_lisp=>type_native value = 'PROC_TURTLE_PEN_COLOR' ).

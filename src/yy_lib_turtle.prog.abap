@@ -18,8 +18,8 @@ ENDCLASS.
 
 CLASS lcx_turtle_problem IMPLEMENTATION.
 
-  METHOD raise.    
-    RAISE EXCEPTION TYPE lcx_turtle_problem EXPORTING text = text.  "NEW lcx_turtle_problem( text = text ).
+  METHOD raise.
+    RAISE EXCEPTION TYPE lcx_turtle_problem EXPORTING text = text.
   ENDMETHOD.
 
   METHOD constructor ##ADT_SUPPRESS_GENERATION.
@@ -259,8 +259,7 @@ CLASS lcl_turtle DEFINITION CREATE PRIVATE.
 
     "! Creates a new turtle based on an existing instance. The position, angle and pen are preserved.
     "! Does not preserve content.
-    CLASS-METHODS clone IMPORTING existing_turtle TYPE REF TO lcl_turtle
-                        RETURNING VALUE(turtle)   TYPE REF TO lcl_turtle.
+    METHODS clone RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 
     "! Merges drawings of multiple turtles into one.
     CLASS-METHODS compose
@@ -497,14 +496,14 @@ CLASS lcl_turtle IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD clone.
-    turtle = NEW #( width = existing_turtle->width
-                    height = existing_turtle->height
-                    title = existing_turtle->title ).
+    turtle = NEW #( width = width
+                    height = height
+                    title = title ).
 
-    turtle->set_pen( existing_turtle->pen ).
-    turtle->set_color_scheme( existing_turtle->color_scheme ).
-    turtle->set_position( existing_turtle->position ).
-    turtle->set_angle( existing_turtle->position-angle ).
+    turtle->set_pen( pen ).
+    turtle->set_color_scheme( color_scheme ).
+    turtle->set_position( position ).
+    turtle->set_angle( position-angle ).
   ENDMETHOD.
 
   METHOD compose.
@@ -514,7 +513,8 @@ CLASS lcl_turtle IMPLEMENTATION.
     ENDIF.
 
     " start where the last one left off
-    turtle = clone( turtles[ lines( turtles ) ] ).
+    DATA(lo_turtle) = turtles[ lines( turtles ) ].
+    turtle = lo_turtle->clone( ).
 
     " new image size is the largest of composed turtles
     DATA(new_width) = lcl_turtle_math=>find_max_int(
@@ -526,10 +526,9 @@ CLASS lcl_turtle IMPLEMENTATION.
     turtle->set_height( new_height ).
     turtle->set_width( new_width ).
 
-    DATA(composed_svg) = REDUCE string(
-      INIT result = ``
+    DATA(composed_svg) = REDUCE string( INIT result = ``
         FOR <svg> IN VALUE stringtab( FOR <x> IN turtles ( <x>->svg ) )
-      NEXT result = result && <svg> ).
+          NEXT result = result && <svg> ).
 
     turtle->append_svg( composed_svg ).
 
@@ -581,21 +580,18 @@ CLASS lcl_turtle IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD show.
-    cl_abap_browser=>show_html(
-      size = size
-      html_string = get_html( ) ).
-
+    cl_abap_browser=>show_html( size = size
+                                html_string = get_html( ) ).
     turtle = me.
   ENDMETHOD.
 
   METHOD regular_polygon.
-    DATA(i) = 0.
-    WHILE i < num_sides.
-      turtle->forward( side_length ).
-      turtle->right( 360 / num_sides ).
-
-      i = i + 1.
-    ENDWHILE.
+    DATA(angle) = CONV tv_real( 360 / num_sides ).
+    DATA(n) = nmax( val1 = 0 val2 = num_sides ).
+    DO n TIMES.
+      forward( side_length ).
+      right( angle ).
+    ENDDO.
 
     turtle = me.
   ENDMETHOD.
@@ -604,13 +600,8 @@ CLASS lcl_turtle IMPLEMENTATION.
     DATA(current_polygon) = 0.
     WHILE current_polygon < number_of_polygons.
 
-      " draw a regular polygon
-      DATA(current_polygon_side) = 0.
-      WHILE current_polygon_side < polygon_sides.
-        forward( side_length ).
-        right( 360 / polygon_sides ).
-        current_polygon_side = current_polygon_side + 1.
-      ENDWHILE.
+      regular_polygon( num_sides   = polygon_sides
+                       side_length = side_length ).
 
       " rotate before painting next polygon
       right( 360 / number_of_polygons ).
@@ -694,6 +685,11 @@ CLASS lcl_turtle_lsystem DEFINITION.
                 parameters    TYPE params
       RETURNING VALUE(result) TYPE REF TO lcl_turtle_lsystem.
 
+    CLASS-METHODS koch_curve_params RETURNING VALUE(params) TYPE params.
+    CLASS-METHODS pattern_params RETURNING VALUE(params) TYPE params.
+    CLASS-METHODS plant_params RETURNING VALUE(params) TYPE params.
+    CLASS-METHODS plant_2_params RETURNING VALUE(params) TYPE params.
+
     METHODS execute.
     METHODS show IMPORTING size TYPE string DEFAULT cl_abap_browser=>large.
 
@@ -776,6 +772,56 @@ CLASS lcl_turtle_lsystem IMPLEMENTATION.
   METHOD show.
     turtle->show( size ).
   ENDMETHOD.
+
+  METHOD koch_curve_params.
+    params = VALUE #(
+      initial_state = `F`
+      " Move distance 10, Rotate right by 90, Rotate left by 90
+      instructions = VALUE #(
+        ( symbol = 'F' kind = instruction_kind-forward amount = 10 )
+        ( symbol = '+' kind = instruction_kind-right amount = 90 )
+        ( symbol = '-' kind = instruction_kind-left amount = 90 ) )
+      num_iterations = 3
+      rewrite_rules = VALUE #( ( from = `F` to = `F+F-F-F+F` ) ) ).
+
+  ENDMETHOD.
+
+  METHOD pattern_params.
+    params = VALUE #( initial_state = `F-F-F-F`
+      instructions = VALUE #(
+        ( symbol = 'F' kind = instruction_kind-forward amount = 10 )
+        ( symbol = '+' kind = instruction_kind-right amount = 90 )
+        ( symbol = '-' kind = instruction_kind-left amount = 90 ) )
+      num_iterations = 3
+      rewrite_rules = VALUE #( ( from = `F` to = `FF-F+F-F-FF` ) ) ).
+  ENDMETHOD.
+
+  METHOD plant_params.
+    params = VALUE #( LET distance = 10 rotation = 25 IN
+      initial_state = `F`
+      instructions = VALUE #(
+        ( symbol = `F` kind = instruction_kind-forward amount = distance )
+        ( symbol = `+` kind = instruction_kind-right amount = rotation )
+        ( symbol = `-` kind = instruction_kind-left amount = rotation )
+        ( symbol = `[` kind = instruction_kind-stack_push )
+        ( symbol = `]` kind = instruction_kind-stack_pop ) )
+      num_iterations = 5
+      rewrite_rules = VALUE #( ( from = `F` to = `F[+F]F[-F][F]` ) ) ).
+  ENDMETHOD.
+
+  METHOD plant_2_params.
+    params = VALUE #( initial_state = `F`
+      instructions = VALUE #(
+        ( symbol = `F` kind = instruction_kind-forward amount = 10 )
+        ( symbol = `+` kind = instruction_kind-right amount = 21 )
+        ( symbol = `-` kind = instruction_kind-left amount = 21 )
+        ( symbol = `[` kind = instruction_kind-stack_push )
+        ( symbol = `]` kind = instruction_kind-stack_pop ) )
+      num_iterations = 4
+      rewrite_rules = VALUE #( ( from = `F` to = `FF-[+F+F+F]+[-F-F+F]` ) ) ).
+  ENDMETHOD.
+
+
 ENDCLASS.
 
 CLASS lcl_turtle_svg IMPLEMENTATION.

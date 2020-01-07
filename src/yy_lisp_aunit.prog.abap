@@ -5173,3 +5173,67 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
      ENDMETHOD.                    "select_1
 
    ENDCLASS.                    "ltc_query IMPLEMENTATION
+
+   CLASS ltc_turtles DEFINITION INHERITING FROM ltc_interpreter
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PRIVATE SECTION.
+       METHODS setup.
+       METHODS teardown.
+       METHODS new_turtle.
+
+       METHODS is_turtle FOR TESTING.
+       METHODS turtle_size FOR TESTING.
+       METHODS turtle_move FOR TESTING.
+       METHODS turtle_move_offset FOR TESTING.
+   ENDCLASS.
+
+   CLASS ltc_turtles IMPLEMENTATION.
+
+     METHOD setup.
+       new_interpreter( ).
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
+
+     METHOD new_turtle.
+       scheme( code = |(define t (turtles 600 400 300 200 90) )|
+               expected = 't' ).
+     ENDMETHOD.
+
+     METHOD is_turtle.
+       new_turtle( ).
+       scheme( code = |(turtles? 1)|
+               expected = '#f' ).
+       scheme( code = |(turtles? t)|
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD turtle_size.
+       new_turtle( ).
+       scheme( code = |(turtles-width t)|
+               expected = '600' ).
+       scheme( code = |(turtles-height t)|
+               expected = '400' ).
+       scheme( code = |(turtle-state t)|
+               expected = '( #( 300 200 90 ) )' ).
+     ENDMETHOD.
+
+     METHOD turtle_move.
+       new_turtle( ).
+       scheme( code = |(move 100 t) |
+               expected = '<ABAP turtle>' ).
+       scheme( code = |(turtle-state t)|
+               expected = '( #( 300 300 90 ) )' ).
+     ENDMETHOD.
+
+     METHOD turtle_move_offset.
+       new_turtle( ).
+       scheme( code = |(move-offset 50 50 t) |
+               expected = '<ABAP turtle>' ).
+       scheme( code = |(turtle-state t)|
+               expected = '( #( 350 250 90 ) )' ).
+     ENDMETHOD.
+
+   ENDCLASS.
