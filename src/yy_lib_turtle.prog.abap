@@ -18,8 +18,8 @@ ENDCLASS.
 
 CLASS lcx_turtle_problem IMPLEMENTATION.
 
-  METHOD raise.
-    RAISE EXCEPTION NEW lcx_turtle_problem( text = text ).
+  METHOD raise.    
+    RAISE EXCEPTION TYPE lcx_turtle_problem EXPORTING text = text.  "NEW lcx_turtle_problem( text = text ).
   ENDMETHOD.
 
   METHOD constructor ##ADT_SUPPRESS_GENERATION.
