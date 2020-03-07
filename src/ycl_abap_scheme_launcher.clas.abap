@@ -28,10 +28,12 @@ CLASS ycl_abap_scheme_launcher IMPLEMENTATION.
 
      out->write( `Welcome to ABAP Scheme in the Cloud!` ).
     TRY.
-        port = NEW #( iv_input = abap_true
-                      iv_output = abap_true
-                      iv_string = abap_false
-                      out = out ).
+        port ?= lcl_lisp_new=>port( iv_port_type = lcl_lisp_port=>c_port_textual
+                                   iv_input     = abap_true
+                                   iv_output    = abap_true
+                                   iv_error     = abap_true
+                                   iv_buffered  = abap_true
+                                   io_out       = out ).
 
         lo_int = NEW #( io_port = port  " LISP Interpreter
                         ii_log = port ).

@@ -12,7 +12,7 @@
 *&---------------------------------------------------------------------*
 *& MIT License (see below)
 *& Martin Ceronio, martin.ceronio@infosize.co.za June 2015
-*& Jacques Nomssi Nzali, www.informatik-dv.com February 2020
+*& Jacques Nomssi Nzali, nomssi@gmail.com February 2020
 *&---------------------------------------------------------------------*
 *  The MIT License (MIT)
 *
@@ -110,48 +110,50 @@
 
   CLASS lcl_lisp_environment DEFINITION DEFERRED.
 
-  CLASS lcl_sexps DEFINITION.   " Symbolic expression (S-expression)
-    PUBLIC SECTION.
-      TYPES tv_type TYPE tv_char.
+ TYPES: BEGIN OF ENUM tv_category BASE TYPE tv_char,
+           standard  VALUE IS INITIAL,
+           macro     VALUE 'X',
+           escape    VALUE '@',
+         END OF ENUM tv_category.
+
+  TYPES: BEGIN OF ENUM tv_type BASE TYPE tv_char,
 *      Type definitions for the various elements
-      CONSTANTS:
-        type_symbol   TYPE tv_type VALUE 'S',
-        type_integer  TYPE tv_type VALUE 'N',
-        type_real     TYPE tv_type VALUE 'R',
-        type_complex  TYPE tv_type VALUE 'z',
-        type_rational TYPE tv_type VALUE 'r',
-        type_string   TYPE tv_type VALUE '"'.
-      CONSTANTS:
-        type_boolean     TYPE tv_type VALUE 'b',
-        type_char        TYPE tv_type VALUE 'c',
-        type_null        TYPE tv_type VALUE '0',
-        type_pair        TYPE tv_type VALUE 'C',
-        type_lambda      TYPE tv_type VALUE 'L',
-        type_case_lambda TYPE tv_type VALUE 'A',
-        type_native      TYPE tv_type VALUE 'n',
-        type_primitive   TYPE tv_type VALUE 'I',
-        type_syntax      TYPE tv_type VALUE 'y',
-        type_hash        TYPE tv_type VALUE 'h',
-        type_vector      TYPE tv_type VALUE 'v',
-        type_bytevector  TYPE tv_type VALUE '8',
-        type_port        TYPE tv_type VALUE 'o',
-        type_undefined   TYPE tv_type VALUE '#'.
+           symbol        VALUE 'S',
+           integer       VALUE 'N',
+           real          VALUE 'R',
+           complex       VALUE 'z',
+           rational      VALUE 'r',
+           string        VALUE '"',
+
+           boolean       VALUE 'b',
+           char          VALUE 'c',
+           null          VALUE '0',
+           pair          VALUE 'C',
+           lambda        VALUE 'L',
+           case_lambda   VALUE 'A',
+           native        VALUE 'n',
+           call_cc       VALUE 'K',
+           primitive     VALUE 'I',
+           syntax        VALUE 'y',
+           hash          VALUE 'h',
+           vector        VALUE 'v',
+           bytevector    VALUE '8',
+           port          VALUE 'o',
+           multiple      VALUE 'M',
+           not_defined   VALUE IS INITIAL,
+
 *      Types for ABAP integration:
-      CONSTANTS:
-        type_abap_data     TYPE tv_type VALUE 'D',
-        type_abap_table    TYPE tv_type VALUE 'T',
-        type_abap_query    TYPE tv_type VALUE 'q',
-        type_abap_sql_set  TYPE tv_type VALUE 's',
-        type_abap_function TYPE tv_type VALUE 'F'.
-*        type_abap_class    TYPE tv_type VALUE 'a',
-*        type_abap_method   TYPE tv_type VALUE 'm'.
-
-*      Types for Turtles graphic:
-      CONSTANTS:
-        type_abap_turtle TYPE tv_type VALUE 't'.
-
-      DATA type TYPE tv_char.
-  ENDCLASS.
+           abap_data     VALUE 'D',
+           abap_table    VALUE 'T',
+           abap_query    VALUE 'q',
+           abap_sql_set  VALUE 's',
+           abap_function VALUE 'F',
+*        abap_class   VALUE 'a',
+*        abap_method  VALUE 'm',
+*      Environment
+           env_spec      VALUE 'e',
+           abap_turtle   VALUE 't',
+         END OF ENUM tv_type.
 
   CLASS lcl_lisp_iterator DEFINITION DEFERRED.
   CLASS lcl_lisp_new DEFINITION DEFERRED.
@@ -161,12 +163,13 @@
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp DEFINITION
 *----------------------------------------------------------------------*
-  CLASS lcl_lisp DEFINITION INHERITING FROM lcl_sexps FRIENDS lcl_lisp_new.
+  CLASS lcl_lisp DEFINITION CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
+      DATA type TYPE tv_type.
 *     Can this be replaced by a mesh? cf. DEMO_RND_PARSER_AST
       DATA mutable TYPE abap_boolean VALUE abap_true READ-ONLY.
 
-      DATA macro TYPE abap_boolean.
+      DATA category TYPE tv_category.
       DATA value TYPE string.
 
       DATA car TYPE REF TO lcl_lisp.
@@ -236,6 +239,7 @@
       CLASS-METHODS throw IMPORTING message TYPE string
                           RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
+      METHODS constructor IMPORTING type TYPE tv_type.
       METHODS list_to_string RETURNING VALUE(str) TYPE string
                              RAISING   lcx_lisp_exception.
 
@@ -264,14 +268,13 @@
   CLASS lcl_lisp_char IMPLEMENTATION.
 
     METHOD new.
-      DATA lv_char TYPE c LENGTH 1.
+      DATA lv_char TYPE tv_char.
       lv_char = value.
       ro_elem = VALUE #( char_table[ char = lv_char ]-elem DEFAULT NEW lcl_lisp_char( lv_char ) ).
     ENDMETHOD.
 
     METHOD constructor.
-      super->constructor( ).
-      type = lcl_lisp=>type_char.
+      super->constructor( char ).
       me->value = value.
       IF value EQ space.   " Special treatment for space,
         me->value = ` `.   " see https://blogs.sap.com/2016/08/10/trailing-blanks-in-character-string-processing/
@@ -295,8 +298,7 @@
   CLASS lcl_lisp_boolean IMPLEMENTATION.
 
     METHOD constructor.
-      super->constructor( ).
-      type = type_boolean.
+      super->constructor( boolean ).
       me->value = value.
     ENDMETHOD.
 
@@ -313,8 +315,7 @@
   CLASS lcl_lisp_string IMPLEMENTATION.
 
     METHOD constructor.
-      super->constructor( ).
-      type = type_string.
+      super->constructor( string ).
       me->value = value.
       mutable = iv_mutable.
     ENDMETHOD.
@@ -331,15 +332,11 @@
   CLASS lcl_lisp_number IMPLEMENTATION.
 
     METHOD is_exact.
-      result = false.
-      CHECK exact EQ abap_true.
-      result = true.
+      result = SWITCH #( exact WHEN abap_true THEN true ELSE false ).
     ENDMETHOD.
 
     METHOD is_inexact.
-      result = true.
-      CHECK exact EQ abap_true.
-      result = false.
+      result = SWITCH #( exact WHEN abap_true THEN false ELSE true ).
     ENDMETHOD.
 
   ENDCLASS.
@@ -347,7 +344,7 @@
   CLASS lcl_lisp_integer DEFINITION INHERITING FROM lcl_lisp_number
     CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
-      DATA integer TYPE tv_int READ-ONLY.
+      DATA int TYPE tv_int READ-ONLY.
     PROTECTED SECTION.
       METHODS constructor IMPORTING value TYPE any.
   ENDCLASS.
@@ -374,9 +371,8 @@
   CLASS lcl_lisp_integer IMPLEMENTATION.
 
     METHOD constructor.
-      super->constructor( ).
-      type = lcl_lisp=>type_integer.
-      integer = value.
+      super->constructor( integer ).
+      int = value.
       exact = abap_true.
     ENDMETHOD.
 
@@ -385,37 +381,31 @@
   CLASS lcl_lisp_rational IMPLEMENTATION.
 
     METHOD new.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      CREATE OBJECT lo_rat
-        EXPORTING
-          nummer = nummer
-          denom  = denom.
-      IF lo_rat->denominator EQ 1.
-        CREATE OBJECT result TYPE lcl_lisp_integer
-          EXPORTING value = lo_rat->integer.
-      ELSE.
-        result = lo_rat.
-      ENDIF.
+      DATA(lo_rat) = NEW lcl_lisp_rational( nummer = nummer
+                                            denom  = denom ).
+      result = SWITCH #( lo_rat->denominator
+                 WHEN 1 THEN NEW lcl_lisp_integer( value = lo_rat->int )
+                 ELSE lo_rat ).
     ENDMETHOD.
 
     METHOD constructor.
       super->constructor( nummer ).
-      type = type_rational.
+      type = rational.
       denominator = denom.
       normalize( ).
     ENDMETHOD.
 
     METHOD to_string.
-      str = |{ integer }/{ denominator }|.
+      str = |{ int }/{ denominator }|.
     ENDMETHOD.
 
     METHOD normalize.
-      DATA(g) = gcd( n = integer
+      DATA(g) = gcd( n = int
                      d = denominator ).
-      integer = trunc( integer / g ).
+      int = trunc( int / g ).
       denominator = trunc( denominator / g ).
       IF denominator LT 0.
-        integer = - integer.
+        int = - int.
         denominator = - denominator.
       ENDIF.
       exact = xsdbool( denominator NE 0 ).
@@ -445,7 +435,7 @@
   CLASS lcl_lisp_real DEFINITION INHERITING FROM lcl_lisp_number
     CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
-      DATA real TYPE tv_real READ-ONLY.
+      DATA float TYPE tv_real READ-ONLY.
       METHODS float_eq IMPORTING iv_real       TYPE tv_real
                        RETURNING VALUE(result) TYPE abap_boolean.
       CLASS-METHODS gcd IMPORTING n             TYPE numeric
@@ -453,16 +443,20 @@
                         RETURNING VALUE(result) TYPE tv_real
                         RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
-      METHODS constructor IMPORTING value TYPE any.
+      METHODS constructor IMPORTING value TYPE any
+                                    exact TYPE abap_boolean.
   ENDCLASS.
 
   CLASS lcl_lisp_real IMPLEMENTATION.
 
     METHOD constructor.
-      super->constructor( ).
-      type = lcl_lisp=>type_real.
-      real = value.
-      exact = abap_false.
+      super->constructor( real ).
+      float = value.
+      IF exact EQ abap_true.
+        me->exact = xsdbool( trunc( float ) = float ).
+      ELSE.
+        me->exact = abap_false.
+      ENDIF.
     ENDMETHOD.
 
     METHOD float_eq.
@@ -475,16 +469,16 @@
       DATA abs_b TYPE tv_real.
 
       result = abap_false.
-      IF real EQ iv_real.
+      IF float EQ iv_real.
         result = abap_true.
       ELSE.
-        abs_a = abs( real ).
+        abs_a = abs( float ).
         abs_b = abs( iv_real ).
-        diff = abs( real - iv_real ).
+        diff = abs( float - iv_real ).
         sum = abs_a + abs_b.
 
-        IF real = 0 OR iv_real = 0 OR sum < c_min_normal.
-*         real or iv_real is zero or both are extremely close to it
+        IF float = 0 OR iv_real = 0 OR sum < c_min_normal.
+*         float or iv_real is zero or both are extremely close to it
 *         relative error is less meaningfull here
           IF diff < c_epsilon * c_min_normal.
             result = abap_true.
@@ -502,32 +496,59 @@
       DATA den TYPE REF TO lcl_lisp_real.
       DATA lo_save TYPE REF TO lcl_lisp_real.
 
-      num = NEW #( n ).
-      den = NEW #( d ).
+      num = NEW #( value = n exact = abap_false ).
+      den = NEW #( value = d exact = abap_false ).
       WHILE NOT den->float_eq( 0 ).
         lo_save = den.
         TRY.
-            den = NEW #( num->real MOD den->real ).
-*            den = NEW #( num->real - den->real * trunc( num->real / den->real ) ).
+            den = NEW #( value = num->float MOD den->float exact = abap_false ).
+*            den = NEW #( num->float - den->float * trunc( num->float / den->float ) ).
           CATCH cx_sy_arithmetic_error INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
         num = lo_save.
       ENDWHILE.
-      result = abs( num->real ).
+      result = abs( num->float ).
     ENDMETHOD.
 
   ENDCLASS.
 
   CLASS lcl_lisp_pair DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
+      METHODS constructor IMPORTING io_car TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
+                                    io_cdr TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil.
+  ENDCLASS.
+
+  CLASS lcl_lisp_pair IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( pair ).
+      car = io_car.
+      cdr = io_cdr.
+    ENDMETHOD.
+
+  ENDCLASS.
+
+  CLASS lcl_lisp_lambda DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
+    PUBLIC SECTION.
+      DATA parameter_object TYPE abap_boolean.
+      METHODS constructor IMPORTING io_car              TYPE REF TO lcl_lisp
+                                    io_cdr              TYPE REF TO lcl_lisp
+                                    iv_category         TYPE tv_category DEFAULT standard
+                                    iv_parameter_object TYPE abap_boolean DEFAULT abap_false.
     PROTECTED SECTION.
   ENDCLASS.
 
-  CLASS lcl_lisp_lambda DEFINITION INHERITING FROM lcl_lisp_pair FRIENDS lcl_lisp_new.
-    PUBLIC SECTION.
-      DATA parameter_object TYPE abap_boolean.
-    PROTECTED SECTION.
+  CLASS lcl_lisp_lambda IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( lambda ).
+      car = io_car.
+      cdr = io_cdr.
+      category = iv_category.
+      parameter_object = iv_parameter_object.
+    ENDMETHOD.
+
   ENDCLASS.
 
   CLASS lcl_lisp_case_lambda DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
@@ -547,7 +568,7 @@
       DATA lo_clause TYPE REF TO lcl_lisp.
 
       LOOP AT clauses INTO lo_clause.
-        IF lo_clause->type NE type_lambda.
+        IF lo_clause->type NE lambda.
           EXIT.
         ENDIF.
         lo_lambda ?= lo_clause.
@@ -555,11 +576,11 @@
         DATA(lo_arg) = args.                " Pointer to arguments
 
         CASE lo_arg->type.
-          WHEN lcl_lisp=>type_pair OR lcl_lisp=>type_null.   "Do we have a proper list?
+          WHEN pair OR null.   "Do we have a proper list?
 
             WHILE lo_var NE lcl_lisp=>nil.         " Nil would mean no parameters to map
 
-              IF lo_var->type EQ lcl_lisp=>type_symbol.
+              IF lo_var->type EQ symbol.
 *               dotted pair after fixed number of parameters, to be bound to a variable number of arguments
                 result = lo_lambda.
                 RETURN.
@@ -581,7 +602,7 @@
               RETURN.
             ENDIF.
 
-          WHEN lcl_lisp=>type_symbol.
+          WHEN symbol.
 *           args is a symbol to be bound to a variable number of parameters
             result = lo_lambda.
             RETURN.
@@ -606,8 +627,7 @@
   CLASS lcl_lisp_symbol IMPLEMENTATION.
 
     METHOD constructor.
-      super->constructor( ).
-      type = type_symbol.
+      super->constructor( symbol ).
       me->index = index.
       me->value = value.
     ENDMETHOD.
@@ -1628,6 +1648,7 @@ ENDCLASS.
                              RAISING   lcx_lisp_exception.
 
       CLASS-METHODS real IMPORTING value          TYPE any
+                                   exact          TYPE abap_boolean
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_real.
 
       CLASS-METHODS number IMPORTING value          TYPE any
@@ -1672,7 +1693,7 @@ ENDCLASS.
                                    io_out TYPE REF TO if_oo_adt_classrun_out
                          RETURNING VALUE(ro_port) TYPE REF TO lcl_lisp_port.
 
-      CLASS-METHODS elem IMPORTING type           TYPE lcl_lisp=>tv_type
+      CLASS-METHODS elem IMPORTING type           TYPE tv_type
                                    value          TYPE any OPTIONAL
                                    parameter      TYPE abap_boolean DEFAULT abap_false
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
@@ -1698,7 +1719,7 @@ ENDCLASS.
       CLASS-METHODS lambda IMPORTING io_car              TYPE REF TO lcl_lisp
                                      io_cdr              TYPE REF TO lcl_lisp
                                      io_env              TYPE REF TO lcl_lisp_environment
-                                     iv_macro            TYPE abap_boolean DEFAULT abap_false
+                                     iv_category         TYPE tv_category DEFAULT standard
                                      iv_parameter_object TYPE abap_boolean DEFAULT abap_false
                            RETURNING VALUE(ro_lambda)    TYPE REF TO lcl_lisp.
 
@@ -1761,8 +1782,7 @@ ENDCLASS.
   CLASS lcl_lisp_port IMPLEMENTATION.
 
     METHOD constructor.
-      super->constructor( ).
-      type = lcl_lisp=>type_port.
+      super->constructor( port ).
 
       port_type = iv_port_type.
       input = iv_input.
@@ -1984,7 +2004,7 @@ ENDCLASS.
                element TYPE REF TO lcl_lisp,
              END OF ts_hash.
       TYPES tt_hash TYPE HASHED TABLE OF ts_hash WITH UNIQUE KEY key.
-      DATA hash TYPE tt_hash.
+      DATA mt_hash TYPE tt_hash.
 
       METHODS fill IMPORTING list TYPE REF TO lcl_lisp
                    RAISING   lcx_lisp_exception.
@@ -2039,7 +2059,7 @@ ENDCLASS.
                    RETURNING VALUE(result) TYPE REF TO lcl_lisp_vector
                    RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
-      DATA vector TYPE tt_lisp.
+      DATA array TYPE tt_lisp.
       DATA mo_length TYPE REF TO lcl_lisp.
   ENDCLASS.
 
@@ -2149,7 +2169,7 @@ ENDCLASS.
             RAISING   lcx_lisp_exception,
 *       Convenience method to add a value and create the cell
         define_value IMPORTING symbol         TYPE string
-                               type           TYPE lcl_lisp=>tv_type
+                               type           TYPE tv_type
                                value          TYPE any OPTIONAL
                      RETURNING VALUE(element) TYPE REF TO lcl_lisp.
 
@@ -2627,7 +2647,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       METHODS bind_symbol
         IMPORTING element       TYPE REF TO lcl_lisp
                   environment   TYPE REF TO lcl_lisp_environment
-                  iv_macro      TYPE abap_boolean DEFAULT abap_false
+                  iv_category   TYPE tv_category DEFAULT standard
         RETURNING VALUE(result) TYPE  REF TO lcl_lisp
         RAISING   lcx_lisp_exception.
 
@@ -3102,7 +3122,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
           DATA(lo_peek) = parse_token( ).
 
-          IF lo_peek->type = lcl_lisp=>type_symbol AND lo_peek->value = c_lisp_dot.
+          IF lo_peek->type = symbol AND lo_peek->value = c_lisp_dot.
             " dotted Pair
             lo_cell->cdr = parse_token( ).
             " match closing parens
@@ -3462,16 +3482,16 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 *     Scheme does not return a value for define; but we are returning the new symbol reference
       DATA(lo_head) = element->car.
       CASE lo_head->type.
-        WHEN lcl_lisp=>type_symbol.
+        WHEN symbol.
 *         call the set method of the current environment using the unevaluated first parameter
 *         (second list element) as the symbol key and the evaluated second parameter as the value.
           lo_params = eval( element = element->cdr->car
                             environment = environment ).
-          lo_params->macro = iv_macro.
+          lo_params->category = iv_category.
           lv_symbol = lo_head->value.
 
 *       Function shorthand (define (id arg ... ) body ...+)
-        WHEN lcl_lisp=>type_pair.
+        WHEN pair.
           IF element->cdr EQ nil.
             throw( |{ lo_head->to_string( ) } no expression in body| ).
           ENDIF.
@@ -3480,7 +3500,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lo_params = lcl_lisp_new=>lambda( io_car = lo_head->cdr  "List of params following function symbol
                                             io_cdr = element->cdr
                                             io_env = environment
-                                            iv_macro = iv_macro ).
+                                            iv_category = iv_category ).
           lv_symbol = lo_head->car->value.
 
         WHEN OTHERS.
@@ -3499,7 +3519,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 *
       result = bind_symbol( element = element
                             environment = environment
-                            iv_macro = abap_true ).
+                            iv_category = macro ).
     ENDMETHOD.
 
     METHOD is_macro_call.
@@ -3511,11 +3531,11 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
       result = abap_false.
-      CHECK element->type EQ lcl_lisp=>type_pair AND element->car->type = lcl_lisp=>type_symbol.
+      CHECK element->type EQ pair AND element->car->type = symbol.
       TRY.
           lo_ptr = environment->get( element->car->value ).
           CHECK lo_ptr->is_procedure( ) EQ true.
-          result = lo_ptr->macro.
+          result = xsdbool( lo_ptr->category EQ macro ).
         CATCH lcx_lisp_exception.
           RETURN.
       ENDTRY.
@@ -3561,14 +3581,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lo_opt = list->car.
       ENDIF.
 
-      IF lo_opt IS BOUND AND lo_opt->type EQ lcl_lisp=>type_integer.
+      IF lo_opt IS BOUND AND lo_opt->type EQ integer.
         lo_int ?= lo_opt.
-        IF lo_int->integer GE 0.
-          lv_counter = lo_int->integer.
+        IF lo_int->int GE 0.
+          lv_counter = lo_int->int.
         ENDIF.
       ENDIF.
 
-      IF lo_opt IS BOUND AND lo_opt->type EQ lcl_lisp=>type_string.
+      IF lo_opt IS BOUND AND lo_opt->type EQ string.
         lo_string ?= lo_opt.
         lv_suffix = lo_string->value.
       ENDIF.
@@ -3586,7 +3606,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       result = element->car.
 
       CASE result->type.
-        WHEN lcl_lisp=>type_symbol.
+        WHEN symbol.
 *         re-define symbol in the original environment, but evaluate parameters in the current environment
           environment->scope_of( result->value )->set( symbol  = result->value
                                                        element = eval( element = element->cdr->car
@@ -3611,7 +3631,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       DATA(elem) = io_list.
 *     TO DO: check if circular list are allowed
-      WHILE elem->type EQ lcl_lisp=>type_pair.
+      WHILE elem->type EQ pair.
         lo_new = lcl_lisp_new=>cons( io_car = eval_ast( element = elem->car
                                                         environment = environment ) ).
         IF ro_head = nil.
@@ -3654,7 +3674,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
 *     Collect arg1 to argn
 *     TO DO: check if circular lists are allowed
-      WHILE lo_arg->cdr->type EQ lcl_lisp=>type_pair.
+      WHILE lo_arg->cdr->type EQ pair.
 *       At least two entries (argn and rest), build (list arg1 . . argn )
 
         lo_new = lo_new->cdr = lcl_lisp_new=>cons( io_car = lo_arg->car ).
@@ -3666,7 +3686,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                                 environment = environment ).
 
 *     TO DO: check if circular lists are allowed
-      WHILE lo_rest->type EQ lcl_lisp=>type_pair.  " e.g. NE nil
+      WHILE lo_rest->type EQ pair.  " e.g. NE nil
         lo_new = lo_new->cdr = lcl_lisp_new=>box_quote( lo_rest->car ).
         lo_rest = lo_rest->cdr.
       ENDWHILE.
@@ -3760,7 +3780,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       eo_step = nil.
 
       DATA(lo_loop) = io_head.
-      WHILE lo_loop->type EQ lcl_lisp=>type_pair AND lo_loop->car->type EQ lcl_lisp=>type_pair.
+      WHILE lo_loop->type EQ pair AND lo_loop->car->type EQ pair.
         DATA(lo_spec) = lo_loop->car.
 *       max. 3 entries
 *       <variable>
@@ -3801,7 +3821,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA(lo_command) = io_command.
 
 *     Evaluate in order
-      WHILE lo_command->type EQ lcl_lisp=>type_pair.
+      WHILE lo_command->type EQ pair.
         eval( element = lo_command->car
               environment = io_env ).
         lo_command = lo_command->cdr.
@@ -3810,7 +3830,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA(lo_local_env) = lcl_lisp_env_factory=>new( ).
 *     the <step> expressions are evaluated in some unspecified order
       DATA(lo_step) = io_steps.
-      WHILE lo_step->type EQ lcl_lisp=>type_pair.
+      WHILE lo_step->type EQ pair.
         DATA(lo_ptr) = lo_step->car.
 
 *       <variable>s are bound to fresh locations to avoid dependencies in the next step
@@ -3821,7 +3841,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDWHILE.
 
       lo_step = io_steps.
-      WHILE lo_step->type EQ lcl_lisp=>type_pair.
+      WHILE lo_step->type EQ pair.
         DATA(lv_symbol) = lo_step->car->car->value.
 
 *       the results of the <step>s are stored in the bindings of the <variable>s
@@ -3844,7 +3864,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       CHECK io_head NE nil.
 
-      WHILE eo_elem IS BOUND AND eo_elem->type EQ lcl_lisp=>type_pair
+      WHILE eo_elem IS BOUND AND eo_elem->type EQ pair
         AND eo_elem->cdr NE nil.  " Do not evaluate the last list element
 
         result = eval_ast( element = eo_elem->car
@@ -3868,7 +3888,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 *      result = nil.
 *
 *      DATA(elem) = io_head.
-*      WHILE elem IS BOUND AND elem->type EQ lcl_lisp=>type_pair.
+*      WHILE elem IS BOUND AND elem->type EQ pair.
 *        result = eval_ast( element = elem->car
 *                           environment = io_environment ).
 *        elem = elem->cdr.
@@ -3888,7 +3908,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       ro_env = lcl_lisp_env_factory=>clone( io_head->environment ).
 
-      IF io_head->macro EQ abap_true.
+      IF io_head->category EQ macro.
         lo_args = io_args.
       ELSE.
         lo_args = evaluate_parameters( io_list = io_args           " Pointer to arguments
@@ -3925,7 +3945,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       eo_args = lo_arg.
 
       lo_ptr = io_head->cdr.
-      WHILE lo_ptr->type EQ lcl_lisp=>type_pair. " IS BOUND AND lo_ptr NE nil.
+      WHILE lo_ptr->type EQ pair. " IS BOUND AND lo_ptr NE nil.
 *       Rest of list, pick head
         DATA(lo_first) = lo_ptr->car.
         IF lo_first IS BOUND AND lo_first->car NE nil.
@@ -3992,7 +4012,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       "_to_param_object lo_ptr->car lo_param.
         lo_param = eval( element = lo_ptr->car
                    environment = io_env ).
-        IF lo_param->type EQ lcl_lisp=>type_lambda.
+        IF lo_param->type EQ lambda.
           lo_lambda ?= lo_param.
           lv_parameter_object = lo_lambda->parameter_object.
         ENDIF.
@@ -4010,14 +4030,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_values = lo_val.
 
       lo_ptr = io_head->cdr.
-      WHILE lo_ptr->type EQ lcl_lisp=>type_pair. " IS BOUND AND lo_ptr NE nil.
+      WHILE lo_ptr->type EQ pair. " IS BOUND AND lo_ptr NE nil.
 *       Rest of list, pick head
         DATA(lo_first) = lo_ptr->car.
         IF lo_first IS BOUND AND lo_first->car NE nil.
           "_to_param_object lo_first->car lo_param.
             lo_param = eval( element = lo_first
                        environment = io_env ).
-            IF lo_param->type EQ lcl_lisp=>type_lambda.
+            IF lo_param->type EQ lambda.
               lo_lambda ?= lo_param.
               lv_parameter_object = lo_lambda->parameter_object.
             ENDIF.
@@ -4112,12 +4132,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 *     (loop 0)) ; start the recursion with 0 as arg i
     METHOD environment_named_let.
       CASE co_head->car->type.
-        WHEN lcl_lisp=>type_symbol.
+        WHEN symbol.
 *named let:  (let <variable> (bindings) <body>)
           DATA(lo_var) = co_head->car.
           co_head = co_head->cdr.
 
-        WHEN OTHERS. " lcl_lisp=>type_pair.
+        WHEN OTHERS. " pair.
 *(let ((x 10) (y 5)) (+ x y)) is syntactic sugar for  ( (lambda (x y) (+ x y)) 10 5)
           lo_var = nil.
       ENDCASE.
@@ -4174,19 +4194,19 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     METHOD eval_ast.
 *     Evaluate element, Element is not a list
       CASE element->type.
-        WHEN lcl_lisp=>type_symbol. "Symbol
+        WHEN symbol. "Symbol
 *         lookup the symbol in the environment and return the value or raise an error if no value is found
           result = environment->get( element->value ).
 
-        WHEN lcl_lisp=>type_pair. " List
+        WHEN pair. " List
           result = eval( element = element
                          environment = environment ).
 
-        WHEN lcl_lisp=>type_hash. " TEST
+        WHEN hash. " TEST
           result = CAST lcl_lisp_hash( element )->eval( environment = environment
                                                         interpreter = me ).
 
-        WHEN lcl_lisp=>type_vector. " TEST
+        WHEN vector. " TEST
           result = CAST lcl_lisp_vector( element )->eval( environment = environment
                                                           interpreter = me ).
 
@@ -4205,10 +4225,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     METHOD is_constant.
 *    (define (constant? exp)
 *      (if (pair? exp) (eq? (car exp) 'quote) (not (symbol? exp))))
-      IF exp->type EQ lcl_lisp=>type_pair.
+      IF exp->type EQ pair.
         rv_flag = xsdbool( exp->car = lcl_lisp=>quote ).
       ELSE.
-        rv_flag = xsdbool( exp->type NE lcl_lisp=>type_symbol ).
+        rv_flag = xsdbool( exp->type NE symbol ).
       ENDIF.
     ENDMETHOD.
 
@@ -4231,7 +4251,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 *       ((null? right) (list 'list left))
         result = lcl_lisp_new=>box( io_proc = lcl_lisp=>list
                                     io_elem = left ).
-      ELSEIF right->type = lcl_lisp=>type_pair AND right->car = lcl_lisp=>list.
+      ELSEIF right->type = pair AND right->car = lcl_lisp=>list.
 *       ((and (pair? right) (eq? (car right) 'list))
 *        (cons 'list (cons left (cdr right))))
         result = lcl_lisp_new=>cons( io_car = lcl_lisp=>list
@@ -4260,7 +4280,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA(lo_ptr) = exp.
 
       CASE lo_ptr->type.
-        WHEN lcl_lisp=>type_pair. "non empty list
+        WHEN pair. "non empty list
 *         ((and (eq? (car exp) 'unquote) (= (length exp) 2))
           DATA(lo_first) = lo_ptr->car.
           DATA(lo_next) = lo_ptr->cdr.
@@ -4270,11 +4290,11 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
 
           IF ( lo_first = lcl_lisp=>unquote
-              OR ( lo_first->type EQ lcl_lisp=>type_symbol AND lo_first->value EQ c_eval_unquote ) )
+              OR ( lo_first->type EQ symbol AND lo_first->value EQ c_eval_unquote ) )
               AND list_length( exp ) EQ 2.
 *           ((and (eq? (first = 'unquote) (= (length exp) 2))
             "_validate_quote lo_ptr c_eval_unquote.
-          IF NOT ( lo_ptr->cdr->type = lcl_lisp=>type_pair AND lo_ptr->cdr->cdr = nil ).
+          IF NOT ( lo_ptr->cdr->type = pair AND lo_ptr->cdr->cdr = nil ).
             throw( |invalid form { lo_ptr->car->to_string( ) } in { c_eval_unquote }| ).
           ENDIF.
 
@@ -4293,10 +4313,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
 
           ELSEIF ( lo_first = lcl_lisp=>quasiquote
-              OR ( lo_first->type EQ lcl_lisp=>type_symbol AND lo_first->value EQ c_eval_quasiquote ) )
+              OR ( lo_first->type EQ symbol AND lo_first->value EQ c_eval_quasiquote ) )
               AND list_length( exp ) EQ 2.
             "_validate_quote lo_ptr c_eval_quasiquote.
-              IF NOT ( lo_ptr->cdr->type = lcl_lisp=>type_pair AND lo_ptr->cdr->cdr = nil ).
+              IF NOT ( lo_ptr->cdr->type = pair AND lo_ptr->cdr->cdr = nil ).
                 throw( |invalid form { lo_ptr->car->to_string( ) } in { c_eval_quasiquote }| ).
               ENDIF.
 
@@ -4309,14 +4329,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                               exp = exp
                               environment = environment ).
 
-          ELSEIF lo_first->type EQ lcl_lisp=>type_pair AND
+          ELSEIF lo_first->type EQ pair AND
             ( lo_first->car = lcl_lisp=>unquote_splicing OR lo_first->car->value EQ c_eval_unquote_splicing )
             AND list_length( lo_first ) EQ 2.
 *           ((and (pair? (car exp))
 *                (eq? (caar exp) 'unquote-splicing)
 *                (= (length (car exp)) 2))
             "_validate_quote lo_first c_eval_unquote_splicing.
-              IF NOT ( lo_first->cdr->type = lcl_lisp=>type_pair AND lo_first->cdr->cdr = nil ).
+              IF NOT ( lo_first->cdr->type = pair AND lo_first->cdr->cdr = nil ).
                 throw( |invalid form { lo_first->car->to_string( ) } in { c_eval_unquote_splicing }| ).
               ENDIF.
 
@@ -4352,7 +4372,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                               environment = environment ).
           ENDIF.
 
-        WHEN lcl_lisp=>type_vector.
+        WHEN vector.
 *         (list 'apply 'vector (expand-quasiquote (vector->list exp) nesting)))
           DATA(lo_vec) = CAST lcl_lisp_vector( exp ).
           result = lcl_lisp_new=>box( io_proc = lcl_lisp_new=>symbol( 'list->vector' )
@@ -4391,14 +4411,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             result = lo_elem.
 
           WHEN OTHERS.
-            IF lo_elem->type EQ lcl_lisp=>type_pair.
+            IF lo_elem->type EQ pair.
               lo_elem = syntax_expand( element = lo_elem
                                        environment = lo_env ).
             ENDIF.
 
 *           Evaluate element
             CASE lo_elem->type.
-              WHEN lcl_lisp=>type_pair. " List
+              WHEN pair. " List
 *               return a new list that is the result of calling EVAL on each of the members of the list
 
 *               To evaluate list, we must first evaluate head value
@@ -4463,7 +4483,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 *                   Derived expression: Conditional
                     lo_ptr = lr_tail.
                     lo_elem = nil.
-                    WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+                    WHILE lo_ptr->type EQ pair.
                       DATA(lo_clause) = lo_ptr->car.
                       IF lo_clause->car->value EQ c_lisp_else.
                         lo_elem = lo_clause->cdr.
@@ -4514,7 +4534,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                   WHEN 'define-macro'.
                     result = bind_symbol( element = lr_tail
                                           environment = lo_env
-                                          iv_macro = abap_true ).
+                                          iv_category = macro ).
 
                   WHEN 'define-syntax'.
                     result = define_syntax( element = lr_tail
@@ -4738,7 +4758,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
                     CLEAR lt_clauses.
                     lo_clause = lr_tail.
-                    WHILE lo_clause->type = lcl_lisp=>type_pair.
+                    WHILE lo_clause->type = pair.
                       lr_tail = lo_clause->car.
                       lo_ptr = lcl_lisp_new=>lambda( io_car = lr_tail->car         " List of parameters
                                                      io_cdr = lr_tail->cdr         " Body
@@ -4852,7 +4872,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
                     lo_elem = nil.
                     DATA(lv_match) = abap_false.
-                    WHILE lr_tail->type EQ lcl_lisp=>type_pair AND lv_match EQ abap_false.
+                    WHILE lr_tail->type EQ pair AND lv_match EQ abap_false.
                       lo_clause = lr_tail->car.
 
                       DATA(lo_datum) = lo_clause->car.
@@ -4969,7 +4989,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
                     CASE lo_proc->type.
 
-                      WHEN lcl_lisp=>type_lambda.
+                      WHEN lambda.
                         lo_env = lambda_environment( io_head = lo_proc
                                                      io_args = lr_tail
                                                      environment = lo_env ).
@@ -4991,7 +5011,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                         CONTINUE.
                       ENDIF.
 
-                      WHEN lcl_lisp=>type_native.
+                      WHEN native.
 *                       Evaluate native function:
                         CALL METHOD (lo_proc->value)
                           EXPORTING
@@ -5000,12 +5020,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                           RECEIVING
                             result = result.
 
-                      WHEN lcl_lisp=>type_primitive OR lcl_lisp=>type_syntax.
+                      WHEN primitive OR syntax.
                         lo_elem = lcl_lisp_new=>cons( io_car = lo_proc
                                                       io_cdr = lr_tail ).
                         CONTINUE. "tail_expression lo_elem.
 
-                      WHEN lcl_lisp=>type_abap_function.
+                      WHEN abap_function.
 *              >> TEST: Support evaluation of ABAP function directly
 *  Recompose as if calling a PROC (which we are). This is part of the test. If we make an ABAP function call
 *  first-class, then we would need to revisit evaluating the whole of ELEMENT in one shot
@@ -5017,7 +5037,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 *              >> TEST: Support evaluation of ABAP methods directly
 *              << TEST
 
-                      WHEN lcl_lisp=>type_case_lambda.
+                      WHEN case_lambda.
                         DATA lo_case TYPE REF TO lcl_lisp_case_lambda.
                         lo_case ?= lo_proc.
                         lo_proc = lo_case->match( lr_tail ).
@@ -5073,12 +5093,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA li_port TYPE REF TO lif_output_port.
 
       TRY.
-          IF io_arg->type EQ lcl_lisp=>type_pair.
+          IF io_arg->type EQ pair.
             "_validate_port io_arg->car `write`.
             IF io_arg->car IS NOT BOUND.
               lcl_lisp=>throw( c_error_incorrect_input ).
             ENDIF.
-            IF io_arg->car->type NE lcl_lisp=>type_port.
+            IF io_arg->car->type NE port.
               throw( io_arg->car->to_string( ) && ` is not a port in write` ) ##NO_TEXT.
             ENDIF.
 
@@ -5099,12 +5119,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA li_port TYPE REF TO lif_output_port.
 
       TRY.
-          IF io_arg->type EQ lcl_lisp=>type_pair.
+          IF io_arg->type EQ pair.
             "_validate_port io_arg->car `display`.
             IF io_arg->car IS NOT BOUND.
               lcl_lisp=>throw( c_error_incorrect_input ).
             ENDIF.
-            IF io_arg->car->type NE lcl_lisp=>type_port.
+            IF io_arg->car->type NE port.
               throw( io_arg->car->to_string( ) && ` is not a port in display` ) ##NO_TEXT.
             ENDIF.
 
@@ -5125,12 +5145,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA li_port TYPE REF TO lif_input_port.
 
       TRY.
-          IF io_arg->type EQ lcl_lisp=>type_pair.
+          IF io_arg->type EQ pair.
             "_validate_port io_arg->car `read`.
             IF io_arg->car IS NOT BOUND.
               lcl_lisp=>throw( c_error_incorrect_input ).
             ENDIF.
-            IF io_arg->car->type NE lcl_lisp=>type_port.
+            IF io_arg->car->type NE port.
               throw( io_arg->car->to_string( ) && ` is not a port in read` ) ##NO_TEXT.
             ENDIF.
 
@@ -5150,12 +5170,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA li_port TYPE REF TO lif_input_port.
 
       TRY.
-          IF io_arg->type EQ lcl_lisp=>type_pair.
+          IF io_arg->type EQ pair.
             "_validate_port io_arg->car `read-char`.
             IF io_arg->car IS NOT BOUND.
               lcl_lisp=>throw( c_error_incorrect_input ).
             ENDIF.
-            IF io_arg->car->type NE lcl_lisp=>type_port.
+            IF io_arg->car->type NE port.
               throw( io_arg->car->to_string( ) && ` is not a port in read-char` ) ##NO_TEXT.
             ENDIF.
 
@@ -5187,18 +5207,18 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
 
-        IF io_arg->type NE lcl_lisp=>type_integer.
+        IF io_arg->type NE integer.
           throw( io_arg->to_string( ) && ` is not an integer in read-string` ) ##NO_TEXT.
         ENDIF.
 
-      k = CAST lcl_lisp_integer( io_arg->car )->integer.
+      k = CAST lcl_lisp_integer( io_arg->car )->int.
 
-      IF io_arg->cdr->type EQ lcl_lisp=>type_pair.
+      IF io_arg->cdr->type EQ pair.
         "_validate_port io_arg->cdr->car `read-string`.
         IF io_arg->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF io_arg->cdr->car->type NE lcl_lisp=>type_port.
+        IF io_arg->cdr->car->type NE port.
           throw( io_arg->cdr->car->to_string( ) && ` is not a port in read-string` ) ##NO_TEXT.
         ENDIF.
 
@@ -5274,13 +5294,13 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         DATA(first) = lo_iter->next( ).
         CHECK first NE nil.
 
-        IF first->type = lcl_lisp=>type_pair.
+        IF first->type = pair.
           result = lcl_lisp_new=>cons( io_car = first->car ).
 
 *         TO DO: Test for circular list! ------------------------------
           DATA(lo_last) = result.
           DATA(lo_arg) = first->cdr.
-          WHILE lo_arg->type = lcl_lisp=>type_pair.
+          WHILE lo_arg->type = pair.
             lo_last = lo_last->cdr = lcl_lisp_new=>cons( io_car = lo_arg->car ).
             lo_arg = lo_arg->cdr.
           ENDWHILE.
@@ -5311,7 +5331,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
 *       TO DO: Check for circular list
 *       Append lo_arg to result, from last element on
-        WHILE lo_arg->type = lcl_lisp=>type_pair.
+        WHILE lo_arg->type = pair.
           lo_last = lo_last->cdr = lcl_lisp_new=>cons( io_car = lo_arg->car ).
           lo_arg = lo_arg->cdr.
         ENDWHILE.
@@ -5333,7 +5353,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA(lo_ptr) = io_list.
 
 *     TO DO: check if circular lists are allowed
-      WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+      WHILE lo_ptr->type EQ pair.
         result = lcl_lisp_new=>cons( io_car = lo_ptr->car
                                      io_cdr = result ).
         lo_ptr = lo_ptr->cdr.
@@ -5408,7 +5428,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ELSE.
 *       Get to last element in list - this can make APPEND expensive, like LENGTH
         DATA(lo_last) = list->car.
-        IF lo_last->type NE lcl_lisp=>type_pair.
+        IF lo_last->type NE pair.
           "_error_no_list list `append!`.
           throw( |append: { list->to_string( ) } is not a proper list| ) ##NO_TEXT.
         ENDIF.
@@ -5418,7 +5438,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDWHILE.
 
         "TO DO - replace with _validate_tail lo_last (?) list->car.
-        IF lo_last->type NE lcl_lisp=>type_pair.
+        IF lo_last->type NE pair.
 *         If the last item is not a cons cell, return an error
           "_error_no_list list->car  `append!`.
            throw( |append: { list->car->to_string( ) } is not a proper list| ) ##NO_TEXT.
@@ -5438,7 +5458,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       DATA(lo_arg) = list->car.
       "_validate_pair lo_arg `car: `.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `car: ` ).
       ENDIF.
       result = lo_arg->car.
@@ -5452,7 +5472,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       DATA(lo_arg) = list->car.
       "_validate_pair lo_arg `set-car!: `.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `set-car!: ` ).
       ENDIF.
       "_validate_mutable lo_arg `list in set-car!`.
@@ -5475,7 +5495,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       DATA(lo_arg) = list->car.
       "_validate_pair lo_arg `set-cdr!: `.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `set-cdr!: ` ).
       ENDIF.
       "_validate_mutable lo_arg `list in set-cdr!`.
@@ -5498,7 +5518,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       DATA(lo_arg) = list->car.
       "_validate_pair lo_arg `cdr: `.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdr: ` ).
       ENDIF.
       result = lo_arg->cdr.
@@ -5539,17 +5559,17 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `caar: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caar: ` ).
       ENDIF.
 
@@ -5562,17 +5582,17 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cadr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadr: ` ).
       ENDIF.
 
@@ -5585,17 +5605,17 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cdar: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdar: ` ).
       ENDIF.
 
@@ -5608,17 +5628,17 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cddr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddr: ` ).
       ENDIF.
 
@@ -5631,22 +5651,22 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `caaar: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaar: ` ).
       ENDIF.
 
@@ -5659,22 +5679,22 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cdaar: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaar: ` ).
       ENDIF.
 
@@ -5687,22 +5707,22 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `caadr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caadr: ` ).
       ENDIF.
 
@@ -5715,22 +5735,22 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cdadr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdadr: ` ).
       ENDIF.
 
@@ -5743,22 +5763,22 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cadar: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadar: ` ).
       ENDIF.
 
@@ -5771,22 +5791,22 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cddar: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddar: ` ).
       ENDIF.
 
@@ -5799,22 +5819,22 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `caddr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caddr: ` ).
       ENDIF.
 
@@ -5827,22 +5847,22 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cdddr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdddr: ` ).
       ENDIF.
 
@@ -5855,27 +5875,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `caaaar: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaaar: ` ).
       ENDIF.
 
@@ -5888,27 +5908,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cdaaar: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaaar: ` ).
       ENDIF.
 
@@ -5921,27 +5941,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cadaar: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadaar: ` ).
       ENDIF.
 
@@ -5954,27 +5974,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cddaar: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddaar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddaar: ` ).
       ENDIF.
 
@@ -5987,27 +6007,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `caaadr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaadr: ` ).
       ENDIF.
 
@@ -6020,27 +6040,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cdaadr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaadr: ` ).
       ENDIF.
 
@@ -6053,27 +6073,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cadadr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadadr: ` ).
       ENDIF.
 
@@ -6086,27 +6106,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cddadr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddadr: ` ).
       ENDIF.
 
@@ -6119,27 +6139,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cddadr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddadr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddadr: ` ).
       ENDIF.
 
@@ -6152,27 +6172,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cdadar: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdadar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdadar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdadar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdadar: ` ).
       ENDIF.
 
@@ -6185,27 +6205,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `caddar: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caddar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caddar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caddar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caddar: ` ).
       ENDIF.
 
@@ -6218,27 +6238,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cdddar: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdddar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdddar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdddar: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdddar: ` ).
       ENDIF.
 
@@ -6251,27 +6271,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `caaddr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `caaddr: ` ).
       ENDIF.
 
@@ -6284,27 +6304,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cdaddr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cdaddr: ` ).
       ENDIF.
 
@@ -6317,27 +6337,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cadddr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cadddr: ` ).
       ENDIF.
 
@@ -6350,27 +6370,27 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->type NE lcl_lisp=>type_pair.
+      IF list->type NE pair.
         list->error_not_a_pair( `cddddr: ` ).
       ENDIF.
 
       DATA(lo_arg) = list->car.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddddr: ` ).
       ENDIF.
 
       lo_arg = lo_arg->cdr.
-      IF lo_arg->type NE lcl_lisp=>type_pair.
+      IF lo_arg->type NE pair.
         lo_arg->error_not_a_pair( `cddddr: ` ).
       ENDIF.
 
@@ -6388,12 +6408,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       result = 0.
       lo_slow = lo_fast = list.
 *     Iterate over list
-      WHILE lo_fast->type EQ lcl_lisp=>type_pair.
+      WHILE lo_fast->type EQ pair.
         result += 1.  " count the number of items
         lo_fast = lo_fast->cdr.
         lo_slow = lo_slow->cdr.
 
-        CHECK lo_fast->type EQ lcl_lisp=>type_pair.
+        CHECK lo_fast->type EQ pair.
         result += 1.  " count the number of items (using the fast pointer)
         lo_fast = lo_fast->cdr.
 
@@ -6441,17 +6461,17 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
        ENDIF.
 
       result = list->car.
-      CHECK result->type EQ lcl_lisp=>type_pair.
+      CHECK result->type EQ pair.
 
       lo_slow = lo_ptr = result->cdr.
       result = lo_new = lcl_lisp_new=>cons( io_car = result->car ).
 
 *     Iterate over list to count the number of items
-      WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+      WHILE lo_ptr->type EQ pair.
         lo_new = lo_new->cdr = lcl_lisp_new=>cons( io_car = lo_ptr->car ).
         lo_ptr = lo_ptr->cdr.
         lo_slow = lo_slow->cdr.
-        CHECK lo_ptr->type EQ lcl_lisp=>type_pair.
+        CHECK lo_ptr->type EQ pair.
         lo_new = lo_new->cdr = lcl_lisp_new=>cons( io_car = lo_ptr->car ).
         lo_ptr = lo_ptr->cdr.
         CHECK lo_ptr = lo_slow.
@@ -6486,16 +6506,16 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_integer.
+        IF list->car->type NE integer.
           throw( list->car->to_string( ) && ` is not an integer in make-list` ) ##NO_TEXT.
         ENDIF.
-        IF CAST lcl_lisp_integer( list->car )->integer LT 0.
+        IF CAST lcl_lisp_integer( list->car )->int LT 0.
           throw( list->car->to_string( ) && ` must be non-negative in make-list` ) ##NO_TEXT.
         ENDIF.
 
       result = lcl_lisp=>nil.
 
-      k = CAST lcl_lisp_integer( list->car )->integer.
+      k = CAST lcl_lisp_integer( list->car )->int.
       CHECK k GT 0.
 
       IF list->cdr EQ nil.
@@ -6521,15 +6541,15 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_integer.
+        IF list->cdr->car->type NE integer.
           throw( list->cdr->car->to_string( ) && ` is not an integer in list-tail` ) ##NO_TEXT.
         ENDIF.
-        IF CAST lcl_lisp_integer( list->cdr->car )->integer LT 0.
+        IF CAST lcl_lisp_integer( list->cdr->car )->int LT 0.
           throw( list->cdr->car->to_string( ) && ` must be non-negative in list-tail` ) ##NO_TEXT.
         ENDIF.
 
       result = list_tail( list = list->car
-                          k  = CAST lcl_lisp_integer( list->cdr->car )->integer
+                          k  = CAST lcl_lisp_integer( list->cdr->car )->int
                           area = 'list-tail' ).
     ENDMETHOD.
 
@@ -6549,7 +6569,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       result = list.
       DO k TIMES.
-        IF result->type NE lcl_lisp=>type_pair.
+        IF result->type NE pair.
           throw( area && `: list too short` ).
         ENDIF.
         result = result->cdr.
@@ -6575,13 +6595,13 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF lo_count IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF lo_count->type NE lcl_lisp=>type_integer.
+        IF lo_count->type NE integer.
           throw( lo_count->to_string( ) && ` is not an integer in iota count` ) ##NO_TEXT.
         ENDIF.
-        IF CAST lcl_lisp_integer( lo_count )->integer LT 0.
+        IF CAST lcl_lisp_integer( lo_count )->int LT 0.
           throw( lo_count->to_string( ) && ` must be non-negative in iota count` ) ##NO_TEXT.
         ENDIF.
-       lv_count = CAST lcl_lisp_integer( lo_count )->integer.
+       lv_count = CAST lcl_lisp_integer( lo_count )->int.
 
       result = nil.
       CHECK lv_count GT 0.
@@ -6598,11 +6618,11 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
 
-        IF lo_start->type NE lcl_lisp=>type_integer.
+        IF lo_start->type NE integer.
           throw( lo_start->to_string( ) && ` is not an integer in iota start` ) ##NO_TEXT.
         ENDIF.
 
-         lv_start = CAST lcl_lisp_integer( lo_start )->integer.
+         lv_start = CAST lcl_lisp_integer( lo_start )->int.
 
         "_validate list->cdr->cdr.
         IF list->cdr->cdr IS NOT BOUND.
@@ -6617,11 +6637,11 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
               lcl_lisp=>throw( c_error_incorrect_input ).
            ENDIF.
 
-        IF lo_step->type NE lcl_lisp=>type_integer.
+        IF lo_step->type NE integer.
           throw( lo_step->to_string( ) && ` is not an integer in iota step` ) ##NO_TEXT.
         ENDIF.
 
-          lv_step = CAST lcl_lisp_integer( lo_step )->integer.
+          lv_step = CAST lcl_lisp_integer( lo_step )->int.
         ENDIF.
       ENDIF.
 
@@ -6650,15 +6670,15 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_integer.
+        IF list->cdr->car->type NE integer.
           throw( list->cdr->car->to_string( ) && ` is not an integer in list-ref` ) ##NO_TEXT.
         ENDIF.
-        IF CAST lcl_lisp_integer( list->cdr->car )->integer LT 0.
+        IF CAST lcl_lisp_integer( list->cdr->car )->int LT 0.
           throw( list->cdr->car->to_string( ) && ` must be non-negative in list-ref` ) ##NO_TEXT.
         ENDIF.
 
       result = list_tail( list = list->car
-                          k = CAST lcl_lisp_integer( list->cdr->car )->integer
+                          k = CAST lcl_lisp_integer( list->cdr->car )->int
                           area = 'list-ref' ).
       result = result->car.
     ENDMETHOD.
@@ -6676,10 +6696,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF lo_size IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF lo_size->type NE lcl_lisp=>type_integer.
+        IF lo_size->type NE integer.
           throw( lo_size->to_string( ) && ` is not an integer in make-vector` ) ##NO_TEXT.
         ENDIF.
-        IF CAST lcl_lisp_integer( lo_size )->integer LT 0.
+        IF CAST lcl_lisp_integer( lo_size )->int LT 0.
           throw( lo_size->to_string( ) && ` must be non-negative in make-vector` ) ##NO_TEXT.
         ENDIF.
 
@@ -6689,7 +6709,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lo_fill = lcl_lisp=>nil.
       ENDIF.
 
-      result = lcl_lisp_vector=>init( size = CAST lcl_lisp_integer( lo_size )->integer
+      result = lcl_lisp_vector=>init( size = CAST lcl_lisp_integer( lo_size )->int
                                       io_fill = lo_fill ).
     ENDMETHOD.
 
@@ -6708,7 +6728,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_vector.
+        IF list->car->type NE vector.
           throw( list->car->to_string( ) && ` is not a vector in vector-length` ) ##NO_TEXT.
         ENDIF.
 
@@ -6726,7 +6746,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_vector.
+        IF list->car->type NE vector.
           throw( list->car->to_string( ) && ` is not a vector in vector-ref` ) ##NO_TEXT.
         ENDIF.
 
@@ -6742,14 +6762,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF lo_idx IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF lo_idx->type NE lcl_lisp=>type_integer.
+        IF lo_idx->type NE integer.
           throw( lo_idx->to_string( ) && ` is not an integer in vector-ref` ) ##NO_TEXT.
         ENDIF.
-        IF CAST lcl_lisp_integer( lo_idx )->integer LT 0.
+        IF CAST lcl_lisp_integer( lo_idx )->int LT 0.
           throw( lo_idx->to_string( ) && ` must be non-negative in vector-ref` ) ##NO_TEXT.
         ENDIF.
 
-      result = lo_vec->get( CAST lcl_lisp_integer( lo_idx )->integer ).
+      result = lo_vec->get( CAST lcl_lisp_integer( lo_idx )->int ).
 
     ENDMETHOD.
 
@@ -6764,7 +6784,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_vector.
+        IF list->car->type NE vector.
           throw( list->car->to_string( ) && ` is not a vector in vector-length` ) ##NO_TEXT.
         ENDIF.
 
@@ -6780,10 +6800,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF lo_idx IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF lo_idx->type NE lcl_lisp=>type_integer.
+        IF lo_idx->type NE integer.
           throw( lo_idx->to_string( ) && ` is not an integer in vector-set!` ) ##NO_TEXT.
         ENDIF.
-        IF CAST lcl_lisp_integer( lo_idx )->integer LT 0.
+        IF CAST lcl_lisp_integer( lo_idx )->int LT 0.
           throw( lo_idx->to_string( ) && ` must be non-negative in vector-set!` ) ##NO_TEXT.
         ENDIF.
 
@@ -6797,7 +6817,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lo_obj = lo_obj->car.
       ENDIF.
 
-      lo_vec->set( index = CAST lcl_lisp_integer( lo_idx )->integer
+      lo_vec->set( index = CAST lcl_lisp_integer( lo_idx )->int
                    io_elem = lo_obj ).
 *     Result is undefined, but must be valid
       result = lo_obj.
@@ -6819,7 +6839,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF lo_ptr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF lo_ptr->car->type NE lcl_lisp=>type_vector.
+        IF lo_ptr->car->type NE vector.
           throw( lo_ptr->car->to_string( ) && ` is not a vector in vector-fill!` ) ##NO_TEXT.
         ENDIF.
 
@@ -6844,15 +6864,15 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF lo_ptr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF lo_ptr->car->type NE lcl_lisp=>type_integer.
+        IF lo_ptr->car->type NE integer.
           throw( lo_ptr->car->to_string( ) && ` is not an integer in vector-fill! start` ) ##NO_TEXT.
         ENDIF.
-        IF CAST lcl_lisp_integer( lo_ptr->car )->integer LT 0.
+        IF CAST lcl_lisp_integer( lo_ptr->car )->int LT 0.
           throw( lo_ptr->car->to_string( ) && ` must be non-negative in vector-fill! start` ) ##NO_TEXT.
         ENDIF.
 
         DATA lv_start TYPE tv_int.
-        lv_start = CAST lcl_lisp_integer( lo_ptr->car )->integer.
+        lv_start = CAST lcl_lisp_integer( lo_ptr->car )->int.
 
         lo_ptr = lo_ptr->cdr.
         "_validate lo_ptr.
@@ -6864,15 +6884,15 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF lo_ptr->car IS NOT BOUND.
               lcl_lisp=>throw( c_error_incorrect_input ).
             ENDIF.
-            IF lo_ptr->car->type NE lcl_lisp=>type_integer.
+            IF lo_ptr->car->type NE integer.
               throw( lo_ptr->car->to_string( ) && ` is not an integer in vector-fill! end` ) ##NO_TEXT.
             ENDIF.
-            IF CAST lcl_lisp_integer( lo_ptr->car )->integer LT 0.
+            IF CAST lcl_lisp_integer( lo_ptr->car )->int LT 0.
               throw( lo_ptr->car->to_string( ) && ` must be non-negative in vector-fill! end` ) ##NO_TEXT.
             ENDIF.
 
           result = lo_vec->fill( from = lv_start
-                                 to = CAST lcl_lisp_integer( lo_ptr->car )->integer
+                                 to = CAST lcl_lisp_integer( lo_ptr->car )->int
                                  elem = lo_fill ).
         ELSE.
           result = lo_vec->fill( from = lv_start
@@ -6900,7 +6920,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_vector.
+        IF list->car->type NE vector.
           throw( list->car->to_string( ) && ` is not a vector in vector->list` ) ##NO_TEXT.
         ENDIF.
 
@@ -6917,13 +6937,13 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF lo_start IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF lo_start->type NE lcl_lisp=>type_integer.
+        IF lo_start->type NE integer.
           throw( lo_start->car->to_string( ) && ` is not an integer in vector->list start` ) ##NO_TEXT.
         ENDIF.
-        IF CAST lcl_lisp_integer( lo_start )->integer LT 0.
+        IF CAST lcl_lisp_integer( lo_start )->int LT 0.
           throw( lo_start->car->to_string( ) && ` must be non-negative in vector->list start` ) ##NO_TEXT.
         ENDIF.
-        lv_start = CAST lcl_lisp_integer( lo_start )->integer.
+        lv_start = CAST lcl_lisp_integer( lo_start )->int.
 
         "_validate list->cdr->cdr.
         IF list->cdr->cdr IS NOT BOUND.
@@ -6936,14 +6956,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF lo_end IS NOT BOUND.
               lcl_lisp=>throw( c_error_incorrect_input ).
             ENDIF.
-            IF lo_end->type NE lcl_lisp=>type_integer.
+            IF lo_end->type NE integer.
               throw( lo_end->car->to_string( ) && ` is not an integer in vector->list end` ) ##NO_TEXT.
             ENDIF.
-            IF CAST lcl_lisp_integer( lo_end )->integer LT 0.
+            IF CAST lcl_lisp_integer( lo_end )->int LT 0.
               throw( lo_end->car->to_string( ) && ` must be non-negative in vector->list end` ) ##NO_TEXT.
             ENDIF.
           result = lo_vec->get_list( from = lv_start
-                                     to = CAST lcl_lisp_integer( lo_end )->integer ).
+                                     to = CAST lcl_lisp_integer( lo_end )->int ).
         ELSE.
           result = lo_vec->get_list( from = lv_start ).
         ENDIF.
@@ -6985,19 +7005,19 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       WHILE lo_sublist NE nil AND lo_sublist->car->type EQ lo_item->type.
 
         CASE lo_item->type.
-          WHEN lcl_lisp=>type_integer.
-            IF CAST lcl_lisp_integer( lo_item )->integer = CAST lcl_lisp_integer( lo_sublist->car )->integer.
+          WHEN integer.
+            IF CAST lcl_lisp_integer( lo_item )->int = CAST lcl_lisp_integer( lo_sublist->car )->int.
               result = lo_sublist.
               RETURN.
             ENDIF.
 
-          WHEN lcl_lisp=>type_real.
-            IF CAST lcl_lisp_real( lo_item )->float_eq( CAST lcl_lisp_real( lo_sublist->car )->real ).
+          WHEN real.
+            IF CAST lcl_lisp_real( lo_item )->float_eq( CAST lcl_lisp_real( lo_sublist->car )->float ).
               result = lo_sublist.
               RETURN.
             ENDIF.
 
-          WHEN lcl_lisp=>type_symbol OR lcl_lisp=>type_string.
+          WHEN symbol OR string.
             DATA(lo_symbol) = CAST lcl_lisp_symbol( lo_item ).
             DATA(lo_s_car) = CAST lcl_lisp_symbol( lo_sublist->car ).
             IF lo_symbol->value = lo_s_car->value AND lo_symbol->index = lo_s_car->index.
@@ -7026,7 +7046,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       DATA(lo_sublist) = list->cdr->car.
       DATA(lo_item) = list->car.
-      WHILE lo_sublist->type EQ lcl_lisp=>type_pair.
+      WHILE lo_sublist->type EQ pair.
         IF lo_sublist->car->is_equivalent( lo_item ) NE false.
           result = lo_sublist.
           RETURN.
@@ -7056,7 +7076,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                                   eo_compare = DATA(lo_compare)
                                   eo_key = DATA(lo_key) ).
 
-      WHILE lo_sublist->type EQ lcl_lisp=>type_pair.
+      WHILE lo_sublist->type EQ pair.
         IF lo_key->is_equal( io_elem = lo_sublist->car
                              comp = lo_compare
                              interpreter = me
@@ -7078,7 +7098,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                                   eo_compare = DATA(lo_compare)
                                   eo_key = DATA(lo_key) ).
 
-      WHILE lo_sublist->type EQ lcl_lisp=>type_pair.
+      WHILE lo_sublist->type EQ pair.
         DATA(lo_pair) = lo_sublist->car.
         IF lo_key->is_equal( io_elem = lo_pair->car
                              comp = lo_compare
@@ -7108,32 +7128,32 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       DATA(lo_sublist) = list->cdr->car.
       DATA(lo_key) = list->car.
-      WHILE lo_sublist->type EQ lcl_lisp=>type_pair.
+      WHILE lo_sublist->type EQ pair.
         DATA(lo_pair) = lo_sublist->car.
         IF lo_pair->car->type EQ lo_key->type.
 
           CASE lo_key->type.
-            WHEN lcl_lisp=>type_integer.
-              IF CAST lcl_lisp_integer( lo_key )->integer = CAST lcl_lisp_integer( lo_pair->car )->integer.
+            WHEN integer.
+              IF CAST lcl_lisp_integer( lo_key )->int = CAST lcl_lisp_integer( lo_pair->car )->int.
                 result = lo_pair.
                 RETURN.
               ENDIF.
 
-            WHEN lcl_lisp=>type_rational.
+            WHEN rational.
               DATA(lo_key_rat) = CAST lcl_lisp_rational( lo_key ).
               DATA(lo_target_rat) = CAST lcl_lisp_rational( lo_pair->car ).
-              IF lo_key_rat->integer = lo_target_rat->integer AND lo_key_rat->denominator = lo_target_rat->denominator.
+              IF lo_key_rat->int = lo_target_rat->int AND lo_key_rat->denominator = lo_target_rat->denominator.
                 result = lo_pair.
                 RETURN.
               ENDIF.
 
-            WHEN lcl_lisp=>type_real.
-              IF CAST lcl_lisp_real( lo_key )->float_eq( CAST lcl_lisp_real( lo_pair->car )->real ).
+            WHEN real.
+              IF CAST lcl_lisp_real( lo_key )->float_eq( CAST lcl_lisp_real( lo_pair->car )->float ).
                 result = lo_pair.
                 RETURN.
               ENDIF.
 
-            WHEN lcl_lisp=>type_symbol OR lcl_lisp=>type_string.
+            WHEN symbol OR string.
               IF lo_key->value = lo_pair->car->value.
                 result = lo_pair.
                 RETURN.
@@ -7163,7 +7183,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA(lo_sublist) = list->cdr->car.
       DATA(lo_key) = list->car.
 
-      WHILE lo_sublist->type EQ lcl_lisp=>type_pair.
+      WHILE lo_sublist->type EQ pair.
         DATA(lo_pair) = lo_sublist->car.
         "_validate lo_pair->car.
            IF lo_pair->car IS NOT BOUND.
@@ -7180,13 +7200,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
 **********************************************************************
     METHOD proc_add.
-      DATA lv_type TYPE lcl_sexps=>tv_type.
+      DATA lv_type TYPE tv_type.
       DATA res_int TYPE tv_int.
       DATA res_real TYPE tv_real.
       DATA res_nummer TYPE tv_int.
       DATA res_denom TYPE tv_int VALUE 1.
       DATA lv_gcd TYPE tv_int.
       DATA cell TYPE REF TO lcl_lisp.
+      DATA res_exact TYPE abap_boolean VALUE abap_false.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_real TYPE REF TO lcl_lisp_real.
@@ -7197,63 +7218,63 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
       DATA(iter) = list->new_iterator( ).
 
-      lv_type = lcl_lisp=>type_integer.
+      lv_type = integer.
       WHILE iter->has_next( ).
         cell = iter->next( ).
         "_cell_arith + `[+]`.
           CASE cell->type.
-            WHEN lcl_lisp=>type_integer.
+            WHEN integer.
               lo_int ?= cell.
 
               CASE lv_type.
-                WHEN lcl_lisp=>type_real.
-                  res_real = res_real + lo_int->integer.
+                WHEN real.
+                  res_real = res_real + lo_int->int.
 
-                WHEN lcl_lisp=>type_rational.
-                  res_nummer = res_nummer + ( lo_int->integer * res_denom ).
+                WHEN rational.
+                  res_nummer = res_nummer + ( lo_int->int * res_denom ).
                   lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                     d = res_denom ).
                   res_nummer = res_nummer DIV lv_gcd.
                   res_denom = res_denom DIV lv_gcd.
 
-                WHEN lcl_lisp=>type_integer.
-                  res_int = res_int + lo_int->integer.
+                WHEN integer.
+                  res_int = res_int + lo_int->int.
 
                 WHEN OTHERS.
-                  lv_type = lcl_lisp=>type_integer.
-                  res_int = lo_int->integer.
+                  lv_type = integer.
+                  res_int = lo_int->int.
               ENDCASE.
 
-            WHEN lcl_lisp=>type_real.
+            WHEN real.
               lo_real ?= cell.
 
               CASE lv_type.
-                WHEN lcl_lisp=>type_real.
-                  res_real = res_real + lo_real->real.
+                WHEN real.
+                  res_real = res_real + lo_real->float.
 
-                WHEN lcl_lisp=>type_rational.
-                  res_real = res_nummer / res_denom + lo_real->real.
-                  lv_type = lcl_lisp=>type_real.
+                WHEN rational.
+                  res_real = res_nummer / res_denom + lo_real->float.
+                  lv_type = real.
 
-                WHEN lcl_lisp=>type_integer.
-                  res_real = res_int + lo_real->real.
-                  lv_type = lcl_lisp=>type_real.
+                WHEN integer.
+                  res_real = res_int + lo_real->float.
+                  lv_type = real.
 
                 WHEN OTHERS.
-                  lv_type = lcl_lisp=>type_real.
-                  res_real = lo_real->real.
+                  lv_type = real.
+                  res_real = lo_real->float.
               ENDCASE.
 
-            WHEN lcl_lisp=>type_rational.
+            WHEN rational.
               lo_rat ?= cell.
 
               CASE lv_type.
-                WHEN lcl_lisp=>type_real.
-                  res_real = res_real + lo_rat->integer / lo_rat->denominator.
-                  lv_type = lcl_lisp=>type_real.
+                WHEN real.
+                  res_real = res_real + lo_rat->int / lo_rat->denominator.
+                  lv_type = real.
 
-                WHEN lcl_lisp=>type_rational.
-                  res_nummer = res_nummer * lo_rat->denominator + ( lo_rat->integer * res_denom ).
+                WHEN rational.
+                  res_nummer = res_nummer * lo_rat->denominator + ( lo_rat->int * res_denom ).
                   res_denom = res_denom * lo_rat->denominator.
                   lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                     d = res_denom ).
@@ -7261,23 +7282,23 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                   res_denom = res_denom DIV lv_gcd.
 
 
-                WHEN lcl_lisp=>type_integer.
-                  res_nummer = ( res_int * lo_rat->denominator ) + lo_rat->integer.
+                WHEN integer.
+                  res_nummer = ( res_int * lo_rat->denominator ) + lo_rat->int.
                   res_denom = lo_rat->denominator.
 
                   lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                     d = res_denom ).
                   res_nummer = res_nummer DIV lv_gcd.
                   res_denom = res_denom DIV lv_gcd.
-                  lv_type = lcl_lisp=>type_rational.
+                  lv_type = rational.
 
                 WHEN OTHERS.
-                  lv_type = lcl_lisp=>type_rational.
-                  res_nummer = lo_rat->integer.
+                  lv_type = rational.
+                  res_nummer = lo_rat->int.
                   res_denom = lo_rat->denominator.
               ENDCASE.
 
-*            WHEN lcl_lisp=>type_complex.
+*            WHEN complex.
             WHEN OTHERS.
               throw( |{ cell->to_string( ) } is not a number in [+]| ).
           ENDCASE.
@@ -7285,10 +7306,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       "_result_arith `[+]`.
       CASE lv_type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           result = lcl_lisp_new=>integer( res_int ).
 
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           IF res_denom EQ 1.
             result = lcl_lisp_new=>integer( res_nummer ).
           ELSE.
@@ -7296,8 +7317,9 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                                              denom = res_denom ).
           ENDIF.
 
-        WHEN lcl_lisp=>type_real.
-          result = lcl_lisp_new=>real( res_real ).
+        WHEN real.
+          result = lcl_lisp_new=>real( value = res_real
+                                       exact = res_exact ).
 
         WHEN OTHERS.
           throw( |Error in result of [+]| ).
@@ -7305,13 +7327,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     ENDMETHOD.                    "proc_add
 
     METHOD proc_multiply.
-      DATA lv_type TYPE lcl_sexps=>tv_type.
+      DATA lv_type TYPE tv_type.
       DATA res_int TYPE tv_int.
       DATA res_real TYPE tv_real.
       DATA res_nummer TYPE tv_int.
       DATA res_denom TYPE tv_int VALUE 1.
       DATA lv_gcd TYPE tv_int.
       DATA cell TYPE REF TO lcl_lisp.
+      DATA res_exact TYPE abap_boolean VALUE abap_false.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_real TYPE REF TO lcl_lisp_real.
@@ -7323,86 +7346,86 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA(iter) = list->new_iterator( ).
 
       res_int = 1.
-      lv_type = lcl_lisp=>type_integer.
+      lv_type = integer.
       WHILE iter->has_next( ).
         cell = iter->next( ).
 
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
+          WHEN integer.
             lo_int ?= cell.
 
             CASE lv_type.
-              WHEN lcl_lisp=>type_real.
-                res_real = res_real * lo_int->integer.
+              WHEN real.
+                res_real = res_real * lo_int->int.
 
-              WHEN lcl_lisp=>type_rational.
-                res_nummer = res_nummer * lo_int->integer.
+              WHEN rational.
+                res_nummer = res_nummer * lo_int->int.
                 lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                   d = res_denom ).
                 res_nummer = res_nummer DIV lv_gcd.
                 res_denom = res_denom DIV lv_gcd.
 
-              WHEN lcl_lisp=>type_integer.
-                res_int = res_int * lo_int->integer.
+              WHEN integer.
+                res_int = res_int * lo_int->int.
 
               WHEN OTHERS.
-                lv_type = lcl_lisp=>type_integer.
-                res_int = lo_int->integer.
+                lv_type = integer.
+                res_int = lo_int->int.
             ENDCASE.
 
-          WHEN lcl_lisp=>type_real.
+          WHEN real.
             lo_real ?= cell.
 
             CASE lv_type.
-              WHEN lcl_lisp=>type_real.
-                res_real = res_real * lo_real->real.
+              WHEN real.
+                res_real = res_real * lo_real->float.
 
-              WHEN lcl_lisp=>type_rational.
-                res_real = res_nummer / res_denom * lo_real->real.
-                lv_type = lcl_lisp=>type_real.
+              WHEN rational.
+                res_real = res_nummer / res_denom * lo_real->float.
+                lv_type = real.
 
-              WHEN lcl_lisp=>type_integer.
-                res_real = res_int * lo_real->real.
-                lv_type = lcl_lisp=>type_real.
+              WHEN integer.
+                res_real = res_int * lo_real->float.
+                lv_type = real.
 
               WHEN OTHERS.
-                lv_type = lcl_lisp=>type_real.
-                res_real = lo_real->real.
+                lv_type = real.
+                res_real = lo_real->float.
             ENDCASE.
 
-          WHEN lcl_lisp=>type_rational.
+          WHEN rational.
             lo_rat ?= cell.
 
             CASE lv_type.
-              WHEN lcl_lisp=>type_real.
-                res_real = res_real * lo_rat->integer / lo_rat->denominator.
-                lv_type = lcl_lisp=>type_real.
+              WHEN real.
+                res_real = res_real * lo_rat->int / lo_rat->denominator.
+                lv_type = real.
 
-              WHEN lcl_lisp=>type_rational.
-                res_nummer = res_nummer * lo_rat->integer.
+              WHEN rational.
+                res_nummer = res_nummer * lo_rat->int.
                 res_denom = res_denom * lo_rat->denominator.
                 lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                   d = res_denom ).
                 res_nummer = res_nummer DIV lv_gcd.
                 res_denom = res_denom DIV lv_gcd.
 
-              WHEN lcl_lisp=>type_integer.
-                res_nummer = res_int * lo_rat->integer.
+              WHEN integer.
+                res_nummer = res_int * lo_rat->int.
                 res_denom = lo_rat->denominator.
 
                 lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                   d = res_denom ).
                 res_nummer = res_nummer DIV lv_gcd.
                 res_denom = res_denom DIV lv_gcd.
-                lv_type = lcl_lisp=>type_rational.
+                lv_type = rational.
 
               WHEN OTHERS.
-                lv_type = lcl_lisp=>type_rational.
-                res_nummer = lo_rat->integer.
+                lv_type = rational.
+                res_nummer = lo_rat->int.
                 res_denom = lo_rat->denominator.
             ENDCASE.
 
-*          WHEN lcl_lisp=>type_complex.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [*]| ).
         ENDCASE.
@@ -7411,10 +7434,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       "_result_arith `[*]`.
       CASE lv_type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           result = lcl_lisp_new=>integer( res_int ).
 
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           IF res_denom EQ 1.
             result = lcl_lisp_new=>integer( res_nummer ).
           ELSE.
@@ -7422,8 +7445,9 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                                              denom = res_denom ).
           ENDIF.
 
-        WHEN lcl_lisp=>type_real.
-          result = lcl_lisp_new=>real( res_real ).
+        WHEN real.
+          result = lcl_lisp_new=>real( value = res_real
+                                       exact = res_exact ).
 
         WHEN OTHERS.
           throw( |Error in result of [*]| ).
@@ -7431,13 +7455,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     ENDMETHOD.                    "proc_multiply
 
     METHOD proc_subtract.
-      DATA lv_type TYPE lcl_sexps=>tv_type.
+      DATA lv_type TYPE tv_type.
       DATA res_int TYPE tv_int.
       DATA res_real TYPE tv_real.
       DATA res_nummer TYPE tv_int.
       DATA res_denom TYPE tv_int VALUE 1.
       DATA lv_gcd TYPE tv_int.
       DATA cell TYPE REF TO lcl_lisp.
+      DATA res_exact TYPE abap_boolean VALUE abap_false.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_real TYPE REF TO lcl_lisp_real.
@@ -7455,58 +7480,58 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       cell = iter->next( ).
       "_cell_arith - `[-]`.
       CASE cell->type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           lo_int ?= cell.
 
           CASE lv_type.
-            WHEN lcl_lisp=>type_real.
-              res_real = res_real - lo_int->integer.
+            WHEN real.
+              res_real = res_real - lo_int->int.
 
-            WHEN lcl_lisp=>type_rational.
-              res_nummer = res_nummer - ( lo_int->integer * res_denom ).
+            WHEN rational.
+              res_nummer = res_nummer - ( lo_int->int * res_denom ).
               lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                 d = res_denom ).
               res_nummer = res_nummer DIV lv_gcd.
               res_denom = res_denom DIV lv_gcd.
 
-            WHEN lcl_lisp=>type_integer.
-              res_int = res_int - lo_int->integer.
+            WHEN integer.
+              res_int = res_int - lo_int->int.
 
             WHEN OTHERS.
-              lv_type = lcl_lisp=>type_integer.
-              res_int = lo_int->integer.
+              lv_type = integer.
+              res_int = lo_int->int.
           ENDCASE.
 
-        WHEN lcl_lisp=>type_real.
+        WHEN real.
           lo_real ?= cell.
 
           CASE lv_type.
-            WHEN lcl_lisp=>type_real.
-              res_real = res_real - lo_real->real.
+            WHEN real.
+              res_real = res_real - lo_real->float.
 
-            WHEN lcl_lisp=>type_rational.
-              res_real = res_nummer / res_denom - lo_real->real.
-              lv_type = lcl_lisp=>type_real.
+            WHEN rational.
+              res_real = res_nummer / res_denom - lo_real->float.
+              lv_type = real.
 
-            WHEN lcl_lisp=>type_integer.
-              res_real = res_int - lo_real->real.
-              lv_type = lcl_lisp=>type_real.
+            WHEN integer.
+              res_real = res_int - lo_real->float.
+              lv_type = real.
 
             WHEN OTHERS.
-              lv_type = lcl_lisp=>type_real.
-              res_real = lo_real->real.
+              lv_type = real.
+              res_real = lo_real->float.
           ENDCASE.
 
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           lo_rat ?= cell.
 
           CASE lv_type.
-            WHEN lcl_lisp=>type_real.
-              res_real = res_real - lo_rat->integer / lo_rat->denominator.
-              lv_type = lcl_lisp=>type_real.
+            WHEN real.
+              res_real = res_real - lo_rat->int / lo_rat->denominator.
+              lv_type = real.
 
-            WHEN lcl_lisp=>type_rational.
-              res_nummer = res_nummer * lo_rat->denominator - ( lo_rat->integer * res_denom ).
+            WHEN rational.
+              res_nummer = res_nummer * lo_rat->denominator - ( lo_rat->int * res_denom ).
               res_denom = res_denom * lo_rat->denominator.
               lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                 d = res_denom ).
@@ -7514,23 +7539,23 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
               res_denom = res_denom DIV lv_gcd.
 
 
-            WHEN lcl_lisp=>type_integer.
-              res_nummer = ( res_int * lo_rat->denominator ) - lo_rat->integer.
+            WHEN integer.
+              res_nummer = ( res_int * lo_rat->denominator ) - lo_rat->int.
               res_denom = lo_rat->denominator.
 
               lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                 d = res_denom ).
               res_nummer = res_nummer DIV lv_gcd.
               res_denom = res_denom DIV lv_gcd.
-              lv_type = lcl_lisp=>type_rational.
+              lv_type = rational.
 
             WHEN OTHERS.
-              lv_type = lcl_lisp=>type_rational.
-              res_nummer = lo_rat->integer.
+              lv_type = rational.
+              res_nummer = lo_rat->int.
               res_denom = lo_rat->denominator.
           ENDCASE.
 
-*        WHEN lcl_lisp=>type_complex.
+*        WHEN complex.
         WHEN OTHERS.
           throw( |{ cell->to_string( ) } is not a number in [-]| ).
       ENDCASE.
@@ -7545,58 +7570,58 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           cell = iter->next( ).
           "_cell_arith - `[-]`.
           CASE cell->type.
-            WHEN lcl_lisp=>type_integer.
+            WHEN integer.
               lo_int ?= cell.
 
               CASE lv_type.
-                WHEN lcl_lisp=>type_real.
-                  res_real = res_real - lo_int->integer.
+                WHEN real.
+                  res_real = res_real - lo_int->int.
 
-                WHEN lcl_lisp=>type_rational.
-                  res_nummer = res_nummer - ( lo_int->integer * res_denom ).
+                WHEN rational.
+                  res_nummer = res_nummer - ( lo_int->int * res_denom ).
                   lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                     d = res_denom ).
                   res_nummer = res_nummer DIV lv_gcd.
                   res_denom = res_denom DIV lv_gcd.
 
-                WHEN lcl_lisp=>type_integer.
-                  res_int = res_int - lo_int->integer.
+                WHEN integer.
+                  res_int = res_int - lo_int->int.
 
                 WHEN OTHERS.
-                  lv_type = lcl_lisp=>type_integer.
-                  res_int = lo_int->integer.
+                  lv_type = integer.
+                  res_int = lo_int->int.
               ENDCASE.
 
-            WHEN lcl_lisp=>type_real.
+            WHEN real.
               lo_real ?= cell.
 
               CASE lv_type.
-                WHEN lcl_lisp=>type_real.
-                  res_real = res_real - lo_real->real.
+                WHEN real.
+                  res_real = res_real - lo_real->float.
 
-                WHEN lcl_lisp=>type_rational.
-                  res_real = res_nummer / res_denom - lo_real->real.
-                  lv_type = lcl_lisp=>type_real.
+                WHEN rational.
+                  res_real = res_nummer / res_denom - lo_real->float.
+                  lv_type = real.
 
-                WHEN lcl_lisp=>type_integer.
-                  res_real = res_int - lo_real->real.
-                  lv_type = lcl_lisp=>type_real.
+                WHEN integer.
+                  res_real = res_int - lo_real->float.
+                  lv_type = real.
 
                 WHEN OTHERS.
-                  lv_type = lcl_lisp=>type_real.
-                  res_real = lo_real->real.
+                  lv_type = real.
+                  res_real = lo_real->float.
               ENDCASE.
 
-            WHEN lcl_lisp=>type_rational.
+            WHEN rational.
               lo_rat ?= cell.
 
               CASE lv_type.
-                WHEN lcl_lisp=>type_real.
-                  res_real = res_real - lo_rat->integer / lo_rat->denominator.
-                  lv_type = lcl_lisp=>type_real.
+                WHEN real.
+                  res_real = res_real - lo_rat->int / lo_rat->denominator.
+                  lv_type = real.
 
-                WHEN lcl_lisp=>type_rational.
-                  res_nummer = res_nummer * lo_rat->denominator - ( lo_rat->integer * res_denom ).
+                WHEN rational.
+                  res_nummer = res_nummer * lo_rat->denominator - ( lo_rat->int * res_denom ).
                   res_denom = res_denom * lo_rat->denominator.
                   lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                     d = res_denom ).
@@ -7604,23 +7629,23 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                   res_denom = res_denom DIV lv_gcd.
 
 
-                WHEN lcl_lisp=>type_integer.
-                  res_nummer = ( res_int * lo_rat->denominator ) - lo_rat->integer.
+                WHEN integer.
+                  res_nummer = ( res_int * lo_rat->denominator ) - lo_rat->int.
                   res_denom = lo_rat->denominator.
 
                   lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                     d = res_denom ).
                   res_nummer = res_nummer DIV lv_gcd.
                   res_denom = res_denom DIV lv_gcd.
-                  lv_type = lcl_lisp=>type_rational.
+                  lv_type = rational.
 
                 WHEN OTHERS.
-                  lv_type = lcl_lisp=>type_rational.
-                  res_nummer = lo_rat->integer.
+                  lv_type = rational.
+                  res_nummer = lo_rat->int.
                   res_denom = lo_rat->denominator.
               ENDCASE.
 
-*            WHEN lcl_lisp=>type_complex.
+*            WHEN complex.
             WHEN OTHERS.
               throw( |{ cell->to_string( ) } is not a number in [-]| ).
           ENDCASE.
@@ -7630,10 +7655,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       "_result_arith `[-]`.
       CASE lv_type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           result = lcl_lisp_new=>integer( res_int ).
 
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           IF res_denom EQ 1.
             result = lcl_lisp_new=>integer( res_nummer ).
           ELSE.
@@ -7641,8 +7666,9 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                                              denom = res_denom ).
           ENDIF.
 
-        WHEN lcl_lisp=>type_real.
-          result = lcl_lisp_new=>real( res_real ).
+        WHEN real.
+          result = lcl_lisp_new=>real( value = res_real
+                                       exact = res_exact ).
 
         WHEN OTHERS.
           throw( |Error in result of [-]| ).
@@ -7650,13 +7676,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     ENDMETHOD.                    "proc_subtract
 
     METHOD proc_divide.
-      DATA lv_type TYPE lcl_sexps=>tv_type.
+      DATA lv_type TYPE tv_type.
       DATA res_int TYPE tv_int.
       DATA res_real TYPE tv_real.
       DATA res_nummer TYPE tv_int.
       DATA res_denom TYPE tv_int VALUE 1.
       DATA lv_gcd TYPE tv_int.
       DATA cell TYPE REF TO lcl_lisp.
+      DATA res_exact TYPE abap_boolean VALUE abap_false.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_real TYPE REF TO lcl_lisp_real.
@@ -7673,58 +7700,58 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       cell = iter->next( ).
       "_cell_arith / `[/]`.
       CASE cell->type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           lo_int ?= cell.
 
           CASE lv_type.
-            WHEN lcl_lisp=>type_real.
-              res_real = res_real / lo_int->integer.
+            WHEN real.
+              res_real = res_real / lo_int->int.
 
-            WHEN lcl_lisp=>type_rational.
-              res_nummer = res_nummer / ( lo_int->integer * res_denom ).
+            WHEN rational.
+              res_nummer = res_nummer / ( lo_int->int * res_denom ).
               lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                 d = res_denom ).
               res_nummer = res_nummer DIV lv_gcd.
               res_denom = res_denom DIV lv_gcd.
 
-            WHEN lcl_lisp=>type_integer.
-              res_int = res_int / lo_int->integer.
+            WHEN integer.
+              res_int = res_int / lo_int->int.
 
             WHEN OTHERS.
-              lv_type = lcl_lisp=>type_integer.
-              res_int = lo_int->integer.
+              lv_type = integer.
+              res_int = lo_int->int.
           ENDCASE.
 
-        WHEN lcl_lisp=>type_real.
+        WHEN real.
           lo_real ?= cell.
 
           CASE lv_type.
-            WHEN lcl_lisp=>type_real.
-              res_real = res_real / lo_real->real.
+            WHEN real.
+              res_real = res_real / lo_real->float.
 
-            WHEN lcl_lisp=>type_rational.
-              res_real = res_nummer / res_denom / lo_real->real.
-              lv_type = lcl_lisp=>type_real.
+            WHEN rational.
+              res_real = res_nummer / res_denom / lo_real->float.
+              lv_type = real.
 
-            WHEN lcl_lisp=>type_integer.
-              res_real = res_int / lo_real->real.
-              lv_type = lcl_lisp=>type_real.
+            WHEN integer.
+              res_real = res_int / lo_real->float.
+              lv_type = real.
 
             WHEN OTHERS.
-              lv_type = lcl_lisp=>type_real.
-              res_real = lo_real->real.
+              lv_type = real.
+              res_real = lo_real->float.
           ENDCASE.
 
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           lo_rat ?= cell.
 
           CASE lv_type.
-            WHEN lcl_lisp=>type_real.
-              res_real = res_real / lo_rat->integer / lo_rat->denominator.
-              lv_type = lcl_lisp=>type_real.
+            WHEN real.
+              res_real = res_real / lo_rat->int / lo_rat->denominator.
+              lv_type = real.
 
-            WHEN lcl_lisp=>type_rational.
-              res_nummer = res_nummer * lo_rat->denominator / ( lo_rat->integer * res_denom ).
+            WHEN rational.
+              res_nummer = res_nummer * lo_rat->denominator / ( lo_rat->int * res_denom ).
               res_denom = res_denom * lo_rat->denominator.
               lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                 d = res_denom ).
@@ -7732,23 +7759,23 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
               res_denom = res_denom DIV lv_gcd.
 
 
-            WHEN lcl_lisp=>type_integer.
-              res_nummer = ( res_int * lo_rat->denominator ) / lo_rat->integer.
+            WHEN integer.
+              res_nummer = ( res_int * lo_rat->denominator ) / lo_rat->int.
               res_denom = lo_rat->denominator.
 
               lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                 d = res_denom ).
               res_nummer = res_nummer DIV lv_gcd.
               res_denom = res_denom DIV lv_gcd.
-              lv_type = lcl_lisp=>type_rational.
+              lv_type = rational.
 
             WHEN OTHERS.
-              lv_type = lcl_lisp=>type_rational.
-              res_nummer = lo_rat->integer.
+              lv_type = rational.
+              res_nummer = lo_rat->int.
               res_denom = lo_rat->denominator.
           ENDCASE.
 
-*        WHEN lcl_lisp=>type_complex.
+*        WHEN complex.
         WHEN OTHERS.
           throw( |{ cell->to_string( ) } is not a number in [/]| ).
       ENDCASE.
@@ -7756,104 +7783,104 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       TRY.
           IF iter->has_next( ) EQ abap_false.
             CASE lv_type.
-              WHEN lcl_lisp=>type_integer.
+              WHEN integer.
                 res_denom = res_int.
                 res_nummer = 1.
-                lv_type = lcl_lisp=>type_rational.
+                lv_type = rational.
 
-              WHEN lcl_lisp=>type_rational.
+              WHEN rational.
                 DATA(lv_saved_nummer) = res_nummer.
                 res_nummer = res_denom.
                 res_denom = lv_saved_nummer.
 
-              WHEN lcl_lisp=>type_real.
+              WHEN real.
                 res_real = 1 / res_real.
             ENDCASE.
           ELSE.
-            IF lv_type EQ lcl_lisp=>type_integer.
+            IF lv_type EQ integer.
               res_nummer = res_int.
               res_denom = 1.
-              lv_type = lcl_lisp=>type_rational.
+              lv_type = rational.
             ENDIF.
 
             WHILE iter->has_next( ).
               cell = iter->next( ).
 
               CASE cell->type.
-                WHEN lcl_lisp=>type_integer.
+                WHEN integer.
                   lo_int ?= cell.
 
                   CASE lv_type.
-                    WHEN lcl_lisp=>type_real.
-                      res_real = res_real / lo_int->integer.
+                    WHEN real.
+                      res_real = res_real / lo_int->int.
 
-                    WHEN lcl_lisp=>type_rational.
-                      res_denom = res_denom * lo_int->integer.
+                    WHEN rational.
+                      res_denom = res_denom * lo_int->int.
                       lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                         d = res_denom ).
                       res_nummer = res_nummer DIV lv_gcd.
                       res_denom = res_denom DIV lv_gcd.
 
-                    WHEN lcl_lisp=>type_integer.
+                    WHEN integer.
                       res_nummer = res_int.
-                      res_denom = lo_int->integer.
-                      lv_type = lcl_lisp=>type_rational.
+                      res_denom = lo_int->int.
+                      lv_type = rational.
 
                     WHEN OTHERS.
                       throw( 'internal error proc_divide( )' ).
-                      lv_type = lcl_lisp=>type_integer.
-                      res_int = lo_int->integer.
+                      lv_type = integer.
+                      res_int = lo_int->int.
                   ENDCASE.
 
-                WHEN lcl_lisp=>type_real.
+                WHEN real.
                   lo_real ?= cell.
 
                   CASE lv_type.
-                    WHEN lcl_lisp=>type_real.
-                      res_real = res_real / lo_real->real.
+                    WHEN real.
+                      res_real = res_real / lo_real->float.
 
-                    WHEN lcl_lisp=>type_rational.
-                      res_real = res_nummer / res_denom / lo_real->real.
-                      lv_type = lcl_lisp=>type_real.
+                    WHEN rational.
+                      res_real = res_nummer / res_denom / lo_real->float.
+                      lv_type = real.
 
-                    WHEN lcl_lisp=>type_integer.
-                      res_real = res_int / lo_real->real.
-                      lv_type = lcl_lisp=>type_real.
+                    WHEN integer.
+                      res_real = res_int / lo_real->float.
+                      lv_type = real.
 
                     WHEN OTHERS.
-                      lv_type = lcl_lisp=>type_real.
-                      res_real = lo_real->real.
+                      lv_type = real.
+                      res_real = lo_real->float.
                   ENDCASE.
 
-                WHEN lcl_lisp=>type_rational.
+                WHEN rational.
                   lo_rat ?= cell.
 
                   CASE lv_type.
-                    WHEN lcl_lisp=>type_real.
-                      res_real = res_real * lo_rat->denominator / lo_rat->integer.
-                      lv_type = lcl_lisp=>type_real.
+                    WHEN real.
+                      res_real = res_real * lo_rat->denominator / lo_rat->int.
+                      lv_type = real.
 
-                    WHEN lcl_lisp=>type_rational.
+                    WHEN rational.
                       res_nummer = res_nummer * lo_rat->denominator.
-                      res_denom = res_denom * lo_rat->integer.
+                      res_denom = res_denom * lo_rat->int.
                       lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
                                                         d = res_denom ).
                       res_nummer = res_nummer DIV lv_gcd.
                       res_denom = res_denom DIV lv_gcd.
 
-                    WHEN lcl_lisp=>type_integer.
+                    WHEN integer.
                       res_nummer = res_int * lo_rat->denominator.
-                      res_denom = lo_rat->integer.
+                      res_denom = lo_rat->int.
 
-                      lv_type = lcl_lisp=>type_rational.
+                      lv_type = rational.
 
                     WHEN OTHERS.
-                      lv_type = lcl_lisp=>type_rational.
-                      res_nummer = lo_rat->integer.
+                      lv_type = rational.
+                      res_nummer = lo_rat->int.
                       res_denom = lo_rat->denominator.
                   ENDCASE.
 
-*                WHEN lcl_lisp=>type_complex.
+*                WHEN complex.
                 WHEN OTHERS.
                   throw( |{ cell->to_string( ) } is not a number in [/]| ).
               ENDCASE.
@@ -7866,10 +7893,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       "_result_arith `[/]`.
       CASE lv_type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           result = lcl_lisp_new=>integer( res_int ).
 
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           IF res_denom EQ 1.
             result = lcl_lisp_new=>integer( res_nummer ).
           ELSE.
@@ -7877,8 +7904,9 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                                              denom = res_denom ).
           ENDIF.
 
-        WHEN lcl_lisp=>type_real.
-          result = lcl_lisp_new=>real( res_real ).
+        WHEN real.
+          result = lcl_lisp_new=>real( value = res_real
+                                       exact = res_exact ).
 
         WHEN OTHERS.
           throw( |Error in result of [/]| ).
@@ -7902,69 +7930,69 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
       throw( c_error_incorrect_input ).
     ENDIF.
-    IF list->cdr->type NE lcl_lisp=>type_pair.
+    IF list->cdr->type NE pair.
       throw( c_error_incorrect_input ).
     ENDIF.
 
     cell = list->car.
     carry_is_int = abap_false.
     CASE cell->type.
-      WHEN lcl_lisp=>type_integer.
+      WHEN integer.
         carry_is_int = abap_true.
-        carry_int = CAST lcl_lisp_integer( cell )->integer.
+        carry_int = CAST lcl_lisp_integer( cell )->int.
         carry = carry_int.
 
-      WHEN lcl_lisp=>type_real.
-        carry = CAST lcl_lisp_real( cell )->real.
+      WHEN real.
+        carry = CAST lcl_lisp_real( cell )->float.
 
-      WHEN lcl_lisp=>type_rational.
+      WHEN rational.
         lo_rat ?= cell.
-        carry = lo_rat->integer / lo_rat->denominator.
-*      WHEN lcl_lisp=>type_complex.
+        carry = lo_rat->int / lo_rat->denominator.
+*      WHEN complex.
 
       WHEN OTHERS.
         throw( |{ cell->to_string( ) } is not a number in [>]| ).
     ENDCASE.
 
     cell = list->cdr.
-    WHILE cell->type EQ lcl_lisp=>type_pair.
+    WHILE cell->type EQ pair.
       "_validate cell->car.
         IF cell->car IS NOT BOUND.
           throw( c_error_incorrect_input ).
         ENDIF.
 
       CASE cell->car->type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           lo_int ?= cell->car.
           IF carry_is_int = abap_true.
-            IF carry_int <= lo_int->integer.
+            IF carry_int <= lo_int->int.
               RETURN.
             ENDIF.
-            carry_int = lo_int->integer.
+            carry_int = lo_int->int.
           ELSE.
-            IF carry <= lo_int->integer.
+            IF carry <= lo_int->int.
               RETURN.
             ENDIF.
           ENDIF.
-          carry = lo_int->integer.
+          carry = lo_int->int.
 
-        WHEN lcl_lisp=>type_real.
+        WHEN real.
           carry_is_int = abap_false.
           lo_real ?= cell->car.
-          IF carry <= lo_real->real.
+          IF carry <= lo_real->float.
             RETURN.
           ENDIF.
-          carry = lo_real->real.
+          carry = lo_real->float.
 
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           carry_is_int = abap_false.
           lo_rat ?= cell->car.
-          IF carry * lo_rat->denominator <= lo_rat->integer.
+          IF carry * lo_rat->denominator <= lo_rat->int.
             RETURN.
           ENDIF.
-          carry = lo_rat->integer / lo_rat->denominator.
+          carry = lo_rat->int / lo_rat->denominator.
 
-*               WHEN lcl_lisp=>type_complex.
+*               WHEN complex.
         WHEN OTHERS.
           throw( |{ cell->car->to_string( ) } is not a number in [>]| ).
       ENDCASE.
@@ -7990,69 +8018,69 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
       throw( c_error_incorrect_input ).
     ENDIF.
-    IF list->cdr->type NE lcl_lisp=>type_pair.
+    IF list->cdr->type NE pair.
       throw( c_error_incorrect_input ).
     ENDIF.
 
     cell = list->car.
     carry_is_int = abap_false.
     CASE cell->type.
-      WHEN lcl_lisp=>type_integer.
+      WHEN integer.
         carry_is_int = abap_true.
-        carry_int = CAST lcl_lisp_integer( cell )->integer.
+        carry_int = CAST lcl_lisp_integer( cell )->int.
         carry = carry_int.
 
-      WHEN lcl_lisp=>type_real.
-        carry = CAST lcl_lisp_real( cell )->real.
+      WHEN real.
+        carry = CAST lcl_lisp_real( cell )->float.
 
-      WHEN lcl_lisp=>type_rational.
+      WHEN rational.
         lo_rat ?= cell.
-        carry = lo_rat->integer / lo_rat->denominator.
-*      WHEN lcl_lisp=>type_complex.
+        carry = lo_rat->int / lo_rat->denominator.
+*      WHEN complex.
 
       WHEN OTHERS.
         throw( |{ cell->to_string( ) } is not a number in [>=]| ).
     ENDCASE.
 
     cell = list->cdr.
-    WHILE cell->type EQ lcl_lisp=>type_pair.
+    WHILE cell->type EQ pair.
       "_validate cell->car.
         IF cell->car IS NOT BOUND.
           throw( c_error_incorrect_input ).
         ENDIF.
 
       CASE cell->car->type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           lo_int ?= cell->car.
           IF carry_is_int = abap_true.
-            IF carry_int < lo_int->integer.
+            IF carry_int < lo_int->int.
               RETURN.
             ENDIF.
-            carry_int = lo_int->integer.
+            carry_int = lo_int->int.
           ELSE.
-            IF carry < lo_int->integer.
+            IF carry < lo_int->int.
               RETURN.
             ENDIF.
           ENDIF.
-          carry = lo_int->integer.
+          carry = lo_int->int.
 
-        WHEN lcl_lisp=>type_real.
+        WHEN real.
           carry_is_int = abap_false.
           lo_real ?= cell->car.
-          IF carry < lo_real->real.
+          IF carry < lo_real->float.
             RETURN.
           ENDIF.
-          carry = lo_real->real.
+          carry = lo_real->float.
 
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           carry_is_int = abap_false.
           lo_rat ?= cell->car.
-          IF carry * lo_rat->denominator < lo_rat->integer.
+          IF carry * lo_rat->denominator < lo_rat->int.
             RETURN.
           ENDIF.
-          carry = lo_rat->integer / lo_rat->denominator.
+          carry = lo_rat->int / lo_rat->denominator.
 
-*               WHEN lcl_lisp=>type_complex.
+*               WHEN complex.
         WHEN OTHERS.
           throw( |{ cell->car->to_string( ) } is not a number in [>=]| ).
       ENDCASE.
@@ -8078,69 +8106,69 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
       throw( c_error_incorrect_input ).
     ENDIF.
-    IF list->cdr->type NE lcl_lisp=>type_pair.
+    IF list->cdr->type NE pair.
       throw( c_error_incorrect_input ).
     ENDIF.
 
     cell = list->car.
     carry_is_int = abap_false.
     CASE cell->type.
-      WHEN lcl_lisp=>type_integer.
+      WHEN integer.
         carry_is_int = abap_true.
-        carry_int = CAST lcl_lisp_integer( cell )->integer.
+        carry_int = CAST lcl_lisp_integer( cell )->int.
         carry = carry_int.
 
-      WHEN lcl_lisp=>type_real.
-        carry = CAST lcl_lisp_real( cell )->real.
+      WHEN real.
+        carry = CAST lcl_lisp_real( cell )->float.
 
-      WHEN lcl_lisp=>type_rational.
+      WHEN rational.
         lo_rat ?= cell.
-        carry = lo_rat->integer / lo_rat->denominator.
-*      WHEN lcl_lisp=>type_complex.
+        carry = lo_rat->int / lo_rat->denominator.
+*      WHEN complex.
 
       WHEN OTHERS.
         throw( |{ cell->to_string( ) } is not a number in [<]| ).
     ENDCASE.
 
     cell = list->cdr.
-    WHILE cell->type EQ lcl_lisp=>type_pair.
+    WHILE cell->type EQ pair.
       "_validate cell->car.
         IF cell->car IS NOT BOUND.
           throw( c_error_incorrect_input ).
         ENDIF.
 
       CASE cell->car->type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           lo_int ?= cell->car.
           IF carry_is_int = abap_true.
-            IF carry_int >= lo_int->integer.
+            IF carry_int >= lo_int->int.
               RETURN.
             ENDIF.
-            carry_int = lo_int->integer.
+            carry_int = lo_int->int.
           ELSE.
-            IF carry >= lo_int->integer.
+            IF carry >= lo_int->int.
               RETURN.
             ENDIF.
           ENDIF.
-          carry = lo_int->integer.
+          carry = lo_int->int.
 
-        WHEN lcl_lisp=>type_real.
+        WHEN real.
           carry_is_int = abap_false.
           lo_real ?= cell->car.
-          IF carry >= lo_real->real.
+          IF carry >= lo_real->float.
             RETURN.
           ENDIF.
-          carry = lo_real->real.
+          carry = lo_real->float.
 
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           carry_is_int = abap_false.
           lo_rat ?= cell->car.
-          IF carry * lo_rat->denominator >= lo_rat->integer.
+          IF carry * lo_rat->denominator >= lo_rat->int.
             RETURN.
           ENDIF.
-          carry = lo_rat->integer / lo_rat->denominator.
+          carry = lo_rat->int / lo_rat->denominator.
 
-*               WHEN lcl_lisp=>type_complex.
+*               WHEN complex.
         WHEN OTHERS.
           throw( |{ cell->car->to_string( ) } is not a number in [<]| ).
       ENDCASE.
@@ -8166,69 +8194,69 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
       throw( c_error_incorrect_input ).
     ENDIF.
-    IF list->cdr->type NE lcl_lisp=>type_pair.
+    IF list->cdr->type NE pair.
       throw( c_error_incorrect_input ).
     ENDIF.
 
     cell = list->car.
     carry_is_int = abap_false.
     CASE cell->type.
-      WHEN lcl_lisp=>type_integer.
+      WHEN integer.
         carry_is_int = abap_true.
-        carry_int = CAST lcl_lisp_integer( cell )->integer.
+        carry_int = CAST lcl_lisp_integer( cell )->int.
         carry = carry_int.
 
-      WHEN lcl_lisp=>type_real.
-        carry = CAST lcl_lisp_real( cell )->real.
+      WHEN real.
+        carry = CAST lcl_lisp_real( cell )->float.
 
-      WHEN lcl_lisp=>type_rational.
+      WHEN rational.
         lo_rat ?= cell.
-        carry = lo_rat->integer / lo_rat->denominator.
-*      WHEN lcl_lisp=>type_complex.
+        carry = lo_rat->int / lo_rat->denominator.
+*      WHEN complex.
 
       WHEN OTHERS.
         throw( |{ cell->to_string( ) } is not a number in [<=]| ).
     ENDCASE.
 
     cell = list->cdr.
-    WHILE cell->type EQ lcl_lisp=>type_pair.
+    WHILE cell->type EQ pair.
       "_validate cell->car.
         IF cell->car IS NOT BOUND.
           throw( c_error_incorrect_input ).
         ENDIF.
 
       CASE cell->car->type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           lo_int ?= cell->car.
           IF carry_is_int = abap_true.
-            IF carry_int > lo_int->integer.
+            IF carry_int > lo_int->int.
               RETURN.
             ENDIF.
-            carry_int = lo_int->integer.
+            carry_int = lo_int->int.
           ELSE.
-            IF carry > lo_int->integer.
+            IF carry > lo_int->int.
               RETURN.
             ENDIF.
           ENDIF.
-          carry = lo_int->integer.
+          carry = lo_int->int.
 
-        WHEN lcl_lisp=>type_real.
+        WHEN real.
           carry_is_int = abap_false.
           lo_real ?= cell->car.
-          IF carry > lo_real->real.
+          IF carry > lo_real->float.
             RETURN.
           ENDIF.
-          carry = lo_real->real.
+          carry = lo_real->float.
 
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           carry_is_int = abap_false.
           lo_rat ?= cell->car.
-          IF carry * lo_rat->denominator > lo_rat->integer.
+          IF carry * lo_rat->denominator > lo_rat->int.
             RETURN.
           ENDIF.
-          carry = lo_rat->integer / lo_rat->denominator.
+          carry = lo_rat->int / lo_rat->denominator.
 
-*               WHEN lcl_lisp=>type_complex.
+*               WHEN complex.
         WHEN OTHERS.
           throw( |{ cell->car->to_string( ) } is not a number in [<=]| ).
       ENDCASE.
@@ -8258,14 +8286,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
     cell = list->car.
     CASE cell->type.
-      WHEN lcl_lisp=>type_integer.
-        carry = CAST lcl_lisp_integer( cell )->integer.
-      WHEN lcl_lisp=>type_real.
-        carry = CAST lcl_lisp_real( cell )->real.
-      WHEN lcl_lisp=>type_rational.
+      WHEN integer.
+        carry = CAST lcl_lisp_integer( cell )->int.
+      WHEN real.
+        carry = CAST lcl_lisp_real( cell )->float.
+      WHEN rational.
         lo_rat ?= cell.
-        carry = lo_rat->integer / lo_rat->denominator.
-*      WHEN lcl_lisp=>type_complex.
+        carry = lo_rat->int / lo_rat->denominator.
+*      WHEN complex.
       WHEN OTHERS.
         throw( |{ cell->to_string( ) } is not a number in [zero?]| ).
     ENDCASE.
@@ -8296,14 +8324,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
     cell = list->car.
     CASE cell->type.
-      WHEN lcl_lisp=>type_integer.
-        carry = CAST lcl_lisp_integer( cell )->integer.
-      WHEN lcl_lisp=>type_real.
-        carry = CAST lcl_lisp_real( cell )->real.
-      WHEN lcl_lisp=>type_rational.
+      WHEN integer.
+        carry = CAST lcl_lisp_integer( cell )->int.
+      WHEN real.
+        carry = CAST lcl_lisp_real( cell )->float.
+      WHEN rational.
         lo_rat ?= cell.
-        carry = lo_rat->integer / lo_rat->denominator.
-*      WHEN lcl_lisp=>type_complex.
+        carry = lo_rat->int / lo_rat->denominator.
+*      WHEN complex.
       WHEN OTHERS.
         throw( |{ cell->to_string( ) } is not a number in [positive?]| ).
     ENDCASE.
@@ -8334,14 +8362,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
     cell = list->car.
     CASE cell->type.
-      WHEN lcl_lisp=>type_integer.
-        carry = CAST lcl_lisp_integer( cell )->integer.
-      WHEN lcl_lisp=>type_real.
-        carry = CAST lcl_lisp_real( cell )->real.
-      WHEN lcl_lisp=>type_rational.
+      WHEN integer.
+        carry = CAST lcl_lisp_integer( cell )->int.
+      WHEN real.
+        carry = CAST lcl_lisp_real( cell )->float.
+      WHEN rational.
         lo_rat ?= cell.
-        carry = lo_rat->integer / lo_rat->denominator.
-*      WHEN lcl_lisp=>type_complex.
+        carry = lo_rat->int / lo_rat->denominator.
+*      WHEN complex.
       WHEN OTHERS.
         throw( |{ cell->to_string( ) } is not a number in [negative?]| ).
     ENDCASE.
@@ -8363,11 +8391,11 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
        IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
        ENDIF.
-        IF list->car->type NE lcl_lisp=>type_integer.
+        IF list->car->type NE integer.
           throw( list->car->to_string( ) && ` is not an integer in [odd?]` ) ##NO_TEXT.
         ENDIF.
 
-      CHECK CAST lcl_lisp_integer( list->car )->integer MOD 2 NE 0.
+      CHECK CAST lcl_lisp_integer( list->car )->int MOD 2 NE 0.
       result = true.
     ENDMETHOD.                    "proc_lte
 
@@ -8382,11 +8410,11 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
        IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
        ENDIF.
-        IF list->car->type NE lcl_lisp=>type_integer.
+        IF list->car->type NE integer.
           throw( list->car->to_string( ) && ` is not an integer in [even?]` ) ##NO_TEXT.
         ENDIF.
 
-      CHECK CAST lcl_lisp_integer( list->car )->integer MOD 2 EQ 0.
+      CHECK CAST lcl_lisp_integer( list->car )->int MOD 2 EQ 0.
       result = true.
     ENDMETHOD.                    "proc_lte
 
@@ -8407,7 +8435,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       result = false.
       DATA(lo_ptr) = list.
-      IF lo_ptr->cdr->type NE lcl_lisp=>type_pair.
+      IF lo_ptr->cdr->type NE pair.
         throw( c_error_incorrect_input ).
       ENDIF.
 
@@ -8417,10 +8445,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
         CASE lo_ptr->car->type.
-          WHEN lcl_lisp=>type_integer
-            OR lcl_lisp=>type_real
-            OR lcl_lisp=>type_rational
-            OR lcl_lisp=>type_complex.
+          WHEN integer
+            OR real
+            OR rational
+            OR complex.
           WHEN OTHERS.
             throw( |{ lo_ptr->car->to_string( ) } is not a number in [=]| ) ##NO_TEXT.
         ENDCASE.
@@ -8429,28 +8457,28 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
         CASE lo_ptr->car->type.
-          WHEN lcl_lisp=>type_integer
-            OR lcl_lisp=>type_real
-            OR lcl_lisp=>type_rational
-            OR lcl_lisp=>type_complex.
+          WHEN integer
+            OR real
+            OR rational
+            OR complex.
           WHEN OTHERS.
             throw( |{ lo_ptr->cdr->car->to_string( ) } is not a number in [=]| ) ##NO_TEXT.
         ENDCASE.
 
         CASE lo_ptr->car->type.
-          WHEN lcl_lisp=>type_integer.
-            lv_int = CAST lcl_lisp_integer( lo_ptr->car )->integer.
+          WHEN integer.
+            lv_int = CAST lcl_lisp_integer( lo_ptr->car )->int.
             CASE lo_ptr->cdr->car->type.
-              WHEN lcl_lisp=>type_integer.
-                IF lv_int = CAST lcl_lisp_integer( lo_ptr->cdr->car )->integer.
+              WHEN integer.
+                IF lv_int = CAST lcl_lisp_integer( lo_ptr->cdr->car )->int.
                   result = true.
                 ELSE.
                   result = false.
                   EXIT.
                 ENDIF.
 
-              WHEN lcl_lisp=>type_real.
-                lv_real = CAST lcl_lisp_real( lo_ptr->cdr->car )->real.
+              WHEN real.
+                lv_real = CAST lcl_lisp_real( lo_ptr->cdr->car )->float.
                 IF lv_int = trunc( lv_real ) AND frac( lv_real ) EQ 0.
                   result = true.
                 ELSE.
@@ -8458,30 +8486,30 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                   EXIT.
                 ENDIF.
 
-              WHEN lcl_lisp=>type_rational.
+              WHEN rational.
                 lo_rat ?= lo_ptr->cdr->car.
-                IF lv_int = lo_rat->integer AND lo_rat->denominator EQ 1.
+                IF lv_int = lo_rat->int AND lo_rat->denominator EQ 1.
                   result = true.
                 ELSE.
                   result = false.
                   EXIT.
                 ENDIF.
 
-*              WHEN lcl_lisp=>type_complex.
+*              WHEN complex.
             ENDCASE.
 
-          WHEN lcl_lisp=>type_real.
-            lv_real = CAST lcl_lisp_real( lo_ptr->car )->real.
+          WHEN real.
+            lv_real = CAST lcl_lisp_real( lo_ptr->car )->float.
             CASE lo_ptr->cdr->car->type.
-              WHEN lcl_lisp=>type_integer.
-                IF trunc( lv_real ) = CAST lcl_lisp_integer( lo_ptr->cdr->car )->integer AND frac( lv_real ) EQ 0.
+              WHEN integer.
+                IF trunc( lv_real ) = CAST lcl_lisp_integer( lo_ptr->cdr->car )->int AND frac( lv_real ) EQ 0.
                   result = true.
                 ELSE.
                   result = false.
                   EXIT.
                 ENDIF.
 
-              WHEN lcl_lisp=>type_real.
+              WHEN real.
                 IF CAST lcl_lisp_real( lo_ptr->cdr->car )->float_eq( lv_real ).
                   result = true.
                 ELSE.
@@ -8489,25 +8517,25 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                   EXIT.
                 ENDIF.
 
-              WHEN lcl_lisp=>type_rational.
+              WHEN rational.
                 lo_rat ?= lo_ptr->cdr->car.
                 lv_real = lv_real * lo_rat->denominator.
 
-                IF trunc( lv_real ) = lo_rat->integer AND frac( lv_real ) EQ 0.
+                IF trunc( lv_real ) = lo_rat->int AND frac( lv_real ) EQ 0.
                   result = true.
                 ELSE.
                   result = false.
                   EXIT.
                 ENDIF.
 
-*              WHEN lcl_lisp=>type_complex.
+*              WHEN complex.
             ENDCASE.
 
-          WHEN lcl_lisp=>type_rational.
+          WHEN rational.
             lo_rat = CAST lcl_lisp_rational( lo_ptr->car ).
             CASE lo_ptr->cdr->car->type.
-              WHEN lcl_lisp=>type_integer.
-                IF lo_rat->integer = CAST lcl_lisp_integer( lo_ptr->cdr->car )->integer
+              WHEN integer.
+                IF lo_rat->int = CAST lcl_lisp_integer( lo_ptr->cdr->car )->int
                   AND lo_rat->denominator EQ 1.
                   result = true.
                 ELSE.
@@ -8515,19 +8543,19 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                   EXIT.
                 ENDIF.
 
-              WHEN lcl_lisp=>type_real.
-                lv_real = CAST lcl_lisp_real( lo_ptr->cdr->car )->real * lo_rat->denominator.
+              WHEN real.
+                lv_real = CAST lcl_lisp_real( lo_ptr->cdr->car )->float * lo_rat->denominator.
 
-                IF lo_rat->integer = trunc( lv_real ) AND frac( lv_real ) EQ 0.
+                IF lo_rat->int = trunc( lv_real ) AND frac( lv_real ) EQ 0.
                   result = true.
                 ELSE.
                   result = false.
                   EXIT.
                 ENDIF.
 
-              WHEN lcl_lisp=>type_rational.
+              WHEN rational.
                 lo_rat_2 ?= lo_ptr->cdr->car.
-                IF lo_rat->integer = lo_rat_2->integer
+                IF lo_rat->int = lo_rat_2->int
                   AND lo_rat->denominator EQ lo_rat_2->denominator.
                   result = true.
                 ELSE.
@@ -8535,10 +8563,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                   EXIT.
                 ENDIF.
 
-*              WHEN lcl_lisp=>type_complex.
+*              WHEN complex.
             ENDCASE.
 
-*          WHEN lcl_lisp=>type_complex.
+*          WHEN complex.
         ENDCASE.
 
         lo_ptr = lo_ptr->cdr.
@@ -8560,33 +8588,33 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           RETURN.
         ENDIF.
         CASE lo_ptr->car->type.
-          WHEN lcl_lisp=>type_integer.
-            IF CAST lcl_lisp_integer( lo_ref )->integer = CAST lcl_lisp_integer( lo_ptr->cdr->car )->integer.
+          WHEN integer.
+            IF CAST lcl_lisp_integer( lo_ref )->int = CAST lcl_lisp_integer( lo_ptr->cdr->car )->int.
               result = true.
             ELSE.
               result = false.
               RETURN.
             ENDIF.
 
-          WHEN lcl_lisp=>type_rational.
+          WHEN rational.
             DATA(lo_ref_rat) = CAST lcl_lisp_rational( lo_ref ).
             DATA(lo_target_rat) = CAST lcl_lisp_rational( lo_ptr->cdr->car ).
-            IF lo_ref_rat->integer = lo_target_rat->integer AND lo_ref_rat->denominator = lo_target_rat->denominator.
+            IF lo_ref_rat->int = lo_target_rat->int AND lo_ref_rat->denominator = lo_target_rat->denominator.
               result = true.
             ELSE.
               result = false.
               RETURN.
             ENDIF.
 
-          WHEN lcl_lisp=>type_real.
-            IF CAST lcl_lisp_real( lo_ref )->float_eq( CAST lcl_lisp_real( lo_ptr->cdr->car )->real ).
+          WHEN real.
+            IF CAST lcl_lisp_real( lo_ref )->float_eq( CAST lcl_lisp_real( lo_ptr->cdr->car )->float ).
               result = true.
             ELSE.
               result = false.
               RETURN.
             ENDIF.
 
-          WHEN lcl_lisp=>type_string.
+          WHEN string.
             IF CAST lcl_lisp_string( lo_ref )->value = CAST lcl_lisp_string( lo_ptr->cdr->car )->value.
               result = true.
             ELSE.
@@ -8594,7 +8622,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
               RETURN.
             ENDIF.
 
-          WHEN lcl_lisp=>type_symbol.
+          WHEN symbol.
             DATA(lo_symbol) = CAST lcl_lisp_symbol( lo_ref ).
             DATA(lo_s_car) = CAST lcl_lisp_symbol( lo_ptr->cdr->car ).
             IF lo_symbol->value = lo_s_car->value
@@ -8726,7 +8754,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         result = false.
         CHECK list->car IS BOUND.
-        IF list->car->type EQ lcl_lisp=>type_string.
+        IF list->car->type EQ string.
           result = true.
         ENDIF.
     ENDMETHOD.                    "proc_is_string
@@ -8738,7 +8766,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         result = false.
         CHECK list->car IS BOUND.
-        IF list->car->type EQ lcl_lisp=>type_char.
+        IF list->car->type EQ char.
           result = true.
         ENDIF.
 
@@ -8751,7 +8779,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         result = false.
         CHECK list->car IS BOUND.
-        IF list->car->type EQ lcl_lisp=>type_hash.
+        IF list->car->type EQ hash.
           result = true.
         ENDIF.
     ENDMETHOD.                    "proc_is_hash
@@ -8774,9 +8802,9 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       result = false.
       CHECK list IS BOUND AND list->car IS BOUND.
       CASE list->car->type.
-        WHEN lcl_lisp=>type_real
-          OR lcl_lisp=>type_rational
-          OR lcl_lisp=>type_integer.
+        WHEN real
+          OR rational
+          OR integer.
           result = true.
       ENDCASE.
     ENDMETHOD.
@@ -8785,8 +8813,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       result = false.
       CHECK list IS BOUND AND list->car IS BOUND.
       CASE list->car->type.
-        WHEN lcl_lisp=>type_rational
-          OR lcl_lisp=>type_integer.
+        WHEN rational
+          OR integer.
           result = true.
       ENDCASE.
     ENDMETHOD.
@@ -8803,9 +8831,9 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       result = false.
       CHECK list->car IS BOUND.
       CASE list->car->type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           result = true.
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           lo_rat ?= list->car.
           CHECK lo_rat->denominator EQ 1.
           result = true.
@@ -8826,14 +8854,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       result = false.
       CHECK list->car IS BOUND.
       CASE list->car->type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           result = true.
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           lo_rat ?= list->car.
           CHECK lo_rat->denominator EQ 1.
           result = true.
-        WHEN lcl_lisp=>type_real.
-          lv_real = CAST lcl_lisp_real( list->car )->real.
+        WHEN real.
+          lv_real = CAST lcl_lisp_real( list->car )->float.
           CHECK trunc( lv_real ) EQ lv_real.
           result = true.
       ENDCASE.
@@ -8846,7 +8874,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       "_is_type symbol.
         result = false.
         CHECK list->car IS BOUND.
-        IF list->car->type EQ lcl_lisp=>type_symbol.
+        IF list->car->type EQ symbol.
           result = true.
         ENDIF.
 
@@ -8861,7 +8889,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       "_is_type pair.
         result = false.
         CHECK list->car IS BOUND.
-        IF list->car->type EQ lcl_lisp=>type_pair.
+        IF list->car->type EQ pair.
           result = true.
         ENDIF.
     ENDMETHOD.                    "proc_is_pair
@@ -8875,7 +8903,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       "_is_type boolean.
         result = false.
         CHECK list->car IS BOUND.
-        IF list->car->type EQ lcl_lisp=>type_boolean.
+        IF list->car->type EQ boolean.
           result = true.
         ENDIF.
     ENDMETHOD.
@@ -8888,7 +8916,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       "_is_type vector.
         result = false.
         CHECK list->car IS BOUND.
-        IF list->car->type EQ lcl_lisp=>type_vector.
+        IF list->car->type EQ vector.
           result = true.
         ENDIF.
     ENDMETHOD.
@@ -8908,10 +8936,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA(lo_ptr) = list->car.
       DATA(lo_slow) = lo_ptr.
 *     Iterate over list
-      WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+      WHILE lo_ptr->type EQ pair.
         lo_ptr = lo_ptr->cdr.
         lo_slow = lo_slow->cdr.
-        CHECK lo_ptr->type EQ lcl_lisp=>type_pair.
+        CHECK lo_ptr->type EQ pair.
 *       fast pointer takes 2 steps while slow pointer takes one
         lo_ptr = lo_ptr->cdr.
         CHECK lo_ptr = lo_slow.
@@ -8939,7 +8967,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_boolean.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ boolean.
         lo_test = lo_arg->car.
         lo_arg = lo_arg->cdr.
       ENDIF.
@@ -8947,7 +8975,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |boolean=? missing boolean argument in { lo_arg->car->to_string( ) }| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_boolean.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ boolean.
         IF lo_arg->car NE lo_test.
           RETURN.
         ENDIF.
@@ -8977,8 +9005,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       result = false.
 
       DATA(lo_arg) = list->car.
-      WHILE lo_arg->type = lcl_lisp=>type_pair.
-        IF lo_arg->car->type = lcl_lisp=>type_pair.
+      WHILE lo_arg->type = pair.
+        IF lo_arg->car->type = pair.
           RETURN.
         ENDIF.
         lo_arg = lo_arg->cdr.
@@ -9010,17 +9038,17 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
 
           CASE list->car->type.
-            WHEN lcl_lisp=>type_integer.
+            WHEN integer.
               lo_int ?= list->car.
-              result = lcl_lisp_new=>integer( abs( lo_int->integer ) ).
-            WHEN lcl_lisp=>type_real.
+              result = lcl_lisp_new=>integer( abs( lo_int->int ) ).
+            WHEN real.
               lo_real ?= list->car.
-              result = lcl_lisp_new=>integer( abs( lo_real->real ) ).
-            WHEN lcl_lisp=>type_rational.
+              result = lcl_lisp_new=>integer( abs( lo_real->float ) ).
+            WHEN rational.
               lo_rat ?= list->car.
-              result = lcl_lisp_new=>rational( nummer = abs( lo_rat->integer )
+              result = lcl_lisp_new=>rational( nummer = abs( lo_rat->int )
                                                denom = lo_rat->denominator ).
-*            WHEN lcl_lisp=>type_complex.
+*            WHEN complex.
             WHEN OTHERS.
               throw( |{ list->car->to_string( ) } is not a number in [abs]| ).
           ENDCASE.
@@ -9050,14 +9078,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
             cell = list->car.
             CASE cell->type.
-              WHEN lcl_lisp=>type_integer.
-                carry = CAST lcl_lisp_integer( cell )->integer.
-              WHEN lcl_lisp=>type_real.
-                carry = CAST lcl_lisp_real( cell )->real.
-              WHEN lcl_lisp=>type_rational.
+              WHEN integer.
+                carry = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                carry = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
                 lo_rat ?= cell.
-                carry = lo_rat->integer / lo_rat->denominator.
-*                  WHEN lcl_lisp=>type_complex.
+                carry = lo_rat->int / lo_rat->denominator.
+*                  WHEN complex.
               WHEN OTHERS.
                 throw( |{ cell->to_string( ) } is not a number in [sin]| ).
             ENDCASE.
@@ -9065,7 +9093,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF list->cdr NE nil.
               throw( |{ list->to_string( ) } Parameter mismatch| ).
             ENDIF.
-            result = lcl_lisp_new=>real( sin( carry ) ).
+            result = lcl_lisp_new=>real( value = sin( carry )
+                                         exact = abap_false ).
           CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
@@ -9091,14 +9120,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
             cell = list->car.
             CASE cell->type.
-              WHEN lcl_lisp=>type_integer.
-                carry = CAST lcl_lisp_integer( cell )->integer.
-              WHEN lcl_lisp=>type_real.
-                carry = CAST lcl_lisp_real( cell )->real.
-              WHEN lcl_lisp=>type_rational.
+              WHEN integer.
+                carry = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                carry = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
                 lo_rat ?= cell.
-                carry = lo_rat->integer / lo_rat->denominator.
-*                  WHEN lcl_lisp=>type_complex.
+                carry = lo_rat->int / lo_rat->denominator.
+*                  WHEN complex.
               WHEN OTHERS.
                 throw( |{ cell->to_string( ) } is not a number in [cos]| ).
             ENDCASE.
@@ -9106,7 +9135,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF list->cdr NE nil.
               throw( |{ list->to_string( ) } Parameter mismatch| ).
             ENDIF.
-            result = lcl_lisp_new=>real( cos( carry ) ).
+            result = lcl_lisp_new=>real( value = cos( carry )
+                                         exact = abap_false ).
           CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
@@ -9132,14 +9162,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
             cell = list->car.
             CASE cell->type.
-              WHEN lcl_lisp=>type_integer.
-                carry = CAST lcl_lisp_integer( cell )->integer.
-              WHEN lcl_lisp=>type_real.
-                carry = CAST lcl_lisp_real( cell )->real.
-              WHEN lcl_lisp=>type_rational.
+              WHEN integer.
+                carry = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                carry = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
                 lo_rat ?= cell.
-                carry = lo_rat->integer / lo_rat->denominator.
-*                  WHEN lcl_lisp=>type_complex.
+                carry = lo_rat->int / lo_rat->denominator.
+*                  WHEN complex.
               WHEN OTHERS.
                 throw( |{ cell->to_string( ) } is not a number in [tan]| ).
             ENDCASE.
@@ -9147,7 +9177,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF list->cdr NE nil.
               throw( |{ list->to_string( ) } Parameter mismatch| ).
             ENDIF.
-            result = lcl_lisp_new=>real( tan( carry ) ).
+            result = lcl_lisp_new=>real( value = tan( carry )
+                                         exact = abap_false ).
           CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
@@ -9173,14 +9204,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
             cell = list->car.
             CASE cell->type.
-              WHEN lcl_lisp=>type_integer.
-                carry = CAST lcl_lisp_integer( cell )->integer.
-              WHEN lcl_lisp=>type_real.
-                carry = CAST lcl_lisp_real( cell )->real.
-              WHEN lcl_lisp=>type_rational.
+              WHEN integer.
+                carry = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                carry = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
                 lo_rat ?= cell.
-                carry = lo_rat->integer / lo_rat->denominator.
-*                  WHEN lcl_lisp=>type_complex.
+                carry = lo_rat->int / lo_rat->denominator.
+*                  WHEN complex.
               WHEN OTHERS.
                 throw( |{ cell->to_string( ) } is not a number in [asin]| ).
             ENDCASE.
@@ -9188,7 +9219,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF list->cdr NE nil.
               throw( |{ list->to_string( ) } Parameter mismatch| ).
             ENDIF.
-            result = lcl_lisp_new=>real( asin( carry ) ).
+            result = lcl_lisp_new=>real( value = asin( carry )
+                                         exact = abap_false ).
           CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
@@ -9214,14 +9246,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
             cell = list->car.
             CASE cell->type.
-              WHEN lcl_lisp=>type_integer.
-                carry = CAST lcl_lisp_integer( cell )->integer.
-              WHEN lcl_lisp=>type_real.
-                carry = CAST lcl_lisp_real( cell )->real.
-              WHEN lcl_lisp=>type_rational.
+              WHEN integer.
+                carry = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                carry = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
                 lo_rat ?= cell.
-                carry = lo_rat->integer / lo_rat->denominator.
-*                  WHEN lcl_lisp=>type_complex.
+                carry = lo_rat->int / lo_rat->denominator.
+*                  WHEN complex.
               WHEN OTHERS.
                 throw( |{ cell->to_string( ) } is not a number in [acos]| ).
             ENDCASE.
@@ -9229,7 +9261,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF list->cdr NE nil.
               throw( |{ list->to_string( ) } Parameter mismatch| ).
             ENDIF.
-            result = lcl_lisp_new=>real( acos( carry ) ).
+            result = lcl_lisp_new=>real( value = acos( carry )
+                                         exact = abap_false ).
           CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
@@ -9255,14 +9288,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
             cell = list->car.
             CASE cell->type.
-              WHEN lcl_lisp=>type_integer.
-                carry = CAST lcl_lisp_integer( cell )->integer.
-              WHEN lcl_lisp=>type_real.
-                carry = CAST lcl_lisp_real( cell )->real.
-              WHEN lcl_lisp=>type_rational.
+              WHEN integer.
+                carry = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                carry = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
                 lo_rat ?= cell.
-                carry = lo_rat->integer / lo_rat->denominator.
-*                  WHEN lcl_lisp=>type_complex.
+                carry = lo_rat->int / lo_rat->denominator.
+*                  WHEN complex.
               WHEN OTHERS.
                 throw( |{ cell->to_string( ) } is not a number in [atan]| ).
             ENDCASE.
@@ -9270,7 +9303,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF list->cdr NE nil.
               throw( |{ list->to_string( ) } Parameter mismatch| ).
             ENDIF.
-            result = lcl_lisp_new=>real( atan( carry ) ).
+            result = lcl_lisp_new=>real( value = atan( carry )
+                                         exact = abap_false ).
           CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
@@ -9296,14 +9330,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
             cell = list->car.
             CASE cell->type.
-              WHEN lcl_lisp=>type_integer.
-                carry = CAST lcl_lisp_integer( cell )->integer.
-              WHEN lcl_lisp=>type_real.
-                carry = CAST lcl_lisp_real( cell )->real.
-              WHEN lcl_lisp=>type_rational.
+              WHEN integer.
+                carry = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                carry = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
                 lo_rat ?= cell.
-                carry = lo_rat->integer / lo_rat->denominator.
-*                  WHEN lcl_lisp=>type_complex.
+                carry = lo_rat->int / lo_rat->denominator.
+*                  WHEN complex.
               WHEN OTHERS.
                 throw( |{ cell->to_string( ) } is not a number in [sinh]| ).
             ENDCASE.
@@ -9311,7 +9345,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF list->cdr NE nil.
               throw( |{ list->to_string( ) } Parameter mismatch| ).
             ENDIF.
-            result = lcl_lisp_new=>real( sinh( carry ) ).
+            result = lcl_lisp_new=>real( value = sinh( carry )
+                                         exact = abap_false ).
           CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
@@ -9337,14 +9372,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
             cell = list->car.
             CASE cell->type.
-              WHEN lcl_lisp=>type_integer.
-                carry = CAST lcl_lisp_integer( cell )->integer.
-              WHEN lcl_lisp=>type_real.
-                carry = CAST lcl_lisp_real( cell )->real.
-              WHEN lcl_lisp=>type_rational.
+              WHEN integer.
+                carry = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                carry = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
                 lo_rat ?= cell.
-                carry = lo_rat->integer / lo_rat->denominator.
-*                  WHEN lcl_lisp=>type_complex.
+                carry = lo_rat->int / lo_rat->denominator.
+*                  WHEN complex.
               WHEN OTHERS.
                 throw( |{ cell->to_string( ) } is not a number in [cosh]| ).
             ENDCASE.
@@ -9352,7 +9387,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF list->cdr NE nil.
               throw( |{ list->to_string( ) } Parameter mismatch| ).
             ENDIF.
-            result = lcl_lisp_new=>real( cosh( carry ) ).
+            result = lcl_lisp_new=>real( value = cosh( carry )
+                                         exact = abap_false ).
           CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
@@ -9378,14 +9414,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
             cell = list->car.
             CASE cell->type.
-              WHEN lcl_lisp=>type_integer.
-                carry = CAST lcl_lisp_integer( cell )->integer.
-              WHEN lcl_lisp=>type_real.
-                carry = CAST lcl_lisp_real( cell )->real.
-              WHEN lcl_lisp=>type_rational.
+              WHEN integer.
+                carry = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                carry = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
                 lo_rat ?= cell.
-                carry = lo_rat->integer / lo_rat->denominator.
-*                  WHEN lcl_lisp=>type_complex.
+                carry = lo_rat->int / lo_rat->denominator.
+*                  WHEN complex.
               WHEN OTHERS.
                 throw( |{ cell->to_string( ) } is not a number in [tanh]| ).
             ENDCASE.
@@ -9393,7 +9429,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF list->cdr NE nil.
               throw( |{ list->to_string( ) } Parameter mismatch| ).
             ENDIF.
-            result = lcl_lisp_new=>real( tanh( carry ) ).
+            result = lcl_lisp_new=>real( value = tanh( carry )
+                                         exact = abap_false ).
           CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
@@ -9419,14 +9456,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
             cell = list->car.
             CASE cell->type.
-              WHEN lcl_lisp=>type_integer.
-                 carry = CAST lcl_lisp_integer( cell )->integer.
-              WHEN lcl_lisp=>type_real.
-                 carry = CAST lcl_lisp_real( cell )->real.
-              WHEN lcl_lisp=>type_rational.
+              WHEN integer.
+                 carry = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                 carry = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
                 lo_rat ?= cell.
-                carry = lo_rat->integer / lo_rat->denominator.
-*              WHEN lcl_lisp=>type_complex.
+                carry = lo_rat->int / lo_rat->denominator.
+*              WHEN complex.
               WHEN OTHERS.
                 throw( |{ cell->to_string( ) } is not a number in [asinh]| ).
             ENDCASE.
@@ -9435,7 +9472,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF list->cdr NE nil.
               throw( |{ list->to_string( ) } Parameter mismatch| ).
             ENDIF.
-          result = lcl_lisp_new=>real( log( carry + sqrt( carry ** 2 + 1 ) ) ).
+          result = lcl_lisp_new=>real( value = log( carry + sqrt( carry ** 2 + 1 ) )
+                                       exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
       ENDTRY.
@@ -9461,14 +9499,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
             cell = list->car.
             CASE cell->type.
-              WHEN lcl_lisp=>type_integer.
-                 carry = CAST lcl_lisp_integer( cell )->integer.
-              WHEN lcl_lisp=>type_real.
-                 carry = CAST lcl_lisp_real( cell )->real.
-              WHEN lcl_lisp=>type_rational.
+              WHEN integer.
+                 carry = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                 carry = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
                 lo_rat ?= cell.
-                carry = lo_rat->integer / lo_rat->denominator.
-*              WHEN lcl_lisp=>type_complex.
+                carry = lo_rat->int / lo_rat->denominator.
+*              WHEN complex.
               WHEN OTHERS.
                 throw( |{ cell->to_string( ) } is not a number in [acosh]| ).
             ENDCASE.
@@ -9476,7 +9514,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF list->cdr NE nil.
               throw( |{ list->to_string( ) } Parameter mismatch| ).
             ENDIF.
-          result = lcl_lisp_new=>real( log( carry + sqrt( carry ** 2 - 1 ) ) ).
+          result = lcl_lisp_new=>real( value = log( carry + sqrt( carry ** 2 - 1 ) )
+                                       exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
       ENDTRY.
@@ -9502,14 +9541,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             ENDIF.
             cell = list->car.
             CASE cell->type.
-              WHEN lcl_lisp=>type_integer.
-                 carry = CAST lcl_lisp_integer( cell )->integer.
-              WHEN lcl_lisp=>type_real.
-                 carry = CAST lcl_lisp_real( cell )->real.
-              WHEN lcl_lisp=>type_rational.
+              WHEN integer.
+                 carry = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                 carry = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
                 lo_rat ?= cell.
-                carry = lo_rat->integer / lo_rat->denominator.
-*              WHEN lcl_lisp=>type_complex.
+                carry = lo_rat->int / lo_rat->denominator.
+*              WHEN complex.
               WHEN OTHERS.
                 throw( |{ cell->to_string( ) } is not a number in [atanh]| ).
             ENDCASE.
@@ -9518,7 +9557,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
               throw( |{ list->to_string( ) } Parameter mismatch| ).
             ENDIF.
 
-          result = lcl_lisp_new=>real( ( log( 1 + carry ) - log( 1 - carry ) ) / 2 ).
+          result = lcl_lisp_new=>real( value = ( log( 1 + carry ) - log( 1 - carry ) ) / 2
+                                       exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
       ENDTRY.
@@ -9548,14 +9588,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-             base1 = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-             base1 = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+             base1 = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+             base1 = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            base1 = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            base1 = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [expt]| ).
         ENDCASE.
@@ -9568,17 +9608,17 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
           cell = list->cdr->car.
           CASE cell->type.
-            WHEN lcl_lisp=>type_integer.
-              exp1 = CAST lcl_lisp_integer( cell )->integer.
+            WHEN integer.
+              exp1 = CAST lcl_lisp_integer( cell )->int.
               result = lcl_lisp_new=>number( ipow( base = base1  exp = exp1 ) ).
-            WHEN lcl_lisp=>type_real.
-              exp1 = CAST lcl_lisp_real( cell )->real.
+            WHEN real.
+              exp1 = CAST lcl_lisp_real( cell )->float.
               result = lcl_lisp_new=>number( base1 ** exp1 ).
-            WHEN lcl_lisp=>type_rational.
+            WHEN rational.
               lo_rat ?= cell.
-              exp1 = lo_rat->integer / lo_rat->denominator.
+              exp1 = lo_rat->int / lo_rat->denominator.
               result = lcl_lisp_new=>number( base1 ** exp1 ).
-*            WHEN lcl_lisp=>type_complex.
+*            WHEN complex.
             WHEN OTHERS.
               throw( |{ cell->to_string( ) } is not a number in [expt]| ).
           ENDCASE.
@@ -9607,21 +9647,21 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-            carry = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-            carry = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+            carry = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+            carry = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            carry = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            carry = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [exp]| ).
         ENDCASE.
          IF list->cdr NE nil.
            throw( |{ list->to_string( ) } Parameter mismatch| ).
          ENDIF.
-        result = lcl_lisp_new=>real( exp( carry ) ).
+        result = lcl_lisp_new=>number( value = exp( carry ) ).
     CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
       throw( lx_error->get_text( ) ).
     ENDTRY.
@@ -9646,21 +9686,21 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-            carry = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-            carry = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+            carry = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+            carry = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            carry = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            carry = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [log]| ).
         ENDCASE.
          IF list->cdr NE nil.
            throw( |{ list->to_string( ) } Parameter mismatch| ).
          ENDIF.
-        result = lcl_lisp_new=>real( log( carry ) ).
+        result = lcl_lisp_new=>number( log( carry ) ).
     CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
       throw( lx_error->get_text( ) ).
     ENDTRY.
@@ -9685,21 +9725,21 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-            carry = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-            carry = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+            carry = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+            carry = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            carry = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            carry = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [sqrt]| ).
         ENDCASE.
          IF list->cdr NE nil.
            throw( |{ list->to_string( ) } Parameter mismatch| ).
          ENDIF.
-        result = lcl_lisp_new=>real( sqrt( carry ) ).
+        result = lcl_lisp_new=>number( sqrt( carry ) ).
     CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
       throw( lx_error->get_text( ) ).
     ENDTRY.
@@ -9724,14 +9764,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-            carry = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-            carry = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+            carry = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+            carry = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            carry = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            carry = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [floor]| ).
         ENDCASE.
@@ -9763,14 +9803,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-            carry = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-            carry = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+            carry = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+            carry = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            carry = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            carry = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [ceil]| ).
         ENDCASE.
@@ -9802,14 +9842,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-            carry = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-            carry = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+            carry = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+            carry = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            carry = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            carry = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [truncate]| ).
         ENDCASE.
@@ -9843,14 +9883,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-             carry = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-             carry = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+             carry = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+             carry = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            carry = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            carry = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [round]| ).
         ENDCASE.
@@ -9884,22 +9924,22 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       cell = list->car.
       CASE cell->type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           result = cell.
 
-        WHEN lcl_lisp=>type_real.
+        WHEN real.
           TRY.
-              lv_num = CAST lcl_lisp_real( cell )->real.
+              lv_num = CAST lcl_lisp_real( cell )->float.
               result = lcl_lisp_new=>number( lcl_lisp_real=>gcd( n = lv_num
                                                                  d = 1 ) * lv_num ).
             CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
               throw( lx_error->get_text( ) ).
           ENDTRY.
 
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           lo_rat ?= cell.
-          result = lcl_lisp_new=>integer( lo_rat->integer ).
-*        WHEN lcl_lisp=>type_complex.
+          result = lcl_lisp_new=>integer( lo_rat->int ).
+*        WHEN complex.
         WHEN OTHERS.
           throw( |{ cell->to_string( ) } is not a number in [numerator]| ).
       ENDCASE.
@@ -9923,26 +9963,28 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       cell = list->car.
       CASE cell->type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           result = lcl_lisp_new=>integer( 1 ).
 
-        WHEN lcl_lisp=>type_real.
+        WHEN real.
           TRY.
               lo_real ?= cell.
-              lo_frac = lcl_lisp_new=>real( frac( lo_real->real ) ).
+              lo_frac = lcl_lisp_new=>real( value = frac( lo_real->float )
+                                            exact = abap_true ).
               IF lo_frac->float_eq( 0 ).
                 result = lcl_lisp_new=>integer( 1 ).
               ELSE.
-                result = lcl_lisp_new=>real( 1 / lo_frac->real ).
+                result = lcl_lisp_new=>real( value = 1 / lo_frac->float
+                                             exact = abap_false ).
               ENDIF.
             CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
               throw( lx_error->get_text( ) ).
           ENDTRY.
 
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           lo_rat ?= cell.
           result = lcl_lisp_new=>integer( lo_rat->denominator ).
-*        WHEN lcl_lisp=>type_complex.
+*        WHEN complex.
         WHEN OTHERS.
           throw( |{ cell->to_string( ) } is not a number in [denominator]| ).
       ENDCASE.
@@ -9968,14 +10010,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-             numerator = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-             numerator = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+             numerator = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+             numerator = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            numerator = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            numerator = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [remainder]| ).
         ENDCASE.
@@ -9985,14 +10027,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->cdr->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-             denominator = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-             denominator = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+             denominator = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+             denominator = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            denominator = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            denominator = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [remainder]| ).
         ENDCASE.
@@ -10029,14 +10071,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-             numerator = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-             numerator = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+             numerator = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+             numerator = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            numerator = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            numerator = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [quotient]| ).
         ENDCASE.
@@ -10047,14 +10089,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-             denominator = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-             denominator = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+             denominator = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+             denominator = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            denominator = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            denominator = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [quotient]| ).
         ENDCASE.
@@ -10092,14 +10134,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-            numerator = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-            numerator = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+            numerator = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+            numerator = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            numerator = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            numerator = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [modulo]| ).
         ENDCASE.
@@ -10110,14 +10152,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->cdr->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-            base = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-            base = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+            base = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+            base = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            base = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            base = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [modulo]| ).
         ENDCASE.
@@ -10151,7 +10193,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_integer.
+        IF list->car->type NE integer.
           throw( list->car->to_string( ) && ` is not an integer in [random]` ) ##NO_TEXT.
         ENDIF.
 
@@ -10161,7 +10203,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
       TRY.
           DATA(lo_rnd) = cl_abap_random=>create( cl_abap_random=>seed( ) ).
-          lv_high = CAST lcl_lisp_integer( list->car )->integer.
+          lv_high = CAST lcl_lisp_integer( list->car )->int.
           result = lcl_lisp_new=>number( lo_rnd->intinrange( high = lv_high ) ).
         CATCH cx_dynamic_check INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
@@ -10180,10 +10222,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lcl_lisp=>throw( c_error_incorrect_input ).
          ENDIF.
         CASE list->car->type.
-          WHEN lcl_lisp=>type_integer
-            OR lcl_lisp=>type_real
-            OR lcl_lisp=>type_rational
-            OR lcl_lisp=>type_complex.
+          WHEN integer
+            OR real
+            OR rational
+            OR complex.
           WHEN OTHERS.
             throw( |{ list->car->to_string( ) } is not a number in exact?| ) ##NO_TEXT.
         ENDCASE.
@@ -10204,10 +10246,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lcl_lisp=>throw( c_error_incorrect_input ).
          ENDIF.
         CASE list->car->type.
-          WHEN lcl_lisp=>type_integer
-            OR lcl_lisp=>type_real
-            OR lcl_lisp=>type_rational
-            OR lcl_lisp=>type_complex.
+          WHEN integer
+            OR real
+            OR rational
+            OR complex.
           WHEN OTHERS.
             throw( |{ list->car->to_string( ) } is not a number in inexact?| ) ##NO_TEXT.
         ENDCASE.
@@ -10231,10 +10273,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lcl_lisp=>throw( c_error_incorrect_input ).
          ENDIF.
         CASE list->car->type.
-          WHEN lcl_lisp=>type_integer
-            OR lcl_lisp=>type_real
-            OR lcl_lisp=>type_rational
-            OR lcl_lisp=>type_complex.
+          WHEN integer
+            OR real
+            OR rational
+            OR complex.
           WHEN OTHERS.
             throw( |{ list->car->to_string( ) } is not a number in exact| ) ##NO_TEXT.
         ENDCASE.
@@ -10244,14 +10286,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         result = lo_number.
       ELSE.
         CASE lo_number->type.
-          WHEN lcl_lisp=>type_real.
+          WHEN real.
             lo_real ?= lo_number.
-            IF abs( lo_real->real ) GT 1.
-              lv_denom = trunc( cl_abap_math=>max_int4 / lo_real->real ).
-              lv_nummer = round( val = lo_real->real * lv_denom dec = 0 ).
+            IF abs( lo_real->float ) GT 1.
+              lv_denom = trunc( cl_abap_math=>max_int4 / lo_real->float ).
+              lv_nummer = round( val = lo_real->float * lv_denom dec = 0 ).
             ELSE.
-              lv_nummer = trunc( cl_abap_math=>max_int4 * lo_real->real ).
-              lv_denom = round( val = lv_nummer / lo_real->real dec = 0 ).
+              lv_nummer = trunc( cl_abap_math=>max_int4 * lo_real->float ).
+              lv_denom = round( val = lv_nummer / lo_real->float dec = 0 ).
             ENDIF.
 
             result = lcl_lisp_new=>rational( nummer = lv_nummer
@@ -10278,10 +10320,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lcl_lisp=>throw( c_error_incorrect_input ).
          ENDIF.
         CASE list->car->type.
-          WHEN lcl_lisp=>type_integer
-            OR lcl_lisp=>type_real
-            OR lcl_lisp=>type_rational
-            OR lcl_lisp=>type_complex.
+          WHEN integer
+            OR real
+            OR rational
+            OR complex.
           WHEN OTHERS.
             throw( |{ list->car->to_string( ) } is not a number in inexact| ) ##NO_TEXT.
         ENDCASE.
@@ -10289,14 +10331,16 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_number ?= list->car.
       IF lo_number->exact EQ abap_true.
         CASE lo_number->type.
-          WHEN lcl_lisp=>type_rational.
+          WHEN rational.
             lo_rat ?= lo_number.
-            lv_real = lo_rat->integer / lo_rat->denominator.
-            result = lcl_lisp_new=>real( lv_real ).
-          WHEN lcl_lisp=>type_integer.
+            lv_real = lo_rat->int / lo_rat->denominator.
+            result = lcl_lisp_new=>real( value = lv_real
+                                         exact = abap_false ).
+          WHEN integer.
             lo_int ?= lo_number.
-            lv_real = lo_int->integer.
-            result = lcl_lisp_new=>real( lv_real ).
+            lv_real = lo_int->int.
+            result = lcl_lisp_new=>real( value = lv_real
+                                         exact = abap_false ).
           WHEN OTHERS.
             throw( |no inexact representation of { lo_number->to_string( ) }| ).
         ENDCASE.
@@ -10330,16 +10374,16 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           IF list->cdr->car IS NOT BOUND.
             lcl_lisp=>throw( c_error_incorrect_input ).
           ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_integer.
+        IF list->cdr->car->type NE integer.
           throw( list->cdr->car->to_string( ) && ` is not an integer in number->string` ) ##NO_TEXT.
         ENDIF.
 
-        lv_radix = CAST lcl_lisp_integer( list->cdr->car )->integer.
+        lv_radix = CAST lcl_lisp_integer( list->cdr->car )->int.
       ENDIF.
 
       CASE list->car->type.
-        WHEN lcl_lisp=>type_integer.
-          lv_int = CAST lcl_lisp_integer( list->car )->integer.
+        WHEN integer.
+          lv_int = CAST lcl_lisp_integer( list->car )->int.
           CASE lv_radix.
             WHEN 10.
               lv_text = lv_int.
@@ -10358,13 +10402,13 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
               lv_radix_error = abap_true.
           ENDCASE.
 
-        WHEN lcl_lisp=>type_real.
+        WHEN real.
           lv_radix_error = xsdbool( lv_radix NE 10 ).
-          lv_real = CAST lcl_lisp_real( list->car )->real.
+          lv_real = CAST lcl_lisp_real( list->car )->float.
           lv_text = lv_real.
           result = lcl_lisp_new=>string( condense( lv_text ) ).
 
-        WHEN lcl_lisp=>type_rational.
+        WHEN rational.
           lv_radix_error = xsdbool( lv_radix NE 10 ).
           lv_text = list->car->to_string( ).
           result = lcl_lisp_new=>string( lv_text ).
@@ -10410,7 +10454,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
       "_validate_string list->car `string->number`.
-        IF list->car->type NE lcl_lisp=>type_string.
+        IF list->car->type NE string.
           throw( list->car->to_string( ) && ` is not a string in string->number` ) ##NO_TEXT.
         ENDIF.
 
@@ -10425,11 +10469,11 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           IF list->cdr->car IS NOT BOUND.
             lcl_lisp=>throw( c_error_incorrect_input ).
           ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_integer.
+        IF list->cdr->car->type NE integer.
           throw( list->cdr->car->to_string( ) && ` is not an integer in string->number` ) ##NO_TEXT.
         ENDIF.
 
-        lv_radix = CAST lcl_lisp_integer( list->cdr->car )->integer.
+        lv_radix = CAST lcl_lisp_integer( list->cdr->car )->int.
       ENDIF.
 
       result = string_to_number( iv_text = list->car->value
@@ -10456,7 +10500,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
       "_validate_string list->car `write-string`.
-        IF list->car->type NE lcl_lisp=>type_string.
+        IF list->car->type NE string.
           throw( list->car->to_string( ) && ` is not a string in write-string` ) ##NO_TEXT.
         ENDIF.
 
@@ -10473,7 +10517,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_char.
+        IF list->car->type NE char.
           throw( list->car->to_string( ) && ` is not a char in write-char` ) ##NO_TEXT.
         ENDIF.
 
@@ -10507,12 +10551,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA li_port TYPE REF TO lif_input_port.
 
       TRY.
-          IF list->type EQ lcl_lisp=>type_pair.
+          IF list->type EQ pair.
             "_validate_port list->car `peek-char`.
             IF list->car IS NOT BOUND.
               lcl_lisp=>throw( c_error_incorrect_input ).
             ENDIF.
-            IF list->car->type NE lcl_lisp=>type_port.
+            IF list->car->type NE port.
               throw( list->car->to_string( ) && ` is not a port in peek-char` ) ##NO_TEXT.
             ENDIF.
 
@@ -10531,12 +10575,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA li_port TYPE REF TO lif_input_port.
 
       TRY.
-          IF list->type EQ lcl_lisp=>type_pair.
+          IF list->type EQ pair.
             "_validate_port list->car `char-ready?`.
             IF list->car IS NOT BOUND.
               lcl_lisp=>throw( c_error_incorrect_input ).
             ENDIF.
-            IF list->car->type NE lcl_lisp=>type_port.
+            IF list->car->type NE port.
               throw( list->car->to_string( ) && ` is not a port in char-ready?` ) ##NO_TEXT.
             ENDIF.
 
@@ -10563,7 +10607,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 
       lo_ptr = list.
-      WHILE lo_ptr->type EQ lcl_lisp=>type_pair AND lo_ptr->car->type EQ lcl_lisp=>type_char.
+      WHILE lo_ptr->type EQ pair AND lo_ptr->car->type EQ char.
         lv_text = lv_text && lo_ptr->car->value+0(1).
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
@@ -10588,11 +10632,11 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_integer.
+        IF list->car->type NE integer.
           throw( list->car->to_string( ) && ` is not an integer in make-string` ) ##NO_TEXT.
         ENDIF.
 
-      lv_len = CAST lcl_lisp_integer( list->car )->integer.
+      lv_len = CAST lcl_lisp_integer( list->car )->int.
 
       IF list->cdr NE nil.
         DATA(lo_char) = list->cdr->car.
@@ -10600,7 +10644,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF lo_char IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF lo_char->type NE lcl_lisp=>type_char.
+        IF lo_char->type NE char.
           throw( lo_char->to_string( ) && ` is not a char in make-string` ) ##NO_TEXT.
         ENDIF.
 
@@ -10631,11 +10675,11 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_integer.
+        IF list->cdr->car->type NE integer.
           throw( list->cdr->car->to_string( ) && ` is not an integer in string->list start` ) ##NO_TEXT.
         ENDIF.
 
-        lv_start = CAST lcl_lisp_integer( list->cdr->car )->integer.
+        lv_start = CAST lcl_lisp_integer( list->cdr->car )->int.
 
         "_validate list->cdr->cdr.
         IF list->cdr->cdr IS NOT BOUND.
@@ -10646,11 +10690,11 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF list->cdr->cdr->car IS NOT BOUND.
               lcl_lisp=>throw( c_error_incorrect_input ).
             ENDIF.
-            IF list->cdr->cdr->car->type NE lcl_lisp=>type_integer.
+            IF list->cdr->cdr->car->type NE integer.
               throw( list->cdr->cdr->car->to_string( ) && ` is not an integer in string->list end` ) ##NO_TEXT.
             ENDIF.
 
-          lv_len = CAST lcl_lisp_integer( list->cdr->cdr->car )->integer.
+          lv_len = CAST lcl_lisp_integer( list->cdr->cdr->car )->int.
           lv_len = lv_len - lv_start.
           lv_text = list->car->value+lv_start(lv_len).
         ELSE.
@@ -10684,7 +10728,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_string.
+        IF list->car->type NE string.
           throw( list->car->to_string( ) && ` is not a string in string-length` ) ##NO_TEXT.
         ENDIF.
 
@@ -10707,7 +10751,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_string.
+        IF list->car->type NE string.
           throw( list->car->to_string( ) && ` is not a string in string-copy` ) ##NO_TEXT.
         ENDIF.
 
@@ -10724,11 +10768,11 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_integer.
+        IF list->cdr->car->type NE integer.
           throw( list->cdr->car->to_string( ) && ` is not an integer in string-copy start` ) ##NO_TEXT.
         ENDIF.
 
-        lv_start = CAST lcl_lisp_integer( list->cdr->car )->integer.
+        lv_start = CAST lcl_lisp_integer( list->cdr->car )->int.
 
         "_validate list->cdr->cdr.
         IF list->cdr->cdr IS NOT BOUND.
@@ -10739,11 +10783,11 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             IF list->cdr->cdr->car IS NOT BOUND.
               lcl_lisp=>throw( c_error_incorrect_input ).
             ENDIF.
-            IF list->cdr->cdr->car->type NE lcl_lisp=>type_integer.
+            IF list->cdr->cdr->car->type NE integer.
               throw( list->cdr->cdr->car->to_string( ) && ` is not an integer in string-copy end` ) ##NO_TEXT.
             ENDIF.
 
-          lv_len = CAST lcl_lisp_integer( list->cdr->cdr->car )->integer.
+          lv_len = CAST lcl_lisp_integer( list->cdr->cdr->car )->int.
           lv_len = lv_len - lv_start.
           lv_text = list->car->value+lv_start(lv_len).
         ELSE.
@@ -10767,7 +10811,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_string.
+        IF list->car->type NE string.
           throw( list->car->to_string( ) && ` is not a string in string-ref` ) ##NO_TEXT.
         ENDIF.
 
@@ -10775,14 +10819,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_integer.
+        IF list->cdr->car->type NE integer.
           throw( list->cdr->car->to_string( ) && ` is not an integer in string-ref` ) ##NO_TEXT.
         ENDIF.
-        IF CAST lcl_lisp_integer( list->cdr->car )->integer LT 0.
+        IF CAST lcl_lisp_integer( list->cdr->car )->int LT 0.
           throw( list->cdr->car->to_string( ) && ` must be non-negative in string-ref` ) ##NO_TEXT.
         ENDIF.
 
-      lv_index = CAST lcl_lisp_integer( list->cdr->car )->integer.
+      lv_index = CAST lcl_lisp_integer( list->cdr->car )->int.
       lv_char = list->car->value+lv_index(1).
 
       result = lcl_lisp_new=>char( lv_char ).
@@ -10806,7 +10850,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_string.
+        IF list->car->type NE string.
           throw( list->car->to_string( ) && ` is not a string in string-set!` ) ##NO_TEXT.
         ENDIF.
 
@@ -10814,10 +10858,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_integer.
+        IF list->cdr->car->type NE integer.
           throw( list->cdr->car->to_string( ) && ` is not an integer in string-set!` ) ##NO_TEXT.
         ENDIF.
-        IF CAST lcl_lisp_integer( list->cdr->car )->integer LT 0.
+        IF CAST lcl_lisp_integer( list->cdr->car )->int LT 0.
           throw( list->cdr->car->to_string( ) && ` must be non-negative in string-set!` ) ##NO_TEXT.
         ENDIF.
 
@@ -10825,14 +10869,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->cdr->car->type NE lcl_lisp=>type_char.
+        IF list->cdr->cdr->car->type NE char.
           throw( list->cdr->cdr->car->to_string( ) && ` is not a char in string-set!` ) ##NO_TEXT.
         ENDIF.
 
       lo_char ?= list->cdr->cdr->car.
       lv_char = lo_char->value(1).
 
-      lv_index = CAST lcl_lisp_integer( list->cdr->car )->integer.
+      lv_index = CAST lcl_lisp_integer( list->cdr->car )->int.
 
       lo_string ?= list->car.
       "_validate_mutable lo_string `in string-set!`.
@@ -10867,7 +10911,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
 
       lo_ptr = list->car.
-      WHILE lo_ptr->type = lcl_lisp=>type_pair AND lo_ptr->car->type EQ lcl_lisp=>type_char.
+      WHILE lo_ptr->type = pair AND lo_ptr->car->type EQ char.
         lv_text = lv_text && lo_ptr->car->value+0(1).
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
@@ -10883,7 +10927,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
 
-      IF list->car->type = lcl_lisp=>type_symbol.
+      IF list->car->type = symbol.
         result = lcl_lisp_new=>string( value = list->car->value
                                        iv_mutable = abap_false ).
       ELSE.
@@ -10897,7 +10941,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
 
-      IF list->car->type = lcl_lisp=>type_string.
+      IF list->car->type = string.
         result = lcl_lisp_new=>symbol( list->car->value ).
       ELSE.
         throw( |{ list->car->to_string( ) } is not a string| ).
@@ -10913,7 +10957,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 
       lo_ptr = list.
-      WHILE lo_ptr->type = lcl_lisp=>type_pair AND lo_ptr->car->type EQ lcl_lisp=>type_string.
+      WHILE lo_ptr->type = pair AND lo_ptr->car->type EQ string.
         lv_text = lv_text && lo_ptr->car->value.
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
@@ -10944,34 +10988,34 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-             lv_max = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-             lv_max = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+             lv_max = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+             lv_max = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            lv_max = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            lv_max = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [max]| ).
         ENDCASE.
 
       lo_ptr = list->cdr.
-      WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+      WHILE lo_ptr->type EQ pair.
         "_get_number carry lo_ptr->car '[max]'.
         IF lo_ptr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
         cell = lo_ptr->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-             carry = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-             carry = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+             carry = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+             carry = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            carry = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            carry = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [max]| ).
         ENDCASE.
@@ -11002,34 +11046,34 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-            lv_min = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-            lv_min = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+            lv_min = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+            lv_min = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            lv_min = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            lv_min = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [min]| ).
         ENDCASE.
 
       lo_ptr = list->cdr.
-      WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+      WHILE lo_ptr->type EQ pair.
         "_get_number carry lo_ptr->car '[min]'.
         IF lo_ptr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
         cell = lo_ptr->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-             carry = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-             carry = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+             carry = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+             carry = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            carry = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            carry = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [min]| ).
         ENDCASE.
@@ -11063,35 +11107,35 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-             lv_gcd = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-             lv_gcd = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+             lv_gcd = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+             lv_gcd = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            lv_gcd = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            lv_gcd = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [gcd]| ).
         ENDCASE.
 
 
         lo_ptr = list->cdr.
-        WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+        WHILE lo_ptr->type EQ pair.
           "_get_number carry lo_ptr->car '[gcd]'.
             IF lo_ptr->car IS NOT BOUND.
               lcl_lisp=>throw( c_error_incorrect_input ).
             ENDIF.
             cell = lo_ptr->car.
             CASE cell->type.
-              WHEN lcl_lisp=>type_integer.
-                 carry = CAST lcl_lisp_integer( cell )->integer.
-              WHEN lcl_lisp=>type_real.
-                 carry = CAST lcl_lisp_real( cell )->real.
-              WHEN lcl_lisp=>type_rational.
+              WHEN integer.
+                 carry = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                 carry = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
                 lo_rat ?= cell.
-                carry = lo_rat->integer / lo_rat->denominator.
-*              WHEN lcl_lisp=>type_complex.
+                carry = lo_rat->int / lo_rat->denominator.
+*              WHEN complex.
               WHEN OTHERS.
                 throw( |{ cell->to_string( ) } is not a number in [gcd]| ).
             ENDCASE.
@@ -11127,34 +11171,34 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
         cell = list->car.
         CASE cell->type.
-          WHEN lcl_lisp=>type_integer.
-             lv_lcm = CAST lcl_lisp_integer( cell )->integer.
-          WHEN lcl_lisp=>type_real.
-             lv_lcm = CAST lcl_lisp_real( cell )->real.
-          WHEN lcl_lisp=>type_rational.
+          WHEN integer.
+             lv_lcm = CAST lcl_lisp_integer( cell )->int.
+          WHEN real.
+             lv_lcm = CAST lcl_lisp_real( cell )->float.
+          WHEN rational.
             lo_rat ?= cell.
-            lv_lcm = lo_rat->integer / lo_rat->denominator.
-*          WHEN lcl_lisp=>type_complex.
+            lv_lcm = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
           WHEN OTHERS.
             throw( |{ cell->to_string( ) } is not a number in [lcm]| ).
         ENDCASE.
 
         lo_ptr = list->cdr.
-        WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+        WHILE lo_ptr->type EQ pair.
           "_get_number carry lo_ptr->car '[lcm]'.
             IF lo_ptr->car IS NOT BOUND.
               lcl_lisp=>throw( c_error_incorrect_input ).
             ENDIF.
             cell = lo_ptr->car.
             CASE cell->type.
-              WHEN lcl_lisp=>type_integer.
-                 carry = CAST lcl_lisp_integer( cell )->integer.
-              WHEN lcl_lisp=>type_real.
-                 carry = CAST lcl_lisp_real( cell )->real.
-              WHEN lcl_lisp=>type_rational.
+              WHEN integer.
+                 carry = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                 carry = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
                 lo_rat ?= cell.
-                carry = lo_rat->integer / lo_rat->denominator.
-*              WHEN lcl_lisp=>type_complex.
+                carry = lo_rat->int / lo_rat->denominator.
+*              WHEN complex.
               WHEN OTHERS.
                 throw( |{ cell->to_string( ) } is not a number in [lcm]| ).
             ENDCASE.
@@ -11175,7 +11219,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
 
       result = false.
-      CHECK list->car->type EQ lcl_lisp=>type_port.
+      CHECK list->car->type EQ port.
       lo_port ?= list->car.
       CHECK lo_port->port_type EQ lcl_lisp_port=>c_port_textual.
       result = true.
@@ -11190,7 +11234,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 
       result = false.
-      CHECK list->car->type EQ lcl_lisp=>type_port.
+      CHECK list->car->type EQ port.
       lo_port ?= list->car.
       CHECK lo_port->port_type EQ lcl_lisp_port=>c_port_binary.
       result = true.
@@ -11203,7 +11247,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 
       result = false.
-      CHECK list->car->type EQ lcl_lisp=>type_port.
+      CHECK list->car->type EQ port.
       result = true.
     ENDMETHOD.
 
@@ -11216,7 +11260,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 
       result = false.
-      CHECK list->car->type EQ lcl_lisp=>type_port.
+      CHECK list->car->type EQ port.
       lo_port ?= list->car.
       CHECK lo_port->input EQ abap_true.
       result = true.
@@ -11231,7 +11275,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 
       result = false.
-      CHECK list->car->type EQ lcl_lisp=>type_port.
+      CHECK list->car->type EQ port.
       lo_port ?= list->car.
       CHECK lo_port->output EQ abap_true.
       result = true.
@@ -11275,7 +11319,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_port.
+        IF list->car->type NE port.
           throw( list->car->to_string( ) && ` is not a port in close-output-port` ) ##NO_TEXT.
         ENDIF.
 
@@ -11295,7 +11339,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_port.
+        IF list->car->type NE port.
           throw( list->car->to_string( ) && ` is not a port in close-input-port` ) ##NO_TEXT.
         ENDIF.
 
@@ -11315,7 +11359,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_port.
+        IF list->car->type NE port.
           throw( list->car->to_string( ) && ` is not a port in close-port` ) ##NO_TEXT.
         ENDIF.
 
@@ -11344,7 +11388,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_string.
+        IF list->car->type NE string.
           throw( list->car->to_string( ) && ` is not a string in open-input-string` ) ##NO_TEXT.
         ENDIF.
 
@@ -11370,7 +11414,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_port.
+        IF list->car->type NE port.
           throw( list->car->to_string( ) && ` is not a port in get-output-string` ) ##NO_TEXT.
         ENDIF.
 
@@ -11478,7 +11522,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_char.
+        IF list->car->type NE char.
           throw( list->car->to_string( ) && ` is not a char in char-alphabetic?` ) ##NO_TEXT.
         ENDIF.
 
@@ -11500,7 +11544,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_char.
+        IF list->car->type NE char.
           throw( list->car->to_string( ) && ` is not a char in char-numeric?` ) ##NO_TEXT.
         ENDIF.
       lv_char = list->car->value.
@@ -11562,7 +11606,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_char.
+        IF list->car->type NE char.
           throw( list->car->to_string( ) && ` is not a char in digit-value` ) ##NO_TEXT.
         ENDIF.
       lv_char = list->car->value.
@@ -11649,7 +11693,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_char.
+        IF list->car->type NE char.
           throw( list->car->to_string( ) && ` is not a char in char-whitespace?` ) ##NO_TEXT.
         ENDIF.
 
@@ -11671,7 +11715,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_char.
+        IF list->car->type NE char.
           throw( list->car->to_string( ) && ` is not a char in char-upper-case?` ) ##NO_TEXT.
         ENDIF.
       result = false.
@@ -11689,7 +11733,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_char.
+        IF list->car->type NE char.
           throw( list->car->to_string( ) && ` is not a char in char-lower-case?` ) ##NO_TEXT.
         ENDIF.
 
@@ -11750,7 +11794,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lo_test = lo_arg->car.
         lv_ref = char_to_integer( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -11759,7 +11803,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `char=?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lv_test = char_to_integer( lo_arg->car ).
         IF lv_ref = lv_test.
           lv_ref = lv_test.
@@ -11792,7 +11836,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lo_test = lo_arg->car.
         lv_ref = char_to_integer( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -11801,7 +11845,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `char<?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lv_test = char_to_integer( lo_arg->car ).
         IF lv_ref < lv_test.
           lv_ref = lv_test.
@@ -11835,7 +11879,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lo_test = lo_arg->car.
         lv_ref = char_to_integer( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -11844,7 +11888,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `char>?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lv_test = char_to_integer( lo_arg->car ).
         IF lv_ref > lv_test.
           lv_ref = lv_test.
@@ -11877,7 +11921,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lo_test = lo_arg->car.
         lv_ref = char_to_integer( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -11886,7 +11930,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `char<=?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lv_test = char_to_integer( lo_arg->car ).
         IF lv_ref <= lv_test.
           lv_ref = lv_test.
@@ -11920,7 +11964,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lo_test = lo_arg->car.
         lv_ref = char_to_integer( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -11929,7 +11973,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `char>=?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lv_test = char_to_integer( lo_arg->car ).
         IF lv_ref >= lv_test.
           lv_ref = lv_test.
@@ -11962,7 +12006,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lo_test = lo_arg->car.
         lv_ref = char_fold_case_to_integer( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -11971,7 +12015,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `char-ci=?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lv_test = char_fold_case_to_integer( lo_arg->car ).
         IF lv_ref  = lv_test.
           lv_ref = lv_test.
@@ -12004,7 +12048,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lo_test = lo_arg->car.
         lv_ref = char_fold_case_to_integer( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -12013,7 +12057,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `char-ci<?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lv_test = char_fold_case_to_integer( lo_arg->car ).
         IF lv_ref < lv_test.
           lv_ref = lv_test.
@@ -12047,7 +12091,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lo_test = lo_arg->car.
         lv_ref = char_fold_case_to_integer( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -12056,7 +12100,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `char-ci>?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lv_test = char_fold_case_to_integer( lo_arg->car ).
         IF lv_ref > lv_test.
           lv_ref = lv_test.
@@ -12089,7 +12133,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lo_test = lo_arg->car.
         lv_ref = char_fold_case_to_integer( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -12098,7 +12142,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `char-ci<=?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lv_test = char_fold_case_to_integer( lo_arg->car ).
         IF lv_ref <= lv_test.
           lv_ref = lv_test.
@@ -12132,7 +12176,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lo_test = lo_arg->car.
         lv_ref = char_fold_case_to_integer( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -12141,7 +12185,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `char-ci>=?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_char.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ char.
         lv_test = char_fold_case_to_integer( lo_arg->car ).
         IF lv_ref >= lv_test.
           lv_ref = lv_test.
@@ -12176,7 +12220,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lo_test = lo_arg->car.
         lv_ref = char_case_identity( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -12185,7 +12229,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `string=?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lv_test = char_case_identity( lo_arg->car ).
         IF lv_ref = lv_test.
           lv_ref = lv_test.
@@ -12219,7 +12263,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lo_test = lo_arg->car.
         lv_ref = char_case_identity( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -12228,7 +12272,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `string<?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lv_test = char_case_identity( lo_arg->car ).
         IF lv_ref < lv_test.
           lv_ref = lv_test.
@@ -12262,7 +12306,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lo_test = lo_arg->car.
         lv_ref = char_case_identity( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -12271,7 +12315,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `string>?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lv_test = char_case_identity( lo_arg->car ).
         IF lv_ref > lv_test.
           lv_ref = lv_test.
@@ -12306,7 +12350,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lo_test = lo_arg->car.
         lv_ref = char_case_identity( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -12315,7 +12359,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `string<=?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lv_test = char_case_identity( lo_arg->car ).
         IF lv_ref <= lv_test.
           lv_ref = lv_test.
@@ -12349,7 +12393,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lo_test = lo_arg->car.
         lv_ref = char_case_identity( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -12358,7 +12402,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `string>=?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lv_test = char_case_identity( lo_arg->car ).
         IF lv_ref >= lv_test.
           lv_ref = lv_test.
@@ -12394,7 +12438,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lo_test = lo_arg->car.
         lv_ref = fold_case( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -12403,7 +12447,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `string-ci=?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lv_test = fold_case( lo_arg->car ).
         IF lv_ref = lv_test.
           lv_ref = lv_test.
@@ -12437,7 +12481,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lo_test = lo_arg->car.
         lv_ref = fold_case( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -12446,7 +12490,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `string-ci<?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lv_test = fold_case( lo_arg->car ).
         IF lv_ref < lv_test.
           lv_ref = lv_test.
@@ -12480,7 +12524,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lo_test = lo_arg->car.
         lv_ref = fold_case( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -12489,7 +12533,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `string-ci>?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lv_test = fold_case( lo_arg->car ).
         IF lv_ref > lv_test.
           lv_ref = lv_test.
@@ -12523,7 +12567,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lo_test = lo_arg->car.
         lv_ref = fold_case( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -12532,7 +12576,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `string-ci<=?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lv_test = fold_case( lo_arg->car ).
         IF lv_ref <= lv_test.
           lv_ref = lv_test.
@@ -12566,7 +12610,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_arg = list.
 
       lo_test = nil.
-      IF lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lo_test = lo_arg->car.
         lv_ref = fold_case( lo_test ).
         lo_arg = lo_arg->cdr.
@@ -12575,7 +12619,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |{ `string-ci>=?` } missing argument| ).
       ENDIF.
 
-      WHILE lo_arg->type EQ lcl_lisp=>type_pair AND lo_arg->car->type EQ lcl_lisp=>type_string.
+      WHILE lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lv_test = fold_case( lo_arg->car ).
         IF lv_ref >= lv_test.
           lv_ref = lv_test.
@@ -12600,12 +12644,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      "_validate_char list->car `char->integer`.
+      "_validate_char list->car `char->int`.
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_char.
-          throw( list->car->to_string( ) && ` is not a char in char->integer` ) ##NO_TEXT.
+        IF list->car->type NE char.
+          throw( list->car->to_string( ) && ` is not a char in char->int` ) ##NO_TEXT.
         ENDIF.
 
       result = lcl_lisp_new=>integer( char_to_integer( list->car ) ).
@@ -12626,11 +12670,11 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_integer.
+        IF list->car->type NE integer.
           throw( list->car->to_string( ) && ` is not an integer in integer->char` ) ##NO_TEXT.
         ENDIF.
 
-      lv_int = CAST lcl_lisp_integer( list->car )->integer.
+      lv_int = CAST lcl_lisp_integer( list->car )->int.
 
       ASSIGN lv_int TO <xint> CASTING.
       ASSIGN lv_char TO <xchar> CASTING.
@@ -12648,7 +12692,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_char.
+        IF list->car->type NE char.
           throw( list->car->to_string( ) && ` is not a char in char-upcase` ) ##NO_TEXT.
         ENDIF.
 
@@ -12665,7 +12709,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_char.
+        IF list->car->type NE char.
           throw( list->car->to_string( ) && ` is not a char in char-downcase` ) ##NO_TEXT.
         ENDIF.
 
@@ -12742,8 +12786,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->car = nil OR ( list->car->type NE lcl_lisp=>type_string
-                            AND list->car->type NE lcl_lisp=>type_symbol ).
+      IF list->car = nil OR ( list->car->type NE string
+                            AND list->car->type NE symbol ).
         throw( |ab-data: String or symbol required as name of type| ).
       ENDIF.
 
@@ -12813,7 +12857,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 
       DATA(lo_ref) = list->car.
-      IF lo_ref->type NE lcl_lisp=>type_abap_table.
+      IF lo_ref->type NE abap_table.
         throw( |ab-append-row requires ABAP table as parameter| ).
       ENDIF.
       throw( `ab-append-row not implemented yet` ).
@@ -12826,7 +12870,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 
       DATA(lo_ref) = list->car.
-      IF lo_ref->type NE lcl_lisp=>type_abap_table.
+      IF lo_ref->type NE abap_table.
         throw( |ab-delete-row requires ABAP table as parameter| ).
       ENDIF.
       throw( `ab-delete-row not implemented yet` ).
@@ -12839,7 +12883,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 
       DATA(lo_ref) = list->car.
-      IF lo_ref->type NE lcl_lisp=>type_abap_table.
+      IF lo_ref->type NE abap_table.
         throw( |ab-get-row requires ABAP table as parameter| ).
       ENDIF.
       throw( `ab-get-row not implemented yet` ).
@@ -12854,8 +12898,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-      IF list->car->type NE lcl_lisp=>type_abap_data AND
-         list->car->type NE lcl_lisp=>type_abap_table.
+      IF list->car->type NE abap_data AND
+         list->car->type NE abap_table.
         throw( |ab-get-value requires ABAP data or table as parameter| ).
       ENDIF.
       lo_ref ?= list->car.
@@ -12876,8 +12920,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      IF list->car->type NE lcl_lisp=>type_abap_data AND
-         list->car->type NE lcl_lisp=>type_abap_table.
+      IF list->car->type NE abap_data AND
+         list->car->type NE abap_table.
         throw( |ab-set-value requires ABAP data or table as first parameter| ).
       ENDIF.
       lo_ref ?= list->car.
@@ -12902,7 +12946,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 *      ENDIF.
 *
 **     The first parameter must be a function module instance
-*      IF list->car->type NE lcl_lisp=>type_abap_function.
+*      IF list->car->type NE abap_function.
 *        throw( |{ list->car->value } is not a function module reference| ).
 *      ENDIF.
 *
@@ -12941,9 +12985,9 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 
 *     Ensure a valid first parameter is passed
-      IF list->car->type NE lcl_lisp=>type_abap_data
-        AND list->car->type NE lcl_lisp=>type_abap_function
-        AND list->car->type NE lcl_lisp=>type_abap_table.
+      IF list->car->type NE abap_data
+        AND list->car->type NE abap_function
+        AND list->car->type NE abap_table.
         throw( |ab-get: First parameter must be ABAP data or table or a function| ).
       ENDIF.
       lo_ref ?= list->car.
@@ -12977,9 +13021,9 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 
 *     Ensure a valid first parameter is passed
-      IF list->car->type NE lcl_lisp=>type_abap_data
-        AND list->car->type NE lcl_lisp=>type_abap_function
-        AND list->car->type NE lcl_lisp=>type_abap_table.
+      IF list->car->type NE abap_data
+        AND list->car->type NE abap_function
+        AND list->car->type NE abap_table.
         throw( |ab-set: First parameter must be ABAP data or table or a function| ).
       ENDIF.
       lo_ref ?= list->car.
@@ -13006,12 +13050,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       IF cl_abap_typedescr=>describe_by_data( <target> )->kind = cl_abap_typedescr=>kind_elem.
 *       For now, we will support setting data from a number, string or symbol
         CASE lo_source->type.
-          WHEN lcl_lisp=>type_string OR lcl_lisp=>type_symbol.
+          WHEN string OR symbol.
             <target> = lo_source->value.
-          WHEN lcl_lisp=>type_integer.
-            <target> = CAST lcl_lisp_integer( lo_source )->integer.
-          WHEN lcl_lisp=>type_real.
-            <target> = CAST lcl_lisp_real( lo_source )->real.
+          WHEN integer.
+            <target> = CAST lcl_lisp_integer( lo_source )->int.
+          WHEN real.
+            <target> = CAST lcl_lisp_real( lo_source )->float.
         ENDCASE.
       ELSE.
 *       Complex types will just copy the whole value across
@@ -13103,7 +13147,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 *       Table type
         WHEN cl_abap_typedescr=>kind_table.
 *         For this mapping to happen, the element must be a cons cell
-          IF element->type NE lcl_lisp=>type_pair.
+          IF element->type NE pair.
             throw( |Mapping failed: Non-cell to table| ).
           ENDIF.
 *         Provide reference to table and line
@@ -13135,7 +13179,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
         WHEN cl_abap_typedescr=>kind_struct.
 *         Structure
-          IF element->type NE lcl_lisp=>type_pair.
+          IF element->type NE pair.
             throw( |Mapping failed: Non-cell to structure| ).
           ENDIF.
 
@@ -13161,10 +13205,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 *         Elementary type
           ASSIGN data TO <field>.
           CASE element->type.
-            WHEN lcl_lisp=>type_integer.
-              <field> = CAST lcl_lisp_integer( element )->integer.
-            WHEN lcl_lisp=>type_real.
-              <field> = CAST lcl_lisp_real( element )->real.
+            WHEN integer.
+              <field> = CAST lcl_lisp_integer( element )->int.
+            WHEN real.
+              <field> = CAST lcl_lisp_real( element )->float.
             WHEN OTHERS.
               <field> = element->value.
           ENDCASE.
@@ -13179,7 +13223,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       FIELD-SYMBOLS <struct> TYPE any.
 
       IF identifier = nil OR
-        ( identifier->type NE lcl_lisp=>type_string AND identifier->type NE lcl_lisp=>type_symbol ).
+        ( identifier->type NE string AND identifier->type NE symbol ).
         throw( `ab-get: String or symbol required to access structure field` ).
       ENDIF.
 
@@ -13200,16 +13244,16 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF identifier IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF identifier->type NE lcl_lisp=>type_integer.
+        IF identifier->type NE integer.
           throw( identifier->to_string( ) && ` is not an integer in ab-get` ) ##NO_TEXT.
         ENDIF.
 
       ASSIGN element->data->* TO <idxtab>.
 
       lo_int ?= identifier.
-      READ TABLE <idxtab> REFERENCE INTO rdata INDEX lo_int->integer.
+      READ TABLE <idxtab> REFERENCE INTO rdata INDEX lo_int->int.
       IF sy-subrc NE 0.
-        throw( |ab-get: No entry at index { lo_int->integer }| ). "Can do AB-TAB-WHERE some other time
+        throw( |ab-get: No entry at index { lo_int->int }| ). "Can do AB-TAB-WHERE some other time
       ENDIF.
     ENDMETHOD.                    "get_index_table_row
 
@@ -13247,7 +13291,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       element ?= list->car.         " Lisp element containing an ABAP value (data, table or function)
       DATA(identifier) = list->cdr->car. " Lisp element, string or symbol or index, to identify subcomponent of value
 
-      IF element->type = lcl_lisp=>type_abap_function.
+      IF element->type = abap_function.
 *       Get function parameter by name
         "rdata = CAST lcl_lisp_abapfunction( element )->get_function_parameter( identifier ).
         throw( `function not supported in the SAP Cloud ABAP environment` ).
@@ -13344,7 +13388,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_integer.
+        IF list->car->type NE integer.
           throw( list->car->to_string( ) && ` is not an integer in turtles` ) ##NO_TEXT.
         ENDIF.
 
@@ -13353,7 +13397,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_integer.
+        IF list->cdr->car->type NE integer.
           throw( list->cdr->car->to_string( ) && ` is not an integer in turtles` ) ##NO_TEXT.
         ENDIF.
 
@@ -13362,12 +13406,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_next = list->cdr->cdr.
 
       IF lo_next->car IS BOUND.
-        IF lo_next->car->type EQ lcl_lisp=>type_integer.
+        IF lo_next->car->type EQ integer.
           lo_init_x ?= lo_next->car.
 
           lo_next = lo_next->cdr.
           IF lo_next->car IS BOUND.
-            IF lo_next->car->type EQ lcl_lisp=>type_integer.
+            IF lo_next->car->type EQ integer.
               lo_init_y ?= lo_next->car.
 
               lo_next = lo_next->cdr.
@@ -13380,18 +13424,19 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                 ENDIF.
                 cell = lo_next->car.
                 CASE cell->type.
-                  WHEN lcl_lisp=>type_integer.
-                     lv_real = CAST lcl_lisp_integer( cell )->integer.
-                  WHEN lcl_lisp=>type_real.
-                     lv_real = CAST lcl_lisp_real( cell )->real.
-                  WHEN lcl_lisp=>type_rational.
+                  WHEN integer.
+                     lv_real = CAST lcl_lisp_integer( cell )->int.
+                  WHEN real.
+                     lv_real = CAST lcl_lisp_real( cell )->float.
+                  WHEN rational.
                     lo_rat ?= cell.
-                    lv_real = lo_rat->integer / lo_rat->denominator.
-*                  WHEN lcl_lisp=>type_complex.
+                    lv_real = lo_rat->int / lo_rat->denominator.
+*                  WHEN complex.
                   WHEN OTHERS.
                     throw( |{ cell->to_string( ) } is not a number in turtles| ).
                 ENDCASE.
-                lo_init_angle = lcl_lisp_new=>real( lv_real ).
+                lo_init_angle = lcl_lisp_new=>real( value = lv_real
+                                                    exact = abap_false ).
               ENDIF.
             ENDIF.
           ENDIF.
@@ -13399,15 +13444,16 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 
       IF lo_init_x IS NOT BOUND.
-        lo_init_x = lcl_lisp_new=>integer( lo_width->integer div 2 ).
+        lo_init_x = lcl_lisp_new=>integer( lo_width->int div 2 ).
       ENDIF.
 
       IF lo_init_y IS NOT BOUND.
-        lo_init_y = lcl_lisp_new=>integer( lo_height->integer div 2 ).
+        lo_init_y = lcl_lisp_new=>integer( lo_height->int div 2 ).
       ENDIF.
 
       IF lo_init_angle IS NOT BOUND.
-        lo_init_angle = lcl_lisp_new=>real( 0 ).
+        lo_init_angle = lcl_lisp_new=>real( value = 0
+                                            exact = abap_true ).
       ENDIF.
 
       result = lcl_lisp_new=>turtles( width = lo_width
@@ -13435,7 +13481,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->car->type NE abap_turtle.
           throw( list->car->to_string( ) && ` is not a turtle in merge` ) ##NO_TEXT.
         ENDIF.
 
@@ -13445,7 +13491,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->cdr->car->type NE abap_turtle.
           throw( list->cdr->car->to_string( ) && ` is not a turtle in merge` ) ##NO_TEXT.
         ENDIF.
 
@@ -13459,9 +13505,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_height = lcl_lisp_new=>integer( nmax( val1 = lo_turtle1->turtle->height
                                                val2 = lo_turtle2->turtle->height ) ).
 
-      lo_init_x = lcl_lisp_new=>integer( lo_width->integer div 2 ).
-      lo_init_y = lcl_lisp_new=>integer( lo_height->integer div 2 ).
-      lo_init_angle = lcl_lisp_new=>real( 0 ).
+      lo_init_x = lcl_lisp_new=>integer( lo_width->int div 2 ).
+      lo_init_y = lcl_lisp_new=>integer( lo_height->int div 2 ).
+      lo_init_angle = lcl_lisp_new=>real( value = 0
+                                          exact = abap_true ).
       result = lcl_lisp_new=>turtles( width = lo_width
                                       height = lo_height
                                       init_x = lo_init_x
@@ -13476,7 +13523,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
       "(turtles? v) → boolean?
-      IF list->car->type EQ lcl_lisp=>type_abap_turtle.
+      IF list->car->type EQ abap_turtle.
         result = true.
       ELSE.
         result = false.
@@ -13498,7 +13545,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_integer.
+        IF list->car->type NE integer.
           throw( list->car->to_string( ) && ` is not an integer in turtles move n` ) ##NO_TEXT.
         ENDIF.
 
@@ -13506,7 +13553,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->cdr->car->type NE abap_turtle.
           throw( list->cdr->car->to_string( ) && ` is not a turtle in turtles move` ) ##NO_TEXT.
         ENDIF.
 
@@ -13515,7 +13562,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       result = lo_turtles.
 
       lo_turtles->turtle->pen_up( ).
-      lo_turtles->turtle->forward( lo_dist_n->integer ).
+      lo_turtles->turtle->forward( lo_dist_n->int ).
     ENDMETHOD.
 
     METHOD proc_turtle_draw. "draw
@@ -13534,7 +13581,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_integer.
+        IF list->car->type NE integer.
           throw( list->car->to_string( ) && ` is not an integer in turtles draw n` ) ##NO_TEXT.
         ENDIF.
 
@@ -13542,7 +13589,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->cdr->car->type NE abap_turtle.
           throw( list->cdr->car->to_string( ) && ` is not a turtle in turtles draw` ) ##NO_TEXT.
         ENDIF.
 
@@ -13551,7 +13598,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       result = lo_turtles.
 
       lo_turtles->turtle->pen_down( ).
-      lo_turtles->turtle->forward( lo_dist_n->integer ).
+      lo_turtles->turtle->forward( lo_dist_n->int ).
     ENDMETHOD.
 
     METHOD proc_turtle_erase.
@@ -13570,7 +13617,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_integer.
+        IF list->car->type NE integer.
           throw( list->car->to_string( ) && ` is not an integer in turtles erase n` ) ##NO_TEXT.
         ENDIF.
 
@@ -13578,7 +13625,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->cdr->car->type NE abap_turtle.
           throw( list->cdr->car->to_string( ) && ` is not a turtle in turtles erase` ) ##NO_TEXT.
         ENDIF.
 
@@ -13587,7 +13634,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       result = lo_turtles.
 
       lo_turtles->turtle->pen_down( ).
-      lo_turtles->turtle->forward( lo_dist_n->integer ).
+      lo_turtles->turtle->forward( lo_dist_n->int ).
     ENDMETHOD.
 
     METHOD proc_turtle_move_offset.
@@ -13607,7 +13654,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_integer.
+        IF list->car->type NE integer.
           throw( list->car->to_string( ) && ` is not an integer in turtles move-offset h` ) ##NO_TEXT.
         ENDIF.
 
@@ -13615,7 +13662,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_integer.
+        IF list->cdr->car->type NE integer.
           throw( list->cdr->car->to_string( ) && ` is not an integer in turtles move-offset v` ) ##NO_TEXT.
         ENDIF.
 
@@ -13623,7 +13670,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->cdr->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->cdr->cdr->car->type NE abap_turtle.
           throw( list->cdr->cdr->car->to_string( ) && ` is not a turtle in move-offset` ) ##NO_TEXT.
         ENDIF.
 
@@ -13633,8 +13680,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       result = lo_turtles.
 
       lo_turtles->turtle->pen_up( ).
-      lo_turtles->turtle->to_offset( delta_x = lo_off_h->integer
-                                     delta_y = lo_off_v->integer ).
+      lo_turtles->turtle->to_offset( delta_x = lo_off_h->int
+                                     delta_y = lo_off_v->int ).
     ENDMETHOD.
 
     METHOD proc_turtle_draw_offset.
@@ -13655,7 +13702,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_integer.
+        IF list->car->type NE integer.
           throw( list->car->to_string( ) && ` is not an integer in turtles draw-offset h`  ) ##NO_TEXT.
         ENDIF.
 
@@ -13663,7 +13710,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_integer.
+        IF list->cdr->car->type NE integer.
           throw( list->cdr->car->to_string( ) && ` is not an integer in draw-offset v` ) ##NO_TEXT.
         ENDIF.
 
@@ -13671,7 +13718,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->cdr->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->cdr->cdr->car->type NE abap_turtle.
           throw( list->cdr->cdr->car->to_string( ) && ` is not a turtle in draw-offset` ) ##NO_TEXT.
         ENDIF.
 
@@ -13680,8 +13727,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_turtles ?= list->cdr->cdr->car.
 
       lo_turtles->turtle->pen_down( ).
-      lo_turtles->turtle->to_offset( delta_x = lo_off_h->integer
-                                     delta_y = lo_off_v->integer ).
+      lo_turtles->turtle->to_offset( delta_x = lo_off_h->int
+                                     delta_y = lo_off_v->int ).
     ENDMETHOD.
 
     METHOD proc_turtle_erase_offset.
@@ -13700,7 +13747,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       IF list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-      IF list->car->type NE lcl_lisp=>type_integer.
+      IF list->car->type NE integer.
         throw( list->car->to_string( ) && ` is not an integer in turtles erase-offset h` ) ##NO_TEXT.
       ENDIF.
 
@@ -13708,7 +13755,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_integer.
+        IF list->cdr->car->type NE integer.
           throw( list->cdr->car->to_string( ) && ` is not an integer in turtles erase-offset v` ) ##NO_TEXT.
         ENDIF.
 
@@ -13716,7 +13763,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->cdr->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->cdr->cdr->car->type NE abap_turtle.
           throw( list->cdr->cdr->car->to_string( ) && ` is not a turtle in erase-offset` ) ##NO_TEXT.
         ENDIF.
 
@@ -13725,8 +13772,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       lo_turtles ?= list->cdr->cdr->car.
 
       lo_turtles->turtle->pen_down( ).
-      lo_turtles->turtle->to_offset( delta_x = lo_off_h->integer
-                                     delta_y = lo_off_v->integer ).
+      lo_turtles->turtle->to_offset( delta_x = lo_off_h->int
+                                     delta_y = lo_off_v->int ).
     ENDMETHOD.
 
     METHOD proc_turtle_turn_degrees. "turn
@@ -13742,10 +13789,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
         CASE list->car->type.
-          WHEN lcl_lisp=>type_integer
-            OR lcl_lisp=>type_real
-            OR lcl_lisp=>type_rational
-            OR lcl_lisp=>type_complex.
+          WHEN integer
+            OR real
+            OR rational
+            OR complex.
           WHEN OTHERS.
             throw( |{ list->car->to_string( ) } is not a number in [turtles turn]| ) ##NO_TEXT.
         ENDCASE.
@@ -13757,14 +13804,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->cdr->car->type NE abap_turtle.
           throw( list->cdr->car->to_string( ) && ` is not a turtle in turn` ) ##NO_TEXT.
         ENDIF.
 
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->cdr->car.
 
-      DATA(angle) = ( lo_turtles->turtle->position-angle + lo_theta->real ) MOD 360.
+      DATA(angle) = ( lo_turtles->turtle->position-angle + lo_theta->float ) MOD 360.
       lo_turtles->turtle->set_position( VALUE #( x = lo_turtles->turtle->position-x
                                                  y = lo_turtles->turtle->position-y
                                                  angle = angle ) ).
@@ -13785,10 +13832,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
         CASE list->car->type.
-          WHEN lcl_lisp=>type_integer
-            OR lcl_lisp=>type_real
-            OR lcl_lisp=>type_rational
-            OR lcl_lisp=>type_complex.
+          WHEN integer
+            OR real
+            OR rational
+            OR complex.
           WHEN OTHERS.
             throw( |{ list->car->to_string( ) } is not a number in [turn/radians theta]| ) ##NO_TEXT.
         ENDCASE.
@@ -13800,14 +13847,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->cdr->car->type NE abap_turtle.
           throw( list->cdr->car->to_string( ) && ` is not a turtle in turn/radians` ) ##NO_TEXT.
         ENDIF.
 
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->cdr->car.
 
-      DATA(angle) = lcl_turtle_convert=>degrees_to_radians( lo_turtles->turtle->position-angle MOD 360 ) + lo_theta->real.
+      DATA(angle) = lcl_turtle_convert=>degrees_to_radians( lo_turtles->turtle->position-angle MOD 360 ) + lo_theta->float.
       angle = lcl_turtle_convert=>radians_to_degrees( angle ) MOD 360.
 
       lo_turtles->turtle->set_position( VALUE #( x = lo_turtles->turtle->position-x
@@ -13828,7 +13875,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->car->type NE abap_turtle.
           throw( list->car->to_string( ) && ` is not a turtle in set-pen-width` ) ##NO_TEXT.
         ENDIF.
 
@@ -13839,14 +13886,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF CAST lcl_lisp_integer( list->cdr->car )->integer LT 0.
+        IF CAST lcl_lisp_integer( list->cdr->car )->int LT 0.
           throw( list->cdr->car->to_string( ) && ` must be non-negative in set-pen-width` ) ##NO_TEXT.
         ENDIF.
       DATA lo_width TYPE REF TO lcl_lisp_integer.
       lo_width ?= list->cdr->car.
 
       lo_turtles->turtle->set_pen( VALUE #( BASE lo_turtles->turtle->pen
-                                            stroke_width = lo_width->integer ) ).
+                                            stroke_width = lo_width->int ) ).
       result = lo_turtles.
     ENDMETHOD.
 
@@ -13862,7 +13909,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->car->type NE abap_turtle.
           throw( list->car->to_string( ) && ` is not a turtle in set-pen-color` ) ##NO_TEXT.
         ENDIF.
 
@@ -13873,7 +13920,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_string.
+        IF list->cdr->car->type NE string.
           throw( list->cdr->car->to_string( ) && ` is not a string in set-pen-color` ) ##NO_TEXT.
         ENDIF.
       DATA lo_color TYPE REF TO lcl_lisp_string.
@@ -13895,7 +13942,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->car->type NE abap_turtle.
           throw( list->car->to_string( ) && ` is not a turtle in turtle-state` ) ##NO_TEXT.
         ENDIF.
 
@@ -13906,7 +13953,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       result = lcl_lisp_new=>cons( io_car = lcl_lisp_new=>vector(
                   it_vector = VALUE tt_lisp( ( lcl_lisp_new=>integer( position-x ) )
                                              ( lcl_lisp_new=>integer( position-y ) )
-                                             ( lcl_lisp_new=>real( position-angle ) )  )
+                                             ( lcl_lisp_new=>real( value = position-angle
+                                                                   exact = abap_false ) )  )
                   iv_mutable = abap_false ) ).
     ENDMETHOD.
 
@@ -13922,7 +13970,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->car->type NE abap_turtle.
           throw( list->car->to_string( ) && ` is not a turtle in clean` ) ##NO_TEXT.
         ENDIF.
 
@@ -13944,7 +13992,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->car->type NE abap_turtle.
           throw( list->car->to_string( ) && ` is not a turtle in turtles-width` ) ##NO_TEXT.
         ENDIF.
 
@@ -13966,7 +14014,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->car->type NE abap_turtle.
           throw( list->car->to_string( ) && ` is not a turtle in turtles-height` ) ##NO_TEXT.
         ENDIF.
 
@@ -13988,7 +14036,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->car->type NE abap_turtle.
           throw( list->car->to_string( ) && ` is not a turtle in turtles-pen-width` ) ##NO_TEXT.
         ENDIF.
 
@@ -14010,7 +14058,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->car->type NE abap_turtle.
           throw( list->car->to_string( ) && ` is not a turtle in turtles-pen-color` ) ##NO_TEXT.
         ENDIF.
 
@@ -14033,7 +14081,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF CAST lcl_lisp_integer( list->car )->integer LT 0.
+        IF CAST lcl_lisp_integer( list->car )->int LT 0.
           throw( list->car->to_string( ) && ` must be non-negative in regular-poly sides` ) ##NO_TEXT.
         ENDIF.
       DATA lo_sides TYPE REF TO lcl_lisp_integer.
@@ -14043,7 +14091,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_integer.
+        IF list->cdr->car->type NE integer.
           throw( list->cdr->car->to_string( ) && ` is not an integer in regular-poly radius` ) ##NO_TEXT.
         ENDIF.
 
@@ -14054,14 +14102,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->cdr->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->cdr->cdr->car->type NE abap_turtle.
           throw( list->cdr->cdr->car->to_string( ) && ` is not a turtle in regular-poly` ) ##NO_TEXT.
         ENDIF.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->cdr->cdr->car.
 
-      lo_turtles->turtle->regular_polygon( num_sides = lo_sides->integer
-                                           side_length = lo_radius->integer ).
+      lo_turtles->turtle->regular_polygon( num_sides = lo_sides->int
+                                           side_length = lo_radius->int ).
       result = lo_turtles.
     ENDMETHOD.
 
@@ -14079,7 +14127,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->car->type NE lcl_lisp=>type_integer.
+        IF list->car->type NE integer.
           throw( list->car->to_string( ) && ` is not an integer in regular-polys n` ) ##NO_TEXT.
         ENDIF.
 
@@ -14090,10 +14138,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->car->type NE lcl_lisp=>type_integer.
+        IF list->cdr->car->type NE integer.
           throw( list->cdr->car->to_string( ) && ` is not an integer in regular-polys s` ) ##NO_TEXT.
         ENDIF.
-        IF CAST lcl_lisp_integer( list->cdr->car )->integer LT 0.
+        IF CAST lcl_lisp_integer( list->cdr->car )->int LT 0.
           throw( list->cdr->car->to_string( ) && ` must be non-negative in regular-polys s` ) ##NO_TEXT.
         ENDIF.
 
@@ -14104,16 +14152,16 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         IF list->cdr->cdr->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        IF list->cdr->cdr->car->type NE lcl_lisp=>type_abap_turtle.
+        IF list->cdr->cdr->car->type NE abap_turtle.
           throw( list->cdr->cdr->car->to_string( ) && ` is not a turtle in regular-polys` ) ##NO_TEXT.
         ENDIF.
 
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->cdr->cdr->car.
 
-      lo_turtles->turtle->polygon_flower( number_of_polygons = lo_n->integer
-                                          polygon_sides = lo_n->integer
-                                          side_length = lo_side->integer ).
+      lo_turtles->turtle->polygon_flower( number_of_polygons = lo_n->int
+                                          polygon_sides = lo_n->int
+                                          side_length = lo_side->int ).
       result = lo_turtles.
     ENDMETHOD.
 
@@ -14356,7 +14404,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA lv_count TYPE i.
 
       CASE io_pars->type.
-        WHEN lcl_lisp=>type_pair.   "Do we have a proper list?
+        WHEN pair.   "Do we have a proper list?
 
           DATA(lo_var) = io_pars.                " Pointer to formal parameters
           DATA(lo_arg) = io_args.                " Pointer to arguments
@@ -14365,7 +14413,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
           WHILE lo_var NE lcl_lisp=>nil.         " Nil would mean no parameters to map
 
-            IF lo_var->type EQ lcl_lisp=>type_symbol.
+            IF lo_var->type EQ symbol.
 *             dotted pair after fixed number of parameters, to be bound to a variable number of arguments
 
 *             1) Read the next parameter, bind to the (rest) list of arguments
@@ -14403,7 +14451,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             lcl_lisp=>throw( |Expected { lv_count } parameter(s), found { io_args->to_string( ) }| ).
           ENDIF.
 
-        WHEN lcl_lisp=>type_symbol.
+        WHEN symbol.
 *         args is a symbol to be bound to a variable number of parameters
           set( symbol = io_pars->value
                element = io_args ).
@@ -14419,336 +14467,336 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       set( symbol = '#t' element = lcl_lisp=>false ).
 
 *     Add primitive functions to environment
-      define_value( symbol = 'define'          type = lcl_lisp=>type_syntax value   = 'define' ).
-      define_value( symbol = 'lambda'          type = lcl_lisp=>type_syntax value   = 'lambda' ).
-      define_value( symbol = 'if'              type = lcl_lisp=>type_syntax value   = 'if' ).
-      define_value( symbol = c_eval_quote      type = lcl_lisp=>type_syntax value   = `'` ).
-      define_value( symbol = c_eval_quasiquote type = lcl_lisp=>type_syntax value   = '`' ).
-      define_value( symbol = 'set!'            type = lcl_lisp=>type_syntax value   = 'set!' ).
+      define_value( symbol = 'define'          type = syntax value   = 'define' ).
+      define_value( symbol = 'lambda'          type = syntax value   = 'lambda' ).
+      define_value( symbol = 'if'              type = syntax value   = 'if' ).
+      define_value( symbol = c_eval_quote      type = syntax value   = `'` ).
+      define_value( symbol = c_eval_quasiquote type = syntax value   = '`' ).
+      define_value( symbol = 'set!'            type = syntax value   = 'set!' ).
 
-      define_value( symbol = 'define-macro'    type = lcl_lisp=>type_syntax value   = 'define-macro' ).
-      define_value( symbol = 'define-syntax'   type = lcl_lisp=>type_syntax value   = 'define-syntax' ).
-      define_value( symbol = 'macroexpand'     type = lcl_lisp=>type_syntax value   = 'macroexpand' ).
-      define_value( symbol = 'gensym'          type = lcl_lisp=>type_syntax value   = 'gensym' ).
-      define_value( symbol = 'case-lambda'     type = lcl_lisp=>type_syntax value   = 'case-lambda' ).
-      define_value( symbol = 'parameterize'    type = lcl_lisp=>type_syntax value   = 'parameterize' ).
+      define_value( symbol = 'define-macro'    type = syntax value   = 'define-macro' ).
+      define_value( symbol = 'define-syntax'   type = syntax value   = 'define-syntax' ).
+      define_value( symbol = 'macroexpand'     type = syntax value   = 'macroexpand' ).
+      define_value( symbol = 'gensym'          type = syntax value   = 'gensym' ).
+      define_value( symbol = 'case-lambda'     type = syntax value   = 'case-lambda' ).
+      define_value( symbol = 'parameterize'    type = syntax value   = 'parameterize' ).
 
-      define_value( symbol = 'and'      type = lcl_lisp=>type_syntax value   = 'and' ).
-      define_value( symbol = 'or'       type = lcl_lisp=>type_syntax value   = 'or' ).
-      define_value( symbol = 'cond'     type = lcl_lisp=>type_syntax value   = 'cond' ).
-      define_value( symbol = 'unless'   type = lcl_lisp=>type_syntax value   = 'unless' ).
-      define_value( symbol = 'when'     type = lcl_lisp=>type_syntax value   = 'when' ).
-      define_value( symbol = 'begin'    type = lcl_lisp=>type_syntax value   = 'begin' ).
-      define_value( symbol = 'let'      type = lcl_lisp=>type_syntax value   = 'let' ).
-      define_value( symbol = 'let*'     type = lcl_lisp=>type_syntax value   = 'let*' ).
-      define_value( symbol = 'letrec'   type = lcl_lisp=>type_syntax value   = 'letrec' ).
-      define_value( symbol = 'letrec*'  type = lcl_lisp=>type_syntax value   = 'letrec*' ).
-      define_value( symbol = 'do'       type = lcl_lisp=>type_syntax value   = 'do' ).
-      define_value( symbol = 'case'     type = lcl_lisp=>type_syntax value   = 'case' ).
+      define_value( symbol = 'and'      type = syntax value   = 'and' ).
+      define_value( symbol = 'or'       type = syntax value   = 'or' ).
+      define_value( symbol = 'cond'     type = syntax value   = 'cond' ).
+      define_value( symbol = 'unless'   type = syntax value   = 'unless' ).
+      define_value( symbol = 'when'     type = syntax value   = 'when' ).
+      define_value( symbol = 'begin'    type = syntax value   = 'begin' ).
+      define_value( symbol = 'let'      type = syntax value   = 'let' ).
+      define_value( symbol = 'let*'     type = syntax value   = 'let*' ).
+      define_value( symbol = 'letrec'   type = syntax value   = 'letrec' ).
+      define_value( symbol = 'letrec*'  type = syntax value   = 'letrec*' ).
+      define_value( symbol = 'do'       type = syntax value   = 'do' ).
+      define_value( symbol = 'case'     type = syntax value   = 'case' ).
 
-      define_value( symbol = c_eval_unquote          type = lcl_lisp=>type_syntax value   = ',' ).
-      define_value( symbol = c_eval_unquote_splicing type = lcl_lisp=>type_syntax value   = ',@' ).
+      define_value( symbol = c_eval_unquote          type = syntax value   = ',' ).
+      define_value( symbol = c_eval_unquote_splicing type = syntax value   = ',@' ).
 
 *     Procedures
-      define_value( symbol = 'apply'        type = lcl_lisp=>type_primitive value   = 'apply' ).
-      define_value( symbol = 'for-each'     type = lcl_lisp=>type_primitive value   = 'for-each' ).
-      define_value( symbol = 'map'          type = lcl_lisp=>type_primitive value   = 'map' ).
+      define_value( symbol = 'apply'        type = primitive value   = 'apply' ).
+      define_value( symbol = 'for-each'     type = primitive value   = 'for-each' ).
+      define_value( symbol = 'map'          type = primitive value   = 'map' ).
 
 *     Add native functions to environment
-      define_value( symbol = '+'        type = lcl_lisp=>type_native value   = 'PROC_ADD' ).
-      define_value( symbol = '-'        type = lcl_lisp=>type_native value   = 'PROC_SUBTRACT' ).
-      define_value( symbol = '*'        type = lcl_lisp=>type_native value   = 'PROC_MULTIPLY' ).
-      define_value( symbol = '/'        type = lcl_lisp=>type_native value   = 'PROC_DIVIDE' ).
-      define_value( symbol = c_eval_append type = lcl_lisp=>type_native value   = 'PROC_APPEND' ).
-      define_value( symbol = 'append!'     type = lcl_lisp=>type_native value   = 'PROC_APPEND_UNSAFE' ).
-      define_value( symbol = 'list'     type = lcl_lisp=>type_native value   = 'PROC_LIST' ).
-      define_value( symbol = 'length'   type = lcl_lisp=>type_native value   = 'PROC_LENGTH' ).
-      define_value( symbol = 'reverse'  type = lcl_lisp=>type_native value   = 'PROC_REVERSE' ).
-      define_value( symbol = 'not'      type = lcl_lisp=>type_native value   = 'PROC_NOT' ).
+      define_value( symbol = '+'        type = native value   = 'PROC_ADD' ).
+      define_value( symbol = '-'        type = native value   = 'PROC_SUBTRACT' ).
+      define_value( symbol = '*'        type = native value   = 'PROC_MULTIPLY' ).
+      define_value( symbol = '/'        type = native value   = 'PROC_DIVIDE' ).
+      define_value( symbol = c_eval_append type = native value   = 'PROC_APPEND' ).
+      define_value( symbol = 'append!'     type = native value   = 'PROC_APPEND_UNSAFE' ).
+      define_value( symbol = 'list'     type = native value   = 'PROC_LIST' ).
+      define_value( symbol = 'length'   type = native value   = 'PROC_LENGTH' ).
+      define_value( symbol = 'reverse'  type = native value   = 'PROC_REVERSE' ).
+      define_value( symbol = 'not'      type = native value   = 'PROC_NOT' ).
 
-      define_value( symbol = 'make-list'    type = lcl_lisp=>type_native value   = 'PROC_MAKE_LIST' ).
-      define_value( symbol = 'list-tail'    type = lcl_lisp=>type_native value   = 'PROC_LIST_TAIL' ).
-      define_value( symbol = 'list-ref'     type = lcl_lisp=>type_native value   = 'PROC_LIST_REF' ).
-      define_value( symbol = 'list-copy'    type = lcl_lisp=>type_native value   = 'PROC_LIST_COPY' ).
-      define_value( symbol = 'list->vector' type = lcl_lisp=>type_native value   = 'PROC_LIST_TO_VECTOR' ).
-      define_value( symbol = 'iota'         type = lcl_lisp=>type_native value   = 'PROC_IOTA' ).
+      define_value( symbol = 'make-list'    type = native value   = 'PROC_MAKE_LIST' ).
+      define_value( symbol = 'list-tail'    type = native value   = 'PROC_LIST_TAIL' ).
+      define_value( symbol = 'list-ref'     type = native value   = 'PROC_LIST_REF' ).
+      define_value( symbol = 'list-copy'    type = native value   = 'PROC_LIST_COPY' ).
+      define_value( symbol = 'list->vector' type = native value   = 'PROC_LIST_TO_VECTOR' ).
+      define_value( symbol = 'iota'         type = native value   = 'PROC_IOTA' ).
 
-      define_value( symbol = 'memq'    type = lcl_lisp=>type_native value   = 'PROC_MEMQ' ).
-      define_value( symbol = 'memv'    type = lcl_lisp=>type_native value   = 'PROC_MEMV' ).
-      define_value( symbol = 'member'  type = lcl_lisp=>type_native value   = 'PROC_MEMBER' ).
+      define_value( symbol = 'memq'    type = native value   = 'PROC_MEMQ' ).
+      define_value( symbol = 'memv'    type = native value   = 'PROC_MEMV' ).
+      define_value( symbol = 'member'  type = native value   = 'PROC_MEMBER' ).
 
-      define_value( symbol = 'assq'    type = lcl_lisp=>type_native value   = 'PROC_ASSQ' ).
-      define_value( symbol = 'assv'    type = lcl_lisp=>type_native value   = 'PROC_ASSV' ).
-      define_value( symbol = 'assoc'   type = lcl_lisp=>type_native value   = 'PROC_ASSOC' ).
+      define_value( symbol = 'assq'    type = native value   = 'PROC_ASSQ' ).
+      define_value( symbol = 'assv'    type = native value   = 'PROC_ASSV' ).
+      define_value( symbol = 'assoc'   type = native value   = 'PROC_ASSOC' ).
 
-      define_value( symbol = 'car'     type = lcl_lisp=>type_native value   = 'PROC_CAR' ).
-      define_value( symbol = 'cdr'     type = lcl_lisp=>type_native value   = 'PROC_CDR' ).
-      define_value( symbol = c_eval_cons    type = lcl_lisp=>type_native value   = 'PROC_CONS' ).
-      define_value( symbol = 'nil?'    type = lcl_lisp=>type_native value   = 'PROC_NILP' ).
-      define_value( symbol = 'null?'   type = lcl_lisp=>type_native value   = 'PROC_NILP' ).
+      define_value( symbol = 'car'     type = native value   = 'PROC_CAR' ).
+      define_value( symbol = 'cdr'     type = native value   = 'PROC_CDR' ).
+      define_value( symbol = c_eval_cons    type = native value   = 'PROC_CONS' ).
+      define_value( symbol = 'nil?'    type = native value   = 'PROC_NILP' ).
+      define_value( symbol = 'null?'   type = native value   = 'PROC_NILP' ).
 
-      define_value( symbol = '>'       type = lcl_lisp=>type_native value   = 'PROC_GT' ).
-      define_value( symbol = '>='      type = lcl_lisp=>type_native value   = 'PROC_GTE' ).
-      define_value( symbol = '<'       type = lcl_lisp=>type_native value   = 'PROC_LT' ).
-      define_value( symbol = '<='      type = lcl_lisp=>type_native value   = 'PROC_LTE' ).
-      define_value( symbol = '='       type = lcl_lisp=>type_native value   = 'PROC_EQL' ). "Math equal
-      define_value( symbol = 'eq?'     type = lcl_lisp=>type_native value   = 'PROC_EQ' ).
-      define_value( symbol = 'eqv?'    type = lcl_lisp=>type_native value   = 'PROC_EQV' ).
-      define_value( symbol = 'equal?'  type = lcl_lisp=>type_native value   = 'PROC_EQUAL' ).
+      define_value( symbol = '>'       type = native value   = 'PROC_GT' ).
+      define_value( symbol = '>='      type = native value   = 'PROC_GTE' ).
+      define_value( symbol = '<'       type = native value   = 'PROC_LT' ).
+      define_value( symbol = '<='      type = native value   = 'PROC_LTE' ).
+      define_value( symbol = '='       type = native value   = 'PROC_EQL' ). "Math equal
+      define_value( symbol = 'eq?'     type = native value   = 'PROC_EQ' ).
+      define_value( symbol = 'eqv?'    type = native value   = 'PROC_EQV' ).
+      define_value( symbol = 'equal?'  type = native value   = 'PROC_EQUAL' ).
 
-      define_value( symbol = 'set-car!' type = lcl_lisp=>type_native value   = 'PROC_SET_CAR' ).
-      define_value( symbol = 'set-cdr!' type = lcl_lisp=>type_native value   = 'PROC_SET_CDR' ).
+      define_value( symbol = 'set-car!' type = native value   = 'PROC_SET_CAR' ).
+      define_value( symbol = 'set-cdr!' type = native value   = 'PROC_SET_CDR' ).
 
-      define_value( symbol = 'caar'     type = lcl_lisp=>type_native value   = 'PROC_CAAR' ).
-      define_value( symbol = 'cadr'     type = lcl_lisp=>type_native value   = 'PROC_CADR' ).
-      define_value( symbol = 'cdar'     type = lcl_lisp=>type_native value   = 'PROC_CDAR' ).
-      define_value( symbol = 'cddr'     type = lcl_lisp=>type_native value   = 'PROC_CDDR' ).
-      define_value( symbol = 'caaar'    type = lcl_lisp=>type_native value   = 'PROC_CAAAR' ).
-      define_value( symbol = 'cdaar'    type = lcl_lisp=>type_native value   = 'PROC_CDAAR' ).
-      define_value( symbol = 'caadr'    type = lcl_lisp=>type_native value   = 'PROC_CAADR' ).
-      define_value( symbol = 'cdadr'    type = lcl_lisp=>type_native value   = 'PROC_CDADR' ).
-      define_value( symbol = 'cadar'    type = lcl_lisp=>type_native value   = 'PROC_CADAR' ).
-      define_value( symbol = 'cddar'    type = lcl_lisp=>type_native value   = 'PROC_CDDAR' ).
-      define_value( symbol = 'caddr'    type = lcl_lisp=>type_native value   = 'PROC_CADDR' ).
-      define_value( symbol = 'cdddr'    type = lcl_lisp=>type_native value   = 'PROC_CDDDR' ).
+      define_value( symbol = 'caar'     type = native value   = 'PROC_CAAR' ).
+      define_value( symbol = 'cadr'     type = native value   = 'PROC_CADR' ).
+      define_value( symbol = 'cdar'     type = native value   = 'PROC_CDAR' ).
+      define_value( symbol = 'cddr'     type = native value   = 'PROC_CDDR' ).
+      define_value( symbol = 'caaar'    type = native value   = 'PROC_CAAAR' ).
+      define_value( symbol = 'cdaar'    type = native value   = 'PROC_CDAAR' ).
+      define_value( symbol = 'caadr'    type = native value   = 'PROC_CAADR' ).
+      define_value( symbol = 'cdadr'    type = native value   = 'PROC_CDADR' ).
+      define_value( symbol = 'cadar'    type = native value   = 'PROC_CADAR' ).
+      define_value( symbol = 'cddar'    type = native value   = 'PROC_CDDAR' ).
+      define_value( symbol = 'caddr'    type = native value   = 'PROC_CADDR' ).
+      define_value( symbol = 'cdddr'    type = native value   = 'PROC_CDDDR' ).
 
-      define_value( symbol = 'caaaar'    type = lcl_lisp=>type_native value   = 'PROC_CAAAAR' ).
-      define_value( symbol = 'cdaaar'    type = lcl_lisp=>type_native value   = 'PROC_CDAAAR' ).
-      define_value( symbol = 'cadaar'    type = lcl_lisp=>type_native value   = 'PROC_CADAAR' ).
-      define_value( symbol = 'cddaar'    type = lcl_lisp=>type_native value   = 'PROC_CDDAAR' ).
-      define_value( symbol = 'caaadr'    type = lcl_lisp=>type_native value   = 'PROC_CAAADR' ).
-      define_value( symbol = 'cdaadr'    type = lcl_lisp=>type_native value   = 'PROC_CDAADR' ).
-      define_value( symbol = 'cadadr'    type = lcl_lisp=>type_native value   = 'PROC_CADADR' ).
-      define_value( symbol = 'cddadr'    type = lcl_lisp=>type_native value   = 'PROC_CDDADR' ).
-      define_value( symbol = 'caadar'    type = lcl_lisp=>type_native value   = 'PROC_CAADAR' ).
-      define_value( symbol = 'cdadar'    type = lcl_lisp=>type_native value   = 'PROC_CDADAR' ).
-      define_value( symbol = 'caddar'    type = lcl_lisp=>type_native value   = 'PROC_CADDAR' ).
-      define_value( symbol = 'cdddar'    type = lcl_lisp=>type_native value   = 'PROC_CDDDAR' ).
-      define_value( symbol = 'caaddr'    type = lcl_lisp=>type_native value   = 'PROC_CAADDR' ).
-      define_value( symbol = 'caaddr'    type = lcl_lisp=>type_native value   = 'PROC_CAADDR' ).
-      define_value( symbol = 'cadddr'    type = lcl_lisp=>type_native value   = 'PROC_CADDDR' ).
-      define_value( symbol = 'cddddr'    type = lcl_lisp=>type_native value   = 'PROC_CDDDDR' ).
+      define_value( symbol = 'caaaar'    type = native value   = 'PROC_CAAAAR' ).
+      define_value( symbol = 'cdaaar'    type = native value   = 'PROC_CDAAAR' ).
+      define_value( symbol = 'cadaar'    type = native value   = 'PROC_CADAAR' ).
+      define_value( symbol = 'cddaar'    type = native value   = 'PROC_CDDAAR' ).
+      define_value( symbol = 'caaadr'    type = native value   = 'PROC_CAAADR' ).
+      define_value( symbol = 'cdaadr'    type = native value   = 'PROC_CDAADR' ).
+      define_value( symbol = 'cadadr'    type = native value   = 'PROC_CADADR' ).
+      define_value( symbol = 'cddadr'    type = native value   = 'PROC_CDDADR' ).
+      define_value( symbol = 'caadar'    type = native value   = 'PROC_CAADAR' ).
+      define_value( symbol = 'cdadar'    type = native value   = 'PROC_CDADAR' ).
+      define_value( symbol = 'caddar'    type = native value   = 'PROC_CADDAR' ).
+      define_value( symbol = 'cdddar'    type = native value   = 'PROC_CDDDAR' ).
+      define_value( symbol = 'caaddr'    type = native value   = 'PROC_CAADDR' ).
+      define_value( symbol = 'caaddr'    type = native value   = 'PROC_CAADDR' ).
+      define_value( symbol = 'cadddr'    type = native value   = 'PROC_CADDDR' ).
+      define_value( symbol = 'cddddr'    type = native value   = 'PROC_CDDDDR' ).
 
 
-      define_value( symbol = 'make-parameter'    type = lcl_lisp=>type_native value = 'PROC_MAKE_PARAMETER' ).
+      define_value( symbol = 'make-parameter'    type = native value = 'PROC_MAKE_PARAMETER' ).
 
-      define_value( symbol = 'current-input-port'  type = lcl_lisp=>type_native value = 'PROC_CURRENT_INPUT_PORT' ).
-      define_value( symbol = 'current-output-port' type = lcl_lisp=>type_native value = 'PROC_CURRENT_OUTPUT_PORT' ).
-      define_value( symbol = 'current-error-port'  type = lcl_lisp=>type_native value = 'PROC_CURRENT_ERROR_PORT' ).
+      define_value( symbol = 'current-input-port'  type = native value = 'PROC_CURRENT_INPUT_PORT' ).
+      define_value( symbol = 'current-output-port' type = native value = 'PROC_CURRENT_OUTPUT_PORT' ).
+      define_value( symbol = 'current-error-port'  type = native value = 'PROC_CURRENT_ERROR_PORT' ).
 
-      define_value( symbol = 'close-input-port'  type = lcl_lisp=>type_native value = 'PROC_CLOSE_INPUT_PORT' ).
-      define_value( symbol = 'close-output-port' type = lcl_lisp=>type_native value = 'PROC_CLOSE_OUTPUT_PORT' ).
-      define_value( symbol = 'close-port'        type = lcl_lisp=>type_native value = 'PROC_CLOSE_PORT' ).
+      define_value( symbol = 'close-input-port'  type = native value = 'PROC_CLOSE_INPUT_PORT' ).
+      define_value( symbol = 'close-output-port' type = native value = 'PROC_CLOSE_OUTPUT_PORT' ).
+      define_value( symbol = 'close-port'        type = native value = 'PROC_CLOSE_PORT' ).
 
 *     vector-related functions
-      define_value( symbol = 'vector'        type = lcl_lisp=>type_native value   = 'PROC_VECTOR' ).
-      define_value( symbol = 'vector-length' type = lcl_lisp=>type_native value   = 'PROC_VECTOR_LENGTH' ).
-      define_value( symbol = 'vector-set!'   type = lcl_lisp=>type_native value   = 'PROC_VECTOR_SET' ).
-      define_value( symbol = 'vector-fill!'  type = lcl_lisp=>type_native value   = 'PROC_VECTOR_FILL' ).
-      define_value( symbol = 'vector-ref'    type = lcl_lisp=>type_native value   = 'PROC_VECTOR_REF' ).
-      define_value( symbol = 'vector->list'  type = lcl_lisp=>type_native value   = 'PROC_VECTOR_TO_LIST' ).
-      define_value( symbol = 'make-vector'   type = lcl_lisp=>type_native value   = 'PROC_MAKE_VECTOR' ).
+      define_value( symbol = 'vector'        type = native value   = 'PROC_VECTOR' ).
+      define_value( symbol = 'vector-length' type = native value   = 'PROC_VECTOR_LENGTH' ).
+      define_value( symbol = 'vector-set!'   type = native value   = 'PROC_VECTOR_SET' ).
+      define_value( symbol = 'vector-fill!'  type = native value   = 'PROC_VECTOR_FILL' ).
+      define_value( symbol = 'vector-ref'    type = native value   = 'PROC_VECTOR_REF' ).
+      define_value( symbol = 'vector->list'  type = native value   = 'PROC_VECTOR_TO_LIST' ).
+      define_value( symbol = 'make-vector'   type = native value   = 'PROC_MAKE_VECTOR' ).
 
 *     Hash-related functions
-      define_value( symbol = 'make-hash'   type = lcl_lisp=>type_native value   = 'PROC_MAKE_HASH' ).
-      define_value( symbol = 'hash-get'    type = lcl_lisp=>type_native value   = 'PROC_HASH_GET' ).
-      define_value( symbol = 'hash-insert' type = lcl_lisp=>type_native value   = 'PROC_HASH_INSERT' ).
-      define_value( symbol = 'hash-remove' type = lcl_lisp=>type_native value   = 'PROC_HASH_REMOVE' ).
-      define_value( symbol = 'hash-keys'   type = lcl_lisp=>type_native value   = 'PROC_HASH_KEYS' ).
+      define_value( symbol = 'make-hash'   type = native value   = 'PROC_MAKE_HASH' ).
+      define_value( symbol = 'hash-get'    type = native value   = 'PROC_HASH_GET' ).
+      define_value( symbol = 'hash-insert' type = native value   = 'PROC_HASH_INSERT' ).
+      define_value( symbol = 'hash-remove' type = native value   = 'PROC_HASH_REMOVE' ).
+      define_value( symbol = 'hash-keys'   type = native value   = 'PROC_HASH_KEYS' ).
 *     Functions for type:
-      define_value( symbol = 'string?'     type = lcl_lisp=>type_native value = 'PROC_IS_STRING' ).
-      define_value( symbol = 'char?'       type = lcl_lisp=>type_native value = 'PROC_IS_CHAR' ).
-      define_value( symbol = 'hash?'       type = lcl_lisp=>type_native value = 'PROC_IS_HASH' ).
-      define_value( symbol = 'number?'     type = lcl_lisp=>type_native value = 'PROC_IS_NUMBER' ).
-      define_value( symbol = 'exact-integer?'    type = lcl_lisp=>type_native value = 'PROC_IS_EXACT_INTEGER' ).
-      define_value( symbol = 'integer?'    type = lcl_lisp=>type_native value = 'PROC_IS_INTEGER' ).
-      define_value( symbol = 'complex?'    type = lcl_lisp=>type_native value = 'PROC_IS_COMPLEX' ).
-      define_value( symbol = 'real?'       type = lcl_lisp=>type_native value = 'PROC_IS_REAL' ).
-      define_value( symbol = 'rational?'   type = lcl_lisp=>type_native value = 'PROC_IS_RATIONAL' ).
-      define_value( symbol = 'list?'       type = lcl_lisp=>type_native value = 'PROC_IS_LIST' ).
-      define_value( symbol = 'pair?'       type = lcl_lisp=>type_native value = 'PROC_IS_PAIR' ).
-      define_value( symbol = 'vector?'     type = lcl_lisp=>type_native value = 'PROC_IS_VECTOR' ).
-      define_value( symbol = 'boolean?'    type = lcl_lisp=>type_native value = 'PROC_IS_BOOLEAN' ).
-      define_value( symbol = 'alist?'      type = lcl_lisp=>type_native value = 'PROC_IS_ALIST' ).
-      define_value( symbol = 'procedure?'  type = lcl_lisp=>type_native value = 'PROC_IS_PROCEDURE' ).
-      define_value( symbol = 'symbol?'     type = lcl_lisp=>type_native value = 'PROC_IS_SYMBOL' ).
-      define_value( symbol = 'port?'       type = lcl_lisp=>type_native value = 'PROC_IS_PORT' ).
-      define_value( symbol = 'boolean=?'   type = lcl_lisp=>type_native value = 'PROC_BOOLEAN_LIST_IS_EQUAL' ).
-      define_value( symbol = 'exact?'      type = lcl_lisp=>type_native value = 'PROC_IS_EXACT' ).
-      define_value( symbol = 'inexact?'    type = lcl_lisp=>type_native value = 'PROC_IS_INEXACT' ).
+      define_value( symbol = 'string?'     type = native value = 'PROC_IS_STRING' ).
+      define_value( symbol = 'char?'       type = native value = 'PROC_IS_CHAR' ).
+      define_value( symbol = 'hash?'       type = native value = 'PROC_IS_HASH' ).
+      define_value( symbol = 'number?'     type = native value = 'PROC_IS_NUMBER' ).
+      define_value( symbol = 'exact-integer?'    type = native value = 'PROC_IS_EXACT_INTEGER' ).
+      define_value( symbol = 'integer?'    type = native value = 'PROC_IS_INTEGER' ).
+      define_value( symbol = 'complex?'    type = native value = 'PROC_IS_COMPLEX' ).
+      define_value( symbol = 'real?'       type = native value = 'PROC_IS_REAL' ).
+      define_value( symbol = 'rational?'   type = native value = 'PROC_IS_RATIONAL' ).
+      define_value( symbol = 'list?'       type = native value = 'PROC_IS_LIST' ).
+      define_value( symbol = 'pair?'       type = native value = 'PROC_IS_PAIR' ).
+      define_value( symbol = 'vector?'     type = native value = 'PROC_IS_VECTOR' ).
+      define_value( symbol = 'boolean?'    type = native value = 'PROC_IS_BOOLEAN' ).
+      define_value( symbol = 'alist?'      type = native value = 'PROC_IS_ALIST' ).
+      define_value( symbol = 'procedure?'  type = native value = 'PROC_IS_PROCEDURE' ).
+      define_value( symbol = 'symbol?'     type = native value = 'PROC_IS_SYMBOL' ).
+      define_value( symbol = 'port?'       type = native value = 'PROC_IS_PORT' ).
+      define_value( symbol = 'boolean=?'   type = native value = 'PROC_BOOLEAN_LIST_IS_EQUAL' ).
+      define_value( symbol = 'exact?'      type = native value = 'PROC_IS_EXACT' ).
+      define_value( symbol = 'inexact?'    type = native value = 'PROC_IS_INEXACT' ).
 
 *     Format
-      define_value( symbol = 'newline'     type = lcl_lisp=>type_native value = 'PROC_NEWLINE' ).
-      define_value( symbol = 'write'       type = lcl_lisp=>type_native value = 'PROC_WRITE' ).
-      define_value( symbol = 'display'     type = lcl_lisp=>type_native value = 'PROC_DISPLAY' ).
+      define_value( symbol = 'newline'     type = native value = 'PROC_NEWLINE' ).
+      define_value( symbol = 'write'       type = native value = 'PROC_WRITE' ).
+      define_value( symbol = 'display'     type = native value = 'PROC_DISPLAY' ).
 
-      define_value( symbol = 'read'         type = lcl_lisp=>type_native value = 'PROC_READ' ).
-      define_value( symbol = 'write-string' type = lcl_lisp=>type_native value = 'PROC_WRITE_STRING' ).
-      define_value( symbol = 'write-char'   type = lcl_lisp=>type_native value = 'PROC_WRITE_CHAR' ).
-      define_value( symbol = 'read-char'    type = lcl_lisp=>type_native value = 'PROC_READ_CHAR' ).
-      define_value( symbol = 'read-string'  type = lcl_lisp=>type_native value = 'PROC_READ_STRING' ).
-      define_value( symbol = 'char-ready?'  type = lcl_lisp=>type_native value = 'PROC_IS_CHAR_READY' ).
-      define_value( symbol = 'peek-char'    type = lcl_lisp=>type_native value = 'PROC_PEEK_CHAR' ).
+      define_value( symbol = 'read'         type = native value = 'PROC_READ' ).
+      define_value( symbol = 'write-string' type = native value = 'PROC_WRITE_STRING' ).
+      define_value( symbol = 'write-char'   type = native value = 'PROC_WRITE_CHAR' ).
+      define_value( symbol = 'read-char'    type = native value = 'PROC_READ_CHAR' ).
+      define_value( symbol = 'read-string'  type = native value = 'PROC_READ_STRING' ).
+      define_value( symbol = 'char-ready?'  type = native value = 'PROC_IS_CHAR_READY' ).
+      define_value( symbol = 'peek-char'    type = native value = 'PROC_PEEK_CHAR' ).
 
-      define_value( symbol = 'exact'          type = lcl_lisp=>type_native value = 'PROC_TO_EXACT' ).
-      define_value( symbol = 'inexact'        type = lcl_lisp=>type_native value = 'PROC_TO_INEXACT' ).
+      define_value( symbol = 'exact'          type = native value = 'PROC_TO_EXACT' ).
+      define_value( symbol = 'inexact'        type = native value = 'PROC_TO_INEXACT' ).
 
-      define_value( symbol = 'number->string' type = lcl_lisp=>type_native value = 'PROC_NUM_TO_STRING' ).
-      define_value( symbol = 'string->number' type = lcl_lisp=>type_native value = 'PROC_STRING_TO_NUM' ).
-      define_value( symbol = 'make-string'    type = lcl_lisp=>type_native value = 'PROC_MAKE_STRING' ).
-      define_value( symbol = 'string'         type = lcl_lisp=>type_native value = 'PROC_STRING' ).
-      define_value( symbol = 'string->list'   type = lcl_lisp=>type_native value = 'PROC_STRING_TO_LIST' ).
-      define_value( symbol = 'list->string'   type = lcl_lisp=>type_native value = 'PROC_LIST_TO_STRING' ).
-      define_value( symbol = 'symbol->string' type = lcl_lisp=>type_native value = 'PROC_SYMBOL_TO_STRING' ).
-      define_value( symbol = 'string->symbol' type = lcl_lisp=>type_native value = 'PROC_STRING_TO_SYMBOL' ).
-      define_value( symbol = 'string-append'  type = lcl_lisp=>type_native value = 'PROC_STRING_APPEND' ).
-      define_value( symbol = 'string-length'  type = lcl_lisp=>type_native value = 'PROC_STRING_LENGTH' ).
-      define_value( symbol = 'string-copy'    type = lcl_lisp=>type_native value = 'PROC_STRING_COPY' ).
-      define_value( symbol = 'substring'      type = lcl_lisp=>type_native value = 'PROC_STRING_COPY' ).
-      define_value( symbol = 'string-ref'     type = lcl_lisp=>type_native value = 'PROC_STRING_REF' ).
-      define_value( symbol = 'string-set!'    type = lcl_lisp=>type_native value = 'PROC_STRING_SET' ).
+      define_value( symbol = 'number->string' type = native value = 'PROC_NUM_TO_STRING' ).
+      define_value( symbol = 'string->number' type = native value = 'PROC_STRING_TO_NUM' ).
+      define_value( symbol = 'make-string'    type = native value = 'PROC_MAKE_STRING' ).
+      define_value( symbol = 'string'         type = native value = 'PROC_STRING' ).
+      define_value( symbol = 'string->list'   type = native value = 'PROC_STRING_TO_LIST' ).
+      define_value( symbol = 'list->string'   type = native value = 'PROC_LIST_TO_STRING' ).
+      define_value( symbol = 'symbol->string' type = native value = 'PROC_SYMBOL_TO_STRING' ).
+      define_value( symbol = 'string->symbol' type = native value = 'PROC_STRING_TO_SYMBOL' ).
+      define_value( symbol = 'string-append'  type = native value = 'PROC_STRING_APPEND' ).
+      define_value( symbol = 'string-length'  type = native value = 'PROC_STRING_LENGTH' ).
+      define_value( symbol = 'string-copy'    type = native value = 'PROC_STRING_COPY' ).
+      define_value( symbol = 'substring'      type = native value = 'PROC_STRING_COPY' ).
+      define_value( symbol = 'string-ref'     type = native value = 'PROC_STRING_REF' ).
+      define_value( symbol = 'string-set!'    type = native value = 'PROC_STRING_SET' ).
 
-      define_value( symbol = 'string=?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_EQ' ).
-      define_value( symbol = 'string<?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_LT' ).
-      define_value( symbol = 'string>?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_GT' ).
-      define_value( symbol = 'string<=?'    type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_LE' ).
-      define_value( symbol = 'string>=?'    type = lcl_lisp=>type_native value   = 'PROC_STRING_LIST_IS_GE' ).
+      define_value( symbol = 'string=?'     type = native value   = 'PROC_STRING_LIST_IS_EQ' ).
+      define_value( symbol = 'string<?'     type = native value   = 'PROC_STRING_LIST_IS_LT' ).
+      define_value( symbol = 'string>?'     type = native value   = 'PROC_STRING_LIST_IS_GT' ).
+      define_value( symbol = 'string<=?'    type = native value   = 'PROC_STRING_LIST_IS_LE' ).
+      define_value( symbol = 'string>=?'    type = native value   = 'PROC_STRING_LIST_IS_GE' ).
 
-      define_value( symbol = 'string-ci=?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_EQ' ).
-      define_value( symbol = 'string-ci<?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_LT' ).
-      define_value( symbol = 'string-ci>?'     type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_GT' ).
-      define_value( symbol = 'string-ci<=?'    type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_LE' ).
-      define_value( symbol = 'string-ci>=?'    type = lcl_lisp=>type_native value   = 'PROC_STRING_CI_LIST_IS_GE' ).
+      define_value( symbol = 'string-ci=?'     type = native value   = 'PROC_STRING_CI_LIST_IS_EQ' ).
+      define_value( symbol = 'string-ci<?'     type = native value   = 'PROC_STRING_CI_LIST_IS_LT' ).
+      define_value( symbol = 'string-ci>?'     type = native value   = 'PROC_STRING_CI_LIST_IS_GT' ).
+      define_value( symbol = 'string-ci<=?'    type = native value   = 'PROC_STRING_CI_LIST_IS_LE' ).
+      define_value( symbol = 'string-ci>=?'    type = native value   = 'PROC_STRING_CI_LIST_IS_GE' ).
 
 *     Math
-      define_value( symbol = 'abs'   type = lcl_lisp=>type_native value = 'PROC_ABS' ).
-      define_value( symbol = 'sin'   type = lcl_lisp=>type_native value = 'PROC_SIN' ).
-      define_value( symbol = 'cos'   type = lcl_lisp=>type_native value = 'PROC_COS' ).
-      define_value( symbol = 'tan'   type = lcl_lisp=>type_native value = 'PROC_TAN' ).
-      define_value( symbol = 'asin'  type = lcl_lisp=>type_native value = 'PROC_ASIN' ).
-      define_value( symbol = 'acos'  type = lcl_lisp=>type_native value = 'PROC_ACOS' ).
-      define_value( symbol = 'atan'  type = lcl_lisp=>type_native value = 'PROC_ATAN' ).
-      define_value( symbol = 'sinh'  type = lcl_lisp=>type_native value = 'PROC_SINH' ).
-      define_value( symbol = 'cosh'  type = lcl_lisp=>type_native value = 'PROC_COSH' ).
-      define_value( symbol = 'tanh'  type = lcl_lisp=>type_native value = 'PROC_TANH' ).
-      define_value( symbol = 'asinh' type = lcl_lisp=>type_native value = 'PROC_ASINH' ).
-      define_value( symbol = 'acosh' type = lcl_lisp=>type_native value = 'PROC_ACOSH' ).
-      define_value( symbol = 'atanh' type = lcl_lisp=>type_native value = 'PROC_ATANH' ).
-      define_value( symbol = 'expt'  type = lcl_lisp=>type_native value = 'PROC_EXPT' ).
-      define_value( symbol = 'exp'   type = lcl_lisp=>type_native value = 'PROC_EXP' ).
-      define_value( symbol = 'log'   type = lcl_lisp=>type_native value = 'PROC_LOG' ).
-      define_value( symbol = 'sqrt'  type = lcl_lisp=>type_native value = 'PROC_SQRT' ).
+      define_value( symbol = 'abs'   type = native value = 'PROC_ABS' ).
+      define_value( symbol = 'sin'   type = native value = 'PROC_SIN' ).
+      define_value( symbol = 'cos'   type = native value = 'PROC_COS' ).
+      define_value( symbol = 'tan'   type = native value = 'PROC_TAN' ).
+      define_value( symbol = 'asin'  type = native value = 'PROC_ASIN' ).
+      define_value( symbol = 'acos'  type = native value = 'PROC_ACOS' ).
+      define_value( symbol = 'atan'  type = native value = 'PROC_ATAN' ).
+      define_value( symbol = 'sinh'  type = native value = 'PROC_SINH' ).
+      define_value( symbol = 'cosh'  type = native value = 'PROC_COSH' ).
+      define_value( symbol = 'tanh'  type = native value = 'PROC_TANH' ).
+      define_value( symbol = 'asinh' type = native value = 'PROC_ASINH' ).
+      define_value( symbol = 'acosh' type = native value = 'PROC_ACOSH' ).
+      define_value( symbol = 'atanh' type = native value = 'PROC_ATANH' ).
+      define_value( symbol = 'expt'  type = native value = 'PROC_EXPT' ).
+      define_value( symbol = 'exp'   type = native value = 'PROC_EXP' ).
+      define_value( symbol = 'log'   type = native value = 'PROC_LOG' ).
+      define_value( symbol = 'sqrt'  type = native value = 'PROC_SQRT' ).
 
-      define_value( symbol = 'floor'    type = lcl_lisp=>type_native value = 'PROC_FLOOR' ).
-      define_value( symbol = 'ceiling'  type = lcl_lisp=>type_native value = 'PROC_CEILING' ).
-      define_value( symbol = 'truncate' type = lcl_lisp=>type_native value = 'PROC_TRUNCATE' ).
-      define_value( symbol = 'round'    type = lcl_lisp=>type_native value = 'PROC_ROUND' ).
+      define_value( symbol = 'floor'    type = native value = 'PROC_FLOOR' ).
+      define_value( symbol = 'ceiling'  type = native value = 'PROC_CEILING' ).
+      define_value( symbol = 'truncate' type = native value = 'PROC_TRUNCATE' ).
+      define_value( symbol = 'round'    type = native value = 'PROC_ROUND' ).
 
-      define_value( symbol = 'numerator'   type = lcl_lisp=>type_native value = 'PROC_NUMERATOR' ).
-      define_value( symbol = 'denominator' type = lcl_lisp=>type_native value = 'PROC_DENOMINATOR' ).
-      define_value( symbol = 'remainder' type = lcl_lisp=>type_native value = 'PROC_REMAINDER' ).
-      define_value( symbol = 'modulo'    type = lcl_lisp=>type_native value = 'PROC_MODULO' ).
-      define_value( symbol = 'quotient'  type = lcl_lisp=>type_native value = 'PROC_QUOTIENT' ).
-      define_value( symbol = 'random'    type = lcl_lisp=>type_native value = 'PROC_RANDOM' ).
-      define_value( symbol = 'max'       type = lcl_lisp=>type_native value = 'PROC_MAX' ).
-      define_value( symbol = 'min'       type = lcl_lisp=>type_native value = 'PROC_MIN' ).
-      define_value( symbol = 'gcd'       type = lcl_lisp=>type_native value = 'PROC_GCD' ).
-      define_value( symbol = 'lcm'       type = lcl_lisp=>type_native value = 'PROC_LCM' ).
+      define_value( symbol = 'numerator'   type = native value = 'PROC_NUMERATOR' ).
+      define_value( symbol = 'denominator' type = native value = 'PROC_DENOMINATOR' ).
+      define_value( symbol = 'remainder' type = native value = 'PROC_REMAINDER' ).
+      define_value( symbol = 'modulo'    type = native value = 'PROC_MODULO' ).
+      define_value( symbol = 'quotient'  type = native value = 'PROC_QUOTIENT' ).
+      define_value( symbol = 'random'    type = native value = 'PROC_RANDOM' ).
+      define_value( symbol = 'max'       type = native value = 'PROC_MAX' ).
+      define_value( symbol = 'min'       type = native value = 'PROC_MIN' ).
+      define_value( symbol = 'gcd'       type = native value = 'PROC_GCD' ).
+      define_value( symbol = 'lcm'       type = native value = 'PROC_LCM' ).
 
-      define_value( symbol = 'zero?'     type = lcl_lisp=>type_native value = 'PROC_IS_ZERO' ).
-      define_value( symbol = 'positive?' type = lcl_lisp=>type_native value = 'PROC_IS_POSITIVE' ).
-      define_value( symbol = 'negative?' type = lcl_lisp=>type_native value = 'PROC_IS_NEGATIVE' ).
-      define_value( symbol = 'odd?'      type = lcl_lisp=>type_native value = 'PROC_IS_ODD' ).
-      define_value( symbol = 'even?'     type = lcl_lisp=>type_native value = 'PROC_IS_EVEN' ).
+      define_value( symbol = 'zero?'     type = native value = 'PROC_IS_ZERO' ).
+      define_value( symbol = 'positive?' type = native value = 'PROC_IS_POSITIVE' ).
+      define_value( symbol = 'negative?' type = native value = 'PROC_IS_NEGATIVE' ).
+      define_value( symbol = 'odd?'      type = native value = 'PROC_IS_ODD' ).
+      define_value( symbol = 'even?'     type = native value = 'PROC_IS_EVEN' ).
 *     Continuation
-      define_value( symbol = 'call-with-current-continuation' type = lcl_lisp=>type_native value = 'PROC_CALL_CC' ).
-      define_value( symbol = 'call/cc'                        type = lcl_lisp=>type_native value = 'PROC_CALL_CC' ).
+      define_value( symbol = 'call-with-current-continuation' type = native value = 'PROC_CALL_CC' ).
+      define_value( symbol = 'call/cc'                        type = native value = 'PROC_CALL_CC' ).
 
 *     Native functions for ABAP integration
-      define_value( symbol = 'ab-data'       type = lcl_lisp=>type_native value   = 'PROC_ABAP_DATA' ).
-      define_value( symbol = 'ab-function'   type = lcl_lisp=>type_native value   = 'PROC_ABAP_FUNCTION' ).
-      define_value( symbol = 'ab-func-param' type = lcl_lisp=>type_native value   = 'PROC_ABAP_FUNCTION_PARAM' ).
-      define_value( symbol = 'ab-table'      type = lcl_lisp=>type_native value   = 'PROC_ABAP_TABLE' ).
-      define_value( symbol = 'ab-append-row' type = lcl_lisp=>type_native value   = 'PROC_ABAP_APPEND_ROW' ).
-      define_value( symbol = 'ab-delete-row' type = lcl_lisp=>type_native value   = 'PROC_ABAP_DELETE_ROW' ).
-      define_value( symbol = 'ab-get-row'    type = lcl_lisp=>type_native value   = 'PROC_ABAP_GET_ROW' ).
-      define_value( symbol = 'ab-get-value'  type = lcl_lisp=>type_native value   = 'PROC_ABAP_GET_VALUE' ).
-      define_value( symbol = 'ab-set-value'  type = lcl_lisp=>type_native value   = 'PROC_ABAP_SET_VALUE' ).
+      define_value( symbol = 'ab-data'       type = native value   = 'PROC_ABAP_DATA' ).
+      define_value( symbol = 'ab-function'   type = native value   = 'PROC_ABAP_FUNCTION' ).
+      define_value( symbol = 'ab-func-param' type = native value   = 'PROC_ABAP_FUNCTION_PARAM' ).
+      define_value( symbol = 'ab-table'      type = native value   = 'PROC_ABAP_TABLE' ).
+      define_value( symbol = 'ab-append-row' type = native value   = 'PROC_ABAP_APPEND_ROW' ).
+      define_value( symbol = 'ab-delete-row' type = native value   = 'PROC_ABAP_DELETE_ROW' ).
+      define_value( symbol = 'ab-get-row'    type = native value   = 'PROC_ABAP_GET_ROW' ).
+      define_value( symbol = 'ab-get-value'  type = native value   = 'PROC_ABAP_GET_VALUE' ).
+      define_value( symbol = 'ab-set-value'  type = native value   = 'PROC_ABAP_SET_VALUE' ).
 
-      define_value( symbol = 'ab-get' type = lcl_lisp=>type_native value = 'PROC_ABAP_GET' ).
-      define_value( symbol = 'ab-set' type = lcl_lisp=>type_native value = 'PROC_ABAP_SET' ).
+      define_value( symbol = 'ab-get' type = native value = 'PROC_ABAP_GET' ).
+      define_value( symbol = 'ab-set' type = native value = 'PROC_ABAP_SET' ).
 
 *     Compatibility
-      define_value( symbol = 'empty?'  type = lcl_lisp=>type_native value   = 'PROC_NILP' ).
-      define_value( symbol = 'first'   type = lcl_lisp=>type_native value   = 'PROC_CAR' ).
-      define_value( symbol = 'rest'    type = lcl_lisp=>type_native value   = 'PROC_CDR' ).
+      define_value( symbol = 'empty?'  type = native value   = 'PROC_NILP' ).
+      define_value( symbol = 'first'   type = native value   = 'PROC_CAR' ).
+      define_value( symbol = 'rest'    type = native value   = 'PROC_CDR' ).
 
 *     Errors
-      define_value( symbol = 'raise'   type = lcl_lisp=>type_native value   = 'PROC_RAISE' ).
-      define_value( symbol = 'error'   type = lcl_lisp=>type_native value   = 'PROC_ERROR' ).
+      define_value( symbol = 'raise'   type = native value   = 'PROC_RAISE' ).
+      define_value( symbol = 'error'   type = native value   = 'PROC_ERROR' ).
 
 *     Ports
-      define_value( symbol = 'input-port?'         type = lcl_lisp=>type_native value   = 'PROC_IS_INPUT_PORT' ).
-      define_value( symbol = 'output-port?'        type = lcl_lisp=>type_native value   = 'PROC_IS_OUTPUT_PORT' ).
-      define_value( symbol = 'textual-port?'       type = lcl_lisp=>type_native value   = 'PROC_IS_TEXTUAL_PORT' ).
-      define_value( symbol = 'binary-port?'        type = lcl_lisp=>type_native value   = 'PROC_IS_BINARY_PORT' ).
-      define_value( symbol = 'input-port-open?'    type = lcl_lisp=>type_native value   = 'PROC_IS_OPEN_INPUT_PORT' ).
-      define_value( symbol = 'output-port-open?'   type = lcl_lisp=>type_native value   = 'PROC_IS_OPEN_OUTPUT_PORT' ).
-      define_value( symbol = 'eof-object?'         type = lcl_lisp=>type_native value   = 'PROC_IS_EOF_OBJECT' ).
-      define_value( symbol = 'open-output-string'  type = lcl_lisp=>type_native value   = 'PROC_OPEN_OUTPUT_STRING' ).
-      define_value( symbol = 'open-input-string'   type = lcl_lisp=>type_native value   = 'PROC_OPEN_INPUT_STRING' ).
-      define_value( symbol = 'get-output-string'   type = lcl_lisp=>type_native value   = 'PROC_GET_OUTPUT_STRING' ).
-      define_value( symbol = 'eof-object'          type = lcl_lisp=>type_native value   = 'PROC_EOF_OBJECT' ).
+      define_value( symbol = 'input-port?'         type = native value   = 'PROC_IS_INPUT_PORT' ).
+      define_value( symbol = 'output-port?'        type = native value   = 'PROC_IS_OUTPUT_PORT' ).
+      define_value( symbol = 'textual-port?'       type = native value   = 'PROC_IS_TEXTUAL_PORT' ).
+      define_value( symbol = 'binary-port?'        type = native value   = 'PROC_IS_BINARY_PORT' ).
+      define_value( symbol = 'input-port-open?'    type = native value   = 'PROC_IS_OPEN_INPUT_PORT' ).
+      define_value( symbol = 'output-port-open?'   type = native value   = 'PROC_IS_OPEN_OUTPUT_PORT' ).
+      define_value( symbol = 'eof-object?'         type = native value   = 'PROC_IS_EOF_OBJECT' ).
+      define_value( symbol = 'open-output-string'  type = native value   = 'PROC_OPEN_OUTPUT_STRING' ).
+      define_value( symbol = 'open-input-string'   type = native value   = 'PROC_OPEN_INPUT_STRING' ).
+      define_value( symbol = 'get-output-string'   type = native value   = 'PROC_GET_OUTPUT_STRING' ).
+      define_value( symbol = 'eof-object'          type = native value   = 'PROC_EOF_OBJECT' ).
 
-      define_value( symbol = 'char-alphabetic?'  type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_ALPHABETIC' ).
-      define_value( symbol = 'char-numeric?'     type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_NUMERIC' ).
-      define_value( symbol = 'char-whitespace?'  type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_WHITESPACE' ).
-      define_value( symbol = 'char-upper-case?'  type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_UPPER_CASE' ).
-      define_value( symbol = 'char-lower-case?'  type = lcl_lisp=>type_native value   = 'PROC_IS_CHAR_LOWER_CASE' ).
+      define_value( symbol = 'char-alphabetic?'  type = native value   = 'PROC_IS_CHAR_ALPHABETIC' ).
+      define_value( symbol = 'char-numeric?'     type = native value   = 'PROC_IS_CHAR_NUMERIC' ).
+      define_value( symbol = 'char-whitespace?'  type = native value   = 'PROC_IS_CHAR_WHITESPACE' ).
+      define_value( symbol = 'char-upper-case?'  type = native value   = 'PROC_IS_CHAR_UPPER_CASE' ).
+      define_value( symbol = 'char-lower-case?'  type = native value   = 'PROC_IS_CHAR_LOWER_CASE' ).
 
-      define_value( symbol = 'digit-value'       type = lcl_lisp=>type_native value   = 'PROC_DIGIT_VALUE' ).
-      define_value( symbol = 'char->integer'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_TO_INTEGER' ).
-      define_value( symbol = 'integer->char'     type = lcl_lisp=>type_native value   = 'PROC_INTEGER_TO_CHAR' ).
-      define_value( symbol = 'char-upcase'       type = lcl_lisp=>type_native value   = 'PROC_CHAR_UPCASE' ).
-      define_value( symbol = 'char-downcase'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_DOWNCASE' ).
+      define_value( symbol = 'digit-value'       type = native value   = 'PROC_DIGIT_VALUE' ).
+      define_value( symbol = 'char->int'     type = native value   = 'PROC_CHAR_TO_INTEGER' ).
+      define_value( symbol = 'integer->char'     type = native value   = 'PROC_INTEGER_TO_CHAR' ).
+      define_value( symbol = 'char-upcase'       type = native value   = 'PROC_CHAR_UPCASE' ).
+      define_value( symbol = 'char-downcase'     type = native value   = 'PROC_CHAR_DOWNCASE' ).
 
-      define_value( symbol = 'char=?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_EQ' ).
-      define_value( symbol = 'char<?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_LT' ).
-      define_value( symbol = 'char>?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_GT' ).
-      define_value( symbol = 'char<=?'    type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_LE' ).
-      define_value( symbol = 'char>=?'    type = lcl_lisp=>type_native value   = 'PROC_CHAR_LIST_IS_GE' ).
+      define_value( symbol = 'char=?'     type = native value   = 'PROC_CHAR_LIST_IS_EQ' ).
+      define_value( symbol = 'char<?'     type = native value   = 'PROC_CHAR_LIST_IS_LT' ).
+      define_value( symbol = 'char>?'     type = native value   = 'PROC_CHAR_LIST_IS_GT' ).
+      define_value( symbol = 'char<=?'    type = native value   = 'PROC_CHAR_LIST_IS_LE' ).
+      define_value( symbol = 'char>=?'    type = native value   = 'PROC_CHAR_LIST_IS_GE' ).
 
-      define_value( symbol = 'char-ci=?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_EQ' ).
-      define_value( symbol = 'char-ci<?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_LT' ).
-      define_value( symbol = 'char-ci>?'     type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_GT' ).
-      define_value( symbol = 'char-ci<=?'    type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_LE' ).
-      define_value( symbol = 'char-ci>=?'    type = lcl_lisp=>type_native value   = 'PROC_CHAR_CI_LIST_IS_GE' ).
+      define_value( symbol = 'char-ci=?'     type = native value   = 'PROC_CHAR_CI_LIST_IS_EQ' ).
+      define_value( symbol = 'char-ci<?'     type = native value   = 'PROC_CHAR_CI_LIST_IS_LT' ).
+      define_value( symbol = 'char-ci>?'     type = native value   = 'PROC_CHAR_CI_LIST_IS_GT' ).
+      define_value( symbol = 'char-ci<=?'    type = native value   = 'PROC_CHAR_CI_LIST_IS_LE' ).
+      define_value( symbol = 'char-ci>=?'    type = native value   = 'PROC_CHAR_CI_LIST_IS_GE' ).
 
-      define_value( symbol = 'sql-query'         type = lcl_lisp=>type_native value   = 'PROC_SQL_QUERY' ).
-      define_value( symbol = 'define-query'      type = lcl_lisp=>type_native value   = 'PROC_SQL_PREPARE' ).
+      define_value( symbol = 'sql-query'         type = native value   = 'PROC_SQL_QUERY' ).
+      define_value( symbol = 'define-query'      type = native value   = 'PROC_SQL_PREPARE' ).
 
-      define_value( symbol = 'turtles'       type = lcl_lisp=>type_native value   = 'PROC_TURTLE_NEW' ).
-      define_value( symbol = 'turtles?'      type = lcl_lisp=>type_native value   = 'PROC_TURTLE_EXIST' ).
-      define_value( symbol = 'move'          type = lcl_lisp=>type_native value   = 'PROC_TURTLE_MOVE' ).
-      define_value( symbol = 'draw'          type = lcl_lisp=>type_native value   = 'PROC_TURTLE_DRAW' ).
-      define_value( symbol = 'erase'         type = lcl_lisp=>type_native value   = 'PROC_TURTLE_ERASE' ).
-      define_value( symbol = 'move-offset'   type = lcl_lisp=>type_native value   = 'PROC_TURTLE_MOVE_OFFSET' ).
-      define_value( symbol = 'draw-offset'   type = lcl_lisp=>type_native value   = 'PROC_TURTLE_DRAW_OFFSET' ).
-      define_value( symbol = 'erase-offset'  type = lcl_lisp=>type_native value   = 'PROC_TURTLE_ERASE_OFFSET' ).
-      define_value( symbol = 'turn'          type = lcl_lisp=>type_native value   = 'PROC_TURTLE_TURN_DEGREES' ).
-      define_value( symbol = 'turn/radians'  type = lcl_lisp=>type_native value   = 'PROC_TURTLE_TURN_RADIANS' ).
-      define_value( symbol = 'set-pen-width' type = lcl_lisp=>type_native value   = 'PROC_TURTLE_SET_PEN_WIDTH' ).
-      define_value( symbol = 'set-pen-color' type = lcl_lisp=>type_native value   = 'PROC_TURTLE_SET_PEN_COLOR' ).
+      define_value( symbol = 'turtles'       type = native value   = 'PROC_TURTLE_NEW' ).
+      define_value( symbol = 'turtles?'      type = native value   = 'PROC_TURTLE_EXIST' ).
+      define_value( symbol = 'move'          type = native value   = 'PROC_TURTLE_MOVE' ).
+      define_value( symbol = 'draw'          type = native value   = 'PROC_TURTLE_DRAW' ).
+      define_value( symbol = 'erase'         type = native value   = 'PROC_TURTLE_ERASE' ).
+      define_value( symbol = 'move-offset'   type = native value   = 'PROC_TURTLE_MOVE_OFFSET' ).
+      define_value( symbol = 'draw-offset'   type = native value   = 'PROC_TURTLE_DRAW_OFFSET' ).
+      define_value( symbol = 'erase-offset'  type = native value   = 'PROC_TURTLE_ERASE_OFFSET' ).
+      define_value( symbol = 'turn'          type = native value   = 'PROC_TURTLE_TURN_DEGREES' ).
+      define_value( symbol = 'turn/radians'  type = native value   = 'PROC_TURTLE_TURN_RADIANS' ).
+      define_value( symbol = 'set-pen-width' type = native value   = 'PROC_TURTLE_SET_PEN_WIDTH' ).
+      define_value( symbol = 'set-pen-color' type = native value   = 'PROC_TURTLE_SET_PEN_COLOR' ).
 
-      define_value( symbol = 'merge'             type = lcl_lisp=>type_native value = 'PROC_TURTLE_MERGE' ).
-      define_value( symbol = 'clean'             type = lcl_lisp=>type_native value = 'PROC_TURTLE_CLEAN' ).
-      define_value( symbol = 'turtle-state'      type = lcl_lisp=>type_native value = 'PROC_TURTLE_STATE' ).
-      define_value( symbol = 'turtles-height'    type = lcl_lisp=>type_native value = 'PROC_TURTLE_HEIGHT' ).
-      define_value( symbol = 'turtles-width'     type = lcl_lisp=>type_native value = 'PROC_TURTLE_WIDTH' ).
-      define_value( symbol = 'turtles-pen-color' type = lcl_lisp=>type_native value = 'PROC_TURTLE_PEN_COLOR' ).
-      define_value( symbol = 'turtles-pen-width' type = lcl_lisp=>type_native value = 'PROC_TURTLE_PEN_WIDTH' ).
-      define_value( symbol = 'regular-poly'      type = lcl_lisp=>type_native value = 'PROC_TURTLE_REGULAR_POLY' ).
-      define_value( symbol = 'regular-polys'     type = lcl_lisp=>type_native value = 'PROC_TURTLE_REGULAR_POLYS' ).
+      define_value( symbol = 'merge'             type = native value = 'PROC_TURTLE_MERGE' ).
+      define_value( symbol = 'clean'             type = native value = 'PROC_TURTLE_CLEAN' ).
+      define_value( symbol = 'turtle-state'      type = native value = 'PROC_TURTLE_STATE' ).
+      define_value( symbol = 'turtles-height'    type = native value = 'PROC_TURTLE_HEIGHT' ).
+      define_value( symbol = 'turtles-width'     type = native value = 'PROC_TURTLE_WIDTH' ).
+      define_value( symbol = 'turtles-pen-color' type = native value = 'PROC_TURTLE_PEN_COLOR' ).
+      define_value( symbol = 'turtles-pen-width' type = native value = 'PROC_TURTLE_PEN_WIDTH' ).
+      define_value( symbol = 'regular-poly'      type = native value = 'PROC_TURTLE_REGULAR_POLY' ).
+      define_value( symbol = 'regular-polys'     type = native value = 'PROC_TURTLE_REGULAR_POLYS' ).
 
 *     Define a value in the environment for SYST
       " set( symbol = 'ab-sy' element = lcl_lisp_new=>data( REF #( syst ) ) ).
@@ -14815,6 +14863,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       eof_object = lcl_lisp_new=>char( c_lisp_eof ).
     ENDMETHOD.
 
+    METHOD constructor.
+      me->type = type.
+    ENDMETHOD.
+
     METHOD is_equivalent. "eqv?
       "_validate io_elem.
       IF io_elem IS NOT BOUND.
@@ -14837,44 +14889,44 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       CHECK type EQ b->type.
 
       CASE type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
 * obj1 and obj2 are both exact numbers and are numerically equal (in the sense of =).
           lo_int ?= b.
-          CHECK CAST lcl_lisp_integer( me )->integer = lo_int->integer.
+          CHECK CAST lcl_lisp_integer( me )->int = lo_int->int.
 
-        WHEN lcl_lisp=>type_real.
+        WHEN real.
 *obj1 and obj2 are both inexact numbers such that they are numerically equal (in the sense of =)
 *and they yield the same results (in the sense of eqv?) when passed as arguments to any other
 *procedure that can be defined as a finite composition of Scheme’s standard arithmetic procedures,
 *provided it does not result in a NaN value.
           lo_real ?= b.
-          CHECK CAST lcl_lisp_real( me )->float_eq( lo_real->real ).
+          CHECK CAST lcl_lisp_real( me )->float_eq( lo_real->float ).
 
-        WHEN lcl_lisp=>type_symbol.
+        WHEN symbol.
 * obj1 and obj2 are both symbols and are the same symbol according to the symbol=? procedure (section 6.5).
           DATA(lo_symbol) = CAST lcl_lisp_symbol( me ).
           DATA(lo_s_b) = CAST lcl_lisp_symbol( b ).
           CHECK lo_symbol->value = lo_s_b->value
               AND lo_symbol->index = lo_s_b->index.  " for uninterned symbols
 
-        WHEN lcl_lisp=>type_string.
+        WHEN string.
 * obj1 and obj2 are both characters and are the same character according to the char=? procedure (section 6.6).
           DATA(lo_string) = CAST lcl_lisp_string( me ).
           DATA(lo_str_b) = CAST lcl_lisp_string( b ).
           CHECK lo_string->value = lo_str_b->value.
 
-        WHEN lcl_lisp=>type_pair.
+        WHEN pair.
 * obj1 and obj2 are procedures whose location tags are equal (section 4.1.4).
           DATA(lo_pair) = CAST lcl_lisp_pair( me ).
           DATA(lo_p_b) = CAST lcl_lisp_pair( b ).
           CHECK lo_pair->car EQ lo_p_b->car AND lo_pair->cdr EQ lo_p_b->cdr.
 
-        WHEN lcl_lisp=>type_lambda OR lcl_lisp=>type_case_lambda .
+        WHEN lambda OR case_lambda .
 * obj1 and obj2 are procedures whose location tags are equal (section 4.1.4).
           DATA(lo_lambda) = CAST lcl_lisp_lambda( me ).
           DATA(lo_l_b) = CAST lcl_lisp_lambda( b ).
           CHECK lo_lambda->car EQ lo_l_b->car AND lo_lambda->cdr EQ lo_l_b->cdr
-            AND lo_lambda->macro EQ lo_l_b->macro AND lo_lambda->environment = b->environment.
+            AND lo_lambda->category EQ lo_l_b->category AND lo_lambda->environment = b->environment.
 
         WHEN OTHERS.
 * obj1 and obj2 are pairs, vectors, bytevectors, records, or strings that denote the same location in the store (section 3.4).
@@ -14918,14 +14970,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       CASE type.
 
-        WHEN lcl_lisp=>type_pair.
+        WHEN pair.
           DATA(lo_a) = me.
           DATA(lo_slow_a) = me.
 
           DATA(lo_b) = io_elem.
           DATA(lo_slow_b) = io_elem.
 
-          WHILE lo_a->type EQ lcl_lisp=>type_pair AND lo_b->type EQ lcl_lisp=>type_pair.
+          WHILE lo_a->type EQ pair AND lo_b->type EQ pair.
             IF lo_a->car EQ lo_a AND lo_b->car EQ lo_b.
 *             Circular list
               result = true.
@@ -14937,7 +14989,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             lo_a = lo_a->cdr.
             lo_slow_b = lo_slow_b->cdr.
             lo_b = lo_b->cdr.
-            CHECK lo_a->type EQ lcl_lisp=>type_pair AND lo_b->type EQ lcl_lisp=>type_pair.
+            CHECK lo_a->type EQ pair AND lo_b->type EQ pair.
             IF lo_a->car->is_equal( lo_b->car ) EQ false.
               RETURN.
             ENDIF.
@@ -14951,14 +15003,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
           result = lo_a->is_equal( lo_b ).
 
-        WHEN lcl_lisp=>type_vector.
+        WHEN vector.
           DATA lo_vec TYPE REF TO lcl_lisp_vector.
           DATA lo_elem_vec TYPE REF TO lcl_lisp_vector.
           lo_vec ?= me.
           lo_elem_vec ?= io_elem.
           result = lo_vec->to_list( )->is_equal( lo_elem_vec->to_list( ) ).
 
-        WHEN lcl_lisp=>type_string.
+        WHEN string.
           CHECK me->value EQ io_elem->value.
           result = true.
 
@@ -14978,9 +15030,9 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     METHOD format_quasiquote.
 *     Quasiquoting output (quasiquote x) is displayed as `x without parenthesis
       ev_skip = abap_false.
-      CHECK io_elem->type EQ type_pair.
+      CHECK io_elem->type EQ pair.
 
-      IF io_elem->car->type EQ type_symbol OR io_elem->car->type EQ type_syntax.
+      IF io_elem->car->type EQ symbol OR io_elem->car->type EQ syntax.
         CASE io_elem->car->value.
           WHEN c_eval_quote OR `'`.
             ev_str = ev_str && `'`.
@@ -15009,13 +15061,13 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       CHECK mv_label IS NOT INITIAL.
 
       CASE type.
-        WHEN lcl_lisp=>type_pair.
+        WHEN pair.
           lo_last_pair = lo_ptr = me.
-          WHILE lo_ptr->type EQ lcl_lisp=>type_pair.
+          WHILE lo_ptr->type EQ pair.
             lo_last_pair = lo_ptr.
             lo_ptr = lo_ptr->cdr.
           ENDWHILE.
-          IF lo_ptr->type = lcl_lisp=>type_symbol AND lo_ptr->value = mv_label.
+          IF lo_ptr->type = symbol AND lo_ptr->value = mv_label.
             lo_last_pair->cdr = me.
           ENDIF.
 
@@ -15041,7 +15093,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
 *       Quasiquoting output (quasiquote x) is displayed as `x without parenthesis
         lv_skip = abap_false.
-        IF lv_first EQ abap_true AND lo_elem->type EQ type_pair.
+        IF lv_first EQ abap_true AND lo_elem->type EQ pair.
           lv_first = abap_false.
 
           format_quasiquote( EXPORTING io_elem = lo_elem
@@ -15052,10 +15104,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           ENDIF.
         ENDIF.
 
-        IF lo_fast IS BOUND AND lo_fast->type EQ type_pair.
+        IF lo_fast IS BOUND AND lo_fast->type EQ pair.
           lo_fast = lo_fast->cdr.
 
-          IF lo_fast IS BOUND AND lo_fast->type EQ type_pair AND lo_elem NE lo_fast.
+          IF lo_fast IS BOUND AND lo_fast->type EQ pair AND lo_elem NE lo_fast.
             lo_fast = lo_fast->cdr.
           ENDIF.
 
@@ -15073,7 +15125,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         ENDIF.
 
         IF lv_skip EQ abap_false.
-          lv_str = lv_str && COND string( WHEN lo_elem->type NE type_pair     " If item is not a cons cell
+          lv_str = lv_str && COND string( WHEN lo_elem->type NE pair     " If item is not a cons cell
                                           THEN | . { lo_elem->to_string( ) }|      " indicate with dot notation:
                                           ELSE | { lo_elem->car->to_string( ) }| ).
         ENDIF.
@@ -15097,21 +15149,21 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
     METHOD to_string.
       CASE type.
-        WHEN type_lambda.
+        WHEN lambda.
           str = |<lambda> { car->list_to_string( ) }|.
-        WHEN type_null.
+        WHEN null.
           str = c_lisp_nil.
 
-        WHEN type_syntax
-          OR type_primitive
-          OR type_symbol
-          OR type_boolean.
+        WHEN syntax
+          OR primitive
+          OR symbol
+          OR boolean.
           str = value.
 
-        WHEN type_undefined.
+        WHEN not_defined.
           str = c_undefined.
 
-        WHEN type_string.
+        WHEN string.
           IF me EQ lcl_lisp=>new_line.
             str = |\n|.
           ELSE.
@@ -15119,7 +15171,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             str = |"{ escape( val = value format = cl_abap_format=>e_html_js ) }"|.
           ENDIF.
 
-        WHEN type_char.
+        WHEN char.
           CASE me.
             WHEN lcl_lisp=>new_line.
               str = |\n|.
@@ -15129,63 +15181,63 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
               str = |"{ escape( val = value format = cl_abap_format=>e_html_js ) }"|.
           ENDCASE.
 
-        WHEN type_integer.
+        WHEN integer.
           DATA lv_real TYPE tv_real.
           DATA lo_int TYPE REF TO lcl_lisp_integer.
 
           lo_int ?= me.
-          lv_real = lo_int->integer.
+          lv_real = lo_int->int.
           str = lv_real.
           str = condense( str ).
 
-        WHEN type_real.
+        WHEN real.
           DATA lo_real TYPE REF TO lcl_lisp_real.
           lo_real ?= me.
-          str = condense( CAST lcl_lisp_real( me )->real ).
-          "str = condense( CONV #( lo_real->real ) ).
+          str = condense( CAST lcl_lisp_real( me )->float ).
+          "str = condense( CONV #( lo_real->float ) ).
 *        WHEN type_rational.
 
 *        WHEN type_complex.
 *          str = ?.
 
-        WHEN type_native.
+        WHEN native.
           str = |<native> { to_lower( value ) }|.
-        WHEN type_pair.
+        WHEN pair.
           str = list_to_string( ).
-        WHEN type_hash.
+        WHEN hash.
           str = '<hash>'.
-        WHEN type_vector.
+        WHEN vector.
           DATA lo_vec TYPE REF TO lcl_lisp_vector.
           lo_vec ?= me.
           str = |#{ lo_vec->to_list( )->to_string( ) }|.
-        WHEN type_port.
+        WHEN port.
           str = '<port>'.
 *--------------------------------------------------------------------*
 *        Additions for ABAP Types:
-        WHEN type_abap_function.
+        WHEN abap_function.
           str = |<ABAP function module { value }>|.
 *          TODO
 *        WHEN type_abap_class.
 *          str = |<ABAP class { value }>|.
 *        WHEN type_abap_method.
 *          str = |<ABAP method { car->value }->{ cdr->value }( ) >|.
-        WHEN type_abap_data.
+        WHEN abap_data.
           str = |<ABAP Data>|.
-        WHEN type_abap_table.
+        WHEN abap_table.
           str = |<ABAP Table>|.
-        WHEN type_abap_query.
+        WHEN abap_query.
           str = |<ABAP Query>|.
-        WHEN type_abap_sql_set.
+        WHEN abap_sql_set.
           str = |<ABAP Query Result Set>|.
 
-        WHEN type_abap_turtle.
+        WHEN abap_turtle.
           str = |<ABAP turtle>|.
       ENDCASE.
     ENDMETHOD.                    "to_string
 
     METHOD to_text.
       CASE type.
-        WHEN type_string OR type_char.
+        WHEN string OR char.
           CASE me.
             WHEN lcl_lisp=>new_line.
               str = |\n|.
@@ -15194,7 +15246,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             WHEN OTHERS.
               str = value.
           ENDCASE.
-        WHEN type_null OR type_undefined.
+        WHEN null OR not_defined.
           str = space.
         WHEN OTHERS.
           str = to_string( ).
@@ -15214,10 +15266,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
     METHOD is_procedure.
       CASE type.
-        WHEN type_lambda
-          OR type_native
-          OR type_primitive
-          OR type_abap_function.  " really?
+        WHEN lambda
+          OR native
+          OR primitive
+          OR abap_function.  " really?
           result = true.
         WHEN OTHERS.
           result = false.
@@ -15226,10 +15278,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
     METHOD is_number.
       CASE type.
-        WHEN type_integer
-          OR type_rational
-          OR type_real
-          OR type_complex.
+        WHEN integer
+          OR rational
+          OR real
+          OR complex.
           result = true.
         WHEN OTHERS.
           result = false.
@@ -15258,7 +15310,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       IF first EQ abap_true.
         first = abap_false.
       ELSE.
-        IF elem->cdr->type NE lcl_lisp=>type_pair.
+        IF elem->cdr->type NE pair.
           lcl_lisp=>throw( |{ elem->to_string( ) } is not a proper list| ).
         ENDIF.
         elem = elem->cdr.
@@ -15272,30 +15324,30 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
     METHOD elem.
       CASE type.
-        WHEN lcl_lisp=>type_integer.
+        WHEN integer.
           ro_elem = integer( value ).
 
-        WHEN lcl_lisp=>type_real.
-          ro_elem = real( value ).
+        WHEN real.
+          ro_elem = real( value = value
+                          exact = abap_false ).
 
-        WHEN lcl_lisp=>type_string.
+        WHEN string.
           ro_elem = string( value ).
 
-        WHEN lcl_lisp=>type_char.
+        WHEN char.
           ro_elem = char( value ).
 
-        WHEN lcl_lisp=>type_boolean.
+        WHEN boolean.
           ro_elem = boolean( value ).
 
-        WHEN lcl_lisp=>type_abap_data.
+        WHEN abap_data.
           ro_elem = data( value ).
 
-        WHEN lcl_lisp=>type_abap_table.
+        WHEN abap_table.
           ro_elem = table( value ).
 
         WHEN OTHERS.
-          CREATE OBJECT ro_elem.
-          ro_elem->type = type.
+          CREATE OBJECT ro_elem EXPORTING type = type.
           ro_elem->value = value.
 
       ENDCASE.
@@ -15356,14 +15408,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     ENDMETHOD.
 
     METHOD null.
-      ro_elem = NEW lcl_lisp_null( ).
-      ro_elem->type = lcl_lisp=>type_null.
+      ro_elem = NEW lcl_lisp_null( null ).
       ro_elem->value = c_lisp_nil.
     ENDMETHOD.
 
     METHOD undefined.
-      ro_elem = NEW lcl_lisp( ).
-      ro_elem->type = lcl_lisp=>type_undefined.
+      ro_elem = NEW lcl_lisp( not_defined ).
     ENDMETHOD.
 
     METHOD integer.
@@ -15371,7 +15421,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     ENDMETHOD.
 
     METHOD real.
-      ro_elem = NEW lcl_lisp_real( value ).
+      ro_elem = NEW lcl_lisp_real( value = value
+                                   exact = exact ).
     ENDMETHOD.
 
     METHOD number.
@@ -15388,7 +15439,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lv_real = value.
 
           IF iv_exact IS SUPPLIED AND iv_exact EQ abap_false.
-            ro_elem = real( lv_real ).
+            ro_elem = real( value = lv_real
+                            exact = iv_exact ).
             RETURN.
           ENDIF.
 
@@ -15414,7 +15466,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             RETURN.
           ENDIF.
 
-          ro_elem = real( lv_real ).
+          ro_elem = real( value = lv_real
+                          exact = iv_exact ).
           RETURN.
 
         CATCH cx_sy_conversion_error.
@@ -15482,10 +15535,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lv_dec = hex_integer( lv_decimal_str ).
         lv_real = lv_int.
         IF lv_dec EQ 0.
-          ro_elem = real( lv_real ).
+          ro_elem = real( value = lv_real
+                          exact = abap_true ).
         ELSE.
           lv_exp = strlen( lv_decimal_str ).
-          ro_elem = real( lv_real + lv_dec / ipow( base = 16 exp = lv_exp ) ).
+          ro_elem = real( value = lv_real + lv_dec / ipow( base = 16 exp = lv_exp )
+                          exact = abap_false ).
         ENDIF.
       ENDIF.
     ENDMETHOD.
@@ -15537,10 +15592,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lv_dec = octal_integer( lv_decimal_str ).
         lv_real = lv_int.
         IF lv_dec EQ 0.
-          ro_elem = real( lv_real ).
+          ro_elem = real( value = lv_real
+                          exact = abap_true ).
         ELSE.
           lv_exp = strlen( lv_decimal_str ).
-          ro_elem = real( lv_real + lv_dec / ipow( base = 8 exp = lv_exp ) ).
+          ro_elem = real( value = lv_real + lv_dec / ipow( base = 8 exp = lv_exp )
+                          exact = abap_false ).
         ENDIF.
       ENDIF.
     ENDMETHOD.
@@ -15591,10 +15648,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lv_dec = binary_integer( lv_decimal_str ).
         lv_real = lv_int.
         IF lv_dec EQ 0.
-          ro_elem = real( lv_real ).
+          ro_elem = real( value = lv_real
+                          exact = abap_true ).
         ELSE.
           lv_exp = strlen( lv_decimal_str ).
-          ro_elem = real( lv_real + lv_dec / ipow( base = 2 exp = lv_exp ) ).
+          ro_elem = real( value = lv_real + lv_dec / ipow( base = 2 exp = lv_exp )
+                          exact = abap_false ).
         ENDIF.
       ENDIF.
     ENDMETHOD.
@@ -15627,14 +15686,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     ENDMETHOD.
 
     METHOD data.
-      ro_elem = NEW lcl_lisp_data( ).
-      ro_elem->type = lcl_lisp=>type_abap_data.
+      ro_elem = NEW lcl_lisp_data( abap_data ).
       ro_elem->data = ref.
     ENDMETHOD.                    "new_data
 
     METHOD table.
-      ro_elem = NEW lcl_lisp_table( ).
-      ro_elem->type = lcl_lisp=>type_abap_table.
+      ro_elem = NEW lcl_lisp_table( abap_table ).
       ro_elem->data = ref.
     ENDMETHOD.                    "new_table
 
@@ -15647,10 +15704,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 *    ENDMETHOD.
 
     METHOD cons.
-      ro_cons = NEW lcl_lisp_pair( ).
-      ro_cons->type = lcl_lisp=>type_pair.
-      ro_cons->car = io_car.
-      ro_cons->cdr = io_cdr.
+      ro_cons = NEW lcl_lisp_pair( io_car = io_car
+                                   io_cdr = io_cdr ).
     ENDMETHOD.                    "new_cons
 
     METHOD box.
@@ -15665,9 +15720,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     ENDMETHOD.
 
     METHOD vector.
-      ro_vec = NEW lcl_lisp_vector( ).
-      ro_vec->type = lcl_lisp=>type_vector.
-      ro_vec->vector = it_vector.
+      ro_vec = NEW lcl_lisp_vector( vector ).
+      ro_vec->array = it_vector.
       ro_vec->mutable = iv_mutable.
       ro_vec->mo_length = number( lines( it_vector ) ).
     ENDMETHOD.
@@ -15684,13 +15738,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     METHOD lambda.
 *     The lambda is a special cell that stores a pointer to a list of parameters
 *     and a pointer to a list which is the body to be evaluated later on
-      DATA(lo_lambda) = NEW lcl_lisp_lambda( ).
-      lo_lambda->type = lcl_lisp=>type_lambda.
-      lo_lambda->car = io_car.               " List of parameters
-      lo_lambda->cdr = io_cdr.               " Body
-      lo_lambda->macro = iv_macro.
-      lo_lambda->parameter_object = iv_parameter_object.
-
+      DATA(lo_lambda) = NEW lcl_lisp_lambda( io_car = io_car               " List of parameters
+                                             io_cdr = io_cdr               " Body
+                                             iv_category = iv_category
+                                             iv_parameter_object = iv_parameter_object ).
 *     Store the reference to the environment in which the lambda was created (lexical scope)
 *     e.g. if the lambda is created inside another lambda we want that environment to be present
 *     when we evaluate the new lambda
@@ -15702,8 +15753,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       IF it_clauses IS INITIAL.
         ro_lambda = lcl_lisp=>nil.
       ELSE.
-        DATA(lo_lambda) = NEW lcl_lisp_case_lambda( ).
-        lo_lambda->type = lcl_lisp=>type_case_lambda.
+        DATA(lo_lambda) = NEW lcl_lisp_case_lambda( case_lambda ).
         lo_lambda->clauses = it_clauses.
         ro_lambda = lo_lambda.
       ENDIF.
@@ -15715,8 +15765,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      ro_hash = NEW lcl_lisp_hash( ).
-      ro_hash->type = lcl_lisp=>type_hash.
+      ro_hash = NEW lcl_lisp_hash( hash ).
       ro_hash->fill( io_list->car ).
     ENDMETHOD.
 
@@ -15757,7 +15806,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 *      ENDIF.
 *
 *      ro_func = NEW lcl_lisp_abapfunction( ).
-*      ro_func->type = lcl_lisp=>type_abap_function.
+*      ro_func->type = abap_function.
 **     Determine the parameters of the function module to populate parameter table
 *      ro_func->value = ro_func->read_interface( io_list->car->value ).
 *    ENDMETHOD.
@@ -15770,13 +15819,12 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
   CLASS lcl_lisp_hash IMPLEMENTATION.
 
     METHOD eval.
-      result = NEW lcl_lisp_hash( ).
-      result->type = lcl_lisp=>type_hash.
+      result = NEW lcl_lisp_hash( hash ).
 
-      LOOP AT hash INTO DATA(ls_entry).
+      LOOP AT mt_hash INTO DATA(ls_entry).
         INSERT VALUE #( key = ls_entry-key
                         element = interpreter->eval( element = ls_entry-element
-                                                     environment = environment ) ) INTO TABLE result->hash.
+                                                     environment = environment ) ) INTO TABLE result->mt_hash.
       ENDLOOP.
 
     ENDMETHOD.
@@ -15788,18 +15836,18 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 
       DATA(lo_head) = list.
-      CHECK lo_head->type = type_pair.
+      CHECK lo_head->type = pair.
 
 *     Can accept a parameter which should be a list of alternating symbols/strings and elements
       DATA(lo_iter) = lo_head->new_iterator( ).
       WHILE lo_iter->has_next( ).
         DATA(lo_key) = lo_iter->next( ).
-        IF lo_key->type NE type_symbol AND lo_key->type NE type_string.
+        IF lo_key->type NE symbol AND lo_key->type NE string.
           throw( |make-hash: Use only symbol or string as a key| ).
         ENDIF.
         CHECK lo_iter->has_next( ).
         INSERT VALUE #( key = lo_key->value
-                        element = lo_iter->next( ) ) INTO TABLE hash.
+                        element = lo_iter->next( ) ) INTO TABLE mt_hash.
       ENDWHILE.
     ENDMETHOD.                    "new_hash
 
@@ -15814,7 +15862,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 
 *      TODO: Additional check for key type
-      result = VALUE #( hash[ key = list->car->value ]-element DEFAULT nil ).
+      result = VALUE #( mt_hash[ key = list->car->value ]-element DEFAULT nil ).
     ENDMETHOD.                    "get
 
     METHOD insert.
@@ -15824,7 +15872,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
 * TODO: Check number and type of parameters
       INSERT VALUE #( key = list->car->value
-                      element = list->cdr->car ) INTO TABLE hash.
+                      element = list->cdr->car ) INTO TABLE mt_hash.
 * TODO: Should we overwrite existing keys?
       result = nil.
     ENDMETHOD.                    "insert
@@ -15835,7 +15883,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 * TODO: Check number and type of parameters
-      DELETE hash WHERE key = list->car->value.
+      DELETE mt_hash WHERE key = list->car->value.
       result = nil.
     ENDMETHOD.                    "delete
 
@@ -15843,7 +15891,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA lo_ptr TYPE REF TO lcl_lisp.
 
       result = nil.
-      LOOP AT hash INTO DATA(ls_entry).
+      LOOP AT mt_hash INTO DATA(ls_entry).
         DATA(lo_last) = lcl_lisp_new=>cons( io_car = lcl_lisp_new=>symbol( ls_entry-key ) ).
 
         IF result EQ nil.
@@ -15859,7 +15907,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-      IF list->car->type NE type_hash.
+      IF list->car->type NE hash.
         throw( |{ msg } only works on hashes| ).
       ENDIF.
       ro_hash = CAST #( list->car ).
@@ -15870,30 +15918,30 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
   CLASS lcl_lisp_vector IMPLEMENTATION.
 
     METHOD init.
-      DATA(lt_vector) = VALUE tt_lisp( FOR idx = 0 UNTIL idx = size ( io_fill )  ).
-      ro_vector = lcl_lisp_new=>vector( it_vector = lt_vector
+      DATA(lt_array) = VALUE tt_lisp( FOR idx = 0 UNTIL idx = size ( io_fill )  ).
+      ro_vector = lcl_lisp_new=>vector( it_vector = lt_array
                                         iv_mutable = iv_mutable ).
     ENDMETHOD.
 
     METHOD from_list.
-      DATA(lt_vector) = VALUE tt_lisp( ).
+      DATA(lt_array) = VALUE tt_lisp( ).
       DATA(lo_ptr) = io_list.
       WHILE lo_ptr NE nil.
-        APPEND lo_ptr->car TO lt_vector.
+        APPEND lo_ptr->car TO lt_array.
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
-      ro_vector = lcl_lisp_new=>vector( it_vector = lt_vector
+      ro_vector = lcl_lisp_new=>vector( it_vector = lt_array
                                         iv_mutable = iv_mutable ).
     ENDMETHOD.
 
     METHOD to_list.
       ro_elem = nil.
-      ASSIGN vector[ 1 ] TO  FIELD-SYMBOL(<vec>).
+      ASSIGN array[ 1 ] TO  FIELD-SYMBOL(<vec>).
       IF sy-subrc EQ 0.
         ro_elem = lcl_lisp_new=>cons( io_car = <vec> ).
         DATA(lo_ptr) = ro_elem.
       ENDIF.
-      LOOP AT vector FROM 2 ASSIGNING <vec>.
+      LOOP AT array FROM 2 ASSIGNING <vec>.
         lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = <vec> ).
       ENDLOOP.
     ENDMETHOD.
@@ -15906,7 +15954,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       IF to IS SUPPLIED.
         lv_end = to.                     " end is Exclusive
       ELSE.
-        lv_end = lines( vector ).        " End of vector
+        lv_end = lines( array ).        " End of vector
       ENDIF.
 
       IF lv_end LT 1 OR lv_start GT lv_end.
@@ -15916,10 +15964,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ro_elem = nil.
       CHECK lv_start BETWEEN 1 AND lv_end.
 
-      ro_elem = lcl_lisp_new=>cons( io_car = vector[ lv_start ] ).
+      ro_elem = lcl_lisp_new=>cons( io_car = array[ lv_start ] ).
 
       DATA(lo_ptr) = ro_elem.
-      LOOP AT vector FROM lv_start + 1 TO lv_end ASSIGNING FIELD-SYMBOL(<vec>).
+      LOOP AT array FROM lv_start + 1 TO lv_end ASSIGNING FIELD-SYMBOL(<vec>).
         lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = <vec> ).
       ENDLOOP.
     ENDMETHOD.
@@ -15927,8 +15975,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     METHOD get.
       DATA(lv_start) = index + 1.
 
-      IF lv_start BETWEEN 1 AND lines( vector ).
-        ro_elem = vector[ lv_start ].
+      IF lv_start BETWEEN 1 AND lines( array ).
+        ro_elem = array[ lv_start ].
       ELSE.
         throw( |vector-ref: out-of-bound position { index }| ).
       ENDIF.
@@ -15943,8 +15991,8 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       DATA(lv_start) = index + 1.
 
-      IF lv_start BETWEEN 1 AND lines( vector ).
-        vector[ lv_start ] = io_elem.
+      IF lv_start BETWEEN 1 AND lines( array ).
+        array[ lv_start ] = io_elem.
       ELSE.
         throw( |vector-set!: out-of-bound position { index }| ).
       ENDIF.
@@ -15961,7 +16009,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ro_elem = me.
 
       DATA(lv_start) = from + 1.         " start is Inclusive
-      DATA(lv_size) = lines( vector ).
+      DATA(lv_size) = lines( array ).
       IF to IS SUPPLIED.
         lv_end = to.                     " end is Exclusive
       ELSE.
@@ -15972,7 +16020,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         throw( |vector-fill!: out-of-bound range| ).
       ENDIF.
 
-      LOOP AT vector FROM lv_start TO lv_end ASSIGNING FIELD-SYMBOL(<vec>).
+      LOOP AT array FROM lv_start TO lv_end ASSIGNING FIELD-SYMBOL(<vec>).
         <vec> = elem.
       ENDLOOP.
     ENDMETHOD.
@@ -15995,13 +16043,13 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       DATA lo_ptr TYPE REF TO lcl_lisp.
 
       result = false.
-      CHECK io_elem->type EQ type_vector.
+      CHECK io_elem->type EQ vector.
 
       lo_vec ?= io_elem.
-      CHECK lines( vector ) = lines( lo_vec->vector ).
+      CHECK lines( array ) = lines( lo_vec->array ).
 
-      LOOP AT lo_vec->vector INTO DATA(lo_elem).
-        lo_ptr = vector[ sy-tabix ].
+      LOOP AT lo_vec->array INTO DATA(lo_elem).
+        lo_ptr = array[ sy-tabix ].
         CHECK lo_ptr->is_equal( io_elem = lo_elem
                                 comp = comp
                                 interpreter = interpreter ) EQ false.
@@ -16011,24 +16059,23 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     ENDMETHOD.
 
     METHOD eval.
-      result = lcl_lisp_new=>vector( it_vector = VALUE tt_lisp( FOR lo_elem IN vector
+      result = lcl_lisp_new=>vector( it_vector = VALUE tt_lisp( FOR lo_elem IN array
                                                     ( interpreter->eval( element = lo_elem
                                                                          environment = environment ) ) )
                                      iv_mutable = abap_true ).
     ENDMETHOD.
 
     METHOD set_shared_structure.
-      FIELD-SYMBOLS <lo_elem> TYPE REF TO lcl_lisp.
-
       CHECK mv_label IS NOT INITIAL.
 
       CASE type.
-        WHEN lcl_lisp=>type_vector.
-          LOOP AT vector ASSIGNING <lo_elem> WHERE table_line->type = type_symbol
-                                               AND table_line->value = mv_label.
+        WHEN vector.
+          ASSIGN array[ table_line->type = symbol
+                        table_line->value = mv_label ] TO FIELD-SYMBOL(<lo_elem>).
+          IF sy-subrc EQ 0.
             <lo_elem> = me.
             RETURN.
-          ENDLOOP.
+          ENDIF.
 
         WHEN OTHERS.
           super->set_shared_structure( ).
@@ -16092,15 +16139,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
   CLASS lcl_lisp_turtle IMPLEMENTATION.
 
     METHOD constructor.
-      super->constructor( ).
-      type = type_abap_turtle.
-      turtle = lcl_turtle=>new( height = height->integer
-                                width = width->integer
+      super->constructor( abap_turtle ).
+      turtle = lcl_turtle=>new( height = height->int
+                                width = width->int
                                 title = `SchemeTurtle`
                                 out = out ).
-      turtle->set_position( VALUE #( x = init_x->integer
-                                     y = init_y->integer
-                                     angle = init_angle->real ) ).
+      turtle->set_position( VALUE #( x = init_x->int
+                                     y = init_y->int
+                                     angle = init_angle->float ) ).
     ENDMETHOD.
 
   ENDCLASS.
