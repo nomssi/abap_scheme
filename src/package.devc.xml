@@ -4,8 +4,8 @@
   <asx:values>
    <DEVC>
     <CTEXT>ABAP Scheme</CTEXT>
-    <COMP_POSID>CA</COMP_POSID>
-    <COMPONENT>HLB0009110</COMPONENT>
+    <TPCLASS>X</TPCLASS>
+    <PACKKIND>5</PACKKIND>
    </DEVC>
   </asx:values>
  </asx:abap>
