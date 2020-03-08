@@ -479,13 +479,10 @@
 
         IF float = 0 OR iv_real = 0 OR sum < c_min_normal.
 *         float or iv_real is zero or both are extremely close to it
-*         relative error is less meaningfull here
-          IF diff < c_epsilon * c_min_normal.
+*         relative error is less meaningful here
+          IF ( diff < c_epsilon * c_min_normal )
+            OR ( diff / nmin( val1 = sum val2 = c_max_value ) < c_epsilon ). " use relative error
             result = abap_true.
-          ELSE. " use relative error
-            IF diff / nmin( val1 = sum val2 = c_max_value ) < c_epsilon.
-              result = abap_true.
-            ENDIF.
           ENDIF.
         ENDIF.
       ENDIF.
@@ -501,8 +498,8 @@
       WHILE NOT den->float_eq( 0 ).
         lo_save = den.
         TRY.
-            den = NEW #( value = num->float MOD den->float exact = abap_false ).
-*            den = NEW #( num->float - den->float * trunc( num->float / den->float ) ).
+            den = NEW #( value = num->float MOD den->float
+                         exact = abap_false ).
           CATCH cx_sy_arithmetic_error INTO DATA(lx_error).
             throw( lx_error->get_text( ) ).
         ENDTRY.
@@ -578,7 +575,7 @@
         CASE lo_arg->type.
           WHEN pair OR null.   "Do we have a proper list?
 
-            WHILE lo_var NE lcl_lisp=>nil.         " Nil would mean no parameters to map
+            WHILE lo_var NE lcl_lisp=>nil.         " Nil means no parameters to map
 
               IF lo_var->type EQ symbol.
 *               dotted pair after fixed number of parameters, to be bound to a variable number of arguments
@@ -597,7 +594,7 @@
               lo_arg = lcl_lisp=>nil.
             ENDWHILE.
 
-            IF lo_arg EQ lcl_lisp=>nil AND lo_var EQ lcl_lisp=>nil.  " Correct number of arguments
+            IF lo_arg EQ lcl_lisp=>nil AND lo_var EQ lcl_lisp=>nil.  " number of arguments is correct
               result = lo_lambda.
               RETURN.
             ENDIF.
@@ -836,7 +833,7 @@ CLASS lcl_number_range IMPLEMENTATION.
     DATA(i) = min.
     WHILE i < max.
       APPEND i TO result.
-      i = i + 1.
+      i += 1.
     ENDWHILE.
   ENDMETHOD.
 ENDCLASS.
@@ -1351,7 +1348,7 @@ CLASS lcl_turtle IMPLEMENTATION.
       " rotate before painting next polygon
       right( 360 / number_of_polygons ).
 
-      current_polygon = current_polygon + 1.
+      current_polygon += 1.
     ENDWHILE.
 
     turtle = me.
@@ -1484,7 +1481,7 @@ CLASS lcl_turtle_lsystem IMPLEMENTATION.
           lcx_turtle_problem=>raise( |Lsystem - unconfigured symbol { symbol }.| ).
       ENDCASE.
 
-      index = index + 1.
+      index += 1.
     ENDWHILE.
 
   ENDMETHOD.
@@ -1837,27 +1834,20 @@ ENDCLASS.
 
     METHOD lif_input_port~peek_char.
       CHECK input EQ abap_true.
-      IF last_index < last_len.
-        rv_char = last_input+last_index(1).
-      ELSE.
-        rv_char = block_read( ).
-      ENDIF.
+      rv_char = COND #( WHEN last_index < last_len THEN last_input+last_index(1)
+                                                   ELSE block_read( ) ).
     ENDMETHOD.
 
     METHOD lif_input_port~read_char.
       CHECK input EQ abap_true.
-      IF last_index < last_len.
-        rv_char = last_input+last_index(1).
-      ELSE.
-        rv_char = block_read( ).
-      ENDIF.
+      rv_char = COND #( WHEN last_index < last_len THEN last_input+last_index(1)
+                                                   ELSE block_read( ) ).
       last_index += 1.
     ENDMETHOD.
 
     METHOD lif_input_port~is_char_ready.
-      rv_flag = abap_false.
-      CHECK input EQ abap_true.
-      rv_flag = xsdbool( last_index < last_len ).
+      rv_flag = SWITCH #( input WHEN abap_true THEN xsdbool( last_index < last_len )
+                                               ELSE abap_false ).
     ENDMETHOD.
 
     METHOD lif_input_port~read.
@@ -1916,11 +1906,8 @@ ENDCLASS.
         rv_input = super->read( ).
         RETURN.
       ENDIF.
-      IF last_index < last_len.
-        rv_input = last_input+last_index.
-      ELSE.
-        rv_input = c_lisp_eof.
-      ENDIF.
+      rv_input = COND #( WHEN last_index < last_len THEN last_input+last_index
+                                                    ELSE c_lisp_eof ).
       CLEAR: last_input, last_index, last_len.
     ENDMETHOD.
 
@@ -1930,11 +1917,8 @@ ENDCLASS.
         rv_char = super->lif_input_port~peek_char( ).
         RETURN.
       ENDIF.
-      IF last_index < last_len.
-        rv_char = last_input+last_index(1).
-      ELSE.
-        rv_char = c_lisp_eof.
-      ENDIF.
+      rv_char = COND #( WHEN last_index < last_len THEN last_input+last_index(1)
+                                                   ELSE c_lisp_eof ).
     ENDMETHOD.
 
     METHOD flush.
@@ -2232,7 +2216,8 @@ ENDCLASS.
       CONSTANTS:
         c_lisp_dot    TYPE tv_char VALUE '.',
         c_open_paren  TYPE tv_char VALUE '(',
-        c_close_paren TYPE tv_char VALUE ')',
+        c_close_paren TYPE tv_char VALUE ')'.
+      CONSTANTS:
         c_lisp_equal  TYPE tv_char VALUE '=',
         c_lisp_xx     TYPE tv_char2 VALUE 'xX'.
       CONSTANTS:
@@ -2261,10 +2246,10 @@ ENDCLASS.
         parse IMPORTING iv_code         TYPE clike
               RETURNING VALUE(elements) TYPE tt_element
               RAISING   lcx_lisp_exception,
-        read_from IMPORTING ii_port        TYPE REF TO lif_input_port
-                  RETURNING VALUE(element) TYPE REF TO lcl_lisp
-                  RAISING   lcx_lisp_exception.
-
+*       like parse, with input from port. Returning a single S-expression
+        next_expression IMPORTING ii_port        TYPE REF TO lif_input_port
+                        RETURNING VALUE(element) TYPE REF TO lcl_lisp
+                        RAISING   lcx_lisp_exception.
     PRIVATE SECTION.
       DATA code TYPE string.
       DATA length TYPE i.
@@ -2988,7 +2973,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     ENDMETHOD.
 
     METHOD next_char.
-      index = index + 1.
+      index += 1.
       IF index < length.
         char = code+index(1).
       ELSEIF index = length.
@@ -3016,13 +3001,13 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
     ENDMETHOD.
 
     METHOD peek_bytevector.
-      CONSTANTS c_prefix TYPE c LENGTH 3 VALUE 'U8('.
+      CONSTANTS c_prefix TYPE c LENGTH 3 VALUE 'u8('.
       DATA lv_token TYPE string.
 
       DATA(lv_idx) = index.
       rv_flag = abap_false.
-      DO 3 TIMES.  " length( 'u8(' ) = 3
-        lv_idx = lv_idx + 1.
+      DO 3 TIMES.  " length( c_prefix ) = 3
+        lv_idx += 1.
 
         IF lv_idx < length.
           lv_token = to_upper( lv_token ).
@@ -3058,7 +3043,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
     ENDMETHOD.                    "parse
 
-    METHOD read_from.
+    METHOD next_expression.
       code = ii_port->read( ).
       length = strlen( code ).
       element = lcl_lisp=>eof_object.
@@ -3233,7 +3218,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
       DATA(len_1) = length - 1.
       WHILE lv_idx < len_1.
-        lv_idx = lv_idx + 1.
+        lv_idx += 1.
 
         DATA(lv_char) = code+lv_idx(1).
         IF lv_char CO c_decimal_digits.
@@ -5162,7 +5147,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           throw( lx_error->get_text( ) ).
       ENDTRY.
 
-      result = read_from( li_port ).
+      result = next_expression( li_port ).
     ENDMETHOD.
 
     METHOD read_char.
@@ -10894,7 +10879,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lv_text = lo_string->value+0(lv_len).
       ENDIF.
 *     compose with new char and right part
-      lv_index = lv_index + 1.
+      lv_index += 1.
       lv_text = lv_text && lv_char && lo_string->value+lv_index.
 
       lo_string->value = lv_text.
