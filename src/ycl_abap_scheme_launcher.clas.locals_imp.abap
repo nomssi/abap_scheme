@@ -689,8 +689,7 @@
       METHODS constructor IMPORTING iv_port_type TYPE lcl_lisp_port=>tv_port_type DEFAULT c_port_textual
                                     iv_input     TYPE abap_boolean
                                     iv_output    TYPE abap_boolean
-                                    iv_error     TYPE abap_boolean DEFAULT abap_false
-                                    out TYPE REF TO if_oo_adt_classrun_out.
+                                    iv_error     TYPE abap_boolean DEFAULT abap_false.
       METHODS close.
       METHODS close_input.
       METHODS close_output.
@@ -702,6 +701,7 @@
       DATA input TYPE abap_boolean READ-ONLY.
       DATA output TYPE abap_boolean READ-ONLY.
       DATA error TYPE abap_boolean READ-ONLY.
+      CLASS-DATA go_out TYPE REF TO if_oo_adt_classrun_out.
     PROTECTED SECTION.
 *     input is always buffered
       DATA last_input TYPE string.
@@ -726,8 +726,7 @@
                                     iv_output    TYPE abap_boolean
                                     iv_error     TYPE abap_boolean DEFAULT abap_false
                                     iv_separator TYPE string DEFAULT c_expr_separator
-                                    iv_string    TYPE abap_boolean
-                                    out TYPE REF TO if_oo_adt_classrun_out.
+                                    iv_string    TYPE abap_boolean.
     PROTECTED SECTION.
       DATA string_mode TYPE abap_boolean.
       DATA buffer TYPE string.
@@ -994,7 +993,6 @@ CLASS lcl_turtle DEFINITION CREATE PRIVATE.
                 width            TYPE tv_int DEFAULT defaults-width
                 background_color TYPE rgb_hex_color OPTIONAL
                 title            TYPE string DEFAULT defaults-title
-                out TYPE REF TO if_oo_adt_classrun_out
       RETURNING VALUE(turtle)    TYPE REF TO lcl_turtle.
 
     "! Creates a new turtle based on an existing instance. The position, angle and pen are preserved.
@@ -1010,8 +1008,7 @@ CLASS lcl_turtle DEFINITION CREATE PRIVATE.
       IMPORTING height           TYPE tv_int
                 width            TYPE tv_int
                 background_color TYPE rgb_hex_color OPTIONAL
-                title            TYPE string
-                out TYPE REF TO if_oo_adt_classrun_out.
+                title            TYPE string.
 
     METHODS right
       IMPORTING degrees       TYPE tv_real
@@ -1116,7 +1113,7 @@ CLASS lcl_turtle IMPLEMENTATION.
     me->color_scheme = lcl_turtle_colors=>default_color_scheme.
     me->use_random_colors = abap_true.
     me->title = title.
-    me->out = out.
+    me->out = lcl_lisp_port=>go_out.
   ENDMETHOD.
 
   METHOD disable_random_colors.
@@ -1233,15 +1230,13 @@ CLASS lcl_turtle IMPLEMENTATION.
     turtle = NEW lcl_turtle( width = width
                              height = height
                              background_color = background_color
-                             title = title
-                             out = out ).
+                             title = title ).
   ENDMETHOD.
 
   METHOD clone.
     turtle = NEW #( width = width
                     height = height
-                    title = title
-                    out = out ).
+                    title = title ).
 
     turtle->set_pen( pen ).
     turtle->set_color_scheme( color_scheme ).
@@ -1621,8 +1616,7 @@ ENDCLASS.
                                     height TYPE REF TO lcl_lisp_integer
                                     init_x TYPE REF TO lcl_lisp_integer
                                     init_y TYPE REF TO lcl_lisp_integer
-                                    init_angle TYPE REF TO lcl_lisp_real
-                                    out TYPE REF TO if_oo_adt_classrun_out.
+                                    init_angle TYPE REF TO lcl_lisp_real.
       DATA turtle TYPE REF TO lcl_turtle.
   ENDCLASS.
 
@@ -1687,7 +1681,6 @@ ENDCLASS.
                                    iv_buffered    TYPE abap_boolean
                                    iv_separator   TYPE string OPTIONAL
                                    iv_string      TYPE abap_boolean DEFAULT abap_false
-                                   io_out TYPE REF TO if_oo_adt_classrun_out
                          RETURNING VALUE(ro_port) TYPE REF TO lcl_lisp_port.
 
       CLASS-METHODS elem IMPORTING type           TYPE tv_type
@@ -1755,7 +1748,6 @@ ENDCLASS.
                                       init_x           TYPE REF TO lcl_lisp_integer
                                       init_y           TYPE REF TO lcl_lisp_integer
                                       init_angle       TYPE REF TO lcl_lisp_real
-                                      out TYPE REF TO if_oo_adt_classrun_out
                             RETURNING VALUE(ro_turtle) TYPE REF TO lcl_lisp_turtle.
   ENDCLASS.
 
@@ -1785,7 +1777,7 @@ ENDCLASS.
       input = iv_input.
       output = iv_output.
       error = iv_error.
-      me->out = out.
+      me->out = go_out.
     ENDMETHOD.
 
     METHOD close.
@@ -1868,8 +1860,7 @@ ENDCLASS.
       super->constructor( iv_port_type = iv_port_type
                           iv_input = iv_input
                           iv_output = iv_output
-                          iv_error = iv_error
-                          out = out ).
+                          iv_error = iv_error ).
       separator = iv_separator.
       string_mode = iv_string.
     ENDMETHOD.
@@ -2682,7 +2673,6 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                     RAISING   lcx_lisp_exception.
 
       CLASS-DATA gi_log TYPE REF TO lif_log.
-      CLASS-DATA: go_out  TYPE REF TO if_oo_adt_classrun_out.
       CLASS-DATA: go_input_port  TYPE REF TO lcl_lisp_lambda,
                   go_output_port TYPE REF TO lcl_lisp_lambda,
                   go_error_port  TYPE REF TO lcl_lisp_lambda.
@@ -4969,7 +4959,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                                               environment = lo_env ).
                     "_trace_call lo_proc lr_tail.
                     IF gv_lisp_trace EQ abap_true.
-                      go_out->write( |call { lo_proc->value } { lo_proc->to_string( ) } param { lr_tail->to_string( ) }| ).
+                      lcl_lisp_port=>go_out->write( |call { lo_proc->value } { lo_proc->to_string( ) } param { lr_tail->to_string( ) }| ).
                     ENDIF.
 
                     CASE lo_proc->type.
@@ -5065,7 +5055,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         result->set_shared_structure( ).
         "_trace_result result.
         IF gv_lisp_trace EQ abap_true.
-          go_out->write( |=> { result->to_string( ) }| ).
+          lcl_lisp_port=>go_out->write( |=> { result->to_string( ) }| ).
         ENDIF.
 
         RETURN.
@@ -6923,10 +6913,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
         IF lo_start->type NE integer.
-          throw( lo_start->car->to_string( ) && ` is not an integer in vector->list start` ) ##NO_TEXT.
+          throw( lo_start->to_string( ) && ` is not an integer in vector->list start` ) ##NO_TEXT.
         ENDIF.
         IF CAST lcl_lisp_integer( lo_start )->int LT 0.
-          throw( lo_start->car->to_string( ) && ` must be non-negative in vector->list start` ) ##NO_TEXT.
+          throw( lo_start->to_string( ) && ` must be non-negative in vector->list start` ) ##NO_TEXT.
         ENDIF.
         lv_start = CAST lcl_lisp_integer( lo_start )->int.
 
@@ -6942,10 +6932,10 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
               lcl_lisp=>throw( c_error_incorrect_input ).
             ENDIF.
             IF lo_end->type NE integer.
-              throw( lo_end->car->to_string( ) && ` is not an integer in vector->list end` ) ##NO_TEXT.
+              throw( lo_end->to_string( ) && ` is not an integer in vector->list end` ) ##NO_TEXT.
             ENDIF.
             IF CAST lcl_lisp_integer( lo_end )->int LT 0.
-              throw( lo_end->car->to_string( ) && ` must be non-negative in vector->list end` ) ##NO_TEXT.
+              throw( lo_end->to_string( ) && ` must be non-negative in vector->list end` ) ##NO_TEXT.
             ENDIF.
           result = lo_vec->get_list( from = lv_start
                                      to = CAST lcl_lisp_integer( lo_end )->int ).
@@ -8900,7 +8890,6 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       ENDIF.
       "_is_type vector.
         result = false.
-        CHECK list->car IS BOUND.
         IF list->car->type EQ vector.
           result = true.
         ENDIF.
@@ -8929,7 +8918,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
         lo_ptr = lo_ptr->cdr.
         CHECK lo_ptr = lo_slow.
 *       If fast pointer eventually equals slow pointer, then we must be stuck in a circular list.
-*       By deﬁnition, all lists have ﬁnite length and are terminated by the empty list,
+*       By definition, all lists have finite length and are terminated by the empty list,
 *       so a circular list is not a list
         RETURN.
       ENDWHILE.
@@ -11358,8 +11347,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                                    iv_output = abap_true
                                    iv_input = abap_false
                                    iv_error = abap_false
-                                   iv_buffered = abap_true
-                                   io_out = go_out ).
+                                   iv_buffered = abap_true ).
     ENDMETHOD.
 
     METHOD proc_open_input_string.
@@ -11382,8 +11370,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                                     iv_input = abap_true
                                     iv_error = abap_false
                                     iv_buffered = abap_true   " only buffered input, but currently needed for peek_char
-                                    iv_string = abap_true
-                                    io_out = go_out ).
+                                    iv_string = abap_true ).
       lo_port->set_input_string( list->car->value ).
       result = lo_port.
     ENDMETHOD.
@@ -13445,8 +13432,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                                       height = lo_height
                                       init_x = lo_init_x
                                       init_y = lo_init_y
-                                      init_angle = lo_init_angle
-                                      out = go_out ).
+                                      init_angle = lo_init_angle ).
     ENDMETHOD.
 
     METHOD proc_turtle_merge.
@@ -13498,8 +13484,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                                       height = lo_height
                                       init_x = lo_init_x
                                       init_y = lo_init_y
-                                      init_angle = lo_init_angle
-                                      out = go_out ).
+                                      init_angle = lo_init_angle ).
     ENDMETHOD.
 
     METHOD proc_turtle_exist. "turtles?
@@ -14796,7 +14781,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
   CLASS lcl_lisp_profiler DEFINITION INHERITING FROM lcl_lisp_interpreter.
     PUBLIC SECTION.
       METHODS eval_repl REDEFINITION.
-      DATA runtime TYPE i READ-ONLY.
+      DATA runtime TYPE tv_int READ-ONLY.
   ENDCLASS.                    "lcl_lisp_profiler DEFINITION
 
 *----------------------------------------------------------------------*
@@ -14805,12 +14790,11 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
   CLASS lcl_lisp_profiler IMPLEMENTATION.
 
     METHOD eval_repl.
-*      DATA(timer) = cl_abap_runtime=>create_hr_timer( ).
-*
-*      DATA(lv_start) = timer->get_runtime( ).         " Start timer
+       GET TIME STAMP FIELD DATA(lv_start).       " Start timer
       response = super->eval_repl( EXPORTING code = code
                                    IMPORTING output = output ).       " Evaluate given code
-*      runtime = timer->get_runtime( ) - lv_start.
+       GET TIME STAMP FIELD DATA(lv_stop).
+       runtime = lv_stop - lv_start.
     ENDMETHOD.                    "eval_repl
 
   ENDCLASS.                    "lcl_lisp_profiler IMPLEMENTATION
@@ -15652,16 +15636,14 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
             iv_output    = iv_output
             iv_error     = iv_error
             iv_separator = iv_separator
-            iv_string    = iv_string
-            out          = io_out.
+            iv_string    = iv_string.
       ELSE.
         CREATE OBJECT ro_port
           EXPORTING
             iv_port_type = iv_port_type
             iv_input     = iv_input
             iv_output    = iv_output
-            iv_error     = iv_error
-            out          = io_out.
+            iv_error     = iv_error.
       ENDIF.
     ENDMETHOD.
 
@@ -15716,8 +15698,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
                                        height = height
                                        init_x = init_x
                                        init_y = init_y
-                                       init_angle = init_angle
-                                       out = out ).
+                                       init_angle = init_angle ).
     ENDMETHOD.
 
     METHOD lambda.
@@ -16127,8 +16108,7 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
       super->constructor( abap_turtle ).
       turtle = lcl_turtle=>new( height = height->int
                                 width = width->int
-                                title = `SchemeTurtle`
-                                out = out ).
+                                title = `SchemeTurtle` ).
       turtle->set_position( VALUE #( x = init_x->int
                                      y = init_y->int
                                      angle = init_angle->float ) ).
