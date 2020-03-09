@@ -14791,10 +14791,13 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
 
     METHOD eval_repl.
        GET TIME STAMP FIELD DATA(lv_start).       " Start timer
+
       response = super->eval_repl( EXPORTING code = code
                                    IMPORTING output = output ).       " Evaluate given code
        GET TIME STAMP FIELD DATA(lv_stop).
-       runtime = lv_stop - lv_start.
+
+       runtime = cl_abap_tstmp=>subtract( tstmp1 = lv_stop
+                                          tstmp2 = lv_start ).
     ENDMETHOD.                    "eval_repl
 
   ENDCLASS.                    "lcl_lisp_profiler IMPLEMENTATION
