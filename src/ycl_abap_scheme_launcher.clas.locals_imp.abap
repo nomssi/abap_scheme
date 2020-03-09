@@ -14790,15 +14790,19 @@ METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING V
   CLASS lcl_lisp_profiler IMPLEMENTATION.
 
     METHOD eval_repl.
-       GET TIME STAMP FIELD DATA(lv_start).       " Start timer
+       CONSTANTS c_sec_to_micro TYPE i VALUE 1000000.
+       DATA lv_start TYPE timestampl.
+       DATA lv_stop TYPE timestampl.
+
+       GET TIME STAMP FIELD lv_start.       " Start timer
 
       response = super->eval_repl( EXPORTING code = code
                                    IMPORTING output = output ).       " Evaluate given code
-       GET TIME STAMP FIELD DATA(lv_stop).
+       GET TIME STAMP FIELD lv_stop.
 
-       runtime = cl_abap_tstmp=>subtract( tstmp1 = lv_stop
-                                          tstmp2 = lv_start ).
-    ENDMETHOD.                    "eval_repl
+       runtime = c_sec_to_micro * cl_abap_tstmp=>subtract( tstmp1 = lv_stop
+                                                           tstmp2 = lv_start ).
+    ENDMETHOD.                   "eval_repl
 
   ENDCLASS.                    "lcl_lisp_profiler IMPLEMENTATION
 
