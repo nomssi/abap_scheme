@@ -35,7 +35,8 @@
     c_eval_unquote_splicing TYPE string VALUE 'unquote-splicing' ##NO_TEXT.
   CONSTANTS:
     c_decimal_digits TYPE c LENGTH 10 VALUE '0123456789',
-    c_hex_digits     TYPE c LENGTH 16 VALUE '0123456789ABCDEF'.
+    c_hex_digits     TYPE c LENGTH 16 VALUE '0123456789ABCDEF',
+    c_abcde          TYPE string VALUE `ABCDEFGHIJKLMNOPQRSTUVWXYZ`. " sy-abcde
 
   TYPES tv_char TYPE c LENGTH 1.
   TYPES tv_int TYPE int8.         " integer data type, use int8 if available
