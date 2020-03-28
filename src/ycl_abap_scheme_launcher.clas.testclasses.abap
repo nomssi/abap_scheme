@@ -1320,12 +1320,12 @@
        scheme( code = '(string-set! (f) 0 #\?)'
                expected = '"?**"' ).  " <-- unspecified
        scheme( code = '(string-set! (g) 0 #\?)'
-               expected = 'Eval: constant in string-set! cannot be changed' ).
+               expected = 'Eval: constant list in string-set! cannot be changed' ).
      ENDMETHOD.                    "string_set_1
 
      METHOD string_set_2.
        scheme( code = |(string-set! (symbol->string 'immutable)| && ' 0 #\?)'
-               expected = 'Eval: constant in string-set! cannot be changed' ).
+               expected = 'Eval: constant list in string-set! cannot be changed' ).
      ENDMETHOD.                    "string_set_2
 
      METHOD symbol_to_string.
