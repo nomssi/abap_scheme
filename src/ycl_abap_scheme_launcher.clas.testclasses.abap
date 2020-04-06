@@ -2544,7 +2544,7 @@
                expected = ' -3 -1' ).
        scheme( code =  '(floor/ -5 -2)'
                expected = ' 2 -1' ).
-     ENDMETHOD.                    "math_floor
+     ENDMETHOD.                    "math_floor_new
 
      METHOD math_ceiling.
        "(ceiling x) - This returns the smallest integer that is no smaller than x.

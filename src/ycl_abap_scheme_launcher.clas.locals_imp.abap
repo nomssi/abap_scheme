@@ -237,7 +237,8 @@
       METHODS error_not_a_pair IMPORTING context TYPE string DEFAULT space
                                RAISING   lcx_lisp_exception.
 
-      METHODS raise IMPORTING message TYPE string
+      METHODS raise IMPORTING context TYPE string DEFAULT space
+                              message TYPE string
                     RAISING   lcx_lisp_exception.
       CLASS-METHODS throw IMPORTING message TYPE string
                           RAISING   lcx_lisp_exception.
@@ -253,8 +254,7 @@
 
   TYPES tt_lisp TYPE STANDARD TABLE OF REF TO lcl_lisp WITH EMPTY KEY.
 
-  CLASS lcl_lisp_char DEFINITION INHERITING FROM lcl_lisp
-    CREATE PROTECTED FRIENDS lcl_lisp_new.
+  CLASS lcl_lisp_char DEFINITION INHERITING FROM lcl_lisp CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
       CLASS-METHODS new IMPORTING value          TYPE any
                         RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_char.
@@ -1055,8 +1055,7 @@
                                         side_length   TYPE tv_int
                               RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 
-      METHODS download
-        IMPORTING filename TYPE string DEFAULT `abap-turtle.html`.
+      METHODS download IMPORTING filename TYPE string DEFAULT `abap-turtle.html`.
 
       METHODS enable_random_colors.
       METHODS disable_random_colors.
@@ -1111,6 +1110,25 @@
       me->color_scheme = lcl_turtle_colors=>default_color_scheme.
       me->use_random_colors = abap_true.
       me->title = title.
+
+      me->svg_builder = lcl_turtle_svg=>new( me ).
+
+      IF background_color IS NOT INITIAL.
+        me->set_pen( VALUE #( fill_color = background_color ) ).
+        DATA(side_length) = 100.
+
+        DATA(points) = VALUE t_points( ( x = 0         y = 0 )
+                                       ( x = 0 + width y = 0 )
+                                       ( x = 0 + width y = 0 + height )
+                                       ( x = 0         y = 0 + height )  ).
+
+        me->append_svg( me->svg_builder->polyline( VALUE #( points = points ) )  ).
+      ENDIF.
+
+      me->pen = VALUE #( stroke_width = 1
+                         stroke_color = `#FF0000`
+                         is_up = abap_false ).
+
       me->out = lcl_lisp_port=>go_out.
     ENDMETHOD.
 
@@ -1244,7 +1262,6 @@
     ENDMETHOD.
 
     METHOD compose.
-
       IF lines( turtles ) < 1.
         lcx_turtle_problem=>raise( `Not enough turtles to compose anything.` ).
       ENDIF.
@@ -1254,11 +1271,9 @@
       turtle = lo_turtle->clone( ).
 
       " new image size is the largest of composed turtles
-      DATA(new_width) = lcl_turtle_math=>find_max_int(
-        VALUE #( FOR <x> IN turtles ( <x>->width ) ) ).
+      DATA(new_width) = lcl_turtle_math=>find_max_int( VALUE #( FOR <x> IN turtles ( <x>->width ) ) ).
 
-      DATA(new_height) = lcl_turtle_math=>find_max_int(
-        VALUE #( FOR <x> IN turtles ( <x>->height ) ) ).
+      DATA(new_height) = lcl_turtle_math=>find_max_int( VALUE #( FOR <x> IN turtles ( <x>->height ) ) ).
 
       turtle->set_height( new_height ).
       turtle->set_width( new_width ).
@@ -1748,6 +1763,8 @@
                                       init_y           TYPE REF TO lcl_lisp_integer
                                       init_angle       TYPE REF TO lcl_lisp_real
                             RETURNING VALUE(ro_turtle) TYPE REF TO lcl_lisp_turtle.
+      CLASS-METHODS throw_radix IMPORTING message TYPE string
+                                RAISING   lcx_lisp_exception.
   ENDCLASS.
 
   CLASS lcl_port_dummy DEFINITION INHERITING FROM lcl_lisp_port.
@@ -2445,6 +2462,7 @@
       METHODS proc_is_even     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
       METHODS proc_floor       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_floor_new   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
       METHODS proc_ceiling     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
       METHODS proc_truncate    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
       METHODS proc_round       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
@@ -6461,7 +6479,6 @@
     ENDMETHOD.                    "proc_nilp
 
     METHOD proc_make_list.
-      DATA k TYPE tv_int.
 *     returns a list of length k and every atom is the default fill value supplied or the empty list
       "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
@@ -6478,7 +6495,7 @@
 
       result = lcl_lisp=>nil.
 
-      k = CAST lcl_lisp_integer( list->car )->int.
+      DATA(k) = CAST lcl_lisp_integer( list->car )->int.
       CHECK k GT 0.
 
       IF list->cdr EQ nil.
@@ -6496,14 +6513,11 @@
     ENDMETHOD.
 
     METHOD proc_list_tail.
-      "_validate: list, list->cdr.
-      IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
+      "_validate: list, list->cdr, list->cdr->car
+      IF list IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
       "_validate_index list->cdr->car 'list-tail'.
-      IF list->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF list->cdr->car->type NE integer.
         list->cdr->car->raise( ` is not an integer in list-tail` ) ##NO_TEXT.
       ENDIF.
@@ -6529,7 +6543,6 @@
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-
       result = list.
       DO k TIMES.
         IF result->type NE pair.
@@ -6548,16 +6561,12 @@
       DATA lo_ptr TYPE REF TO lcl_lisp.
 
       "_validate list.
-      IF list IS NOT BOUND.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-
 
       DATA(lo_count) = list->car.
       "_validate_index lo_count 'iota count'.
-      IF lo_count IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF lo_count->type NE integer.
         lo_count->raise( ` is not an integer in iota count` ) ##NO_TEXT.
       ENDIF.
@@ -6625,14 +6634,11 @@
 *    The implementation must check that list is a chain of pairs whose length is at least k + 1.
 *    It should not check that it is a list of pairs beyond this length.
 
-      "_validate: list, list->cdr.
-      IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
+      "_validate: list, list->cdr, list->cdr->car.
+      IF list IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
       "_validate_index list->cdr->car 'list-ref'.
-      IF list->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF list->cdr->car->type NE integer.
         list->cdr->car->raise( ` is not an integer in list-ref` ) ##NO_TEXT.
       ENDIF.
@@ -6649,16 +6655,12 @@
     METHOD proc_make_vector.
       DATA lo_fill TYPE REF TO lcl_lisp.
       "_validate: list, list->cdr.
-      IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
       DATA(lo_size) = list->car.
-
       "_validate_index lo_size `make-vector`.
-      IF lo_size IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF lo_size->type NE integer.
         lo_size->raise( ` is not an integer in make-vector` ) ##NO_TEXT.
       ENDIF.
@@ -6782,17 +6784,13 @@
 * (vector-fill! vector fill start) procedure
 * (vector-fill! vector fill start end) procedure
 *The vector-fill! procedure stores fill in the elements of vector between start and end.
-      "_validate list.
-      IF list IS NOT BOUND.
+      "_validate: list, list->car.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
       DATA(lo_ptr) = list.
-
       "_validate_vector lo_ptr->car 'vector-fill!'.
-      IF lo_ptr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF lo_ptr->car->type NE vector.
         lo_ptr->car->raise( ` is not a vector in vector-fill!` ) ##NO_TEXT.
       ENDIF.
@@ -9687,6 +9685,60 @@
       ENDTRY.
     ENDMETHOD.                    "proc_floor
 
+    METHOD proc_floor_new.
+      DATA carry TYPE tv_real.
+      DATA cell TYPE REF TO lcl_lisp.
+      DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+      "_validate: list, list->car
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
+        lcl_lisp=>throw( c_error_incorrect_input ).
+      ENDIF.
+
+      TRY.
+          "_get_number carry list->car &2.
+          cell = list->car.
+          CASE cell->type.
+            WHEN integer.
+              carry = CAST lcl_lisp_integer( cell )->int.
+            WHEN real.
+              carry = CAST lcl_lisp_real( cell )->float.
+            WHEN rational.
+              lo_rat ?= cell.
+              carry = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
+            WHEN OTHERS.
+              cell->raise( | is not a number in [floor/]| ).
+          ENDCASE.
+
+          "_get_number carry list->cdr->car &2.
+          cell = list->cdr->car.
+          CASE cell->type.
+            WHEN integer.
+              carry = CAST lcl_lisp_integer( cell )->int.
+            WHEN real.
+              carry = CAST lcl_lisp_real( cell )->float.
+            WHEN rational.
+              lo_rat ?= cell.
+              carry = lo_rat->int / lo_rat->denominator.
+*          WHEN complex.
+            WHEN OTHERS.
+              cell->raise( | is not a number in [floor/]| ).
+          ENDCASE.
+
+          IF list->cdr->cdr NE nil.
+            list->raise( | Parameter mismatch| ).
+          ENDIF.
+
+          throw( `floor/ not implemented yet` ).
+
+          result = lcl_lisp_new=>number( floor( carry ) ).
+        CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
+          throw( lx_error->get_text( ) ).
+      ENDTRY.
+    ENDMETHOD.
+
     METHOD proc_ceiling.
       "_math ceil '[ceil]' number.
       DATA carry TYPE tv_real.
@@ -10391,8 +10443,8 @@
     ENDMETHOD.
 
     METHOD proc_display.
-      "_validate: list, list->car.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+      "_validate: list, list->car, list->cdr.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
       result = display( io_elem = list->car
@@ -12116,8 +12168,6 @@
       "_proc_string_list_compare `string<=?` <=.
 
       "_proc_list_compare &1 &2 char_case_identity string type_string.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
       DATA lv_ref TYPE string.
       DATA lv_test TYPE string.
 
@@ -12127,9 +12177,9 @@
       ENDIF.
 
       result = false.
-      lo_arg = list.
+      DATA(lo_arg) = list.
 
-      lo_test = nil.
+      DATA(lo_test) = nil.
       IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lo_test = lo_arg->car.
         lv_ref = char_case_identity( lo_test ).
@@ -12158,9 +12208,6 @@
 
     METHOD proc_string_list_is_ge.
       "_proc_string_list_compare `string>=?` >=.
-
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
       DATA lv_ref TYPE string.
       DATA lv_test TYPE string.
 
@@ -12170,9 +12217,9 @@
       ENDIF.
 
       result = false.
-      lo_arg = list.
+      DATA(lo_arg) = list.
 
-      lo_test = nil.
+      DATA(lo_test) = nil.
       IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
         lo_test = lo_arg->car.
         lv_ref = char_case_identity( lo_test ).
@@ -12203,9 +12250,7 @@
 
     METHOD proc_string_ci_list_is_eq.
       "_proc_string_ci_list_compare `string-ci=?` =.
-
       DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
 
       "_validate list.
       IF list IS NOT BOUND.
@@ -12213,7 +12258,7 @@
       ENDIF.
 
       result = false.
-      lo_arg = list.
+      DATA(lo_arg) = list.
 
       lo_test = nil.
       IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
@@ -12241,9 +12286,7 @@
 
     METHOD proc_string_ci_list_is_lt.
       "_proc_string_ci_list_compare `string-ci<?` <.
-
       DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
       DATA lv_ref TYPE string.
       DATA lv_test TYPE string.
 
@@ -12253,7 +12296,7 @@
       ENDIF.
 
       result = false.
-      lo_arg = list.
+      DATA(lo_arg) = list.
 
       lo_test = nil.
       IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
@@ -12284,9 +12327,7 @@
 
     METHOD proc_string_ci_list_is_gt.
       "_proc_string_ci_list_compare `string-ci>?` >.
-
       DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
       DATA lv_ref TYPE string.
       DATA lv_test TYPE string.
 
@@ -12296,7 +12337,7 @@
       ENDIF.
 
       result = false.
-      lo_arg = list.
+      DATA(lo_arg) = list.
 
       lo_test = nil.
       IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
@@ -12327,9 +12368,7 @@
 
     METHOD proc_string_ci_list_is_le.
       "_proc_string_ci_list_compare `string-ci<=?` <=.
-
       DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
       DATA lv_ref TYPE string.
       DATA lv_test TYPE string.
 
@@ -12339,7 +12378,7 @@
       ENDIF.
 
       result = false.
-      lo_arg = list.
+      DATA(lo_arg) = list.
 
       lo_test = nil.
       IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
@@ -12370,9 +12409,7 @@
 
     METHOD proc_string_ci_list_is_ge.
       "_proc_string_ci_list_compare `string-ci>=?` >=.
-
       DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
       DATA lv_ref TYPE string.
       DATA lv_test TYPE string.
 
@@ -12382,7 +12419,7 @@
       ENDIF.
 
       result = false.
-      lo_arg = list.
+      DATA(lo_arg) = list.
 
       lo_test = nil.
       IF lo_arg->type EQ pair AND lo_arg->car->type EQ string.
@@ -12432,7 +12469,6 @@
       FIELD-SYMBOLS <xchar> TYPE x.
       FIELD-SYMBOLS <xint> TYPE x.
       DATA lv_int TYPE int2.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
 
       "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
@@ -12934,7 +12970,7 @@
             IF <sotab> IS ASSIGNED.
               INSERT <line> INTO TABLE <sotab>.
             ELSE.
-              APPEND <line> TO <sttab>.
+              INSERT <line> INTO TABLE <sttab>.
             ENDIF.
             CLEAR <line>.
             lr_conscell = lr_conscell->cdr.
@@ -12985,8 +13021,7 @@
       FIELD-SYMBOLS <value> TYPE any.
       FIELD-SYMBOLS <struct> TYPE any.
 
-      IF identifier = nil OR
-        ( identifier->type NE string AND identifier->type NE symbol ).
+      IF identifier = nil OR ( identifier->type NE string AND identifier->type NE symbol ).
         throw( `ab-get: String or symbol required to access structure field` ).
       ENDIF.
 
@@ -13001,7 +13036,6 @@
     METHOD get_index_table_row.
 *     Second input for reading an index table must be a number (row index)
       FIELD-SYMBOLS <idxtab> TYPE INDEX TABLE.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
 
       "_validate_integer identifier `ab-get`.
       IF identifier IS NOT BOUND.
@@ -13013,7 +13047,7 @@
 
       ASSIGN element->data->* TO <idxtab>.
 
-      lo_int ?= identifier.
+      DATA(lo_int) = CAST lcl_lisp_integer( identifier ).
       READ TABLE <idxtab> REFERENCE INTO rdata INDEX lo_int->int.
       IF sy-subrc NE 0.
         throw( |ab-get: No entry at index { lo_int->int }| ). "Can do AB-TAB-WHERE some other time
@@ -13049,9 +13083,8 @@
     ENDMETHOD.                    "get_table_row_with_key
 
     METHOD get_element.
-      DATA element TYPE REF TO lcl_lisp_data.
 *     RDATA <- Data reference to value pointed to
-      element ?= list->car.         " Lisp element containing an ABAP value (data, table or function)
+      DATA(element) = CAST lcl_lisp_data( list->car ).         " Lisp element containing an ABAP value (data, table or function)
       DATA(identifier) = list->cdr->car. " Lisp element, string or symbol or index, to identify subcomponent of value
 
       IF element->type = abap_function.
@@ -13132,11 +13165,7 @@
 *      init-x : real? = (/ width 2)
 *      init-y : real? = (/ height 2)
 *      init-angle : real? = 0
-      DATA lo_width TYPE REF TO lcl_lisp_integer.
       DATA lo_next TYPE REF TO lcl_lisp.
-      DATA lo_height TYPE REF TO lcl_lisp_integer.
-      DATA lo_init_x TYPE REF TO lcl_lisp_integer.
-      DATA lo_init_y TYPE REF TO lcl_lisp_integer.
       DATA lo_init_angle TYPE REF TO lcl_lisp_real.
       DATA cell TYPE REF TO lcl_lisp.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
@@ -13152,7 +13181,7 @@
         list->car->raise( ` is not an integer in turtles` ) ##NO_TEXT.
       ENDIF.
 
-      lo_width ?= list->car.
+      DATA(lo_width) = CAST lcl_lisp_integer( list->car ).
       "_validate_integer list->cdr->car `turtles`.
       IF list->cdr->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
@@ -13161,44 +13190,40 @@
         list->cdr->car->raise( ` is not an integer in turtles` ) ##NO_TEXT.
       ENDIF.
 
-      lo_height ?= list->cdr->car.
+      DATA(lo_height) = CAST lcl_lisp_integer( list->cdr->car ).
 
       lo_next = list->cdr->cdr.
 
-      IF lo_next->car IS BOUND.
-        IF lo_next->car->type EQ integer.
-          lo_init_x ?= lo_next->car.
+      IF lo_next->car IS BOUND AND lo_next->car->type EQ integer.
+        DATA(lo_init_x) = CAST lcl_lisp_integer( lo_next->car ).
+
+        lo_next = lo_next->cdr.
+        IF lo_next->car IS BOUND AND lo_next->car->type EQ integer.
+          DATA(lo_init_y) = CAST lcl_lisp_integer( lo_next->car ).
 
           lo_next = lo_next->cdr.
           IF lo_next->car IS BOUND.
-            IF lo_next->car->type EQ integer.
-              lo_init_y ?= lo_next->car.
+            DATA lv_real TYPE tv_real.
 
-              lo_next = lo_next->cdr.
-              IF lo_next->car IS BOUND.
-                DATA lv_real TYPE tv_real.
-
-                "_get_number lv_real lo_next->car `turtles`.
-                IF lo_next->car IS NOT BOUND.
-                  lcl_lisp=>throw( c_error_incorrect_input ).
-                ENDIF.
-                cell = lo_next->car.
-                CASE cell->type.
-                  WHEN integer.
-                    lv_real = CAST lcl_lisp_integer( cell )->int.
-                  WHEN real.
-                    lv_real = CAST lcl_lisp_real( cell )->float.
-                  WHEN rational.
-                    lo_rat ?= cell.
-                    lv_real = lo_rat->int / lo_rat->denominator.
-*                  WHEN complex.
-                  WHEN OTHERS.
-                    cell->raise( | is not a number in turtles| ).
-                ENDCASE.
-                lo_init_angle = lcl_lisp_new=>real( value = lv_real
-                                                    exact = abap_false ).
-              ENDIF.
+            "_get_number lv_real lo_next->car `turtles`.
+            IF lo_next->car IS NOT BOUND.
+              lcl_lisp=>throw( c_error_incorrect_input ).
             ENDIF.
+            cell = lo_next->car.
+            CASE cell->type.
+              WHEN integer.
+                lv_real = CAST lcl_lisp_integer( cell )->int.
+              WHEN real.
+                lv_real = CAST lcl_lisp_real( cell )->float.
+              WHEN rational.
+                lo_rat ?= cell.
+                lv_real = lo_rat->int / lo_rat->denominator.
+*                  WHEN complex.
+              WHEN OTHERS.
+                cell->raise( | is not a number in turtles| ).
+            ENDCASE.
+            lo_init_angle = lcl_lisp_new=>real( value = lv_real
+                                                exact = abap_false ).
           ENDIF.
         ENDIF.
       ENDIF.
@@ -13224,13 +13249,8 @@
     ENDMETHOD.
 
     METHOD proc_turtle_merge.
-      DATA lo_width TYPE REF TO lcl_lisp_integer.
-      DATA lo_height TYPE REF TO lcl_lisp_integer.
-      DATA lo_init_x TYPE REF TO lcl_lisp_integer.
-      DATA lo_init_y TYPE REF TO lcl_lisp_integer.
-      DATA lo_init_angle TYPE REF TO lcl_lisp_real.
       "_validate: list, list->car, list->cdr.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 *    (merge turtles1 turtles2) → turtles?
@@ -13240,36 +13260,27 @@
       IF list->car->type NE abap_turtle.
         list->car->raise( ` is not a turtle in merge` ) ##NO_TEXT.
       ENDIF.
-
-      DATA lo_turtle1 TYPE REF TO lcl_lisp_turtle.
-      lo_turtle1 ?= list->car.
       "_validate_turtle list->cdr->car `merge`.
-      IF list->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF list->cdr->car->type NE abap_turtle.
         list->cdr->car->raise( ` is not a turtle in merge` ) ##NO_TEXT.
       ENDIF.
 
-      DATA lo_turtle2 TYPE REF TO lcl_lisp_turtle.
-      lo_turtle2 ?= list->cdr->car.
+      DATA(lo_turtle1) = CAST lcl_lisp_turtle( list->car ).
+      DATA(lo_turtle2) = CAST lcl_lisp_turtle( list->cdr->car ).
 
-      DATA(lo_turtles) = lcl_turtle=>compose( VALUE #( ( lo_turtle1->turtle ) ( lo_turtle2->turtle ) ) ).
-
-      lo_width = lcl_lisp_new=>integer( nmax( val1 = lo_turtle1->turtle->width
+      DATA(lo_width) = lcl_lisp_new=>integer( nmax( val1 = lo_turtle1->turtle->width
                                               val2 = lo_turtle2->turtle->width ) ).
-      lo_height = lcl_lisp_new=>integer( nmax( val1 = lo_turtle1->turtle->height
+      DATA(lo_height) = lcl_lisp_new=>integer( nmax( val1 = lo_turtle1->turtle->height
                                                val2 = lo_turtle2->turtle->height ) ).
 
-      lo_init_x = lcl_lisp_new=>integer( lo_width->int DIV 2 ).
-      lo_init_y = lcl_lisp_new=>integer( lo_height->int DIV 2 ).
-      lo_init_angle = lcl_lisp_new=>real( value = 0
-                                          exact = abap_true ).
-      result = lcl_lisp_new=>turtles( width = lo_width
-                                      height = lo_height
-                                      init_x = lo_init_x
-                                      init_y = lo_init_y
-                                      init_angle = lo_init_angle ).
+      DATA(lo_turtle) = lcl_lisp_new=>turtles( width = lo_width
+                                               height = lo_height
+                                               init_x = lcl_lisp_new=>integer( lo_width->int DIV 2 )
+                                               init_y = lcl_lisp_new=>integer( lo_height->int DIV 2 )
+                                               init_angle = lcl_lisp_new=>real( value = 0
+                                                                                exact = abap_true ) ).
+      lo_turtle->turtle = lcl_turtle=>compose( VALUE #( ( lo_turtle1->turtle ) ( lo_turtle2->turtle ) ) ).
+      result = lo_turtle.
     ENDMETHOD.
 
     METHOD proc_turtle_exist. "turtles?
@@ -13318,16 +13329,13 @@
     ENDMETHOD.
 
     METHOD proc_turtle_draw. "draw
-      "_validate: list, list->car, list->cdr.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
-
 *    (draw n turtles) → turtles?
 *      n : real? (integer)
 *      turtles : turtles?
-      DATA lo_dist_n TYPE REF TO lcl_lisp_integer.
-      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      "_validate: list, list->car, list->cdr, list->cdr->car.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
+        lcl_lisp=>throw( c_error_incorrect_input ).
+      ENDIF.
 
       "_validate_integer list->car `turtles draw n`.
       IF list->car->type NE integer.
@@ -13335,140 +13343,109 @@
       ENDIF.
 
       "_validate_turtle list->cdr->car `turtles draw`.
-      IF list->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF list->cdr->car->type NE abap_turtle.
         list->cdr->car->raise( ` is not a turtle in turtles draw` ) ##NO_TEXT.
       ENDIF.
 
-      lo_dist_n ?= list->car.
-      lo_turtles ?= list->cdr->car.
-      result = lo_turtles.
-
+      DATA(lo_turtles) = CAST lcl_lisp_turtle( list->cdr->car ).
       lo_turtles->turtle->pen_down( ).
-      lo_turtles->turtle->forward( lo_dist_n->int ).
+      lo_turtles->turtle->forward( CAST lcl_lisp_integer( list->car )->int ).
+
+      result = lo_turtles.
     ENDMETHOD.
 
     METHOD proc_turtle_erase.
-      "_validate: list, list->car, list->cdr.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
 *    (erase n turtles) → turtles?
-*
 *      n : real?
 *      turtles : turtles?
-      DATA lo_dist_n TYPE REF TO lcl_lisp_integer.
-      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
-
+      "_validate: list, list->car, list->cdr, list->cdr->car.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
+        lcl_lisp=>throw( c_error_incorrect_input ).
+      ENDIF.
       "_validate_integer list->car `turtles erase n`.
       IF list->car->type NE integer.
         list->car->raise( ` is not an integer in turtles erase n` ) ##NO_TEXT.
       ENDIF.
-
       "_validate_turtle list->cdr->car `turtles erase`.
-      IF list->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF list->cdr->car->type NE abap_turtle.
         list->cdr->car->raise( ` is not a turtle in turtles erase` ) ##NO_TEXT.
       ENDIF.
 
-      lo_dist_n ?= list->car.
-      lo_turtles ?= list->cdr->car.
-      result = lo_turtles.
+      DATA(lo_turtles) = CAST lcl_lisp_turtle( list->cdr->car ).
+
+      " Set color = fill_color
+      DATA(pen) = lo_turtles->turtle->pen.
+      pen-stroke_color = pen-fill_color.
+      lo_turtles->turtle->set_pen( pen ).
 
       lo_turtles->turtle->pen_down( ).
-      lo_turtles->turtle->forward( lo_dist_n->int ).
+      lo_turtles->turtle->forward( CAST lcl_lisp_integer( list->car )->int ).
+
+      result = lo_turtles.
     ENDMETHOD.
 
     METHOD proc_turtle_move_offset.
-      "_validate: list, list->car, list->cdr, list->cdr->cdr.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->cdr IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
 *    (move-offset h v turtles) → turtles?
 *      h : real? (integer)
 *      v : real? (integer)
 *      turtles : turtles?
-      DATA lo_off_h TYPE REF TO lcl_lisp_integer.
-      DATA lo_off_v TYPE REF TO lcl_lisp_integer.
-      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      "_validate: list, list->car, list->cdr, list->cdr->cdr, list->cdr->car, list->cdr->cdr->car.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND
+        OR list->cdr->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND OR  list->cdr->cdr->car IS NOT BOUND.
+        lcl_lisp=>throw( c_error_incorrect_input ).
+      ENDIF.
 
       "_validate_integer list->car `turtles move-offset h`.
       IF list->car->type NE integer.
         list->car->raise( ` is not an integer in turtles move-offset h` ) ##NO_TEXT.
       ENDIF.
-
       "_validate_integer list->cdr->car `turtles move-offset v`.
-      IF list->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF list->cdr->car->type NE integer.
         list->cdr->car->raise( ` is not an integer in turtles move-offset v` ) ##NO_TEXT.
       ENDIF.
-
       "_validate_turtle list->cdr->cdr->car `move-offset`.
-      IF list->cdr->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF list->cdr->cdr->car->type NE abap_turtle.
         list->cdr->cdr->car->raise( ` is not a turtle in move-offset` ) ##NO_TEXT.
       ENDIF.
 
-      lo_off_h ?= list->car.
-      lo_off_v ?= list->cdr->car.
-      lo_turtles ?= list->cdr->cdr->car.
-      result = lo_turtles.
+      DATA(lo_turtles) = CAST lcl_lisp_turtle( list->cdr->cdr->car ).
 
       lo_turtles->turtle->pen_up( ).
-      lo_turtles->turtle->to_offset( delta_x = lo_off_h->int
-                                     delta_y = lo_off_v->int ).
+      lo_turtles->turtle->to_offset( delta_x = CAST lcl_lisp_integer( list->car )->int
+                                     delta_y = CAST lcl_lisp_integer( list->cdr->car )->int ).
+      result = lo_turtles.
     ENDMETHOD.
 
     METHOD proc_turtle_draw_offset.
-      "_validate: list, list->car, list->cdr, list->cdr->cdr.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->cdr IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
-
 *    (draw-offset h v turtles) → turtles?
 *      h : real? (integer)
 *      v : real? (integer)
 *      turtles : turtles?
-      DATA lo_off_h TYPE REF TO lcl_lisp_integer.
-      DATA lo_off_v TYPE REF TO lcl_lisp_integer.
-      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      "_validate: list, list->car, list->cdr, list->cdr->car, list->cdr->cdr, list->cdr->cdr->car.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND
+         OR list->cdr->cdr IS NOT BOUND OR list->cdr->cdr->car IS NOT BOUND.
+        lcl_lisp=>throw( c_error_incorrect_input ).
+      ENDIF.
 
       "_validate_integer list->car `turtles draw-offset h`.
       IF list->car->type NE integer.
         list->car->raise( ` is not an integer in turtles draw-offset h`  ) ##NO_TEXT.
       ENDIF.
-
       "_validate_integer list->cdr->car `turtles draw-offset v`.
-      IF list->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF list->cdr->car->type NE integer.
         list->cdr->car->raise( ` is not an integer in draw-offset v` ) ##NO_TEXT.
       ENDIF.
-
       "_validate_turtle list->cdr->cdr->car `draw-offset`.
-      IF list->cdr->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF list->cdr->cdr->car->type NE abap_turtle.
         list->cdr->cdr->car->raise( ` is not a turtle in draw-offset` ) ##NO_TEXT.
       ENDIF.
 
-      lo_off_h ?= list->car.
-      lo_off_v ?= list->cdr->car.
-      lo_turtles ?= list->cdr->cdr->car.
-
+      DATA(lo_turtles) = CAST lcl_lisp_turtle( list->cdr->cdr->car ).
       lo_turtles->turtle->pen_down( ).
-      lo_turtles->turtle->to_offset( delta_x = lo_off_h->int
-                                     delta_y = lo_off_v->int ).
+      lo_turtles->turtle->to_offset( delta_x = CAST lcl_lisp_integer( list->car )->int
+                                     delta_y = CAST lcl_lisp_integer( list->cdr->car )->int ).
+
+      result = lo_turtles.
     ENDMETHOD.
 
     METHOD proc_turtle_erase_offset.
@@ -13553,14 +13530,16 @@
     ENDMETHOD.
 
     METHOD proc_turtle_turn_radians. "turn/radians
+*      (turn/radians theta turtles) → turtles?
+*        theta : real?
+*        turtles : turtles?
       "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-
-*      (turn/radians theta turtles) → turtles?
-*        theta : real?
-*        turtles : turtles?
+      IF list->cdr->car IS NOT BOUND.
+        lcl_lisp=>throw( c_error_incorrect_input ).
+      ENDIF.
       "_validate_number list->car `turn/radians theta`.
       CASE list->car->type.
         WHEN integer
@@ -13575,9 +13554,6 @@
       lo_theta ?= list->car.
 
       "_validate_turtle list->cdr->car `turn/radians`.
-      IF list->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF list->cdr->car->type NE abap_turtle.
         list->cdr->car->raise( ` is not a turtle in turn/radians` ) ##NO_TEXT.
       ENDIF.
@@ -13595,51 +13571,44 @@
     ENDMETHOD.
 
     METHOD proc_turtle_set_pen_width. "set-pen-width
+*      (set-pen-width turtles width) → turtles?
+*        turtles : turtles?
+*        width : (real-in 0 255)
       "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-*      (set-pen-width turtles width) → turtles?
-*        turtles : turtles?
-*        width : (real-in 0 255)
+      IF list->cdr->car IS NOT BOUND.
+        lcl_lisp=>throw( c_error_incorrect_input ).
+      ENDIF.
+
       "_validate_turtle list->car `set-pen-width`.
       IF list->car->type NE abap_turtle.
         list->car->raise( ` is not a turtle in set-pen-width` ) ##NO_TEXT.
       ENDIF.
-
-      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
-      lo_turtles ?= list->car.
-
       "_validate_index list->cdr->car `set-pen-width`.
-      IF list->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF CAST lcl_lisp_integer( list->cdr->car )->int LT 0.
         list->cdr->car->raise( ` must be non-negative in set-pen-width` ) ##NO_TEXT.
       ENDIF.
-      DATA lo_width TYPE REF TO lcl_lisp_integer.
-      lo_width ?= list->cdr->car.
 
+      DATA(lo_turtles) = CAST lcl_lisp_turtle( list->car ).
       lo_turtles->turtle->set_pen( VALUE #( BASE lo_turtles->turtle->pen
-                                            stroke_width = lo_width->int ) ).
+                                            stroke_width = CAST lcl_lisp_integer( list->cdr->car )->int ) ).
       result = lo_turtles.
     ENDMETHOD.
 
     METHOD proc_turtle_set_pen_color. "set-pen-color
+*    (set-pen-color turtles color) → turtles?
+*      turtles : turtles?
+*      color : (or/c string? (is-a?/c color%))
       "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-*    (set-pen-color turtles color) → turtles?
-*      turtles : turtles?
-*      color : (or/c string? (is-a?/c color%))
       "_validate_turtle list->car `set-pen-color`.
       IF list->car->type NE abap_turtle.
         list->car->raise( ` is not a turtle in set-pen-color` ) ##NO_TEXT.
       ENDIF.
-
-      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
-      lo_turtles ?= list->car.
 
       "_validate_string list->cdr->car `set-pen-color`.
       IF list->cdr->car IS NOT BOUND.
@@ -13648,9 +13617,10 @@
       IF list->cdr->car->type NE string.
         list->cdr->car->raise( ` is not a string in set-pen-color` ) ##NO_TEXT.
       ENDIF.
-      DATA lo_color TYPE REF TO lcl_lisp_string.
-      lo_color ?= list->cdr->car.
 
+      DATA(lo_color) = CAST lcl_lisp_string( list->cdr->car ).
+
+      DATA(lo_turtles) = CAST lcl_lisp_turtle( list->car ).
       lo_turtles->turtle->set_pen( VALUE #( BASE lo_turtles->turtle->pen
                                             stroke_color = lo_color->value ) ).
       result = lo_turtles.
@@ -13681,20 +13651,18 @@
     ENDMETHOD.
 
     METHOD proc_turtle_clean.
+*    (clean turtles) → turtles?
+*      turtles : turtles?
       "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-
-*    (clean turtles) → turtles?
-*      turtles : turtles?
       "_validate_turtle list->car `clean`.
       IF list->car->type NE abap_turtle.
         list->car->raise( ` is not a turtle in clean` ) ##NO_TEXT.
       ENDIF.
 
-      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
-      lo_turtles ?= list->car.
+      DATA(lo_turtles) = CAST lcl_lisp_turtle( list->car ).
       throw( `turtle clean not implemented yet` ).
       result = lo_turtles.
     ENDMETHOD.
@@ -13712,10 +13680,7 @@
         list->car->raise( ` is not a turtle in turtles-width` ) ##NO_TEXT.
       ENDIF.
 
-      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
-      lo_turtles ?= list->car.
-
-      result = lcl_lisp_new=>integer( lo_turtles->turtle->width ).
+      result = lcl_lisp_new=>integer( CAST lcl_lisp_turtle( list->car )->turtle->width ).
     ENDMETHOD.
 
     METHOD proc_turtle_height.
@@ -13730,10 +13695,7 @@
         list->car->raise( ` is not a turtle in turtles-height` ) ##NO_TEXT.
       ENDIF.
 
-      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
-      lo_turtles ?= list->car.
-
-      result = lcl_lisp_new=>integer( lo_turtles->turtle->height ).
+      result = lcl_lisp_new=>integer( CAST lcl_lisp_turtle( list->car )->turtle->height ).
     ENDMETHOD.
 
     METHOD proc_turtle_pen_width.
@@ -13748,10 +13710,7 @@
         list->car->raise( ` is not a turtle in turtles-pen-width` ) ##NO_TEXT.
       ENDIF.
 
-      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
-      lo_turtles ?= list->car.
-
-      result = lcl_lisp_new=>integer( lo_turtles->turtle->pen-stroke_width ).
+      result = lcl_lisp_new=>integer( CAST lcl_lisp_turtle( list->car )->turtle->pen-stroke_width ).
     ENDMETHOD.
 
     METHOD proc_turtle_pen_color.
@@ -13767,94 +13726,80 @@
         list->car->raise( ` is not a turtle in turtles-pen-color` ) ##NO_TEXT.
       ENDIF.
 
-      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
-      lo_turtles ?= list->car.
-
-      result = lcl_lisp_new=>string( lo_turtles->turtle->pen-stroke_color ).
+      result = lcl_lisp_new=>string( CAST lcl_lisp_turtle( list->car )->turtle->pen-stroke_color ).
     ENDMETHOD.
 
     METHOD proc_turtle_regular_poly.
-      "_validate: list, list->car, list->cdr, list->cdr->cdr.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->cdr IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
 *      (regular-poly sides radius turtles) → turtles?
 *        sides : exact-nonnegative-integer?
 *        radius : real?
 *        turtles : turtles?
-      "_validate_index list->car `regular-poly sides`.
-      IF CAST lcl_lisp_integer( list->car )->int LT 0.
-        list->car->raise( ` must be non-negative in regular-poly sides` ) ##NO_TEXT.
-      ENDIF.
-      DATA lo_sides TYPE REF TO lcl_lisp_integer.
-      lo_sides ?= list->car.
-
-      "_validate_integer list->cdr->car `regular-poly radius`.
-      IF list->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
-      IF list->cdr->car->type NE integer.
-        list->cdr->car->raise( ` is not an integer in regular-poly radius` ) ##NO_TEXT.
-      ENDIF.
-
-      DATA lo_radius TYPE REF TO lcl_lisp_integer.
-      lo_radius ?= list->cdr->car.
-
-      "_validate_turtle list->cdr->cdr->car `regular-poly`.
-      IF list->cdr->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
-      IF list->cdr->cdr->car->type NE abap_turtle.
-        list->cdr->cdr->car->raise( ` is not a turtle in regular-poly` ) ##NO_TEXT.
-      ENDIF.
-      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
-      lo_turtles ?= list->cdr->cdr->car.
-
-      lo_turtles->turtle->regular_polygon( num_sides = lo_sides->int
-                                           side_length = lo_radius->int ).
-      result = lo_turtles.
-    ENDMETHOD.
-
-    METHOD proc_turtle_regular_polys.
       "_validate: list, list->car, list->cdr, list->cdr->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
+      IF list->cdr->car IS NOT BOUND.
+        lcl_lisp=>throw( c_error_incorrect_input ).
+      ENDIF.
+      IF list->cdr->cdr->car IS NOT BOUND.
+        lcl_lisp=>throw( c_error_incorrect_input ).
+      ENDIF.
+      "_validate_index list->car `regular-poly sides`.
+      IF CAST lcl_lisp_integer( list->car )->int LT 0.
+        list->car->raise( ` must be non-negative in regular-poly sides` ) ##NO_TEXT.
+      ENDIF.
+      "_validate_integer list->cdr->car `regular-poly radius`.
+      IF list->cdr->car->type NE integer.
+        list->cdr->car->raise( ` is not an integer in regular-poly radius` ) ##NO_TEXT.
+      ENDIF.
+      "_validate_turtle list->cdr->cdr->car `regular-poly`.
+      IF list->cdr->cdr->car->type NE abap_turtle.
+        list->cdr->cdr->car->raise( ` is not a turtle in regular-poly` ) ##NO_TEXT.
+      ENDIF.
+
+      DATA(lo_turtles) = CAST lcl_lisp_turtle( list->cdr->cdr->car ).
+      lo_turtles->turtle->regular_polygon( num_sides = CAST lcl_lisp_integer( list->car )->int
+                                           side_length = CAST lcl_lisp_integer( list->cdr->car )->int ).
+      result = lo_turtles.
+    ENDMETHOD.
+
+    METHOD proc_turtle_regular_polys.
 *      Draws n regular polys each with n sides centered at the turtle.
 *      (regular-polys n s turtles) → turtles?
 *        n : exact-nonnegative-integer?
 *        s : any/c
 *        turtles : turtles?
+      "_validate: list, list->car, list->cdr, list->cdr->cdr.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->cdr IS NOT BOUND.
+        lcl_lisp=>throw( c_error_incorrect_input ).
+      ENDIF.
+      IF list->cdr->car IS NOT BOUND.
+        lcl_lisp=>throw( c_error_incorrect_input ).
+      ENDIF.
+      IF list->cdr->cdr->car IS NOT BOUND.
+        lcl_lisp=>throw( c_error_incorrect_input ).
+      ENDIF.
+
       "_validate_integer list->car `regular-polys n`.
       IF list->car->type NE integer.
         list->car->raise( ` is not an integer in regular-polys n` ) ##NO_TEXT.
       ENDIF.
-
-      DATA lo_n TYPE REF TO lcl_lisp_integer.
-      lo_n ?= list->car.
-
       "_validate_index list->cdr->car `regular-polys s`.
-      IF list->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF list->cdr->car->type NE integer.
         list->cdr->car->raise( ` is not an integer in regular-polys s` ) ##NO_TEXT.
       ENDIF.
       IF CAST lcl_lisp_integer( list->cdr->car )->int LT 0.
         list->cdr->car->raise( ` must be non-negative in regular-polys s` ) ##NO_TEXT.
       ENDIF.
-
-      DATA lo_side TYPE REF TO lcl_lisp_integer.
-      lo_side ?= list->cdr->car.
-
       "_validate_turtle list->cdr->cdr->car `regular-polys`.
-      IF list->cdr->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF list->cdr->cdr->car->type NE abap_turtle.
         list->cdr->cdr->car->raise( ` is not a turtle in regular-polys` ) ##NO_TEXT.
       ENDIF.
 
+      DATA lo_n TYPE REF TO lcl_lisp_integer.
+      lo_n ?= list->car.
+      DATA lo_side TYPE REF TO lcl_lisp_integer.
+      lo_side ?= list->cdr->car.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->cdr->cdr->car.
 
@@ -14068,10 +14013,7 @@
 
     METHOD unbound_symbol.
 *     symbol not found in the environment chain
-      RAISE EXCEPTION TYPE lcx_lisp_exception
-        EXPORTING
-          message = |Symbol { symbol } is unbound|
-          area    = c_area_eval.
+      lcl_lisp=>throw( |Symbol { symbol } is unbound| ).
     ENDMETHOD.
 
     METHOD define_value.
@@ -14387,6 +14329,7 @@
       define_value( symbol = 'sqrt'  type = native value = 'PROC_SQRT' ).
 
       define_value( symbol = 'floor'    type = native value = 'PROC_FLOOR' ).
+      define_value( symbol = 'floor/'   type = native value = 'PROC_FLOOR_NEW' ).
       define_value( symbol = 'ceiling'  type = native value = 'PROC_CEILING' ).
       define_value( symbol = 'truncate' type = native value = 'PROC_TRUNCATE' ).
       define_value( symbol = 'round'    type = native value = 'PROC_ROUND' ).
@@ -14577,8 +14520,6 @@
       IF io_elem IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = false.
 
@@ -14596,16 +14537,14 @@
       CASE type.
         WHEN integer.
 * obj1 and obj2 are both exact numbers and are numerically equal (in the sense of =).
-          lo_int ?= b.
-          CHECK CAST lcl_lisp_integer( me )->int = lo_int->int.
+          CHECK CAST lcl_lisp_integer( me )->int = CAST lcl_lisp_integer( b )->int.
 
         WHEN real.
 *obj1 and obj2 are both inexact numbers such that they are numerically equal (in the sense of =)
 *and they yield the same results (in the sense of eqv?) when passed as arguments to any other
 *procedure that can be defined as a finite composition of Scheme’s standard arithmetic procedures,
 *provided it does not result in a NaN value.
-          lo_real ?= b.
-          CHECK CAST lcl_lisp_real( me )->float_eq( lo_real->float ).
+          CHECK CAST lcl_lisp_real( me )->float_eq( CAST lcl_lisp_real( b )->float ).
 
         WHEN symbol.
 * obj1 and obj2 are both symbols and are the same symbol according to the symbol=? procedure (section 6.5).
@@ -14616,9 +14555,7 @@
 
         WHEN string.
 * obj1 and obj2 are both characters and are the same character according to the char=? procedure (section 6.6).
-          DATA(lo_string) = CAST lcl_lisp_string( me ).
-          DATA(lo_str_b) = CAST lcl_lisp_string( b ).
-          CHECK lo_string->value = lo_str_b->value.
+          CHECK CAST lcl_lisp_string( me )->value = CAST lcl_lisp_string( b )->value.
 
         WHEN pair.
 * obj1 and obj2 are procedures whose location tags are equal (section 4.1.4).
@@ -14709,11 +14646,7 @@
           result = lo_a->is_equal( lo_b ).
 
         WHEN vector.
-          DATA lo_vec TYPE REF TO lcl_lisp_vector.
-          DATA lo_elem_vec TYPE REF TO lcl_lisp_vector.
-          lo_vec ?= me.
-          lo_elem_vec ?= io_elem.
-          result = lo_vec->to_list( )->is_equal( lo_elem_vec->to_list( ) ).
+          result = CAST lcl_lisp_vector( me )->to_list( )->is_equal( CAST lcl_lisp_vector( io_elem )->to_list( ) ).
 
         WHEN string.
           CHECK me->value EQ io_elem->value.
@@ -14786,12 +14719,10 @@
       DATA lv_skip TYPE abap_boolean.
       DATA lv_parens TYPE abap_boolean.
       DATA lv_first TYPE abap_boolean VALUE abap_true.
-      DATA lo_elem TYPE REF TO lcl_lisp.
-      DATA lo_fast TYPE REF TO lcl_lisp.
       DATA lv_shared TYPE i VALUE -1.
 
-      lo_elem = me.
-      lo_fast = cdr.
+      DATA(lo_elem) = me.
+      DATA(lo_fast) = cdr.
 
       lv_parens = abap_true.
       WHILE lo_elem IS BOUND AND lo_elem NE nil.
@@ -14820,10 +14751,10 @@
 *           Circular list
             lv_shared += 1.
             WHILE lo_elem->cdr NE lo_fast.
-              lv_str = |{ lv_str } { lo_elem->car->to_string( ) }|.
+              lv_str &&= | { lo_elem->car->to_string( ) }|.
               lo_elem = lo_elem->cdr.
             ENDWHILE.
-            lv_str = |{ lv_str } { lo_elem->car->to_string( ) } . #{ lv_shared }#|.
+            lv_str &&= | { lo_elem->car->to_string( ) } . #{ lv_shared }#|.
             EXIT.
           ENDIF.
 
@@ -14888,18 +14819,21 @@
 
         WHEN integer.
           DATA lv_real TYPE tv_real.
-          DATA lo_int TYPE REF TO lcl_lisp_integer.
 
-          lo_int ?= me.
-          lv_real = lo_int->int.
+          lv_real = CAST lcl_lisp_integer( me )->int.
           str = lv_real.
           str = condense( str ).
 
         WHEN real.
-          DATA lo_real TYPE REF TO lcl_lisp_real.
-          lo_real ?= me.
+          DATA(lo_real) = CAST lcl_lisp_real( me ).
+          DATA(lv_float) = lo_real->float.
+
           str = condense( CAST lcl_lisp_real( me )->float ).
-          "str = condense( CONV #( lo_real->float ) ).
+          IF lo_real->exact EQ abap_false AND frac( lv_float ) EQ 0.
+            IF str CN `.`.
+              str &&= `.0`.
+            ENDIF.
+          ENDIF.
 *        WHEN type_rational.
 
 *        WHEN type_complex.
@@ -14958,10 +14892,6 @@
       ENDCASE.
     ENDMETHOD.
 
-    METHOD error_not_a_pair.
-      throw( context && to_string( ) && ` is not a pair` ).
-    ENDMETHOD.
-
     METHOD throw.
       RAISE EXCEPTION TYPE lcx_lisp_exception
         EXPORTING
@@ -14970,7 +14900,12 @@
     ENDMETHOD.                    "eval_err
 
     METHOD raise.
-      throw( to_string( ) && message ).
+      throw( context && to_string( ) && message ).
+    ENDMETHOD.
+
+    METHOD error_not_a_pair.
+      raise( context = context
+             message = ` is not a pair` ).
     ENDMETHOD.
 
     METHOD is_procedure.
@@ -15099,8 +15034,7 @@
       DATA xword TYPE tv_xword.
       DATA lv_int TYPE int2.
 
-      xword = value.
-      lv_int = xword.
+      lv_int = xword = value.
       ASSIGN lv_int TO <xword> CASTING.
       ASSIGN lv_char TO <xchar> CASTING.
       <xchar> = <xword>.
@@ -15199,6 +15133,7 @@
     ENDMETHOD.
 
     METHOD hex_integer.
+      CONSTANTS c_hex_alpha_lowercase TYPE c LENGTH 6 VALUE 'abcdef'.
       DATA lv_text TYPE string VALUE '0000000000000000'. " 2x8 = 16
       DATA lv_len TYPE tv_int.
       DATA lv_hex TYPE x LENGTH 8.
@@ -15209,18 +15144,14 @@
       ELSE.
         lv_text = value.
       ENDIF.
-      IF lv_text CA 'abcdef'.
+      IF lv_text CA c_hex_alpha_lowercase.
         lv_text = to_upper( lv_text ).
       ENDIF.
       IF lv_text CO c_hex_digits.
         lv_hex = lv_text.
         rv_int = lv_hex.
       ELSE.
-        "_throw_radix `Invalid hexadecimal number`.
-        RAISE EXCEPTION TYPE lcx_lisp_exception
-          EXPORTING
-            message = `Invalid hexadecimal number`
-            area    = 'Radix' ##NO_TEXT.
+        throw_radix( `Invalid hexadecimal number` ).
       ENDIF.
     ENDMETHOD.
 
@@ -15230,8 +15161,6 @@
       DATA lv_trunc_str TYPE string.
       DATA lv_decimal_str TYPE string.
       DATA lv_int TYPE tv_int.
-      DATA lv_exp TYPE tv_int.
-      DATA lv_dec TYPE tv_int.
       DATA lv_real TYPE tv_real.
 
       lv_text = value.
@@ -15241,12 +15170,14 @@
       IF lv_decimal_str IS INITIAL.
         ro_elem = integer( lv_int ).
       ELSE.
+        DATA lv_dec TYPE tv_int.
         lv_dec = hex_integer( lv_decimal_str ).
         lv_real = lv_int.
         IF lv_dec EQ 0.
           ro_elem = real( value = lv_real
                           exact = abap_true ).
         ELSE.
+          DATA lv_exp TYPE tv_int.
           lv_exp = strlen( lv_decimal_str ).
           ro_elem = real( value = lv_real + lv_dec / ipow( base = 16 exp = lv_exp )
                           exact = abap_false ).
@@ -15264,11 +15195,7 @@
       CLEAR rv_int.
       lv_text = value.
       IF lv_text CN '01234567'.
-        "_throw_radix `Invalid octal number`.
-        RAISE EXCEPTION TYPE lcx_lisp_exception
-          EXPORTING
-            message = `Invalid octal number`
-            area    = 'Radix' ##NO_TEXT.
+        throw_radix( `Invalid octal number` ).
       ENDIF.
 
       lv_index = lv_size = strlen( lv_text ).
@@ -15319,11 +15246,7 @@
 
       lv_text = value.
       IF lv_text CN '01'.
-        "_throw_radix `Invalid binary number`.
-        RAISE EXCEPTION TYPE lcx_lisp_exception
-          EXPORTING
-            message = `Invalid binary number`
-            area    = 'Radix' ##NO_TEXT.
+        throw_radix( `Invalid binary number` ).
       ENDIF.
 
       lv_index = lv_size = strlen( lv_text ).
@@ -15516,6 +15439,13 @@
 **     Determine the parameters of the function module to populate parameter table
 *      ro_func->value = ro_func->read_interface( io_list->car->value ).
 *    ENDMETHOD.
+
+    METHOD throw_radix.
+      RAISE EXCEPTION TYPE lcx_lisp_exception
+        EXPORTING
+          message = message
+          area    = c_area_radix.
+    ENDMETHOD.
 
   ENDCLASS.
 

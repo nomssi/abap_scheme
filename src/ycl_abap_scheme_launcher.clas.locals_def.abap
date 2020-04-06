@@ -20,7 +20,8 @@
 
   CONSTANTS:
     c_area_eval  TYPE string VALUE `Eval` ##NO_TEXT,
-    c_area_parse TYPE string VALUE `Parse` ##NO_TEXT.
+    c_area_parse TYPE string VALUE `Parse` ##NO_TEXT,
+    c_area_radix TYPE string VALUE 'Radix' ##NO_TEXT.
   CONSTANTS:
     c_lisp_else TYPE string VALUE 'else' ##NO_TEXT,
     c_lisp_then TYPE c LENGTH 2 VALUE '=>'.
