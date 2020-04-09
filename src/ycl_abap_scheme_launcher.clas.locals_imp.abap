@@ -15554,7 +15554,7 @@
   CLASS lcl_lisp_vector IMPLEMENTATION.
 
     METHOD init.
-      DATA(lt_array) = VALUE tt_lisp( FOR idx = 0 UNTIL idx = size ( io_fill )  ).
+      DATA(lt_array) = VALUE tt_lisp( FOR idx = 0 WHILE idx LT size ( io_fill )  ).
       ro_vector = lcl_lisp_new=>vector( it_vector = lt_array
                                         iv_mutable = iv_mutable ).
     ENDMETHOD.
