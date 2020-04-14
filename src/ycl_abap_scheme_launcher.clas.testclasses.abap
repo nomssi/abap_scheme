@@ -3775,7 +3775,7 @@ ENDCLASS.                    "ltc_list IMPLEMENTATION
 
      METHOD vector_set_2.
        scheme( code = |(vector-set! '#(0 1 2) 1 "doe")|
-               expected = 'Eval: constant vector cannot be changed' ).
+               expected = 'Eval: constant list in vector cannot be changed' ).
      ENDMETHOD.                    "vector_set_2
 
      METHOD vector_to_list_1.

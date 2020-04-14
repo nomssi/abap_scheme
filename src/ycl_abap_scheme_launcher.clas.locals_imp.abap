@@ -13,7 +13,7 @@
 *& Turtle Graphics from Frederik Hudák, placed under The Unlicense
 *& MIT License (see below)
 *& Martin Ceronio, martin.ceronio@infosize.co.za June 2015
-*& Jacques Nomssi Nzali, nomssi@gmail.com February 2020
+*& Jacques Nomssi Nzali, nomssi@gmail.com April 2020
 *&---------------------------------------------------------------------*
 *  The MIT License (MIT)
 *
@@ -1705,8 +1705,8 @@
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_data.
       CLASS-METHODS table IMPORTING ref            TYPE REF TO data OPTIONAL
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_table.
-*      CLASS-METHODS query IMPORTING value          TYPE any OPTIONAL
-*                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+      CLASS-METHODS query IMPORTING value          TYPE any OPTIONAL
+                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS cons IMPORTING io_car         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                                    io_cdr         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                          RETURNING VALUE(ro_cons) TYPE REF TO lcl_lisp.
@@ -2118,29 +2118,29 @@
 *                                      iv_kind  TYPE i.
 *  ENDCLASS.                    "lcl_lisp_abapfunction DEFINITION
 
-*  CLASS lcl_lisp_sql_result DEFINITION INHERITING FROM lcl_lisp_data.
-*    PUBLIC SECTION.
-*      METHODS constructor IMPORTING io_result TYPE REF TO cl_sql_result_set.
-*      METHODS clear.
-*      METHODS close.
-*    PROTECTED SECTION.
-*      DATA result_set TYPE REF TO cl_sql_result_set.
-*  ENDCLASS.
-*
-*  CLASS lcl_lisp_query DEFINITION INHERITING FROM lcl_lisp_data
-*     CREATE PROTECTED FRIENDS lcl_lisp_new.
-*    PUBLIC SECTION.
-*      METHODS constructor IMPORTING osql TYPE string OPTIONAL
-*                          RAISING   cx_sql_exception.
-*      METHODS execute IMPORTING query         TYPE string
-*                      RETURNING VALUE(result) TYPE REF TO lcl_lisp_sql_result
-*                      RAISING   cx_sql_exception.
-*    PROTECTED SECTION.
-*      DATA mv_hold_cursor TYPE abap_boolean.
-*      DATA sql_query TYPE string.
+  CLASS lcl_lisp_sql_result DEFINITION INHERITING FROM lcl_lisp_data.
+    PUBLIC SECTION.
+      METHODS constructor IMPORTING io_result TYPE REF TO object. "cl_sql_result_set.
+      METHODS clear.
+      METHODS close.
+    PROTECTED SECTION.
+      DATA result_set TYPE REF TO object. "cl_sql_result_set.
+  ENDCLASS.
+
+  CLASS lcl_lisp_query DEFINITION INHERITING FROM lcl_lisp_data
+     CREATE PROTECTED FRIENDS lcl_lisp_new.
+    PUBLIC SECTION.
+      METHODS constructor IMPORTING osql TYPE string OPTIONAL
+                          RAISING   CX_SY_OPEN_SQL_ERROR. "cx_sql_exception.
+      METHODS execute IMPORTING query         TYPE string
+                      RETURNING VALUE(result) TYPE REF TO lcl_lisp_sql_result
+                      RAISING   CX_SY_OPEN_SQL_ERROR. " cx_sql_exception.
+    PROTECTED SECTION.
+      DATA mv_hold_cursor TYPE abap_boolean.
+      DATA sql_query TYPE string.
 *      DATA connection TYPE REF TO cl_sql_connection.
 *      DATA statement TYPE REF TO cl_sql_statement.
-*  ENDCLASS.
+  ENDCLASS.
 
   CLASS lcl_lisp_env_factory DEFINITION DEFERRED.
 
@@ -2577,8 +2577,8 @@
       METHODS proc_equal  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
 * SQL
-*METHODS proc_sql_prepare IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
-*METHODS proc_sql_query   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_sql_prepare IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_sql_query   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
 * Functions for dealing with vectors:
       METHODS proc_make_vector     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
@@ -13134,36 +13134,36 @@
       ENDIF.
     ENDMETHOD. "get_element
 
-*    METHOD proc_sql_prepare.
-**     define-query
-*      DATA lo_string TYPE REF TO lcl_lisp_string.
-*      "_validate: list, list->car.
-*      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-*        lcl_lisp=>throw( c_error_incorrect_input ).
-*      ENDIF.
-*
-*      lo_string ?= list->car.
-*
-*      result = lcl_lisp_new=>query( value = lo_string->value ).
-*    ENDMETHOD.
+    method proc_sql_prepare.
+*     define-query
+      data lo_string type ref to lcl_lisp_string.
+      "_validate: list, list->car.
+      if list is not bound or list->car is not bound.
+        lcl_lisp=>throw( c_error_incorrect_input ).
+      endif.
 
-*    METHOD proc_sql_query.
-*      DATA lo_sql TYPE REF TO lcl_lisp_query.
-*      DATA lo_string TYPE REF TO lcl_lisp_string.
-**     sql-query
-*      "_validate: list, list->cdr.
-*      IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
-*        lcl_lisp=>throw( c_error_incorrect_input ).
-*      ENDIF.
-*
-*      TRY.
-*          lo_string ?= list->car.
-*          lo_sql ?= lcl_lisp_new=>query( value = lo_string->value ).
-*          result = lo_sql->execute( lo_string->value ).
-*        CATCH cx_sql_exception INTO DATA(lx_error).
-*          throw( |SQL query { lx_error->get_text( ) }| ).
-*      ENDTRY.
-*    ENDMETHOD.
+      lo_string ?= list->car.
+
+      result = lcl_lisp_new=>query( value = lo_string->value ).
+    endmethod.
+
+    METHOD proc_sql_query.
+      DATA lo_sql TYPE REF TO lcl_lisp_query.
+      DATA lo_string TYPE REF TO lcl_lisp_string.
+*     sql-query
+      "_validate: list, list->cdr.
+      IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
+        lcl_lisp=>throw( c_error_incorrect_input ).
+      ENDIF.
+
+      TRY.
+          lo_string ?= list->car.
+          lo_sql ?= lcl_lisp_new=>query( value = lo_string->value ).
+          result = lo_sql->execute( lo_string->value ).
+        CATCH cx_root INTO DATA(lx_error).
+          throw( |SQL query { lx_error->get_text( ) }| ).
+      ENDTRY.
+    ENDMETHOD.
 
     " Turtle library
     METHOD proc_turtle_new. "turtles
@@ -15337,13 +15337,13 @@
       ro_elem->data = ref.
     ENDMETHOD.                    "new_table
 
-*    METHOD query.
-*      TRY.
-*          ro_elem = NEW lcl_lisp_query( ).
-*        CATCH cx_sql_exception.
-*          ro_elem = lcl_lisp=>nil.
-*      ENDTRY.
-*    ENDMETHOD.
+    METHOD query.
+      TRY.
+          ro_elem = NEW lcl_lisp_query( ).
+        CATCH cx_sy_sql_error.
+          ro_elem = lcl_lisp=>nil.
+      ENDTRY.
+    ENDMETHOD.
 
     METHOD cons.
       ro_cons = NEW lcl_lisp_pair( io_car = io_car
@@ -15732,57 +15732,65 @@
 
   ENDCLASS.
 
-*  CLASS lcl_lisp_query IMPLEMENTATION.
-*
-*    METHOD constructor.
-*      super->constructor( ).
-*      type = type_abap_query.
-*      sql_query = osql.
+  CLASS lcl_lisp_query IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( abap_query ).
+      sql_query = osql.
+      mv_hold_cursor = abap_false.
+      RAISE EXCEPTION TYPE CX_SY_OPEN_SQL_ERROR
+        EXPORTING SQLMSG = osql.
 *      connection = cl_sql_connection=>get_connection( ).
 *      IF value IS INITIAL.
 *        statement = connection->create_statement( ).
 *      ELSE.
 *        statement = connection->prepare_statement( sql_query ).
 *      ENDIF.
-*      mv_hold_cursor = abap_false.
-*    ENDMETHOD.
-*
-*    METHOD execute.
-**     Development not completed yet
-*      DATA lo_set TYPE REF TO cl_sql_result_set.
-*      IF sql_query IS NOT INITIAL.
-**       prepared statement
-**       statement->set_param( dref1 ).
-*        lo_set = statement->execute_query( hold_cursor = mv_hold_cursor ).
-*      ELSEIF query IS NOT INITIAL.
-*        lo_set = statement->execute_query( statement = query
-*                                           hold_cursor = mv_hold_cursor ).
-**     ELSE ? which query to execute
-*      ENDIF.
-*      result = NEW lcl_lisp_sql_result( lo_set ).
-*    ENDMETHOD.
-*
-*  ENDCLASS.
-*
-*  CLASS lcl_lisp_sql_result IMPLEMENTATION.
-*
-*    METHOD constructor.
-*      super->constructor( ).
-*      type = type_abap_sql_set.
-*      result_set = io_result.
-*    ENDMETHOD.
-*
-*    METHOD clear.
-*      CHECK result_set IS BOUND.
-*      result_set->clear_parameters( ).
-*    ENDMETHOD.
-*
-*    METHOD close.
-*      CHECK result_set IS BOUND.
-*      result_set->close( ).
-*      CLEAR result_set.
-*    ENDMETHOD.
-*  ENDCLASS.
+    ENDMETHOD.
+
+    METHOD execute.
+*     Development not completed yet
+      "DATA lo_set TYPE REF TO cl_sql_result_set.
+
+      IF sql_query IS NOT INITIAL.
+*       prepared statement
+*       statement->set_param( dref1 ).
+        RAISE EXCEPTION TYPE CX_SY_SQL_ERROR
+          EXPORTING SQLMSG = sql_query.
+
+        "lo_set = statement->execute_query( hold_cursor = mv_hold_cursor ).
+      ELSEIF query IS NOT INITIAL.
+        RAISE EXCEPTION TYPE CX_SY_SQL_ERROR
+          EXPORTING SQLMSG = query.
+
+        "lo_set = statement->execute_query( statement = query
+        "                                   hold_cursor = mv_hold_cursor ).
+*     ELSE ? which query to execute
+      ENDIF.
+        RAISE EXCEPTION TYPE CX_SY_SQL_ERROR.
+      "result = NEW lcl_lisp_sql_result( lo_set ).
+    ENDMETHOD.
+
+  ENDCLASS.
+
+  CLASS lcl_lisp_sql_result IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( abap_sql_set ).
+      result_set = io_result.
+    ENDMETHOD.
+
+    METHOD clear.
+      CHECK result_set IS BOUND.
+      "result_set->clear_parameters( ).
+    ENDMETHOD.
+
+    METHOD close.
+      CHECK result_set IS BOUND.
+      "result_set->close( ).
+      CLEAR result_set.
+    ENDMETHOD.
+  ENDCLASS.
 
   CLASS lcl_lisp_turtle IMPLEMENTATION.
 
