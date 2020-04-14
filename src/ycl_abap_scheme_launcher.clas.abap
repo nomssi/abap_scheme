@@ -7,7 +7,8 @@ CLASS ycl_abap_scheme_launcher DEFINITION
     INTERFACES if_oo_adt_classrun.
   PROTECTED SECTION.
   PRIVATE SECTION.
-    METHODS repl IMPORTING out TYPE REF TO if_oo_adt_classrun_out.
+    METHODS repl IMPORTING code TYPE string
+                           out TYPE REF TO if_oo_adt_classrun_out.
     "lif_classrun_output
 ENDCLASS.
 
@@ -16,11 +17,16 @@ ENDCLASS.
 CLASS ycl_abap_scheme_launcher IMPLEMENTATION.
 
   METHOD if_oo_adt_classrun~main.
-     repl( out ).
+     repl( code = `(round 3.5)`
+           out = out ).
+     repl( code = `(list->vector '(dididit dah))`
+           out = out ).
+     repl( code = |(when (= 1 1.0)| &
+                         |(display "1")| &
+                         |(display "2"))|
+           out = out ).
   ENDMETHOD.
-
   METHOD repl.
-    DATA code TYPE string VALUE `(list->vector '(dididit dah))`.
     DATA response TYPE string.
     DATA output TYPE string.
     DATA port TYPE REF TO lcl_lisp_buffered_port.
@@ -49,7 +55,7 @@ CLASS ycl_abap_scheme_launcher IMPLEMENTATION.
         response = lx_root->get_text( ).
     ENDTRY.
 
-    out->write( |{  code }\n=> { response }\n| ).
+    out->write( |{ code }\n=> { response }\n| ).
   ENDMETHOD.
 
 ENDCLASS.

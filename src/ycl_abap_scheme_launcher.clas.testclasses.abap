@@ -2531,7 +2531,7 @@
      METHOD math_floor.
        "(floor x) - This returns the largest integer that is no larger than x.
        scheme( code =  '(floor 7.3890560989306504)'
-               expected = '7' ).
+               expected = '7.0' ).
      ENDMETHOD.                    "math_floor
 
      METHOD math_floor_new.
@@ -2549,13 +2549,13 @@
      METHOD math_ceiling.
        "(ceiling x) - This returns the smallest integer that is no smaller than x.
        scheme( code =  '(ceiling 1.4142135623730951)'
-               expected = '2' ).
+               expected = '2.0' ).
      ENDMETHOD.                    "math_ceiling
 
      METHOD math_truncate.
        "(truncate x) - returns the integer value closest to x that is no larger than the absolute value of x.
        scheme( code =  '(truncate -2.945)'
-               expected = '-2' ).
+               expected = '-2.0' ).
      ENDMETHOD.                    "math_truncate
 
      METHOD math_truncate_new.
@@ -2577,13 +2577,18 @@
 *   This rounds value of x to the nearest integer as is usual in mathematics.
 *   It even works when halfway between values.
        scheme( code =  '(round 7.389056)'
-               expected = '7' ).
+               expected = '7.0' ).
        scheme( code =  '(round 7.789056)'
-               expected = '8' ).
+               expected = '8.0' ).
        scheme( code =  '(round -7.789056)'
-               expected = '-8' ).
+               expected = '-8.0' ).
        scheme( code =  '(round 3.5)'
                expected = '4.0' ).   " inexact
+
+       scheme( code =  '(round 7/2)'
+               expected = '4' ).   " exact
+       scheme( code =  '(round 7)'
+               expected = '7' ).   " exact
      ENDMETHOD.                    "math_round
 
      METHOD math_remainder.
@@ -3749,7 +3754,8 @@ ENDCLASS.                    "ltc_list IMPLEMENTATION
 
      METHOD vector_ref_2.
        scheme( code = |(vector-ref '#(1 1 2 3 5 8 13 21)| &
-                         |    (round (* 2 (acos -1))) )|
+                         |   (exact| &
+                         |    (round (* 2 (acos -1))) ))|
                expected = '13' ).
      ENDMETHOD.                    "vector_ref_2
 

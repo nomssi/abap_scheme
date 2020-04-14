@@ -1877,7 +1877,11 @@
                           iv_input = iv_input
                           iv_output = iv_output
                           iv_error = iv_error ).
-      separator = iv_separator.
+      IF iv_separator EQ space.   " Special treatment for space,
+        separator = ` `.   " see https://blogs.sap.com/2016/08/10/trailing-blanks-in-character-string-processing/
+      ELSE.
+        separator = iv_separator.
+      ENDIF.
       string_mode = iv_string.
     ENDMETHOD.
 
@@ -1937,7 +1941,7 @@
       IF buffer IS INITIAL.
         buffer = text.
       ELSE.
-        buffer = |{ buffer }{ separator }{ text }|.
+        buffer &&= separator && text.
       ENDIF.
     ENDMETHOD.                    "add
 
@@ -2319,8 +2323,7 @@
                     environment   TYPE REF TO lcl_lisp_environment
           RETURNING VALUE(result) TYPE REF TO lcl_lisp
           RAISING   lcx_lisp_exception,
-* To enable a REPL, the following convenience method wraps parsing and evaluating
-* and stringifies the response/error
+* To enable a REPL, the following convenience method wraps parsing and evaluating and stringifies the response/error
         eval_source
           IMPORTING code            TYPE clike
           RETURNING VALUE(response) TYPE string,
@@ -3004,12 +3007,12 @@
     ENDMETHOD.
 
     METHOD peek_bytevector.
-      CONSTANTS c_prefix TYPE c LENGTH 3 VALUE 'u8('.
+      CONSTANTS c_bytevector_prefix TYPE c LENGTH 3 VALUE 'u8('.
       DATA lv_token TYPE string.
 
       DATA(lv_idx) = index.
       rv_flag = abap_false.
-      DO 3 TIMES.  " length( c_prefix ) = 3
+      DO 3 TIMES.  " length( c_bytevector_prefix ) = 3
         lv_idx += 1.
 
         IF lv_idx < length.
@@ -3019,7 +3022,7 @@
           RETURN.
         ENDIF.
       ENDDO.
-      CHECK lv_token EQ c_prefix.
+      CHECK lv_token EQ c_bytevector_prefix.
       rv_flag = abap_true.
     ENDMETHOD.
 
@@ -9679,7 +9682,8 @@
           IF list->cdr NE nil.
             list->raise( | Parameter mismatch| ).
           ENDIF.
-          result = lcl_lisp_new=>number( floor( carry ) ).
+          result = lcl_lisp_new=>number( value = floor( carry )
+                                         iv_exact = CAST lcl_lisp_number( cell )->exact ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
       ENDTRY.
@@ -9771,7 +9775,8 @@
           IF list->cdr NE nil.
             list->raise( | Parameter mismatch| ).
           ENDIF.
-          result = lcl_lisp_new=>number( ceil( carry ) ).
+          result = lcl_lisp_new=>number( value = ceil( carry )
+                                         iv_exact = CAST lcl_lisp_number( cell )->exact ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
       ENDTRY.
@@ -9811,7 +9816,8 @@
           IF list->cdr NE nil.
             list->raise( | Parameter mismatch| ).
           ENDIF.
-          result = lcl_lisp_new=>number( trunc( carry ) ).
+          result = lcl_lisp_new=>number( value = trunc( carry )
+                                         iv_exact = CAST lcl_lisp_number( cell )->exact ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
       ENDTRY.
@@ -9850,7 +9856,8 @@
       ENDIF.
 
       TRY.
-          result = lcl_lisp_new=>number( round( val = carry dec = 0 ) ).
+          result = lcl_lisp_new=>number( value = round( val = carry dec = 0 )
+                                         iv_exact = CAST lcl_lisp_number( cell )->exact ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
       ENDTRY.
@@ -10227,6 +10234,11 @@
 
             result = lcl_lisp_new=>rational( nummer = lv_nummer
                                              denom = lv_denom ).
+          WHEN integer.
+            result = lcl_lisp_new=>number( value = CAST lcl_lisp_integer( lo_number )->int
+                                           iv_exact = abap_true ).
+                           "RAISING   cx_sy_conversion_no_number.
+
           WHEN OTHERS.
             throw( |no exact representation of { lo_number->to_string( ) }| ).
         ENDCASE.
