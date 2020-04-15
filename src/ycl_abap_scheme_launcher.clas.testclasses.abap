@@ -97,11 +97,11 @@
    CLASS ltc_interpreter IMPLEMENTATION.
 
      METHOD new_interpreter.
-       mo_port ?= lcl_lisp_new=>port( iv_port_type = lcl_lisp_port=>c_port_textual
-                                     iv_input  = abap_false
-                                     iv_output = abap_true
-                                     iv_error  = abap_true
-                                     iv_buffered = abap_true ).
+       mo_port ?= lcl_lisp_new=>port( iv_port_type = textual
+                                      iv_input  = abap_false
+                                      iv_output = abap_true
+                                      iv_error  = abap_true
+                                      iv_buffered = abap_true ).
        mo_int = lcl_lisp_interpreter=>new( io_port = mo_port
                                            ii_log = mo_port ).
      ENDMETHOD.                    "new_interpreter
@@ -1154,12 +1154,12 @@
    CLASS ltc_string IMPLEMENTATION.
 
      METHOD setup.
-       mo_port ?= lcl_lisp_new=>port( iv_port_type = lcl_lisp_port=>c_port_textual
-                                     iv_input  = abap_false
-                                     iv_output = abap_true
-                                     iv_error  = abap_true
-                                     iv_string = abap_true
-                                     iv_buffered = abap_true ).
+       mo_port ?= lcl_lisp_new=>port( iv_port_type = textual
+                                      iv_input  = abap_false
+                                      iv_output = abap_true
+                                      iv_error  = abap_true
+                                      iv_string = abap_true
+                                      iv_buffered = abap_true ).
        mo_int = lcl_lisp_interpreter=>new( io_port = mo_port
                                            ii_log = mo_port ).
      ENDMETHOD.                    "setup

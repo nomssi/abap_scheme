@@ -26,6 +26,7 @@ CLASS ycl_abap_scheme_launcher IMPLEMENTATION.
                          |(display "2"))|
            out = out ).
   ENDMETHOD.
+
   METHOD repl.
     DATA response TYPE string.
     DATA output TYPE string.
@@ -35,11 +36,11 @@ CLASS ycl_abap_scheme_launcher IMPLEMENTATION.
      out->write( `Welcome to ABAP Scheme in the Cloud!` ).
      lcl_lisp_port=>go_out = out.
     TRY.
-        port ?= lcl_lisp_new=>port( iv_port_type = lcl_lisp_port=>c_port_textual
-                                   iv_input     = abap_true
-                                   iv_output    = abap_true
-                                   iv_error     = abap_true
-                                   iv_buffered  = abap_true ).
+        port ?= lcl_lisp_new=>port( iv_port_type = textual
+                                    iv_input     = abap_true
+                                    iv_output    = abap_true
+                                    iv_error     = abap_true
+                                    iv_buffered  = abap_true ).
 
         lo_int = NEW #( io_port = port  " LISP Interpreter
                         ii_log = port ).
