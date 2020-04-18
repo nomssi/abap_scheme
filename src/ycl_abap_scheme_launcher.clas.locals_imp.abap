@@ -245,6 +245,12 @@
       METHODS raise IMPORTING context TYPE string DEFAULT space
                               message TYPE string
                     RAISING   lcx_lisp_exception.
+
+      METHODS raise_NaN IMPORTING operation TYPE string
+                        RAISING   lcx_lisp_exception.
+
+      METHODS assert_last_param  RAISING lcx_lisp_exception.
+
       CLASS-METHODS throw IMPORTING message TYPE string
                           RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
@@ -3624,17 +3630,13 @@
     ENDMETHOD.                    "evaluate_parameters
 
     METHOD expand_apply.
-      "_validate io_list.
-      IF io_list IS NOT BOUND.
+      "_validate: io_list, io_list->cdr.
+      IF io_list IS NOT BOUND OR io_list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
       DATA(lo_proc) = io_list->car.     " proc
       DATA(lo_arg) = io_list->cdr.      " handle arg1 . . . rest-args
 
-      "_validate lo_arg.
-      IF lo_arg IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
 *     (apply proc arg1 . . . argn rest)
 *     Parameter io_list is list arg1 ... argn rest
 
@@ -5157,17 +5159,12 @@
       DATA lv_char TYPE tv_char.
       DATA li_port TYPE REF TO lif_input_port.
 
-      "_validate io_arg.
-      IF io_arg IS NOT BOUND.
+      "_validate: io_arg, io_arg->car.
+      IF io_arg IS NOT BOUND OR io_arg->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
       "_validate_integer io_arg->car `read-string`.
-      "_validate io_arg->car.
-      IF io_arg->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
-
       IF io_arg->car->type NE integer.  " fix
         io_arg->raise( ` is not an integer in read-string` ) ##NO_TEXT.
       ENDIF.
@@ -5284,7 +5281,8 @@
         "_validate_tail lo_arg first `append`.
         IF lo_arg NE nil.
 *         if the last element in the list is not a cons cell, we cannot append
-          throw( |append: { first->to_string( ) } is not a proper list| ) ##NO_TEXT.
+          first->raise( context = |append: |
+                        message = | is not a proper list| ) ##NO_TEXT.
         ENDIF.
 
         first = lo_arg = lo_iter->next( ).
@@ -5391,7 +5389,8 @@
         DATA(lo_last) = list->car.
         IF lo_last->type NE pair.
           "_error_no_list list `append!`.
-          throw( |append: { list->to_string( ) } is not a proper list| ) ##NO_TEXT.
+          list->raise( context = |append: |
+                       message = | is not a proper list| ) ##NO_TEXT.
         ENDIF.
 
         WHILE lo_last->cdr IS BOUND AND lo_last->cdr NE nil.
@@ -5402,7 +5401,8 @@
         IF lo_last->type NE pair.
 *         If the last item is not a cons cell, return an error
           "_error_no_list list->car  `append!`.
-          throw( |append: { list->car->to_string( ) } is not a proper list| ) ##NO_TEXT.
+          list->car->raise( context = |append: |
+                            message = | is not a proper list| ) ##NO_TEXT.
         ENDIF.
 
 *       Last item is a cons cell; tack on the new value
@@ -6689,15 +6689,12 @@
       DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
 
       "_validate list->cdr.
-      IF list->cdr IS NOT BOUND.
+      IF list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
       DATA(lo_idx) = list->cdr->car.
       "_validate_index lo_idx 'vector-ref'.
-      IF lo_idx IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF lo_idx->type NE integer.
         lo_idx->raise( ` is not an integer in vector-ref` ) ##NO_TEXT.
       ENDIF.
@@ -6723,16 +6720,13 @@
 
       DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
 
-      "_validate: list->cdr.
-      IF list->cdr IS NOT BOUND.
+      "_validate: list->cdr, list->cdr->car.
+      IF list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
       DATA(lo_idx) = list->cdr->car.
       "_validate_index lo_idx 'vector-set!'.
-      IF lo_idx IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF lo_idx->type NE integer.
         lo_idx->raise( ` is not an integer in vector-set!` ) ##NO_TEXT.
       ENDIF.
@@ -7219,7 +7213,7 @@
 
 *            WHEN complex.
           WHEN OTHERS.
-            cell->raise( | is not a number in [+]| ).
+            cell->raise_nan( |+| ).
         ENDCASE.
       ENDWHILE.
 
@@ -7346,7 +7340,7 @@
 
 *          WHEN complex.
           WHEN OTHERS.
-            cell->raise( | is not a number in [*]| ).
+            cell->raise_nan( |*| ).
         ENDCASE.
 
       ENDWHILE.
@@ -7476,7 +7470,7 @@
 
 *        WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [-]| ).
+          cell->raise_nan( |-| ).
       ENDCASE.
 
       IF iter->has_next( ) EQ abap_false.
@@ -7566,7 +7560,7 @@
 
 *            WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [-]| ).
+              cell->raise_nan( |-| ).
           ENDCASE.
 
         ENDWHILE.
@@ -7696,7 +7690,7 @@
 
 *        WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [/]| ).
+          cell->raise_nan( |/| ).
       ENDCASE.
 
       TRY.
@@ -7801,7 +7795,7 @@
 
 *                WHEN complex.
                 WHEN OTHERS.
-                  cell->raise( | is not a number in [/]| ).
+                  cell->raise_nan( |/| ).
               ENDCASE.
 
             ENDWHILE.
@@ -7868,7 +7862,7 @@
 *      WHEN complex.
 
         WHEN OTHERS.
-          cell->raise( | is not a number in [>]| ).
+          cell->raise_nan( |>| ).
       ENDCASE.
 
       cell = list->cdr.
@@ -7911,7 +7905,7 @@
 
 *               WHEN complex.
           WHEN OTHERS.
-            cell->car->raise( | is not a number in [>]| ).
+            cell->car->raise_nan( |>| ).
         ENDCASE.
         cell = cell->cdr.
       ENDWHILE.
@@ -7956,7 +7950,7 @@
 *      WHEN complex.
 
         WHEN OTHERS.
-          cell->raise( | is not a number in [>=]| ).
+          cell->raise_nan( |>=| ).
       ENDCASE.
 
       cell = list->cdr.
@@ -7999,7 +7993,7 @@
 
 *               WHEN complex.
           WHEN OTHERS.
-            cell->car->raise( | is not a number in [>=]| ).
+            cell->car->raise_nan( |>=| ).
         ENDCASE.
         cell = cell->cdr.
       ENDWHILE.
@@ -8043,7 +8037,7 @@
 *      WHEN complex.
 
         WHEN OTHERS.
-          cell->raise( | is not a number in [<]| ).
+          cell->raise_nan( |<| ).
       ENDCASE.
 
       cell = list->cdr.
@@ -8086,7 +8080,7 @@
 
 *               WHEN complex.
           WHEN OTHERS.
-            cell->car->raise( | is not a number in [<]| ).
+            cell->car->raise_nan( |<| ).
         ENDCASE.
         cell = cell->cdr.
       ENDWHILE.
@@ -8130,7 +8124,7 @@
 *      WHEN complex.
 
         WHEN OTHERS.
-          cell->raise( | is not a number in [<=]| ).
+          cell->raise_nan( |<=| ).
       ENDCASE.
 
       cell = list->cdr.
@@ -8173,7 +8167,7 @@
 
 *               WHEN complex.
           WHEN OTHERS.
-            cell->car->raise( | is not a number in [<=]| ).
+            cell->car->raise_nan( |<=| ).
         ENDCASE.
         cell = cell->cdr.
       ENDWHILE.
@@ -8207,7 +8201,7 @@
           carry = lo_rat->int / lo_rat->denominator.
 *      WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [zero?]| ).
+          cell->raise_nan( |zero?| ).
       ENDCASE.
 
       IF sign( carry ) NE 0.
@@ -8242,7 +8236,7 @@
           carry = lo_rat->int / lo_rat->denominator.
 *      WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [positive?]| ).
+          cell->raise_nan( |positive?| ).
       ENDCASE.
 
       IF sign( carry ) NE 1.
@@ -8277,7 +8271,7 @@
           carry = lo_rat->int / lo_rat->denominator.
 *      WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [negative?]| ).
+          cell->raise_nan( |negative?| ).
       ENDCASE.
 
       IF sign( carry ) NE -1.
@@ -8350,7 +8344,7 @@
             OR rational
             OR complex.
           WHEN OTHERS.
-            lo_ptr->car->raise( | is not a number in [=]| ) ##NO_TEXT.
+            lo_ptr->car->raise_nan( |=| ) ##NO_TEXT.
         ENDCASE.
         "_validate_number lo_ptr->cdr->car '[=]'.
         IF lo_ptr->cdr->car IS NOT BOUND.
@@ -8362,7 +8356,7 @@
             OR rational
             OR complex.
           WHEN OTHERS.
-            lo_ptr->cdr->car->raise( | is not a number in [=]| ) ##NO_TEXT.
+            lo_ptr->cdr->car->raise_nan( |=| ) ##NO_TEXT.
         ENDCASE.
 
         CASE lo_ptr->car->type.
@@ -8725,7 +8719,6 @@
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
 *     (exact-integer? z) procedure
 *     Returns #t if z is both exact and an integer; otherwise returns #f.
       result = false.
@@ -8734,8 +8727,7 @@
         WHEN integer.
           result = true.
         WHEN rational.
-          lo_rat ?= list->car.
-          CHECK lo_rat->denominator EQ 1.
+          CHECK CAST lcl_lisp_rational( list->car )->denominator EQ 1.
           result = true.
       ENDCASE.
     ENDMETHOD.
@@ -8747,9 +8739,6 @@
       ENDIF.
 
 *     If x is an inexact real number, then (integer? x) is true if and only if (= x (round x)).
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
-      DATA lv_real TYPE tv_real.
 
       result = false.
       CHECK list->car IS BOUND.
@@ -8757,11 +8746,10 @@
         WHEN integer.
           result = true.
         WHEN rational.
-          lo_rat ?= list->car.
-          CHECK lo_rat->denominator EQ 1.
+          CHECK CAST lcl_lisp_rational( list->car )->denominator EQ 1.
           result = true.
         WHEN real.
-          lv_real = CAST lcl_lisp_real( list->car )->float.
+          DATA(lv_real) = CAST lcl_lisp_real( list->car )->float.
           CHECK trunc( lv_real ) EQ lv_real.
           result = true.
       ENDCASE.
@@ -8777,7 +8765,6 @@
       IF list->car->type EQ symbol.
         result = true.
       ENDIF.
-
     ENDMETHOD.
 
     METHOD proc_is_pair. " argument in list->car
@@ -8925,10 +8912,7 @@
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-      "_is_last_param list.
-      IF list->cdr NE nil.
-        list->raise( | Parameter mismatch| ).
-      ENDIF.
+      list->assert_last_param( ).
 
       TRY.
           "_validate list->car.
@@ -8949,7 +8933,7 @@
                                                denom = lo_rat->denominator ).
 *            WHEN complex.
             WHEN OTHERS.
-              list->car->raise( | is not a number in [abs]| ).
+              list->car->raise_nan( |abs| ).
           ENDCASE.
 
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -8984,12 +8968,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [sin]| ).
+              cell->raise_nan( |sin| ).
           ENDCASE.
 
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
           result = lcl_lisp_new=>real( value = sin( carry )
                                        exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9024,12 +9006,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [cos]| ).
+              cell->raise_nan( |cos| ).
           ENDCASE.
 
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
           result = lcl_lisp_new=>real( value = cos( carry )
                                        exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9064,12 +9044,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [tan]| ).
+              cell->raise_nan( |tan| ).
           ENDCASE.
 
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
           result = lcl_lisp_new=>real( value = tan( carry )
                                        exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9104,12 +9082,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [asin]| ).
+              cell->raise_nan( |asin| ).
           ENDCASE.
 
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
           result = lcl_lisp_new=>real( value = asin( carry )
                                        exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9144,12 +9120,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [acos]| ).
+              cell->raise_nan( |acos| ).
           ENDCASE.
 
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
           result = lcl_lisp_new=>real( value = acos( carry )
                                        exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9184,12 +9158,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [atan]| ).
+              cell->raise_nan( |atan| ).
           ENDCASE.
 
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
           result = lcl_lisp_new=>real( value = atan( carry )
                                        exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9224,12 +9196,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [sinh]| ).
+              cell->raise_nan( |sinh| ).
           ENDCASE.
 
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
           result = lcl_lisp_new=>real( value = sinh( carry )
                                        exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9264,12 +9234,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [cosh]| ).
+              cell->raise_nan( |cosh| ).
           ENDCASE.
 
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
           result = lcl_lisp_new=>real( value = cosh( carry )
                                        exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9304,12 +9272,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [tanh]| ).
+              cell->raise_nan( |tanh| ).
           ENDCASE.
 
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
           result = lcl_lisp_new=>real( value = tanh( carry )
                                        exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9344,13 +9310,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *              WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [asinh]| ).
+              cell->raise_nan( |asinh| ).
           ENDCASE.
 
-          "_is_last_param list.
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
           result = lcl_lisp_new=>real( value = log( carry + sqrt( carry ** 2 + 1 ) )
                                        exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9384,12 +9347,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *              WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [acosh]| ).
+              cell->raise_nan( |acosh| ).
           ENDCASE.
-          "_is_last_param list.
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
+
           result = lcl_lisp_new=>real( value = log( carry + sqrt( carry ** 2 - 1 ) )
                                        exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9423,12 +9384,9 @@
               carry = lo_rat->int / lo_rat->denominator.
 *              WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [atanh]| ).
+              cell->raise_nan( |atanh| ).
           ENDCASE.
-          "_is_last_param list.
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
 
           result = lcl_lisp_new=>real( value = ( log( 1 + carry ) - log( 1 - carry ) ) / 2
                                        exact = abap_false ).
@@ -9450,10 +9408,7 @@
       IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-      "_is_last_param list->cdr.
-      IF list->cdr->cdr NE nil.
-        list->cdr->raise( | Parameter mismatch| ).
-      ENDIF.
+      list->cdr->assert_last_param( ).
 
       "_get_number base1 list->car '[expt]'.
       IF list->car IS NOT BOUND.
@@ -9470,7 +9425,7 @@
           base1 = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [expt]| ).
+          cell->raise_nan( |expt| ).
       ENDCASE.
       TRY.
 *          _get_number exp1 list->cdr->car '[expt]'.
@@ -9493,7 +9448,7 @@
               result = lcl_lisp_new=>number( base1 ** exp1 ).
 *            WHEN complex.
             WHEN OTHERS.
-              cell->raise(  | is not a number in [expt]| ).
+              cell->raise_nan( |expt| ).
           ENDCASE.
 
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9528,11 +9483,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [exp]| ).
+              cell->raise_nan( |exp| ).
           ENDCASE.
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
+
           result = lcl_lisp_new=>number( value = exp( carry ) ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
@@ -9566,11 +9520,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [log]| ).
+              cell->raise_nan( |log| ).
           ENDCASE.
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
+
           result = lcl_lisp_new=>number( log( carry ) ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
@@ -9604,11 +9557,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [sqrt]| ).
+              cell->raise_nan( |sqrt| ).
           ENDCASE.
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
+
           result = lcl_lisp_new=>number( sqrt( carry ) ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
@@ -9642,11 +9594,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [square]| ).
+              cell->raise_nan( |square| ).
           ENDCASE.
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
+
           result = lcl_lisp_new=>number( value = carry * carry
                                          iv_exact = CAST lcl_lisp_number( cell )->exact ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9681,11 +9632,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [floor]| ).
+              cell->raise_nan( |floor| ).
           ENDCASE.
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
+
           result = lcl_lisp_new=>number( value = floor( carry )
                                          iv_exact = CAST lcl_lisp_number( cell )->exact ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9717,7 +9667,7 @@
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [floor/]| ).
+              cell->raise_nan( |floor/| ).
           ENDCASE.
 
           "_get_number carry list->cdr->car &2.
@@ -9732,12 +9682,9 @@
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [floor/]| ).
+              cell->raise_nan( |floor/| ).
           ENDCASE.
-
-          IF list->cdr->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->cdr->assert_last_param( ).
 
           throw( `floor/ not implemented yet` ).
 
@@ -9774,11 +9721,10 @@
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [ceil]| ).
+              cell->raise_nan( |ceil| ).
           ENDCASE.
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
+
           result = lcl_lisp_new=>number( value = ceil( carry )
                                          iv_exact = CAST lcl_lisp_number( cell )->exact ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9813,13 +9759,11 @@
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [truncate]| ).
+              cell->raise_nan( |truncate| ).
           ENDCASE.
 
-          "_is_last_param list.
-          IF list->cdr NE nil.
-            list->raise( | Parameter mismatch| ).
-          ENDIF.
+          list->assert_last_param( ).
+
           result = lcl_lisp_new=>number( value = trunc( carry )
                                          iv_exact = CAST lcl_lisp_number( cell )->exact ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9852,12 +9796,9 @@
           carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [round]| ).
+          cell->raise_nan( |round| ).
       ENDCASE.
-      "_is_last_param list.
-      IF list->cdr NE nil.
-        list->raise( | Parameter mismatch| ).
-      ENDIF.
+      list->assert_last_param( ).
 
       TRY.
           result = lcl_lisp_new=>number( value = round( val = carry dec = 0 )
@@ -9878,10 +9819,7 @@
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-      "_is_last_param list.
-      IF list->cdr NE nil.
-        list->raise( | Parameter mismatch| ).
-      ENDIF.
+      list->assert_last_param( ).
 
       cell = list->car.
       CASE cell->type.
@@ -9902,7 +9840,7 @@
           result = lcl_lisp_new=>integer( lo_rat->int ).
 *        WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [numerator]| ).
+          cell->raise_nan( |numerator| ).
       ENDCASE.
     ENDMETHOD.
 
@@ -9917,10 +9855,7 @@
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-      "_is_last_param list.
-      IF list->cdr NE nil.
-        list->raise( | Parameter mismatch| ).
-      ENDIF.
+      list->assert_last_param( ).
 
       cell = list->car.
       CASE cell->type.
@@ -9947,7 +9882,7 @@
           result = lcl_lisp_new=>integer( lo_rat->denominator ).
 *        WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [denominator]| ).
+          cell->raise_nan( |denominator| ).
       ENDCASE.
     ENDMETHOD.
 
@@ -9977,7 +9912,7 @@
           numerator = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [remainder]| ).
+          cell->raise_nan( |remainder| ).
       ENDCASE.
       "_get_number denominator list->cdr->car '[remainder]'.
       IF list->cdr->car IS NOT BOUND.
@@ -9994,13 +9929,10 @@
           denominator = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [remainder]| ).
+          cell->raise_nan( |remainder| ).
       ENDCASE.
 
-      "_is_last_param list->cdr.
-      IF list->cdr->cdr NE nil.
-        throw( |{ list->cdr->to_string( ) } Parameter mismatch| ).
-      ENDIF.
+      list->cdr->assert_last_param( ).
 
       TRY.
           result = lcl_lisp_new=>number( numerator - denominator * trunc( numerator / denominator ) ).
@@ -10035,7 +9967,7 @@
           numerator = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [quotient]| ).
+          cell->raise_nan( |quotient| ).
       ENDCASE.
 
       "_get_number denominator list->cdr->car '[quotient]'.
@@ -10053,13 +9985,9 @@
           denominator = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [quotient]| ).
+          cell->raise_nan( |quotient| ).
       ENDCASE.
-
-      "_is_last_param list->cdr.
-      IF list->cdr->cdr NE nil.
-        list->cdr->raise( | Parameter mismatch| ).
-      ENDIF.
+      list->cdr->assert_last_param( ).
 
       TRY.
           result = lcl_lisp_new=>number( trunc( numerator / denominator ) ).
@@ -10095,7 +10023,7 @@
           numerator = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [modulo]| ).
+          cell->raise_nan( |modulo| ).
       ENDCASE.
 
       "_get_number base list->cdr->car '[modulo]'.
@@ -10113,13 +10041,9 @@
           base = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [modulo]| ).
+          cell->raise_nan( |modulo| ).
       ENDCASE.
-
-      "_is_last_param list->cdr.
-      IF list->cdr->cdr NE nil.
-        throw( |{ list->cdr->to_string( ) } Parameter mismatch| ).
-      ENDIF.
+      list->cdr->assert_last_param( ).
 
       TRY.
           mod = numerator MOD base.
@@ -10145,11 +10069,8 @@
       IF list->car->type NE integer.
         list->car->raise( ` is not an integer in [random]` ) ##NO_TEXT.
       ENDIF.
+      list->assert_last_param( ).
 
-      "_is_last_param list.
-      IF list->cdr NE nil.
-        list->raise( | Parameter mismatch| ).
-      ENDIF.
       TRY.
           DATA(lo_rnd) = cl_abap_random=>create( cl_abap_random=>seed( ) ).
           lv_high = CAST lcl_lisp_integer( list->car )->int.
@@ -10173,7 +10094,7 @@
           OR rational
           OR complex.
         WHEN OTHERS.
-          throw( |{ list->car->to_string( ) } is not a number in exact?| ) ##NO_TEXT.
+          list->car->raise_nan( |exact?| ) ##NO_TEXT.
       ENDCASE.
 
       lo_number ?= list->car.
@@ -10194,7 +10115,7 @@
           OR rational
           OR complex.
         WHEN OTHERS.
-          throw( |{ list->car->to_string( ) } is not a number in inexact?| ) ##NO_TEXT.
+          list->car->raise_nan( |inexact?| ) ##NO_TEXT.
       ENDCASE.
       lo_number ?= list->car.
       result = lo_number->is_inexact( ).
@@ -10218,7 +10139,7 @@
           OR rational
           OR complex.
         WHEN OTHERS.
-          throw( |{ list->car->to_string( ) } is not a number in exact| ) ##NO_TEXT.
+          list->car->raise_nan( |exact| ) ##NO_TEXT.
       ENDCASE.
 
       lo_number ?= list->car.
@@ -10267,7 +10188,7 @@
           OR rational
           OR complex.
         WHEN OTHERS.
-          throw( |{ list->car->to_string( ) } is not a number in inexact| ) ##NO_TEXT.
+          list->car->raise_nan( |inexact| ) ##NO_TEXT.
       ENDCASE.
 
       lo_number ?= list->car.
@@ -10350,7 +10271,7 @@
           result = lcl_lisp_new=>string( lv_text ).
 
         WHEN OTHERS.
-          list->car->raise( | is not a number in number->string| ) ##NO_TEXT.
+          list->car->raise_nan( |number->string| ) ##NO_TEXT.
       ENDCASE.
       IF lv_radix_error EQ abap_true.
         throw( |{ list->car->to_string( ) } radix { lv_radix } not supported in number->string| ) ##NO_TEXT.
@@ -10537,7 +10458,7 @@
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
       IF lo_ptr NE nil.
-        throw( |{ lo_ptr->to_string( ) } is not a list of char | ).
+        lo_ptr->raise( | is not a list of char | ).
       ENDIF.
 
       result = lcl_lisp_new=>string( lv_text ).
@@ -10808,7 +10729,7 @@
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
       IF lo_ptr NE nil.
-        throw( |{ lo_ptr->to_string( ) } is not a list of char| ).
+        lo_ptr->raise( | is not a list of char| ).
       ENDIF.
       result = lcl_lisp_new=>string( lv_text ).
     ENDMETHOD.
@@ -10823,7 +10744,7 @@
         result = lcl_lisp_new=>string( value = list->car->value
                                        iv_mutable = abap_false ).
       ELSE.
-        throw( |{ list->car->to_string( ) } is not a symbol| ).
+        list->car->raise( | is not a symbol| ).
       ENDIF.
     ENDMETHOD.
 
@@ -10836,7 +10757,7 @@
       IF list->car->type = string.
         result = lcl_lisp_new=>symbol( list->car->value ).
       ELSE.
-        throw( |{ list->car->to_string( ) } is not a string| ).
+        list->car->raise( | is not a string| ).
       ENDIF.
     ENDMETHOD.
 
@@ -10854,7 +10775,7 @@
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
       IF lo_ptr NE nil.
-        throw( |{ lo_ptr->car->to_string( ) } is not a string| ).
+        lo_ptr->car->raise( | is not a string| ).
       ENDIF.
       result = lcl_lisp_new=>string( lv_text ).
     ENDMETHOD.
@@ -10886,7 +10807,7 @@
           lv_max = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [max]| ).
+          cell->raise_nan( |max| ).
       ENDCASE.
 
       lo_ptr = list->cdr.
@@ -10906,7 +10827,7 @@
             carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
           WHEN OTHERS.
-            cell->raise( | is not a number in [max]| ).
+            cell->raise_nan( |max| ).
         ENDCASE.
 
         lv_max = nmax( val1 = carry val2 = lv_max ).
@@ -10941,7 +10862,7 @@
           lv_min = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
-          cell->raise( | is not a number in [min]| ).
+          cell->raise_nan( |min| ).
       ENDCASE.
 
       lo_ptr = list->cdr.
@@ -10961,7 +10882,7 @@
             carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
           WHEN OTHERS.
-            cell->raise( | is not a number in [min]| ).
+            cell->raise_nan( |min| ).
         ENDCASE.
 
         lv_min = nmin( val1 = carry val2 = lv_min ).
@@ -11002,7 +10923,7 @@
             lv_gcd = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
           WHEN OTHERS.
-            cell->raise( | is not a number in [gcd]| ).
+            cell->raise_nan( |gcd| ).
         ENDCASE.
 
 
@@ -11023,7 +10944,7 @@
               carry = lo_rat->int / lo_rat->denominator.
 *              WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [gcd]| ).
+              cell->raise_nan( |gcd| ).
           ENDCASE.
 
           lv_gcd = lcl_lisp_rational=>gcd( n = carry d = lv_gcd ).
@@ -11066,7 +10987,7 @@
             lv_lcm = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
           WHEN OTHERS.
-            cell->raise( | is not a number in [lcm]| ).
+            cell->raise_nan( |lcm| ).
         ENDCASE.
 
         lo_ptr = list->cdr.
@@ -11086,7 +11007,7 @@
               carry = lo_rat->int / lo_rat->denominator.
 *              WHEN complex.
             WHEN OTHERS.
-              cell->raise( | is not a number in [lcm]| ).
+              cell->raise_nan( |lcm| ).
           ENDCASE.
 
           lv_lcm = lv_lcm * carry / lcl_lisp_rational=>gcd( n = carry d = lv_lcm ).
@@ -11355,7 +11276,7 @@
 
         lo_converter = lo_ptr->car.
         IF NOT lo_converter->is_procedure( ).
-          throw( |{ lo_converter->to_string( ) } is not a procedure in make-parameter| ).
+          lo_converter->raise( | is not a procedure in make-parameter| ).
         ENDIF.
 
         lo_value = eval( element = lcl_lisp_new=>box( io_proc = lo_converter
@@ -13442,7 +13363,7 @@
           OR rational
           OR complex.
         WHEN OTHERS.
-          list->car->raise( | is not a number in [turtles turn]| ) ##NO_TEXT.
+          list->car->raise_nan( |turtles turn| ) ##NO_TEXT.
       ENDCASE.
 
       DATA lo_theta TYPE REF TO lcl_lisp_real.
@@ -13484,7 +13405,7 @@
           OR rational
           OR complex.
         WHEN OTHERS.
-          list->car->raise( | is not a number in [turn/radians theta]| ) ##NO_TEXT.
+          list->car->raise_nan( |turn/radians theta| ) ##NO_TEXT.
       ENDCASE.
 
       DATA lo_theta TYPE REF TO lcl_lisp_real.
@@ -14839,6 +14760,15 @@
 
     METHOD raise.
       throw( context && to_string( ) && message ).
+    ENDMETHOD.
+
+    METHOD raise_NaN.
+      throw( to_string( ) && | is not a number in [{ operation }]| ).
+    ENDMETHOD.
+
+    METHOD assert_last_param.
+      CHECK cdr NE nil.
+      throw( to_string( ) && | Parameter mismatch| ).
     ENDMETHOD.
 
     METHOD error_not_a_pair.
