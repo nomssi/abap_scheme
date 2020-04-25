@@ -160,6 +160,16 @@
            abap_turtle   VALUE 't',
          END OF ENUM tv_type.
 
+      TYPES: BEGIN OF ts_result,
+                  type TYPE tv_type,
+                  int TYPE tv_int,
+                  real TYPE tv_real,
+                  nummer TYPE tv_int,
+                  denom TYPE tv_int,
+                  exact TYPE abap_boolean,
+                  operation TYPE string,
+             END OF ts_result.
+
   CLASS lcl_lisp_iterator DEFINITION DEFERRED.
   CLASS lcl_lisp_new DEFINITION DEFERRED.
   CLASS lcl_lisp_interpreter DEFINITION DEFERRED.
@@ -1645,6 +1655,10 @@
                                      iv_exact       TYPE abap_boolean OPTIONAL
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                            RAISING   cx_sy_conversion_no_number.
+
+      CLASS-METHODS numeric IMPORTING record TYPE ts_result
+                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
+                            RAISING   lcx_lisp_exception.
 
       CLASS-METHODS binary_integer IMPORTING value         TYPE csequence
                                    RETURNING VALUE(rv_int) TYPE tv_int
@@ -7099,101 +7113,91 @@
 
 **********************************************************************
     METHOD proc_add.
-      DATA lv_type TYPE tv_type.
-      DATA res_int TYPE tv_int.
-      DATA res_real TYPE tv_real.
-      DATA res_nummer TYPE tv_int.
-      DATA res_denom TYPE tv_int VALUE 1.
-      DATA lv_gcd TYPE tv_int.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA res_exact TYPE abap_boolean VALUE abap_false.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
-
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
       DATA(iter) = list->new_iterator( ).
-
-      lv_type = integer.
+      DATA(res) = VALUE ts_result( type = integer
+                                   denom = 1
+                                   exact = abap_false
+                                   operation = '+' ).
       WHILE iter->has_next( ).
-        cell = iter->next( ).
+        DATA(cell) = iter->next( ).
         "_cell_arith + `[+]`.
         CASE cell->type.
           WHEN integer.
-            lo_int ?= cell.
+            DATA(lo_int) = CAST lcl_lisp_integer( cell ).
 
-            CASE lv_type.
+            CASE res-type.
               WHEN real.
-                res_real += lo_int->int.
+                res-real += lo_int->int.
 
               WHEN rational.
-                res_nummer += lo_int->int * res_denom.
-                lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
-                                                  d = res_denom ).
-                res_nummer = res_nummer DIV lv_gcd.
-                res_denom = res_denom DIV lv_gcd.
+                res-nummer += lo_int->int * res-denom.
+                DATA(lv_gcd) = lcl_lisp_rational=>gcd(  n = res-nummer
+                                                        d = res-denom ).
+                res-nummer = res-nummer DIV lv_gcd.
+                res-denom = res-denom DIV lv_gcd.
 
               WHEN integer.
-                res_int += lo_int->int.
+                res-int += lo_int->int.
 
               WHEN OTHERS.
-                lv_type = integer.
-                res_int = lo_int->int.
+                res-type = integer.
+                res-int = lo_int->int.
             ENDCASE.
 
           WHEN real.
-            lo_real ?= cell.
+            DATA(lo_real) = CAST lcl_lisp_real( cell ).
 
-            CASE lv_type.
+            CASE res-type.
               WHEN real.
-                res_real += lo_real->float.
+                res-real += lo_real->float.
 
               WHEN rational.
-                res_real = res_nummer / res_denom + lo_real->float.
-                lv_type = real.
+                res-real = res-nummer / res-denom + lo_real->float.
+                res-type = real.
 
               WHEN integer.
-                res_real = res_int + lo_real->float.
-                lv_type = real.
+                res-real = res-int + lo_real->float.
+                res-type = real.
 
               WHEN OTHERS.
-                lv_type = real.
-                res_real = lo_real->float.
+                res-type = real.
+                res-real = lo_real->float.
             ENDCASE.
 
           WHEN rational.
-            lo_rat ?= cell.
+            DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
 
-            CASE lv_type.
+            CASE res-type.
               WHEN real.
-                res_real += lo_rat->int / lo_rat->denominator.
-                lv_type = real.
+                res-real += lo_rat->int / lo_rat->denominator.
+                res-type = real.
 
               WHEN rational.
-                res_nummer = res_nummer * lo_rat->denominator + ( lo_rat->int * res_denom ).
-                res_denom *= lo_rat->denominator.
-                lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
-                                                  d = res_denom ).
-                res_nummer = res_nummer DIV lv_gcd.
-                res_denom = res_denom DIV lv_gcd.
+                res-nummer = res-nummer * lo_rat->denominator + ( lo_rat->int * res-denom ).
+                res-denom *= lo_rat->denominator.
+                lv_gcd = lcl_lisp_rational=>gcd(  n = res-nummer
+                                                  d = res-denom ).
+                res-nummer = res-nummer DIV lv_gcd.
+                res-denom = res-denom DIV lv_gcd.
 
 
               WHEN integer.
-                res_nummer = ( res_int * lo_rat->denominator ) + lo_rat->int.
-                res_denom = lo_rat->denominator.
+                res-nummer = ( res-int * lo_rat->denominator ) + lo_rat->int.
+                res-denom = lo_rat->denominator.
 
-                lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
-                                                  d = res_denom ).
-                res_nummer = res_nummer DIV lv_gcd.
-                res_denom = res_denom DIV lv_gcd.
-                lv_type = rational.
+                lv_gcd = lcl_lisp_rational=>gcd(  n = res-nummer
+                                                  d = res-denom ).
+                res-nummer = res-nummer DIV lv_gcd.
+                res-denom = res-denom DIV lv_gcd.
+                res-type = rational.
 
               WHEN OTHERS.
-                lv_type = rational.
-                res_nummer = lo_rat->int.
-                res_denom = lo_rat->denominator.
+                res-type = rational.
+                res-nummer = lo_rat->int.
+                res-denom = lo_rat->denominator.
             ENDCASE.
 
 *            WHEN complex.
@@ -7203,39 +7207,11 @@
       ENDWHILE.
 
       "_result_arith `[+]`.
-      CASE lv_type.
-        WHEN integer.
-          result = lcl_lisp_new=>integer( res_int ).
-
-        WHEN rational.
-          IF res_denom EQ 1.
-            result = lcl_lisp_new=>integer( res_nummer ).
-          ELSE.
-            result = lcl_lisp_new=>rational( nummer = res_nummer
-                                             denom = res_denom ).
-          ENDIF.
-
-        WHEN real.
-          result = lcl_lisp_new=>real( value = res_real
-                                       exact = res_exact ).
-
-        WHEN OTHERS.
-          throw( |Error in result of [+]| ).
-      ENDCASE.
+      result = lcl_lisp_new=>numeric( res ).
     ENDMETHOD.                    "proc_add
 
     METHOD proc_multiply.
-      DATA lv_type TYPE tv_type.
-      DATA res_int TYPE tv_int.
-      DATA res_real TYPE tv_real.
-      DATA res_nummer TYPE tv_int.
-      DATA res_denom TYPE tv_int VALUE 1.
       DATA lv_gcd TYPE tv_int.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA res_exact TYPE abap_boolean VALUE abap_false.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       "_validate list.
       IF list IS NOT BOUND.
@@ -7243,84 +7219,88 @@
       ENDIF.
       DATA(iter) = list->new_iterator( ).
 
-      res_int = 1.
-      lv_type = integer.
+      DATA(res) = VALUE ts_result( type = integer
+                                   int = 1
+                                   denom = 1
+                                   exact = abap_false
+                                   operation = '*' ).
+
       WHILE iter->has_next( ).
-        cell = iter->next( ).
+        DATA(cell) = iter->next( ).
 
         CASE cell->type.
           WHEN integer.
-            lo_int ?= cell.
+            DATA(lo_int) = CAST lcl_lisp_integer( cell ).
 
-            CASE lv_type.
+            CASE res-type.
               WHEN real.
-                res_real *= lo_int->int.
+                res-real *= lo_int->int.
 
               WHEN rational.
-                res_nummer *= lo_int->int.
-                lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
-                                                  d = res_denom ).
-                res_nummer = res_nummer DIV lv_gcd.
-                res_denom = res_denom DIV lv_gcd.
+                res-nummer *= lo_int->int.
+                lv_gcd = lcl_lisp_rational=>gcd(  n = res-nummer
+                                                  d = res-denom ).
+                res-nummer = res-nummer DIV lv_gcd.
+                res-denom = res-denom DIV lv_gcd.
 
               WHEN integer.
-                res_int *= lo_int->int.
+                res-int *= lo_int->int.
 
               WHEN OTHERS.
-                lv_type = integer.
-                res_int = lo_int->int.
+                res-type = integer.
+                res-int = lo_int->int.
             ENDCASE.
 
           WHEN real.
-            lo_real ?= cell.
+            DATA(lo_real) = CAST lcl_lisp_real( cell ).
 
-            CASE lv_type.
+            CASE res-type.
               WHEN real.
-                res_real *= lo_real->float.
+                res-real *= lo_real->float.
 
               WHEN rational.
-                res_real = res_nummer / res_denom * lo_real->float.
-                lv_type = real.
+                res-real = res-nummer / res-denom * lo_real->float.
+                res-type = real.
 
               WHEN integer.
-                res_real = res_int * lo_real->float.
-                lv_type = real.
+                res-real = res-int * lo_real->float.
+                res-type = real.
 
               WHEN OTHERS.
-                lv_type = real.
-                res_real = lo_real->float.
+                res-type = real.
+                res-real = lo_real->float.
             ENDCASE.
 
           WHEN rational.
-            lo_rat ?= cell.
+            DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
 
-            CASE lv_type.
+            CASE res-type.
               WHEN real.
-                res_real = res_real * lo_rat->int / lo_rat->denominator.
-                lv_type = real.
+                res-real = res-real * lo_rat->int / lo_rat->denominator.
+                res-type = real.
 
               WHEN rational.
-                res_nummer *= lo_rat->int.
-                res_denom = res_denom * lo_rat->denominator.
-                lv_gcd = lcl_lisp_rational=>gcd( n = res_nummer
-                                                 d = res_denom ).
-                res_nummer = res_nummer DIV lv_gcd.
-                res_denom = res_denom DIV lv_gcd.
+                res-nummer *= lo_rat->int.
+                res-denom = res-denom * lo_rat->denominator.
+                lv_gcd = lcl_lisp_rational=>gcd( n = res-nummer
+                                                 d = res-denom ).
+                res-nummer = res-nummer DIV lv_gcd.
+                res-denom = res-denom DIV lv_gcd.
 
               WHEN integer.
-                res_nummer = res_int * lo_rat->int.
-                res_denom = lo_rat->denominator.
+                res-nummer = res-int * lo_rat->int.
+                res-denom = lo_rat->denominator.
 
-                lv_gcd = lcl_lisp_rational=>gcd( n = res_nummer
-                                                 d = res_denom ).
-                res_nummer = res_nummer DIV lv_gcd.
-                res_denom = res_denom DIV lv_gcd.
-                lv_type = rational.
+                lv_gcd = lcl_lisp_rational=>gcd( n = res-nummer
+                                                 d = res-denom ).
+                res-nummer = res-nummer DIV lv_gcd.
+                res-denom = res-denom DIV lv_gcd.
+                res-type = rational.
 
               WHEN OTHERS.
-                lv_type = rational.
-                res_nummer = lo_rat->int.
-                res_denom = lo_rat->denominator.
+                res-type = rational.
+                res-nummer = lo_rat->int.
+                res-denom = lo_rat->denominator.
             ENDCASE.
 
 *          WHEN complex.
@@ -7331,36 +7311,11 @@
       ENDWHILE.
 
       "_result_arith `[*]`.
-      CASE lv_type.
-        WHEN integer.
-          result = lcl_lisp_new=>integer( res_int ).
-
-        WHEN rational.
-          IF res_denom EQ 1.
-            result = lcl_lisp_new=>integer( res_nummer ).
-          ELSE.
-            result = lcl_lisp_new=>rational( nummer = res_nummer
-                                             denom = res_denom ).
-          ENDIF.
-
-        WHEN real.
-          result = lcl_lisp_new=>real( value = res_real
-                                       exact = res_exact ).
-
-        WHEN OTHERS.
-          throw( |Error in result of [*]| ).
-      ENDCASE.
+      result = lcl_lisp_new=>numeric( res ).
     ENDMETHOD.                    "proc_multiply
 
     METHOD proc_subtract.
-      DATA lv_type TYPE tv_type.
-      DATA res_int TYPE tv_int.
-      DATA res_real TYPE tv_real.
-      DATA res_nummer TYPE tv_int.
-      DATA res_denom TYPE tv_int VALUE 1.
       DATA lv_gcd TYPE tv_int.
-
-      DATA res_exact TYPE abap_boolean VALUE abap_false.
 
       "_validate list.
       IF list IS NOT BOUND.
@@ -7373,81 +7328,86 @@
       ENDIF.
 
       DATA(cell) = iter->next( ).
+      DATA(res) = VALUE ts_result( "type = integer
+                                   "int = 1
+                                   denom = 1
+                                   exact = abap_false
+                                   operation = '-' ).
       "_cell_arith - `[-]`.
       CASE cell->type.
         WHEN integer.
           DATA(lo_int) = CAST lcl_lisp_integer( cell ).
 
-          CASE lv_type.
+          CASE res-type.
             WHEN real.
-              res_real -= lo_int->int.
+              res-real -= lo_int->int.
 
             WHEN rational.
-              res_nummer -= lo_int->int * res_denom.
-              lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
-                                                d = res_denom ).
-              res_nummer = res_nummer DIV lv_gcd.
-              res_denom = res_denom DIV lv_gcd.
+              res-nummer -= lo_int->int * res-denom.
+              lv_gcd = lcl_lisp_rational=>gcd(  n = res-nummer
+                                                d = res-denom ).
+              res-nummer = res-nummer DIV lv_gcd.
+              res-denom = res-denom DIV lv_gcd.
 
             WHEN integer.
-              res_int -= lo_int->int.
+              res-int -= lo_int->int.
 
             WHEN OTHERS.
-              lv_type = integer.
-              res_int = lo_int->int.
+              res-type = integer.
+              res-int = lo_int->int.
           ENDCASE.
 
         WHEN real.
           DATA(lo_real) = CAST lcl_lisp_real( cell ).
 
-          CASE lv_type.
+          CASE res-type.
             WHEN real.
-              res_real -= lo_real->float.
+              res-real -= lo_real->float.
 
             WHEN rational.
-              res_real = res_nummer / res_denom - lo_real->float.
-              lv_type = real.
+              res-real = res-nummer / res-denom - lo_real->float.
+              res-type = real.
 
             WHEN integer.
-              res_real = res_int - lo_real->float.
-              lv_type = real.
+              res-real = res-int - lo_real->float.
+              res-type = real.
 
             WHEN OTHERS.
-              lv_type = real.
-              res_real = lo_real->float.
+              res-type = real.
+              res-real = lo_real->float.
           ENDCASE.
 
         WHEN rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
 
-          CASE lv_type.
+          CASE res-type.
             WHEN real.
-              res_real -= lo_rat->int / lo_rat->denominator.
-              lv_type = real.
+              res-real -= lo_rat->int / lo_rat->denominator.
+              res-type = real.
 
             WHEN rational.
-              res_nummer = res_nummer * lo_rat->denominator - ( lo_rat->int * res_denom ).
-              res_denom *= lo_rat->denominator.
-              lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
-                                                d = res_denom ).
-              res_nummer = res_nummer DIV lv_gcd.
-              res_denom = res_denom DIV lv_gcd.
+              res-nummer = res-nummer * lo_rat->denominator - ( lo_rat->int * res-denom ).
+              res-denom *= lo_rat->denominator.
+              lv_gcd = lcl_lisp_rational=>gcd(  n = res-nummer
+                                                d = res-denom ).
+              res-nummer = res-nummer DIV lv_gcd.
+              res-denom = res-denom DIV lv_gcd.
 
 
             WHEN integer.
-              res_nummer = ( res_int * lo_rat->denominator ) - lo_rat->int.
-              res_denom = lo_rat->denominator.
+              res-nummer = ( res-int * lo_rat->denominator ) - lo_rat->int.
+              res-denom = lo_rat->denominator.
 
-              lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
-                                                d = res_denom ).
-              res_nummer = res_nummer DIV lv_gcd.
-              res_denom = res_denom DIV lv_gcd.
-              lv_type = rational.
+              lv_gcd = lcl_lisp_rational=>gcd(  n = res-nummer
+                                                d = res-denom ).
+              res-nummer = res-nummer DIV lv_gcd.
+              res-denom = res-denom DIV lv_gcd.
+              res-type = rational.
 
             WHEN OTHERS.
-              lv_type = rational.
-              res_nummer = lo_rat->int.
-              res_denom = lo_rat->denominator.
+              res-type = rational.
+              res-nummer = lo_rat->int.
+              res-denom = lo_rat->denominator.
           ENDCASE.
 
 *        WHEN complex.
@@ -7456,9 +7416,9 @@
       ENDCASE.
 
       IF iter->has_next( ) EQ abap_false.
-        res_int = 0 - res_int.
-        res_real = 0 - res_real.
-        res_nummer = 0 - res_nummer.
+        res-int = 0 - res-int.
+        res-real = 0 - res-real.
+        res-nummer = 0 - res-nummer.
       ELSE.
 *       Subtract all consecutive numbers from the first
         WHILE iter->has_next( ).
@@ -7468,76 +7428,76 @@
             WHEN integer.
               lo_int = CAST lcl_lisp_integer( cell ).
 
-              CASE lv_type.
+              CASE res-type.
                 WHEN real.
-                  res_real -= lo_int->int.
+                  res-real -= lo_int->int.
 
                 WHEN rational.
-                  res_nummer -= lo_int->int * res_denom.
-                  lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
-                                                    d = res_denom ).
-                  res_nummer = res_nummer DIV lv_gcd.
-                  res_denom = res_denom DIV lv_gcd.
+                  res-nummer -= lo_int->int * res-denom.
+                  lv_gcd = lcl_lisp_rational=>gcd(  n = res-nummer
+                                                    d = res-denom ).
+                  res-nummer = res-nummer DIV lv_gcd.
+                  res-denom = res-denom DIV lv_gcd.
 
                 WHEN integer.
-                  res_int -= lo_int->int.
+                  res-int -= lo_int->int.
 
                 WHEN OTHERS.
-                  lv_type = integer.
-                  res_int = lo_int->int.
+                  res-type = integer.
+                  res-int = lo_int->int.
               ENDCASE.
 
             WHEN real.
               lo_real = CAST lcl_lisp_real( cell ).
 
-              CASE lv_type.
+              CASE res-type.
                 WHEN real.
-                  res_real -= lo_real->float.
+                  res-real -= lo_real->float.
 
                 WHEN rational.
-                  res_real = res_nummer / res_denom - lo_real->float.
-                  lv_type = real.
+                  res-real = res-nummer / res-denom - lo_real->float.
+                  res-type = real.
 
                 WHEN integer.
-                  res_real = res_int - lo_real->float.
-                  lv_type = real.
+                  res-real = res-int - lo_real->float.
+                  res-type = real.
 
                 WHEN OTHERS.
-                  lv_type = real.
-                  res_real = lo_real->float.
+                  res-type = real.
+                  res-real = lo_real->float.
               ENDCASE.
 
             WHEN rational.
               lo_rat = CAST lcl_lisp_rational( cell ).
 
-              CASE lv_type.
+              CASE res-type.
                 WHEN real.
-                  res_real -= lo_rat->int / lo_rat->denominator.
-                  lv_type = real.
+                  res-real -= lo_rat->int / lo_rat->denominator.
+                  res-type = real.
 
                 WHEN rational.
-                  res_nummer = res_nummer * lo_rat->denominator - ( lo_rat->int * res_denom ).
-                  res_denom *= lo_rat->denominator.
-                  lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
-                                                    d = res_denom ).
-                  res_nummer = res_nummer DIV lv_gcd.
-                  res_denom = res_denom DIV lv_gcd.
+                  res-nummer = res-nummer * lo_rat->denominator - ( lo_rat->int * res-denom ).
+                  res-denom *= lo_rat->denominator.
+                  lv_gcd = lcl_lisp_rational=>gcd(  n = res-nummer
+                                                    d = res-denom ).
+                  res-nummer = res-nummer DIV lv_gcd.
+                  res-denom = res-denom DIV lv_gcd.
 
 
                 WHEN integer.
-                  res_nummer = ( res_int * lo_rat->denominator ) - lo_rat->int.
-                  res_denom = lo_rat->denominator.
+                  res-nummer = ( res-int * lo_rat->denominator ) - lo_rat->int.
+                  res-denom = lo_rat->denominator.
 
-                  lv_gcd = lcl_lisp_rational=>gcd(  n = res_nummer
-                                                    d = res_denom ).
-                  res_nummer = res_nummer DIV lv_gcd.
-                  res_denom = res_denom DIV lv_gcd.
-                  lv_type = rational.
+                  lv_gcd = lcl_lisp_rational=>gcd(  n = res-nummer
+                                                    d = res-denom ).
+                  res-nummer = res-nummer DIV lv_gcd.
+                  res-denom = res-denom DIV lv_gcd.
+                  res-type = rational.
 
                 WHEN OTHERS.
-                  lv_type = rational.
-                  res_nummer = lo_rat->int.
-                  res_denom = lo_rat->denominator.
+                  res-type = rational.
+                  res-nummer = lo_rat->int.
+                  res-denom = lo_rat->denominator.
               ENDCASE.
 
 *            WHEN complex.
@@ -7549,39 +7509,11 @@
       ENDIF.
 
       "_result_arith `[-]`.
-      CASE lv_type.
-        WHEN integer.
-          result = lcl_lisp_new=>integer( res_int ).
-
-        WHEN rational.
-          IF res_denom EQ 1.
-            result = lcl_lisp_new=>integer( res_nummer ).
-          ELSE.
-            result = lcl_lisp_new=>rational( nummer = res_nummer
-                                             denom = res_denom ).
-          ENDIF.
-
-        WHEN real.
-          result = lcl_lisp_new=>real( value = res_real
-                                       exact = res_exact ).
-
-        WHEN OTHERS.
-          throw( |Error in result of [-]| ).
-      ENDCASE.
+      result = lcl_lisp_new=>numeric( res ).
     ENDMETHOD.                    "proc_subtract
 
     METHOD proc_divide.
-      DATA lv_type TYPE tv_type.
-      DATA res_int TYPE tv_int.
-      DATA res_real TYPE tv_real.
-      DATA res_nummer TYPE tv_int.
-      DATA res_denom TYPE tv_int VALUE 1.
       DATA lv_gcd TYPE tv_int.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA res_exact TYPE abap_boolean VALUE abap_false.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       "_validate list.
       IF list IS NOT BOUND.
@@ -7592,82 +7524,85 @@
       IF iter->has_next( ) EQ abap_false.
         throw( |no number in [/]| ).
       ENDIF.
-      cell = iter->next( ).
+      DATA(cell) = iter->next( ).
+      DATA(res) = VALUE ts_result( denom = 1
+                                   exact = abap_false
+                                   operation = '/' ).
       "_cell_arith / `[/]`.
       CASE cell->type.
         WHEN integer.
-          lo_int ?= cell.
+          DATA(lo_int) = CAST lcl_lisp_integer( cell ).
 
-          CASE lv_type.
+          CASE res-type.
             WHEN real.
-              res_real /= lo_int->int.
+              res-real /= lo_int->int.
 
             WHEN rational.
-              res_nummer /= lo_int->int * res_denom.
-              lv_gcd = lcl_lisp_rational=>gcd( n = res_nummer
-                                               d = res_denom ).
-              res_nummer = res_nummer DIV lv_gcd.
-              res_denom = res_denom DIV lv_gcd.
+              res-nummer /= lo_int->int * res-denom.
+              lv_gcd = lcl_lisp_rational=>gcd( n = res-nummer
+                                               d = res-denom ).
+              res-nummer = res-nummer DIV lv_gcd.
+              res-denom = res-denom DIV lv_gcd.
 
             WHEN integer.
-              res_int /= lo_int->int.
+              res-int /= lo_int->int.
 
             WHEN OTHERS.
-              lv_type = integer.
-              res_int = lo_int->int.
+              res-type = integer.
+              res-int = lo_int->int.
           ENDCASE.
 
         WHEN real.
-          lo_real ?= cell.
+          DATA(lo_real) = CAST lcl_lisp_real( cell ).
 
-          CASE lv_type.
+          CASE res-type.
             WHEN real.
-              res_real /= lo_real->float.
+              res-real /= lo_real->float.
 
             WHEN rational.
-              res_real = res_nummer / res_denom / lo_real->float.
-              lv_type = real.
+              res-real = res-nummer / res-denom / lo_real->float.
+              res-type = real.
 
             WHEN integer.
-              res_real = res_int / lo_real->float.
-              lv_type = real.
+              res-real = res-int / lo_real->float.
+              res-type = real.
 
             WHEN OTHERS.
-              lv_type = real.
-              res_real = lo_real->float.
+              res-type = real.
+              res-real = lo_real->float.
           ENDCASE.
 
         WHEN rational.
-          lo_rat ?= cell.
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
 
-          CASE lv_type.
+          CASE res-type.
             WHEN real.
-              res_real = res_real / lo_rat->int / lo_rat->denominator.
-              lv_type = real.
+              res-real = res-real / lo_rat->int / lo_rat->denominator.
+              res-type = real.
 
             WHEN rational.
-              res_nummer = res_nummer * lo_rat->denominator / ( lo_rat->int * res_denom ).
-              res_denom *= lo_rat->denominator.
-              lv_gcd = lcl_lisp_rational=>gcd( n = res_nummer
-                                               d = res_denom ).
-              res_nummer = res_nummer DIV lv_gcd.
-              res_denom = res_denom DIV lv_gcd.
+              res-nummer = res-nummer * lo_rat->denominator / ( lo_rat->int * res-denom ).
+              res-denom *= lo_rat->denominator.
+              lv_gcd = lcl_lisp_rational=>gcd( n = res-nummer
+                                               d = res-denom ).
+              res-nummer = res-nummer DIV lv_gcd.
+              res-denom = res-denom DIV lv_gcd.
 
 
             WHEN integer.
-              res_nummer = ( res_int * lo_rat->denominator ) / lo_rat->int.
-              res_denom = lo_rat->denominator.
+              res-nummer = ( res-int * lo_rat->denominator ) / lo_rat->int.
+              res-denom = lo_rat->denominator.
 
-              lv_gcd = lcl_lisp_rational=>gcd( n = res_nummer
-                                               d = res_denom ).
-              res_nummer = res_nummer DIV lv_gcd.
-              res_denom = res_denom DIV lv_gcd.
-              lv_type = rational.
+              lv_gcd = lcl_lisp_rational=>gcd( n = res-nummer
+                                               d = res-denom ).
+              res-nummer = res-nummer DIV lv_gcd.
+              res-denom = res-denom DIV lv_gcd.
+              res-type = rational.
 
             WHEN OTHERS.
-              lv_type = rational.
-              res_nummer = lo_rat->int.
-              res_denom = lo_rat->denominator.
+              res-type = rational.
+              res-nummer = lo_rat->int.
+              res-denom = lo_rat->denominator.
           ENDCASE.
 
 *        WHEN complex.
@@ -7677,25 +7612,25 @@
 
       TRY.
           IF iter->has_next( ) EQ abap_false.
-            CASE lv_type.
+            CASE res-type.
               WHEN integer.
-                res_denom = res_int.
-                res_nummer = 1.
-                lv_type = rational.
+                res-denom = res-int.
+                res-nummer = 1.
+                res-type = rational.
 
               WHEN rational.
-                DATA(lv_saved_nummer) = res_nummer.
-                res_nummer = res_denom.
-                res_denom = lv_saved_nummer.
+                DATA(lv_saved_nummer) = res-nummer.
+                res-nummer = res-denom.
+                res-denom = lv_saved_nummer.
 
               WHEN real.
-                res_real = 1 / res_real.
+                res-real = 1 / res-real.
             ENDCASE.
           ELSE.
-            IF lv_type EQ integer.
-              res_nummer = res_int.
-              res_denom = 1.
-              lv_type = rational.
+            IF res-type EQ integer.
+              res-nummer = res-int.
+              res-denom = 1.
+              res-type = rational.
             ENDIF.
 
             WHILE iter->has_next( ).
@@ -7705,74 +7640,74 @@
                 WHEN integer.
                   lo_int ?= cell.
 
-                  CASE lv_type.
+                  CASE res-type.
                     WHEN real.
-                      res_real /= lo_int->int.
+                      res-real /= lo_int->int.
 
                     WHEN rational.
-                      res_denom *= lo_int->int.
-                      lv_gcd = lcl_lisp_rational=>gcd( n = res_nummer
-                                                       d = res_denom ).
-                      res_nummer = res_nummer DIV lv_gcd.
-                      res_denom = res_denom DIV lv_gcd.
+                      res-denom *= lo_int->int.
+                      lv_gcd = lcl_lisp_rational=>gcd( n = res-nummer
+                                                       d = res-denom ).
+                      res-nummer = res-nummer DIV lv_gcd.
+                      res-denom = res-denom DIV lv_gcd.
 
                     WHEN integer.
-                      res_nummer = res_int.
-                      res_denom = lo_int->int.
-                      lv_type = rational.
+                      res-nummer = res-int.
+                      res-denom = lo_int->int.
+                      res-type = rational.
 
                     WHEN OTHERS.
                       throw( 'internal error proc_divide( )' ).
-                      lv_type = integer.
-                      res_int = lo_int->int.
+                      res-type = integer.
+                      res-int = lo_int->int.
                   ENDCASE.
 
                 WHEN real.
                   lo_real ?= cell.
 
-                  CASE lv_type.
+                  CASE res-type.
                     WHEN real.
-                      res_real /= lo_real->float.
+                      res-real /= lo_real->float.
 
                     WHEN rational.
-                      res_real = res_nummer / res_denom / lo_real->float.
-                      lv_type = real.
+                      res-real = res-nummer / res-denom / lo_real->float.
+                      res-type = real.
 
                     WHEN integer.
-                      res_real = res_int / lo_real->float.
-                      lv_type = real.
+                      res-real = res-int / lo_real->float.
+                      res-type = real.
 
                     WHEN OTHERS.
-                      lv_type = real.
-                      res_real = lo_real->float.
+                      res-type = real.
+                      res-real = lo_real->float.
                   ENDCASE.
 
                 WHEN rational.
-                  lo_rat ?= cell.
+                  lo_rat = CAST lcl_lisp_rational( cell ).
 
-                  CASE lv_type.
+                  CASE res-type.
                     WHEN real.
-                      res_real = res_real * lo_rat->denominator / lo_rat->int.
-                      lv_type = real.
+                      res-real = res-real * lo_rat->denominator / lo_rat->int.
+                      res-type = real.
 
                     WHEN rational.
-                      res_nummer *= lo_rat->denominator.
-                      res_denom *= lo_rat->int.
-                      lv_gcd = lcl_lisp_rational=>gcd( n = res_nummer
-                                                       d = res_denom ).
-                      res_nummer = res_nummer DIV lv_gcd.
-                      res_denom = res_denom DIV lv_gcd.
+                      res-nummer *= lo_rat->denominator.
+                      res-denom *= lo_rat->int.
+                      lv_gcd = lcl_lisp_rational=>gcd( n = res-nummer
+                                                       d = res-denom ).
+                      res-nummer = res-nummer DIV lv_gcd.
+                      res-denom = res-denom DIV lv_gcd.
 
                     WHEN integer.
-                      res_nummer = res_int * lo_rat->denominator.
-                      res_denom = lo_rat->int.
+                      res-nummer = res-int * lo_rat->denominator.
+                      res-denom = lo_rat->int.
 
-                      lv_type = rational.
+                      res-type = rational.
 
                     WHEN OTHERS.
-                      lv_type = rational.
-                      res_nummer = lo_rat->int.
-                      res_denom = lo_rat->denominator.
+                      res-type = rational.
+                      res-nummer = lo_rat->int.
+                      res-denom = lo_rat->denominator.
                   ENDCASE.
 
 *                WHEN complex.
@@ -7787,25 +7722,7 @@
       ENDTRY.
 
       "_result_arith `[/]`.
-      CASE lv_type.
-        WHEN integer.
-          result = lcl_lisp_new=>integer( res_int ).
-
-        WHEN rational.
-          IF res_denom EQ 1.
-            result = lcl_lisp_new=>integer( res_nummer ).
-          ELSE.
-            result = lcl_lisp_new=>rational( nummer = res_nummer
-                                             denom = res_denom ).
-          ENDIF.
-
-        WHEN real.
-          result = lcl_lisp_new=>real( value = res_real
-                                       exact = res_exact ).
-
-        WHEN OTHERS.
-          throw( |Error in result of [/]| ).
-      ENDCASE.
+      result = lcl_lisp_new=>numeric( res ).
     ENDMETHOD.                    "proc_divide
 
 **********************************************************************
@@ -7814,11 +7731,6 @@
       DATA carry TYPE tv_real.
       DATA carry_int TYPE tv_int.
       DATA carry_is_int TYPE abap_boolean.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
-      DATA cell TYPE REF TO lcl_lisp.
-
 
       result = false.
       "_validate: list, list->car, list->cdr. list->cdr->type must be a pair!
@@ -7827,7 +7739,7 @@
         throw( c_error_incorrect_input ).
       ENDIF.
 
-      cell = list->car.
+      DATA(cell) = list->car.
       carry_is_int = abap_false.
       CASE cell->type.
         WHEN integer.
@@ -7839,7 +7751,7 @@
           carry = CAST lcl_lisp_real( cell )->float.
 
         WHEN rational.
-          lo_rat = CAST lcl_lisp_rational( cell ).
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
 *      WHEN complex.
 
@@ -7856,7 +7768,7 @@
 
         CASE cell->car->type.
           WHEN integer.
-            lo_int ?= cell->car.
+            DATA(lo_int) = CAST lcl_lisp_integer( cell->car ).
             IF carry_is_int = abap_true.
               IF carry_int <= lo_int->int.
                 RETURN.
@@ -7871,7 +7783,7 @@
 
           WHEN real.
             carry_is_int = abap_false.
-            lo_real ?= cell->car.
+            DATA(lo_real) = CAST lcl_lisp_real( cell->car ).
             IF carry <= lo_real->float.
               RETURN.
             ENDIF.
@@ -7879,7 +7791,7 @@
 
           WHEN rational.
             carry_is_int = abap_false.
-            lo_rat ?= cell->car.
+            lo_rat = CAST lcl_lisp_rational( cell->car ).
             IF carry * lo_rat->denominator <= lo_rat->int.
               RETURN.
             ENDIF.
@@ -7900,9 +7812,6 @@
       DATA carry TYPE tv_real.
       DATA carry_int TYPE tv_int.
       DATA carry_is_int TYPE abap_boolean.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = false.
       "_validate: list, list->car, list->cdr.
@@ -7925,7 +7834,7 @@
           carry = CAST lcl_lisp_real( cell )->float.
 
         WHEN rational.
-          lo_rat ?= cell.
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
 *      WHEN complex.
 
@@ -7942,7 +7851,7 @@
 
         CASE cell->car->type.
           WHEN integer.
-            lo_int ?= cell->car.
+            DATA(lo_int) = CAST lcl_lisp_integer( cell->car ).
             IF carry_is_int = abap_true.
               IF carry_int < lo_int->int.
                 RETURN.
@@ -7957,7 +7866,7 @@
 
           WHEN real.
             carry_is_int = abap_false.
-            lo_real ?= cell->car.
+            DATA(lo_real) = CAST lcl_lisp_real( cell->car ).
             IF carry < lo_real->float.
               RETURN.
             ENDIF.
@@ -7986,10 +7895,6 @@
       DATA carry TYPE tv_real.
       DATA carry_int TYPE tv_int.
       DATA carry_is_int TYPE abap_boolean.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
-      DATA cell TYPE REF TO lcl_lisp.
 
       result = false.
       "_validate: list, list->car, list->cdr.
@@ -8000,7 +7905,7 @@
         throw( c_error_incorrect_input ).
       ENDIF.
 
-      cell = list->car.
+      DATA(cell) = list->car.
       carry_is_int = abap_false.
       CASE cell->type.
         WHEN integer.
@@ -8012,7 +7917,7 @@
           carry = CAST lcl_lisp_real( cell )->float.
 
         WHEN rational.
-          lo_rat ?= cell.
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
 *      WHEN complex.
 
@@ -8029,7 +7934,7 @@
 
         CASE cell->car->type.
           WHEN integer.
-            lo_int ?= cell->car.
+            DATA(lo_int) = CAST lcl_lisp_integer( cell->car ).
             IF carry_is_int = abap_true.
               IF carry_int >= lo_int->int.
                 RETURN.
@@ -8044,7 +7949,7 @@
 
           WHEN real.
             carry_is_int = abap_false.
-            lo_real ?= cell->car.
+            DATA(lo_real) = CAST lcl_lisp_real( cell->car ).
             IF carry >= lo_real->float.
               RETURN.
             ENDIF.
@@ -8076,7 +7981,6 @@
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_real TYPE REF TO lcl_lisp_real.
-      DATA cell TYPE REF TO lcl_lisp.
 
       result = false.
       "_validate: list, list->car, list->cdr.
@@ -8087,7 +7991,7 @@
         throw( c_error_incorrect_input ).
       ENDIF.
 
-      cell = list->car.
+      DATA(cell) = list->car.
       carry_is_int = abap_false.
       CASE cell->type.
         WHEN integer.
@@ -8158,7 +8062,6 @@
     METHOD proc_is_zero.
       "_sign 0 '[zero?]'.
       DATA carry TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_real TYPE REF TO lcl_lisp_real.
@@ -8170,7 +8073,7 @@
       ENDIF.
 
       "_get_number carry list->car &2.
-      cell = list->car.
+      DATA(cell) = list->car.
       CASE cell->type.
         WHEN integer.
           carry = CAST lcl_lisp_integer( cell )->int.
@@ -8193,7 +8096,6 @@
     METHOD proc_is_positive.
       "_sign 1 '[positive?]'.
       DATA carry TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_real TYPE REF TO lcl_lisp_real.
@@ -8205,7 +8107,7 @@
       ENDIF.
 
       "_get_number carry list->car &2.
-      cell = list->car.
+      DATA(cell) = list->car.
       CASE cell->type.
         WHEN integer.
           carry = CAST lcl_lisp_integer( cell )->int.
@@ -8228,10 +8130,6 @@
     METHOD proc_is_negative.
       "_sign -1 '[negative?]'.
       DATA carry TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = false.
       "_validate: list, list->car
@@ -8240,14 +8138,14 @@
       ENDIF.
 
       "_get_number carry list->car &2.
-      cell = list->car.
+      DATA(cell) = list->car.
       CASE cell->type.
         WHEN integer.
           carry = CAST lcl_lisp_integer( cell )->int.
         WHEN real.
           carry = CAST lcl_lisp_real( cell )->float.
         WHEN rational.
-          lo_rat ?= cell.
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
 *      WHEN complex.
         WHEN OTHERS.
@@ -8258,7 +8156,7 @@
         RETURN.
       ENDIF.
       result = true.
-    ENDMETHOD.                    "proc_lt
+    ENDMETHOD.                    "proc_is_negative
 
     METHOD proc_is_odd.
       result = false.
@@ -8924,10 +8822,6 @@
     METHOD proc_sin.
       "_trigonometric sin '[sin]'.
       DATA carry TYPE f.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -8937,14 +8831,14 @@
 
       TRY.
           "_get_number carry list->car `[sin]`.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
@@ -8962,10 +8856,6 @@
     METHOD proc_cos.
       "_trigonometric cos '[cos]'.
       DATA carry TYPE f.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -8975,14 +8865,14 @@
 
       TRY.
           "_get_number carry list->car `[cos]`.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
@@ -9000,10 +8890,6 @@
     METHOD proc_tan.
       "_trigonometric tan '[tan]'.
       DATA carry TYPE f.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9013,14 +8899,14 @@
 
       TRY.
           "_get_number carry list->car `[tan]`.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
@@ -9038,10 +8924,6 @@
     METHOD proc_asin.
       "_trigonometric asin '[asin]'.
       DATA carry TYPE f.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9051,14 +8933,14 @@
 
       TRY.
           "_get_number carry list->car `[asin]`.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
@@ -9076,10 +8958,6 @@
     METHOD proc_acos.
       "_trigonometric acos '[acos]'.
       DATA carry TYPE f.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9089,14 +8967,14 @@
 
       TRY.
           "_get_number carry list->car `[acos]`.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
@@ -9114,10 +8992,6 @@
     METHOD proc_atan.
       "_trigonometric atan '[atan]'.
       DATA carry TYPE f.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9127,14 +9001,14 @@
 
       TRY.
           "_get_number carry list->car `[atan]`.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
@@ -9152,10 +9026,6 @@
     METHOD proc_sinh.
       "_trigonometric sinh '[sinh]'.
       DATA carry TYPE f.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9165,14 +9035,14 @@
 
       TRY.
           "_get_number carry list->car `[sinh]`.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
@@ -9190,10 +9060,6 @@
     METHOD proc_cosh.
       "_trigonometric cosh '[cosh]'.
       DATA carry TYPE f.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9203,14 +9069,14 @@
 
       TRY.
           "_get_number carry list->car `[cosh]`.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
@@ -9228,10 +9094,6 @@
     METHOD proc_tanh.
       "_trigonometric tanh '[tanh]'.
       DATA carry TYPE f.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9241,14 +9103,14 @@
 
       TRY.
           "_get_number carry list->car `[tanh]`.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
             WHEN OTHERS.
@@ -9265,10 +9127,6 @@
 
     METHOD proc_asinh.
       DATA carry TYPE f.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate list.
@@ -9279,14 +9137,14 @@
 
       TRY.
           "_get_number carry list->car '[asinh]'.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *              WHEN complex.
             WHEN OTHERS.
@@ -9303,10 +9161,6 @@
 
     METHOD proc_acosh.
       DATA carry TYPE f.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9316,14 +9170,14 @@
 
       TRY.
           "_get_number carry list->car '[acosh]'.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *              WHEN complex.
             WHEN OTHERS.
@@ -9340,10 +9194,6 @@
 
     METHOD proc_atanh.
       DATA carry TYPE f.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9353,14 +9203,14 @@
 
       TRY.
           "_get_number carry list->car '[atanh]'.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *              WHEN complex.
             WHEN OTHERS.
@@ -9378,10 +9228,6 @@
     METHOD proc_expt.
       DATA base1 TYPE tv_real.
       DATA exp1 TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->cdr.
@@ -9394,14 +9240,14 @@
       IF list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-      cell = list->car.
+      DATA(cell) = list->car.
       CASE cell->type.
         WHEN integer.
           base1 = CAST lcl_lisp_integer( cell )->int.
         WHEN real.
           base1 = CAST lcl_lisp_real( cell )->float.
         WHEN rational.
-          lo_rat ?= cell.
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           base1 = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
@@ -9439,10 +9285,6 @@
     METHOD proc_exp.
       "_math exp '[exp]' real.
       DATA carry TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9452,14 +9294,14 @@
 
       TRY.
           "_get_number carry list->car &2.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
@@ -9476,10 +9318,6 @@
     METHOD proc_log.
       "_math log '[log]' real.
       DATA carry TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9489,14 +9327,14 @@
 
       TRY.
           "_get_number carry list->car &2.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
@@ -9513,10 +9351,6 @@
     METHOD proc_sqrt.
       "_math sqrt '[sqrt]' real.
       DATA carry TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9526,14 +9360,14 @@
 
       TRY.
           "_get_number carry list->car &2.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
@@ -9550,10 +9384,6 @@
     METHOD proc_square.
       "_math square '[square]' real.
       DATA carry TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9563,14 +9393,14 @@
 
       TRY.
           "_get_number carry list->car &2.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
@@ -9588,10 +9418,6 @@
     METHOD proc_floor.
       "_math floor '[floor]' number.
       DATA carry TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9601,14 +9427,14 @@
 
       TRY.
           "_get_number carry list->car &2.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
@@ -9625,10 +9451,7 @@
 
     METHOD proc_floor_new.
       DATA carry TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
+
       "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
@@ -9636,14 +9459,14 @@
 
       TRY.
           "_get_number carry list->car &2.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
@@ -9658,7 +9481,7 @@
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              lo_rat = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
@@ -9677,10 +9500,6 @@
     METHOD proc_ceiling.
       "_math ceil '[ceil]' number.
       DATA carry TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9690,14 +9509,14 @@
 
       TRY.
           "_get_number carry list->car &2..
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
@@ -9715,10 +9534,6 @@
     METHOD proc_truncate.
       "_math trunc '[truncate]' number.
       DATA carry TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9728,14 +9543,14 @@
 
       TRY.
           "_get_number carry list->car &2.
-          cell = list->car.
+          DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
               carry = CAST lcl_lisp_integer( cell )->int.
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
             WHEN OTHERS.
@@ -9753,10 +9568,6 @@
 
     METHOD proc_round.
       DATA carry TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car
@@ -9765,14 +9576,14 @@
       ENDIF.
 
       "_get_number carry list->car '[round]'.
-      cell = list->car.
+      DATA(cell) = list->car.
       CASE cell->type.
         WHEN integer.
           carry = CAST lcl_lisp_integer( cell )->int.
         WHEN real.
           carry = CAST lcl_lisp_real( cell )->float.
         WHEN rational.
-          lo_rat ?= cell.
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
@@ -9790,10 +9601,6 @@
 
     METHOD proc_numerator.
       DATA lv_num TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
@@ -9801,7 +9608,7 @@
       ENDIF.
       list->assert_last_param( ).
 
-      cell = list->car.
+      DATA(cell) = list->car.
       CASE cell->type.
         WHEN integer.
           result = cell.
@@ -9816,8 +9623,7 @@
           ENDTRY.
 
         WHEN rational.
-          lo_rat ?= cell.
-          result = lcl_lisp_new=>integer( lo_rat->int ).
+          result = lcl_lisp_new=>integer( CAST lcl_lisp_rational( cell )->int ).
 *        WHEN complex.
         WHEN OTHERS.
           cell->raise_nan( |numerator| ).
@@ -9826,10 +9632,6 @@
 
     METHOD proc_denominator.
       DATA lo_frac TYPE REF TO lcl_lisp_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
@@ -9837,15 +9639,14 @@
       ENDIF.
       list->assert_last_param( ).
 
-      cell = list->car.
+      DATA(cell) = list->car.
       CASE cell->type.
         WHEN integer.
           result = lcl_lisp_new=>integer( 1 ).
 
         WHEN real.
           TRY.
-              lo_real ?= cell.
-              lo_frac = lcl_lisp_new=>real( value = frac( lo_real->float )
+              lo_frac = lcl_lisp_new=>real( value = frac( CAST lcl_lisp_real( cell )->float )
                                             exact = abap_true ).
               IF lo_frac->float_eq( 0 ).
                 result = lcl_lisp_new=>integer( 1 ).
@@ -9858,8 +9659,7 @@
           ENDTRY.
 
         WHEN rational.
-          lo_rat ?= cell.
-          result = lcl_lisp_new=>integer( lo_rat->denominator ).
+          result = lcl_lisp_new=>integer( CAST lcl_lisp_rational( cell )->denominator ).
 *        WHEN complex.
         WHEN OTHERS.
           cell->raise_nan( |denominator| ).
@@ -9869,10 +9669,6 @@
     METHOD proc_remainder.
       DATA numerator TYPE tv_real.
       DATA denominator TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car, list->cdr.
@@ -9881,14 +9677,14 @@
       ENDIF.
 
       "_get_number numerator list->car '[remainder]'.
-      cell = list->car.
+      DATA(cell) = list->car.
       CASE cell->type.
         WHEN integer.
           numerator = CAST lcl_lisp_integer( cell )->int.
         WHEN real.
           numerator = CAST lcl_lisp_real( cell )->float.
         WHEN rational.
-          lo_rat ?= cell.
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           numerator = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
@@ -9924,10 +9720,6 @@
     METHOD proc_quotient.
       DATA numerator TYPE tv_real.
       DATA denominator TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car, list->cdr.
@@ -9936,14 +9728,14 @@
       ENDIF.
 
       "_get_number numerator list->car '[quotient]'.
-      cell = list->car.
+      DATA(cell) = list->car.
       CASE cell->type.
         WHEN integer.
           numerator = CAST lcl_lisp_integer( cell )->int.
         WHEN real.
           numerator = CAST lcl_lisp_real( cell )->float.
         WHEN rational.
-          lo_rat ?= cell.
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           numerator = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
@@ -9961,7 +9753,7 @@
         WHEN real.
           denominator = CAST lcl_lisp_real( cell )->float.
         WHEN rational.
-          lo_rat ?= cell.
+          lo_rat = CAST lcl_lisp_rational( cell ).
           denominator = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
@@ -9980,10 +9772,6 @@
       DATA numerator TYPE tv_real.
       DATA base TYPE tv_real.
       DATA mod TYPE tv_real.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       "_validate: list, list->car, list->cdr.
@@ -9992,14 +9780,14 @@
       ENDIF.
 
       "_get_number numerator list->car '[modulo]'.
-      cell = list->car.
+      DATA(cell) = list->car.
       CASE cell->type.
         WHEN integer.
           numerator = CAST lcl_lisp_integer( cell )->int.
         WHEN real.
           numerator = CAST lcl_lisp_real( cell )->float.
         WHEN rational.
-          lo_rat ?= cell.
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           numerator = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
@@ -10017,7 +9805,7 @@
         WHEN real.
           base = CAST lcl_lisp_real( cell )->float.
         WHEN rational.
-          lo_rat ?= cell.
+          lo_rat = CAST lcl_lisp_rational( cell ).
           base = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
@@ -10937,10 +10725,6 @@
     METHOD proc_lcm.
 *     non-negative least common multiple of the arguments
       DATA lo_ptr TYPE REF TO lcl_lisp.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       DATA carry TYPE tv_real.
       DATA lv_lcm TYPE tv_real VALUE 1.
@@ -10956,14 +10740,14 @@
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        cell = list->car.
+        DATA(cell) = list->car.
         CASE cell->type.
           WHEN integer.
             lv_lcm = CAST lcl_lisp_integer( cell )->int.
           WHEN real.
             lv_lcm = CAST lcl_lisp_real( cell )->float.
           WHEN rational.
-            lo_rat ?= cell.
+            DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
             lv_lcm = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
           WHEN OTHERS.
@@ -10983,7 +10767,7 @@
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              lo_rat = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *              WHEN complex.
             WHEN OTHERS.
@@ -12512,8 +12296,7 @@
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
-      IF list->car->type NE abap_data AND
-         list->car->type NE abap_table.
+      IF list->car->type NE abap_data AND list->car->type NE abap_table.
         throw( |ab-get-value requires ABAP data or table as parameter| ).
       ENDIF.
       lo_ref ?= list->car.
@@ -12526,7 +12309,6 @@
     ENDMETHOD.                    "proc_abap_get_value
 
     METHOD proc_abap_set_value. "Convert Lisp to ABAP data
-      DATA lo_ref TYPE REF TO lcl_lisp_data.
       FIELD-SYMBOLS <data> TYPE any.
 
       "_validate: list, list->car.
@@ -12538,7 +12320,7 @@
          list->car->type NE abap_table.
         throw( |ab-set-value requires ABAP data or table as first parameter| ).
       ENDIF.
-      lo_ref ?= list->car.
+      DATA(lo_ref) = CAST lcl_lisp_data( list->car ).
       TRY.
           ASSIGN lo_ref->data->* TO <data>.
           element_to_data(
@@ -12623,7 +12405,6 @@
     ENDMETHOD. "proc_abap_get
 
     METHOD proc_abap_set.
-      DATA lo_source TYPE REF TO lcl_lisp.
       DATA lr_target TYPE REF TO data.
       FIELD-SYMBOLS <target> TYPE any.
       FIELD-SYMBOLS <source> TYPE any.
@@ -12646,7 +12427,7 @@
         cl_abap_typedescr=>describe_by_data_ref( lo_ref->data )->kind = cl_abap_typedescr=>kind_elem.
 *       Elementary type; can return the value without mapping
         lr_target = lo_ref->data.
-        lo_source = list->cdr->car.  "Value to set is data ref from second argument
+        DATA(lo_source) = list->cdr->car.  "Value to set is data ref from second argument
       ELSEIF list->cdr = nil.
         throw( |ab-set: Complex type requires identifier for lookup| ).
       ELSE.
@@ -12976,9 +12757,6 @@
 *      init-x : real? = (/ width 2)
 *      init-y : real? = (/ height 2)
 *      init-angle : real? = 0
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
       DATA lv_real TYPE tv_real VALUE 0.
       DATA lv_angle_exact TYPE abap_boolean VALUE abap_false.
 
@@ -13023,7 +12801,7 @@
               WHEN real.
                 lv_real = CAST lcl_lisp_real( cell )->float.
               WHEN rational.
-                lo_rat ?= cell.
+                DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
                 lv_real = lo_rat->int / lo_rat->denominator.
 *                  WHEN complex.
               WHEN OTHERS.
@@ -14917,6 +14695,28 @@
         EXPORTING
           value = value.
 
+    ENDMETHOD.
+
+    METHOD numeric.
+      CASE record-type.
+        WHEN integer.
+          ro_elem = lcl_lisp_new=>integer( record-int ).
+
+        WHEN rational.
+          IF record-denom EQ 1.
+            ro_elem = lcl_lisp_new=>integer( record-nummer ).
+          ELSE.
+            ro_elem = lcl_lisp_new=>rational( nummer = record-nummer
+                                              denom = record-denom ).
+          ENDIF.
+
+        WHEN real.
+          ro_elem = lcl_lisp_new=>real( value = record-real
+                                        exact = record-exact ).
+
+        WHEN OTHERS.
+          lcl_lisp=>throw( |Error in result of [{ record-operation }]| ).
+      ENDCASE.
     ENDMETHOD.
 
     METHOD hex_integer.
