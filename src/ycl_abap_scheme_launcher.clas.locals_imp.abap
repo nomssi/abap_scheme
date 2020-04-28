@@ -8566,7 +8566,6 @@
       result = false.
       CHECK list IS BOUND AND list->car IS BOUND.
       result = list->car->is_number( ).
-*      _is_type complex.
     ENDMETHOD.
 
     METHOD proc_is_real.
@@ -8660,16 +8659,15 @@
     ENDMETHOD.                    "proc_is_pair
 
     METHOD proc_is_boolean. " argument in list->car
-      "_validate list.
-      IF list IS NOT BOUND.
+      "_validate: list, list->car.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      "_is_type boolean.
-      result = false.
-      CHECK list->car IS BOUND.
       IF list->car->type EQ boolean.
         result = true.
+      ELSE.
+        result = false.
       ENDIF.
     ENDMETHOD.
 
@@ -8679,9 +8677,10 @@
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
       "_is_type vector.
-      result = false.
       IF list->car->type EQ vector.
         result = true.
+      ELSE.
+        result = false.
       ENDIF.
     ENDMETHOD.
 
@@ -8719,18 +8718,15 @@
     ENDMETHOD.                    "proc_is_list
 
     METHOD proc_boolean_list_is_equal.
-      DATA lo_test TYPE REF TO lcl_lisp.
-      DATA lo_arg TYPE REF TO lcl_lisp.
-
       "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
       result = false.
-      lo_arg = list.
+      DATA(lo_arg) = list.
 
-      lo_test = nil.
+      DATA(lo_test) = nil.
       IF lo_arg->type EQ pair AND lo_arg->car->type EQ boolean.
         lo_test = lo_arg->car.
         lo_arg = lo_arg->cdr.
@@ -8781,10 +8777,6 @@
     ENDMETHOD.                    "proc_is_alist
 
     METHOD proc_abs.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
-
       result = nil.
       "_validate list.
       IF list IS NOT BOUND.
@@ -8800,15 +8792,13 @@
 
           CASE list->car->type.
             WHEN integer.
-              lo_int ?= list->car.
-              result = lcl_lisp_new=>integer( abs( lo_int->int ) ).
+              result = lcl_lisp_new=>integer( abs( CAST lcl_lisp_integer( list->car )->int ) ).
             WHEN real.
-              lo_real ?= list->car.
-              result = lcl_lisp_new=>integer( abs( lo_real->float ) ).
+              result = lcl_lisp_new=>integer( abs( CAST lcl_lisp_real( list->car )->float ) ).
             WHEN rational.
-              lo_rat ?= list->car.
+              DATA(lo_rat) = CAST lcl_lisp_rational( list->car ).
               result = lcl_lisp_new=>rational( nummer = abs( lo_rat->int )
-                                               denom = lo_rat->denominator ).
+                                               denom = abs( lo_rat->denominator ) ).
 *            WHEN complex.
             WHEN OTHERS.
               list->car->raise_nan( |abs| ).
@@ -9269,7 +9259,7 @@
               exp1 = CAST lcl_lisp_real( cell )->float.
               result = lcl_lisp_new=>number( base1 ** exp1 ).
             WHEN rational.
-              lo_rat ?= cell.
+              lo_rat = CAST lcl_lisp_rational( cell ).
               exp1 = lo_rat->int / lo_rat->denominator.
               result = lcl_lisp_new=>number( base1 ** exp1 ).
 *            WHEN complex.
@@ -9849,7 +9839,6 @@
     ENDMETHOD.                    "proc_random
 
     METHOD proc_is_exact.
-      DATA lo_number TYPE REF TO lcl_lisp_number.
       "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
@@ -9865,8 +9854,7 @@
           list->car->raise_nan( |exact?| ) ##NO_TEXT.
       ENDCASE.
 
-      lo_number ?= list->car.
-      result = lo_number->is_exact( ).
+      result = CAST lcl_lisp_number( list->car )->is_exact( ).
     ENDMETHOD.
 
     METHOD proc_is_inexact.
@@ -9885,16 +9873,10 @@
         WHEN OTHERS.
           list->car->raise_nan( |inexact?| ) ##NO_TEXT.
       ENDCASE.
-      lo_number ?= list->car.
-      result = lo_number->is_inexact( ).
+      result = CAST lcl_lisp_number( list->car )->is_inexact( ).
     ENDMETHOD.
 
     METHOD proc_to_exact.
-      DATA lo_number TYPE REF TO lcl_lisp_number.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
-      DATA lv_denom TYPE tv_int.
-      DATA lv_nummer TYPE tv_int.
-
       "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
@@ -9910,13 +9892,16 @@
           list->car->raise_nan( |exact| ) ##NO_TEXT.
       ENDCASE.
 
-      lo_number ?= list->car.
+      DATA(lo_number) = CAST lcl_lisp_number( list->car ).
       IF lo_number->exact EQ abap_true.
         result = lo_number.
       ELSE.
         CASE lo_number->type.
           WHEN real.
-            lo_real ?= lo_number.
+            DATA lv_denom TYPE tv_int.
+            DATA lv_nummer TYPE tv_int.
+            DATA(lo_real) = CAST lcl_lisp_real( lo_number ).
+
             IF abs( lo_real->float ) GT 1.
               lv_denom = trunc( cl_abap_math=>max_int4 / lo_real->float ).
               lv_nummer = round( val = lo_real->float * lv_denom dec = 0 ).
@@ -9939,9 +9924,6 @@
     ENDMETHOD.
 
     METHOD proc_to_inexact.
-      DATA lo_number TYPE REF TO lcl_lisp_number.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
       DATA lv_real TYPE tv_real.
 
       "_validate: list, list->car
@@ -9959,17 +9941,16 @@
           list->car->raise_nan( |inexact| ) ##NO_TEXT.
       ENDCASE.
 
-      lo_number ?= list->car.
+      DATA(lo_number) = CAST lcl_lisp_number( list->car ).
       IF lo_number->exact EQ abap_true.
         CASE lo_number->type.
           WHEN rational.
-            lo_rat ?= lo_number.
+            DATA(lo_rat) = CAST lcl_lisp_rational( lo_number ).
             lv_real = lo_rat->int / lo_rat->denominator.
             result = lcl_lisp_new=>real( value = lv_real
                                          exact = abap_false ).
           WHEN integer.
-            lo_int ?= lo_number.
-            lv_real = lo_int->int.
+            lv_real = CAST lcl_lisp_integer( lo_number )->int.
             result = lcl_lisp_new=>real( value = lv_real
                                          exact = abap_false ).
           WHEN OTHERS.
@@ -10270,7 +10251,6 @@
       DATA lv_len TYPE tv_index.
       DATA lv_len_1 TYPE tv_index.
       DATA lv_text TYPE string.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
 
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
@@ -10339,7 +10319,6 @@
       DATA lv_len TYPE tv_index.
 
       DATA lv_text TYPE string.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
 
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
@@ -10388,7 +10367,6 @@
     METHOD proc_string_ref.
       DATA lv_index TYPE tv_index.
       DATA lv_char TYPE c LENGTH 1.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
 
       "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
@@ -10419,26 +10397,21 @@
     METHOD proc_string_set.
       DATA lv_index TYPE tv_index.
       DATA lv_char TYPE c LENGTH 1.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_char TYPE REF TO lcl_lisp_char.
-      DATA lo_string TYPE REF TO lcl_lisp_string.
-
       DATA lv_len TYPE tv_index.
       DATA lv_text TYPE string.
 
       "_validate: list, list->car, list->cdr, list->cdr->cdr.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->cdr IS NOT BOUND.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->cdr IS NOT BOUND
+        OR list->cdr->car IS NOT BOUND OR list->cdr->cdr->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
+
       "_validate_string list->car 'string-set!'.
       IF list->car->type NE string.
         list->car->raise( ` is not a string in string-set!` ) ##NO_TEXT.
       ENDIF.
 
       "_validate_index list->cdr->car 'string-set!'.
-      IF list->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF list->cdr->car->type NE integer.
         list->cdr->car->raise( ` is not an integer in string-set!` ) ##NO_TEXT.
       ENDIF.
@@ -10447,23 +10420,16 @@
       ENDIF.
 
       "_validate_char list->cdr->cdr->car 'string-set!'.
-      IF list->cdr->cdr->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
       IF list->cdr->cdr->car->type NE char.
         list->cdr->cdr->car->raise( ` is not a char in string-set!` ) ##NO_TEXT.
       ENDIF.
 
-      lo_char ?= list->cdr->cdr->car.
-      lv_char = lo_char->value(1).
+      lv_char = CAST lcl_lisp_char( list->cdr->cdr->car )->value(1).
 
       lv_index = CAST lcl_lisp_integer( list->cdr->car )->int.
 
-      lo_string ?= list->car.
       "_validate_mutable lo_string `in string-set!`.
-      IF lo_string IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
+      DATA(lo_string) = CAST lcl_lisp_string( list->car ).
       IF lo_string->mutable EQ abap_false.
         throw( |constant list in string-set! cannot be changed| ) ##NO_TEXT.
       ENDIF.
@@ -10484,14 +10450,13 @@
 
     METHOD proc_list_to_string.
       DATA lv_text TYPE string.
-      DATA lo_ptr TYPE REF TO lcl_lisp.
 
       "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      lo_ptr = list->car.
+      DATA(lo_ptr) = list->car.
       WHILE lo_ptr->type = pair AND lo_ptr->car->type EQ char.
         lv_text &&= lo_ptr->car->value+0(1).
         lo_ptr = lo_ptr->cdr.
@@ -10531,13 +10496,12 @@
 
     METHOD proc_string_append.
       DATA lv_text TYPE string.
-      DATA lo_ptr TYPE REF TO lcl_lisp.
       "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      lo_ptr = list.
+      DATA(lo_ptr) = list.
       WHILE lo_ptr->type = pair AND lo_ptr->car->type EQ string.
         lv_text &&= lo_ptr->car->value.
         lo_ptr = lo_ptr->cdr.
@@ -10549,12 +10513,6 @@
     ENDMETHOD.
 
     METHOD proc_max.
-      DATA lo_ptr TYPE REF TO lcl_lisp.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
-
       DATA carry TYPE tv_real.
       DATA lv_max TYPE tv_real.
 
@@ -10564,21 +10522,21 @@
       ENDIF.
 
       "_get_number lv_max list->car '[max]'.
-      cell = list->car.
+      DATA(cell) = list->car.
       CASE cell->type.
         WHEN integer.
           lv_max = CAST lcl_lisp_integer( cell )->int.
         WHEN real.
           lv_max = CAST lcl_lisp_real( cell )->float.
         WHEN rational.
-          lo_rat ?= cell.
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           lv_max = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
           cell->raise_nan( |max| ).
       ENDCASE.
 
-      lo_ptr = list->cdr.
+      DATA(lo_ptr) = list->cdr.
       WHILE lo_ptr->type EQ pair.
         "_get_number carry lo_ptr->car '[max]'.
         IF lo_ptr->car IS NOT BOUND.
@@ -10591,7 +10549,7 @@
           WHEN real.
             carry = CAST lcl_lisp_real( cell )->float.
           WHEN rational.
-            lo_rat ?= cell.
+            lo_rat = CAST lcl_lisp_rational( cell ).
             carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
           WHEN OTHERS.
@@ -10605,12 +10563,6 @@
     ENDMETHOD.
 
     METHOD proc_min.
-      DATA lo_ptr TYPE REF TO lcl_lisp.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
-
       DATA carry TYPE tv_real.
       DATA lv_min TYPE tv_real.
 
@@ -10619,21 +10571,21 @@
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
       "_get_number lv_min list->car '[min]'.
-      cell = list->car.
+      DATA(cell) = list->car.
       CASE cell->type.
         WHEN integer.
           lv_min = CAST lcl_lisp_integer( cell )->int.
         WHEN real.
           lv_min = CAST lcl_lisp_real( cell )->float.
         WHEN rational.
-          lo_rat ?= cell.
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           lv_min = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
         WHEN OTHERS.
           cell->raise_nan( |min| ).
       ENDCASE.
 
-      lo_ptr = list->cdr.
+      DATA(lo_ptr) = list->cdr.
       WHILE lo_ptr->type EQ pair.
         "_get_number carry lo_ptr->car '[min]'.
         IF lo_ptr->car IS NOT BOUND.
@@ -10646,7 +10598,7 @@
           WHEN real.
             carry = CAST lcl_lisp_real( cell )->float.
           WHEN rational.
-            lo_rat ?= cell.
+            lo_rat = CAST lcl_lisp_rational( cell ).
             carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
           WHEN OTHERS.
@@ -10661,11 +10613,6 @@
 
     METHOD proc_gcd.
 *     non-negative greatest common divisor of the arguments
-      DATA lo_ptr TYPE REF TO lcl_lisp.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
       DATA carry TYPE tv_real.
       DATA lv_gcd TYPE tv_real VALUE 0.
 
@@ -10680,14 +10627,14 @@
         IF list->car IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-        cell = list->car.
+        DATA(cell) = list->car.
         CASE cell->type.
           WHEN integer.
             lv_gcd = CAST lcl_lisp_integer( cell )->int.
           WHEN real.
             lv_gcd = CAST lcl_lisp_real( cell )->float.
           WHEN rational.
-            lo_rat ?= cell.
+            DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
             lv_gcd = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
           WHEN OTHERS.
@@ -10695,7 +10642,7 @@
         ENDCASE.
 
 
-        lo_ptr = list->cdr.
+        DATA(lo_ptr) = list->cdr.
         WHILE lo_ptr->type EQ pair.
           "_get_number carry lo_ptr->car '[gcd]'.
           IF lo_ptr->car IS NOT BOUND.
@@ -10708,7 +10655,7 @@
             WHEN real.
               carry = CAST lcl_lisp_real( cell )->float.
             WHEN rational.
-              lo_rat ?= cell.
+              lo_rat = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
 *              WHEN complex.
             WHEN OTHERS.
@@ -10724,8 +10671,6 @@
 
     METHOD proc_lcm.
 *     non-negative least common multiple of the arguments
-      DATA lo_ptr TYPE REF TO lcl_lisp.
-
       DATA carry TYPE tv_real.
       DATA lv_lcm TYPE tv_real VALUE 1.
 
@@ -10754,7 +10699,7 @@
             cell->raise_nan( |lcm| ).
         ENDCASE.
 
-        lo_ptr = list->cdr.
+        DATA(lo_ptr) = list->cdr.
         WHILE lo_ptr->type EQ pair.
           "_get_number carry lo_ptr->car '[lcm]'.
           IF lo_ptr->car IS NOT BOUND.
@@ -10994,8 +10939,6 @@
 *                         converter)
 *                       (else (error "bad parameter syntax"))))))
 
-      DATA lo_converter TYPE REF TO lcl_lisp.
-      DATA lo_init TYPE REF TO lcl_lisp.
       DATA lo_value TYPE REF TO lcl_lisp.
       "DATA lo_env TYPE REF TO lcl_lisp_environment.
 
@@ -11004,7 +10947,7 @@
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-      lo_init = list->car.
+      DATA(lo_init) = list->car.
 
       DATA(lo_ptr) = list->cdr.
       IF lo_ptr NE nil.
@@ -11017,7 +10960,7 @@
           throw( |unexpected parameter { lo_ptr->cdr->to_string( ) } in make-parameter| ).
         ENDIF.
 
-        lo_converter = lo_ptr->car.
+        DATA(lo_converter) = lo_ptr->car.
         IF NOT lo_converter->is_procedure( ).
           lo_converter->raise( | is not a procedure in make-parameter| ).
         ENDIF.
@@ -14668,7 +14611,7 @@
             SPLIT lv_nummer_str AT lcl_parser=>c_lisp_dot INTO lv_int_str lv_dec_str.
             lv_int_str &&= lv_dec_str.
             lv_int = lv_int_str.
-            lv_denom = ipow( base = 10 exp = strlen( lv_dec_str ) ).
+            lv_denom = ipow( base = 10 exp = numofchar( lv_dec_str ) ).
             ro_elem = rational( nummer = lv_int
                                 denom = lv_denom ).
             RETURN.
@@ -14725,7 +14668,7 @@
       DATA lv_len TYPE tv_int.
       DATA lv_hex TYPE x LENGTH 8.
 
-      lv_len = 16 - strlen( value ).
+      lv_len = 16 - numofchar( value ).
       IF lv_len GT 0.
         lv_text = lv_text+0(lv_len) && value.
       ELSE.
@@ -14747,13 +14690,12 @@
 
       DATA lv_trunc_str TYPE string.
       DATA lv_decimal_str TYPE string.
-      DATA lv_int TYPE tv_int.
       DATA lv_real TYPE tv_real.
 
       lv_text = value.
       SPLIT lv_text AT lcl_parser=>c_lisp_dot INTO lv_trunc_str lv_decimal_str.
 
-      lv_int = hex_integer( lv_trunc_str ).
+      DATA(lv_int) = hex_integer( lv_trunc_str ).
       IF lv_decimal_str IS INITIAL.
         ro_elem = integer( lv_int ).
       ELSE.
@@ -14764,9 +14706,7 @@
           ro_elem = real( value = lv_real
                           exact = abap_true ).
         ELSE.
-          DATA lv_exp TYPE tv_int.
-          lv_exp = strlen( lv_decimal_str ).
-          ro_elem = real( value = lv_real + lv_dec / ipow( base = 16 exp = lv_exp )
+          ro_elem = real( value = lv_real + lv_dec / ipow( base = 16 exp = numofchar( lv_decimal_str ) )
                           exact = abap_false ).
         ENDIF.
       ENDIF.
@@ -14785,7 +14725,7 @@
         throw_radix( `Invalid octal number` ).
       ENDIF.
 
-      lv_index = lv_size = strlen( lv_text ).
+      lv_index = lv_size = numofchar( lv_text ).
       DO lv_size TIMES.
         lv_index -= 1.
         lv_char = lv_text+lv_index(1).
@@ -14800,15 +14740,13 @@
 
       DATA lv_trunc_str TYPE string.
       DATA lv_decimal_str TYPE string.
-      DATA lv_int TYPE tv_int.
-      DATA lv_exp TYPE tv_int.
       DATA lv_real TYPE tv_real.
       DATA lv_dec TYPE tv_int.
 
       lv_text = value.
       SPLIT lv_text AT lcl_parser=>c_lisp_dot INTO lv_trunc_str lv_decimal_str.
 
-      lv_int = octal_integer( lv_trunc_str ).
+      DATA(lv_int) = octal_integer( lv_trunc_str ).
       IF lv_decimal_str IS INITIAL.
         ro_elem = integer( lv_int ).
       ELSE.
@@ -14818,8 +14756,7 @@
           ro_elem = real( value = lv_real
                           exact = abap_true ).
         ELSE.
-          lv_exp = strlen( lv_decimal_str ).
-          ro_elem = real( value = lv_real + lv_dec / ipow( base = 8 exp = lv_exp )
+          ro_elem = real( value = lv_real + lv_dec / ipow( base = 8 exp = numofchar( lv_decimal_str ) )
                           exact = abap_false ).
         ENDIF.
       ENDIF.
@@ -14836,7 +14773,7 @@
         throw_radix( `Invalid binary number` ).
       ENDIF.
 
-      lv_index = lv_size = strlen( lv_text ).
+      lv_index = lv_size = numofchar( lv_text ).
       DO lv_size TIMES.
         lv_index -= 1.
 
@@ -14852,15 +14789,13 @@
 
       DATA lv_trunc_str TYPE string.
       DATA lv_decimal_str TYPE string.
-      DATA lv_int TYPE tv_int.
-      DATA lv_exp TYPE tv_int.
       DATA lv_real TYPE tv_real.
       DATA lv_dec TYPE tv_int.
 
       lv_text = value.
       SPLIT lv_text AT lcl_parser=>c_lisp_dot INTO lv_trunc_str lv_decimal_str.
 
-      lv_int = binary_integer( lv_trunc_str ).
+      DATA(lv_int) = binary_integer( lv_trunc_str ).
       IF lv_decimal_str IS INITIAL.
         ro_elem = integer( lv_int ).
       ELSE.
@@ -14870,8 +14805,7 @@
           ro_elem = real( value = lv_real
                           exact = abap_true ).
         ELSE.
-          lv_exp = strlen( lv_decimal_str ).
-          ro_elem = real( value = lv_real + lv_dec / ipow( base = 2 exp = lv_exp )
+          ro_elem = real( value = lv_real + lv_dec / ipow( base = 2 exp = numofchar( lv_decimal_str ) )
                           exact = abap_false ).
         ENDIF.
       ENDIF.
@@ -15135,8 +15069,7 @@
   CLASS lcl_lisp_vector IMPLEMENTATION.
 
     METHOD init.
-      DATA(lt_array) = VALUE tt_lisp( FOR idx = 0 WHILE idx LT size ( io_fill )  ).
-      ro_vector = lcl_lisp_new=>vector( it_vector = lt_array
+      ro_vector = lcl_lisp_new=>vector( it_vector = VALUE tt_lisp( FOR idx = 0 WHILE idx LT size ( io_fill )  )
                                         iv_mutable = iv_mutable ).
     ENDMETHOD.
 
@@ -15152,11 +15085,12 @@
     ENDMETHOD.
 
     METHOD to_list.
+      DATA lo_ptr TYPE REF TO lcl_lisp.
+
       ro_elem = nil.
       ASSIGN array[ 1 ] TO  FIELD-SYMBOL(<vec>).
       IF sy-subrc EQ 0.
-        ro_elem = lcl_lisp_new=>cons( io_car = <vec> ).
-        DATA(lo_ptr) = ro_elem.
+        lo_ptr = ro_elem = lcl_lisp_new=>cons( io_car = <vec> ).
       ENDIF.
       LOOP AT array FROM 2 ASSIGNING <vec>.
         lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = <vec> ).
@@ -15253,20 +15187,16 @@
     ENDMETHOD.
 
     METHOD is_equal.
-      DATA lo_vec TYPE REF TO lcl_lisp_vector.
-      DATA lo_ptr TYPE REF TO lcl_lisp.
-
       result = false.
       CHECK io_elem->type EQ vector.
 
-      lo_vec ?= io_elem.
+      DATA(lo_vec) = CAST lcl_lisp_vector( io_elem ).
       CHECK lines( array ) = lines( lo_vec->array ).
 
       LOOP AT lo_vec->array INTO DATA(lo_elem).
-        lo_ptr = array[ sy-tabix ].
-        CHECK lo_ptr->is_equal( io_elem = lo_elem
-                                comp = comp
-                                interpreter = interpreter ) EQ false.
+        CHECK array[ sy-tabix ]->is_equal( io_elem = lo_elem
+                                           comp = comp
+                                           interpreter = interpreter ) EQ false.
         RETURN.
       ENDLOOP.
       result = true.
