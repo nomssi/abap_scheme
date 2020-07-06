@@ -14790,7 +14790,6 @@
     ENDMETHOD.
 
 *    METHOD function.
-*      "_validate: io_list, io_list->car.
 *      IF io_list IS NOT BOUND OR io_list->car IS NOT BOUND.
 *        lcl_lisp=>throw( c_error_incorrect_input ).
 *      ENDIF.
