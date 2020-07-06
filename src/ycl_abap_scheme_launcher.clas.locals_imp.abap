@@ -485,21 +485,17 @@
                  c_max_value  TYPE tv_real VALUE cl_abap_math=>max_decfloat34.
       DATA diff TYPE tv_real.
       DATA sum TYPE tv_real.
-      DATA abs_a TYPE tv_real.
-      DATA abs_b TYPE tv_real.
 
       result = abap_false.
       IF float EQ iv_real.
         result = abap_true.
       ELSE.
-        abs_a = abs( float ).
-        abs_b = abs( iv_real ).
-        diff = abs( float - iv_real ).
-        sum = abs_a + abs_b.
+        sum = abs( float ) + abs( iv_real ).
 
         IF float = 0 OR iv_real = 0 OR sum < c_min_normal.
 *         float or iv_real is zero or both are extremely close to it
 *         relative error is less meaningful here
+          diff = abs( float - iv_real ).
           IF ( diff < c_epsilon * c_min_normal )
             OR ( diff / nmin( val1 = sum val2 = c_max_value ) < c_epsilon ). " use relative error
             result = abap_true.
@@ -577,13 +573,12 @@
 
     METHOD match.
 *     Find the first lambda where we can assign each argument to its corresponding symbol
-      DATA lo_lambda TYPE REF TO lcl_lisp_lambda.
 
       LOOP AT clauses INTO DATA(lo_clause).
         IF lo_clause->type NE lambda.
           EXIT.
         ENDIF.
-        lo_lambda ?= lo_clause.
+        DATA(lo_lambda) = CAST lcl_lisp_lambda( lo_clause ).
         DATA(lo_var) = lo_lambda->car.      " pointer to formal parameters
         DATA(lo_arg) = args.                " Pointer to arguments
 
@@ -1243,7 +1238,7 @@
       ENDIF.
 
       svg &&= |<line x1="{ x_from }" y1="{ y_from }" x2="{ x_to }" y2="{ y_to }"|
-           && |stroke="{ pen-stroke_color }" stroke-width="{ pen-stroke_width }"/>|.
+            & |stroke="{ pen-stroke_color }" stroke-width="{ pen-stroke_width }"/>|.
 
       turtle = me.
     ENDMETHOD.
@@ -1276,12 +1271,8 @@
       turtle = lo_turtle->clone( ).
 
       " new image size is the largest of composed turtles
-      DATA(new_width) = lcl_turtle_math=>find_max_int( VALUE #( FOR <x> IN turtles ( <x>->width ) ) ).
-
-      DATA(new_height) = lcl_turtle_math=>find_max_int( VALUE #( FOR <x> IN turtles ( <x>->height ) ) ).
-
-      turtle->set_height( new_height ).
-      turtle->set_width( new_width ).
+      turtle->set_height( lcl_turtle_math=>find_max_int( VALUE #( FOR t IN turtles ( t->height ) ) ) ).
+      turtle->set_width( lcl_turtle_math=>find_max_int( VALUE #( FOR t IN turtles ( t->width ) ) ) ).
 
       DATA(composed_svg) = REDUCE string( INIT result = ``
           FOR <svg> IN VALUE string_table( FOR <x> IN turtles ( <x>->svg ) )
@@ -1372,7 +1363,7 @@
       DATA(points) = VALUE t_points( ( start )
                                      ( x = start-x + side_length y = start-y )
                                      ( x = start-x + side_length y = start-y + side_length )
-                                     ( x = start-x y = start-y + side_length ) ).
+                                     ( x = start-x               y = start-y + side_length ) ).
 
       append_svg( turtle->svg_builder->polyline( VALUE #( points = points ) )  ).
 
@@ -3002,17 +2993,18 @@
 
     METHOD peek_char.
       DATA(lv_idx) = index + 1.
-
       rv_char = COND #( WHEN lv_idx < length THEN code+lv_idx(1) ELSE c_lisp_eof ).
     ENDMETHOD.
 
     METHOD peek_bytevector.
-      CONSTANTS c_bytevector_prefix TYPE c LENGTH 3 VALUE 'u8('.
+      CONSTANTS:
+        c_prefix_length TYPE i VALUE 3,
+        c_bytevector_prefix TYPE c LENGTH c_prefix_length VALUE 'u8('.
       DATA lv_token TYPE string.
 
       DATA(lv_idx) = index.
       rv_flag = abap_false.
-      DO 3 TIMES.  " length( c_bytevector_prefix ) = 3
+      DO c_prefix_length TIMES.
         lv_idx += 1.
 
         IF lv_idx < length.
@@ -3599,7 +3591,6 @@
 *     This routine is called very, very often!
       DATA lo_arg TYPE REF TO lcl_lisp.
 *     Before execution of the procedure or lambda, all parameters must be evaluated
-      "_validate io_list.
       IF io_list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -3620,7 +3611,6 @@
         elem = elem->cdr.
       ENDWHILE.
 
-      "_validate_tail elem io_list space.
       IF elem NE nil.
 *       if the last element in the list is not a cons cell, we cannot append
         throw( |: { io_list->to_string( ) } is not a proper list| ) ##NO_TEXT.
@@ -3629,7 +3619,6 @@
     ENDMETHOD.                    "evaluate_parameters
 
     METHOD expand_apply.
-      "_validate: io_list, io_list->cdr.
       IF io_list IS NOT BOUND OR io_list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -3959,7 +3948,6 @@
       DATA lo_values TYPE REF TO lcl_lisp.
       DATA lv_parameter_object TYPE abap_boolean VALUE abap_false.
 
-      "_validate io_head.
       IF io_head IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -4353,10 +4341,8 @@
 
     ENDMETHOD.
 
-**********************************************************************
 *------------------------------- EVAL( ) ----------------------------
 * eval takes an expression and an environment to a value
-**********************************************************************
     METHOD eval.
       DATA(lo_elem) = element.
       DATA(lo_env) = environment.
@@ -5158,12 +5144,10 @@
       DATA lv_char TYPE tv_char.
       DATA li_port TYPE REF TO lif_input_port.
 
-      "_validate: io_arg, io_arg->car.
       IF io_arg IS NOT BOUND OR io_arg->car IS NOT BOUND.
         throw( c_error_incorrect_input ).
       ENDIF.
 
-      "_validate_integer io_arg->car `read-string`.
       IF io_arg->car->type NE integer.  " fix
         io_arg->raise( ` is not an integer in read-string` ) ##NO_TEXT.
       ENDIF.
@@ -5425,7 +5409,6 @@
     ENDMETHOD.                    "proc_car
 
     METHOD proc_set_car.
-      "_validate: list, list->cdr.
       IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -5448,7 +5431,6 @@
     ENDMETHOD.                    "proc_car
 
     METHOD proc_set_cdr.
-      "_validate: list, list->cdr.
       IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -5471,7 +5453,6 @@
     ENDMETHOD.
 
     METHOD proc_cdr.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -5501,7 +5482,6 @@
 
     METHOD proc_not.
 *     Create new cell and prepend it to second parameter
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6360,7 +6340,7 @@
     METHOD list_length.
       DATA lo_fast TYPE REF TO lcl_lisp.
       DATA lo_slow TYPE REF TO lcl_lisp.
-      "_validate list.
+
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6389,7 +6369,6 @@
     ENDMETHOD.
 
     METHOD proc_length.
-      "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6406,7 +6385,6 @@
       DATA lo_ptr TYPE REF TO lcl_lisp.
       DATA lo_new TYPE REF TO lcl_lisp.
 
-      "_validate: list, list->cdr.
       IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6415,7 +6393,6 @@
         throw( |list-copy takes only one argument| ).
       ENDIF.
 
-      "_validate list->car.
       IF list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6446,7 +6423,6 @@
     ENDMETHOD.                    "proc_list
 
     METHOD proc_nilp.
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6456,7 +6432,6 @@
 
     METHOD proc_make_list.
 *     returns a list of length k and every atom is the default fill value supplied or the empty list
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6489,7 +6464,6 @@
     ENDMETHOD.
 
     METHOD proc_list_tail.
-      "_validate: list, list->cdr, list->cdr->car
       IF list IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6514,7 +6488,6 @@
 *     we must check that list is a chain of pairs whose length is at least k.
 *     we should not check that it is a list of pairs beyond this length.
 
-      "_validate: list, list->cdr.
       IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6536,7 +6509,6 @@
       DATA lv_step TYPE tv_int VALUE 1.
       DATA lo_ptr TYPE REF TO lcl_lisp.
 
-      "_validate list.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6554,25 +6526,21 @@
       result = nil.
       CHECK lv_count GT 0.
 
-      "_validate list->cdr.
       IF list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
       IF list->cdr NE nil.
         DATA(lo_start) = list->cdr->car.
-        "_validate_integer lo_start 'iota start'.
-        "_validate lo_start.
         IF lo_start IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
-
+        "_validate_integer lo_start 'iota start'.
         IF lo_start->type NE integer.
           lo_start->raise( ` is not an integer in iota start` ) ##NO_TEXT.
         ENDIF.
 
         lv_start = CAST lcl_lisp_integer( lo_start )->int.
 
-        "_validate list->cdr->cdr.
         IF list->cdr->cdr IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
@@ -6580,7 +6548,6 @@
         IF list->cdr->cdr NE nil.
           DATA(lo_step) = list->cdr->cdr->car.
           "_validate_integer lo_step 'iota step'.
-          "_validate lo_step.
           IF lo_step IS NOT BOUND.
             lcl_lisp=>throw( c_error_incorrect_input ).
           ENDIF.
@@ -6610,7 +6577,6 @@
 *    The implementation must check that list is a chain of pairs whose length is at least k + 1.
 *    It should not check that it is a list of pairs beyond this length.
 
-      "_validate: list, list->cdr, list->cdr->car.
       IF list IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6630,7 +6596,7 @@
 
     METHOD proc_make_vector.
       DATA lo_fill TYPE REF TO lcl_lisp.
-      "_validate: list, list->cdr.
+
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6660,7 +6626,6 @@
     ENDMETHOD.
 
     METHOD proc_vector_length.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6675,7 +6640,6 @@
 
     METHOD proc_vector_ref.
 *    (vector-ref vector k) procedure
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6687,7 +6651,6 @@
 
       DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
 
-      "_validate list->cdr.
       IF list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6707,7 +6670,6 @@
 
     METHOD proc_vector_set.
 *    (vector-set! vector k obj) procedure
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6754,7 +6716,6 @@
 * (vector-fill! vector fill start) procedure
 * (vector-fill! vector fill start end) procedure
 *The vector-fill! procedure stores fill in the elements of vector between start and end.
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6833,7 +6794,6 @@
 *   (vector->list vector start end) procedure
 * The vector->list procedure returns a newly allocated list of the objects contained
 * in the elements of vector between start and end. Order is preserved.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -6954,7 +6914,6 @@
     ENDMETHOD.
 
     METHOD proc_memv.
-      "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -7087,7 +7046,6 @@
     ENDMETHOD.
 
     METHOD proc_assv.
-      "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -7111,7 +7069,6 @@
       ENDWHILE.
     ENDMETHOD.
 
-**********************************************************************
     METHOD proc_add.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
@@ -7814,11 +7771,8 @@
       DATA carry_is_int TYPE abap_boolean.
 
       result = false.
-      "_validate: list, list->car, list->cdr.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
-        throw( c_error_incorrect_input ).
-      ENDIF.
-      IF list->cdr->type NE pair.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND
+        OR list->cdr->type NE pair.
         throw( c_error_incorrect_input ).
       ENDIF.
 
@@ -7897,11 +7851,8 @@
       DATA carry_is_int TYPE abap_boolean.
 
       result = false.
-      "_validate: list, list->car, list->cdr.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
-        throw( c_error_incorrect_input ).
-      ENDIF.
-      IF list->cdr->type NE pair.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND
+        OR list->cdr->type NE pair.
         throw( c_error_incorrect_input ).
       ENDIF.
 
@@ -7978,16 +7929,10 @@
       DATA carry TYPE tv_real.
       DATA carry_int TYPE tv_int.
       DATA carry_is_int TYPE abap_boolean.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = false.
-      "_validate: list, list->car, list->cdr.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
-        throw( c_error_incorrect_input ).
-      ENDIF.
-      IF list->cdr->type NE pair.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND
+        OR list->cdr->type NE pair.
         throw( c_error_incorrect_input ).
       ENDIF.
 
@@ -8003,7 +7948,7 @@
           carry = CAST lcl_lisp_real( cell )->float.
 
         WHEN rational.
-          lo_rat ?= cell.
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
 *      WHEN complex.
 
@@ -8020,7 +7965,7 @@
 
         CASE cell->car->type.
           WHEN integer.
-            lo_int ?= cell->car.
+            DATA(lo_int) = CAST lcl_lisp_integer( cell->car ).
             IF carry_is_int = abap_true.
               IF carry_int > lo_int->int.
                 RETURN.
@@ -8035,7 +7980,7 @@
 
           WHEN real.
             carry_is_int = abap_false.
-            lo_real ?= cell->car.
+            DATA(lo_real) = CAST lcl_lisp_real( cell->car ).
             IF carry > lo_real->float.
               RETURN.
             ENDIF.
@@ -8043,7 +7988,7 @@
 
           WHEN rational.
             carry_is_int = abap_false.
-            lo_rat ?= cell->car.
+            lo_rat = CAST lcl_lisp_rational( cell->car ).
             IF carry * lo_rat->denominator > lo_rat->int.
               RETURN.
             ENDIF.
@@ -8062,12 +8007,8 @@
     METHOD proc_is_zero.
       "_sign 0 '[zero?]'.
       DATA carry TYPE tv_real.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = false.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -8080,7 +8021,7 @@
         WHEN real.
           carry = CAST lcl_lisp_real( cell )->float.
         WHEN rational.
-          lo_rat ?= cell.
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
 *      WHEN complex.
         WHEN OTHERS.
@@ -8096,12 +8037,8 @@
     METHOD proc_is_positive.
       "_sign 1 '[positive?]'.
       DATA carry TYPE tv_real.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = false.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -8114,7 +8051,7 @@
         WHEN real.
           carry = CAST lcl_lisp_real( cell )->float.
         WHEN rational.
-          lo_rat ?= cell.
+          DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
 *      WHEN complex.
         WHEN OTHERS.
@@ -8132,7 +8069,6 @@
       DATA carry TYPE tv_real.
 
       result = false.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -8176,7 +8112,6 @@
 
     METHOD proc_is_even.
       result = false.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -8193,14 +8128,9 @@
 **********************************************************************
 
     METHOD proc_eql.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
-      DATA lo_rat_2 TYPE REF TO lcl_lisp_rational.
       DATA lv_int TYPE tv_int.
       DATA lv_real TYPE tv_real.
 
-      "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -8259,7 +8189,7 @@
                 ENDIF.
 
               WHEN rational.
-                lo_rat ?= lo_ptr->cdr->car.
+                DATA(lo_rat) = CAST lcl_lisp_rational( lo_ptr->cdr->car ).
                 IF lv_int = lo_rat->int AND lo_rat->denominator EQ 1.
                   result = true.
                 ELSE.
@@ -8326,7 +8256,7 @@
                 ENDIF.
 
               WHEN rational.
-                lo_rat_2 ?= lo_ptr->cdr->car.
+                DATA(lo_rat_2) = CAST lcl_lisp_rational( lo_ptr->cdr->car ).
                 IF lo_rat->int = lo_rat_2->int
                   AND lo_rat->denominator EQ lo_rat_2->denominator.
                   result = true.
@@ -8346,7 +8276,6 @@
     ENDMETHOD.                    "proc_eql
 
     METHOD proc_eq.
-      "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -8423,7 +8352,6 @@
 * procedures, and the empty list. If two objects are eqv?, they must be equal? as well.
 * In all other cases, equal? may return either #t or #f.
 * Even if its arguments are circular data structures, equal? must always terminate.
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         throw( c_error_incorrect_input ).
       ENDIF.
@@ -8778,14 +8706,12 @@
 
     METHOD proc_abs.
       result = nil.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
       list->assert_last_param( ).
 
       TRY.
-          "_validate list->car.
           IF list->car IS NOT BOUND.
             throw( c_error_incorrect_input ).
           ENDIF.
@@ -8848,7 +8774,6 @@
       DATA carry TYPE f.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -8882,7 +8807,6 @@
       DATA carry TYPE f.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -8916,7 +8840,6 @@
       DATA carry TYPE f.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -8950,7 +8873,6 @@
       DATA carry TYPE f.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -8984,7 +8906,6 @@
       DATA carry TYPE f.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9086,7 +9007,6 @@
       DATA carry TYPE f.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9120,7 +9040,6 @@
 
       result = nil.
       "_validate list.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9153,7 +9072,6 @@
       DATA carry TYPE f.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9186,7 +9104,6 @@
       DATA carry TYPE f.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9277,7 +9194,6 @@
       DATA carry TYPE tv_real.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9310,7 +9226,6 @@
       DATA carry TYPE tv_real.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9343,7 +9258,6 @@
       DATA carry TYPE tv_real.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9410,7 +9324,6 @@
       DATA carry TYPE tv_real.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9442,7 +9355,6 @@
     METHOD proc_floor_new.
       DATA carry TYPE tv_real.
 
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9492,7 +9404,6 @@
       DATA carry TYPE tv_real.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9526,7 +9437,6 @@
       DATA carry TYPE tv_real.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9560,7 +9470,6 @@
       DATA carry TYPE tv_real.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9592,7 +9501,6 @@
     METHOD proc_numerator.
       DATA lv_num TYPE tv_real.
 
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9623,7 +9531,6 @@
     METHOD proc_denominator.
       DATA lo_frac TYPE REF TO lcl_lisp_real.
 
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9661,7 +9568,6 @@
       DATA denominator TYPE tv_real.
 
       result = nil.
-      "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9712,7 +9618,6 @@
       DATA denominator TYPE tv_real.
 
       result = nil.
-      "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9764,7 +9669,6 @@
       DATA mod TYPE tv_real.
 
       result = nil.
-      "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9818,7 +9722,6 @@
       DATA lv_high TYPE i.
 
       result = nil.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9839,7 +9742,6 @@
     ENDMETHOD.                    "proc_random
 
     METHOD proc_is_exact.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9859,7 +9761,6 @@
 
     METHOD proc_is_inexact.
       DATA lo_number TYPE REF TO lcl_lisp_number.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9877,7 +9778,6 @@
     ENDMETHOD.
 
     METHOD proc_to_exact.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -9926,7 +9826,6 @@
     METHOD proc_to_inexact.
       DATA lv_real TYPE tv_real.
 
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10053,7 +9952,6 @@
     ENDMETHOD.
 
     METHOD proc_string_to_num.
-      "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10341,7 +10239,6 @@
 
         lv_start = CAST lcl_lisp_integer( lo_start )->int.
 
-        "_validate list->cdr->cdr.
         IF list->cdr->cdr IS NOT BOUND.
           lcl_lisp=>throw( c_error_incorrect_input ).
         ENDIF.
@@ -10400,7 +10297,6 @@
       DATA lv_len TYPE tv_index.
       DATA lv_text TYPE string.
 
-      "_validate: list, list->car, list->cdr, list->cdr->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->cdr IS NOT BOUND
         OR list->cdr->car IS NOT BOUND OR list->cdr->cdr->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
@@ -10451,7 +10347,6 @@
     METHOD proc_list_to_string.
       DATA lv_text TYPE string.
 
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10468,7 +10363,6 @@
     ENDMETHOD.
 
     METHOD proc_symbol_to_string.
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10482,7 +10376,6 @@
     ENDMETHOD.
 
     METHOD proc_string_to_symbol.
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10566,7 +10459,6 @@
       DATA carry TYPE tv_real.
       DATA lv_min TYPE tv_real.
 
-      "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10616,7 +10508,6 @@
       DATA carry TYPE tv_real.
       DATA lv_gcd TYPE tv_real VALUE 0.
 
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10727,7 +10618,6 @@
     ENDMETHOD.
 
     METHOD proc_is_textual_port.
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10739,7 +10629,6 @@
     ENDMETHOD.
 
     METHOD proc_is_binary_port.
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10751,7 +10640,6 @@
     ENDMETHOD.
 
     METHOD proc_is_port.
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10762,7 +10650,6 @@
     ENDMETHOD.
 
     METHOD proc_is_input_port.
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10813,7 +10700,6 @@
     ENDMETHOD.
 
     METHOD proc_close_output_port.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10828,7 +10714,6 @@
     ENDMETHOD.
 
     METHOD proc_close_input_port.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10843,7 +10728,6 @@
     ENDMETHOD.
 
     METHOD proc_close_port.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10866,7 +10750,6 @@
     ENDMETHOD.
 
     METHOD proc_open_input_string.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10887,7 +10770,6 @@
     ENDMETHOD.
 
     METHOD proc_get_output_string.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10905,7 +10787,6 @@
     ENDMETHOD.
 
     METHOD proc_is_eof_object.
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10942,7 +10823,6 @@
       DATA lo_value TYPE REF TO lcl_lisp.
       "DATA lo_env TYPE REF TO lcl_lisp_environment.
 
-      "_validate: list, list->car, list->cdr.
       IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -10983,7 +10863,7 @@
 
     METHOD proc_is_char_alphabetic.
       DATA lv_char TYPE tv_char.
-      "_validate: list, list->car
+
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11051,7 +10931,6 @@
     ENDMETHOD.
 
     METHOD proc_digit_value.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11134,7 +11013,6 @@
     ENDMETHOD.
 
     METHOD proc_is_char_whitespace.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11153,7 +11031,6 @@
     ENDMETHOD.
 
     METHOD proc_is_char_upper_case.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11168,7 +11045,6 @@
     ENDMETHOD.
 
     METHOD proc_is_char_lower_case.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11221,7 +11097,6 @@
 
 *----- Char
     METHOD proc_char_list_is_eq.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11257,7 +11132,6 @@
     ENDMETHOD.
 
     METHOD proc_char_list_is_lt.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11297,7 +11171,6 @@
 
     METHOD proc_char_list_is_gt.
       "_proc_char_list_compare `char>?` >.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11336,7 +11209,6 @@
 
     METHOD proc_char_list_is_le.
       "_proc_char_list_compare `char<=?` <=.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11376,7 +11248,6 @@
 
     METHOD proc_char_list_is_ge.
       "_proc_char_list_compare `char>=?` >=.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11415,7 +11286,6 @@
 
     METHOD proc_char_ci_list_is_eq.
       "_proc_char_ci_list_compare `char-ci=?` =.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11451,7 +11321,6 @@
 
     METHOD proc_char_ci_list_is_lt.
       "_proc_char_ci_list_compare `char-ci<?` <.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11490,7 +11359,6 @@
 
     METHOD proc_char_ci_list_is_gt.
       "_proc_char_ci_list_compare `char-ci>?` >.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11529,7 +11397,6 @@
 
     METHOD proc_char_ci_list_is_le.
       "_proc_char_ci_list_compare `char-ci<=?` <=.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11568,7 +11435,6 @@
 
     METHOD proc_char_ci_list_is_ge.
       "_proc_char_ci_list_compare `char-ci>=?` >=.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11608,7 +11474,6 @@
 *----- String
     METHOD proc_string_list_is_eq.
       "_proc_string_list_compare `string=?` =.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11644,7 +11509,6 @@
 
     METHOD proc_string_list_is_lt.
       "_proc_string_list_compare `string<?` <.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11683,7 +11547,6 @@
 
     METHOD proc_string_list_is_gt.
       "_proc_string_list_compare `string>?` >.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11722,7 +11585,6 @@
     METHOD proc_string_list_is_le.
       "_proc_string_list_compare `string<=?` <=.
       "_proc_list_compare &1 &2 char_case_identity string type_string.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11761,7 +11623,6 @@
 
     METHOD proc_string_list_is_ge.
       "_proc_string_list_compare `string>=?` >=.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11802,7 +11663,6 @@
 
     METHOD proc_string_ci_list_is_eq.
       "_proc_string_ci_list_compare `string-ci=?` =.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11838,7 +11698,6 @@
 
     METHOD proc_string_ci_list_is_lt.
       "_proc_string_ci_list_compare `string-ci<?` <.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11877,7 +11736,6 @@
 
     METHOD proc_string_ci_list_is_gt.
       "_proc_string_ci_list_compare `string-ci>?` >.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11916,7 +11774,6 @@
 
     METHOD proc_string_ci_list_is_le.
       "_proc_string_ci_list_compare `string-ci<=?` <=.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11955,7 +11812,6 @@
 
     METHOD proc_string_ci_list_is_ge.
       "_proc_string_ci_list_compare `string-ci>=?` >=.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -11995,7 +11851,6 @@
 *--- End string
 
     METHOD proc_char_to_integer.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -12032,7 +11887,6 @@
     ENDMETHOD.
 
     METHOD proc_char_upcase.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -12045,7 +11899,6 @@
     ENDMETHOD.
 
     METHOD proc_char_downcase.
-      "_validate: list, list->car
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -12058,7 +11911,6 @@
     ENDMETHOD.
 
     METHOD proc_error.
-      "_validate list.
       IF list IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -12067,7 +11919,6 @@
     ENDMETHOD.
 
     METHOD proc_raise.
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -12173,7 +12024,7 @@
 
     METHOD proc_abap_table. "Create a table data
       DATA lo_result TYPE REF TO lcl_lisp_table.
-      "_validate: list, list->car.
+
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -12192,7 +12043,6 @@
 
 **********************************************************************
     METHOD proc_abap_append_row.
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -12235,7 +12085,6 @@
       DATA lo_ref TYPE REF TO lcl_lisp_data.
       FIELD-SYMBOLS <data> TYPE any.
 
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -12254,7 +12103,6 @@
     METHOD proc_abap_set_value. "Convert Lisp to ABAP data
       FIELD-SYMBOLS <data> TYPE any.
 
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -12318,7 +12166,7 @@
 
     METHOD proc_abap_get.
       DATA lo_ref TYPE REF TO lcl_lisp_data.
-      "_validate: list, list->car.
+
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -12352,7 +12200,6 @@
       FIELD-SYMBOLS <target> TYPE any.
       FIELD-SYMBOLS <source> TYPE any.
 
-      "_validate: list, list->car.
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
@@ -14785,29 +14632,26 @@
     ENDMETHOD.
 
     METHOD binary.
-      DATA lv_text TYPE string.
-
       DATA lv_trunc_str TYPE string.
       DATA lv_decimal_str TYPE string.
-      DATA lv_real TYPE tv_real.
-      DATA lv_dec TYPE tv_int.
+      DATA lv_frac_bin TYPE tv_int.
+      DATA lv_frac_real TYPE tv_real.
 
-      lv_text = value.
-      SPLIT lv_text AT lcl_parser=>c_lisp_dot INTO lv_trunc_str lv_decimal_str.
+      SPLIT CONV string( value ) AT lcl_parser=>c_lisp_dot INTO lv_trunc_str lv_decimal_str.
 
       DATA(lv_int) = binary_integer( lv_trunc_str ).
       IF lv_decimal_str IS INITIAL.
         ro_elem = integer( lv_int ).
       ELSE.
-        lv_dec = binary_integer( lv_decimal_str ).
-        lv_real = lv_int.
-        IF lv_dec EQ 0.
-          ro_elem = real( value = lv_real
-                          exact = abap_true ).
+        lv_frac_bin = binary_integer( lv_decimal_str ).
+
+        IF lv_frac_bin EQ 0.
+          lv_frac_real = 0.
         ELSE.
-          ro_elem = real( value = lv_real + lv_dec / ipow( base = 2 exp = numofchar( lv_decimal_str ) )
-                          exact = abap_false ).
+          lv_frac_real = lv_frac_bin / ipow( base = 2 exp = numofchar( lv_decimal_str ) ).
         ENDIF.
+        ro_elem = real( value = lv_int + lv_frac_real
+                        exact = xsdbool( lv_frac_bin EQ 0 ) ).
       ENDIF.
     ENDMETHOD.
 
