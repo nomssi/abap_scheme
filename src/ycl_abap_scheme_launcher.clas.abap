@@ -31,7 +31,7 @@ CLASS ycl_abap_scheme_launcher IMPLEMENTATION.
     DATA response TYPE string.
     DATA output TYPE string.
     DATA port TYPE REF TO lcl_lisp_buffered_port.
-    DATA lo_int TYPE REF TO lcl_lisp_profiler. "The Lisp interpreter.
+    DATA lo_interpreter TYPE REF TO lcl_lisp_profiler. "The Lisp interpreter.
 
      out->write( `Welcome to ABAP Scheme in the Cloud!` ).
      lcl_lisp_port=>go_out = out.
@@ -42,15 +42,15 @@ CLASS ycl_abap_scheme_launcher IMPLEMENTATION.
                                     iv_error     = abap_true
                                     iv_buffered  = abap_true ).
 
-        lo_int = NEW #( io_port = port  " LISP Interpreter
-                        ii_log = port ).
+        lo_interpreter = NEW #( io_port = port
+                                ii_log = port ).
 
         out->get( data = code
                   name = |Enter Scheme code:\n| ).
 
-        response = lo_int->eval_repl( EXPORTING code = code
-                                      IMPORTING output = output ).
-        response = |[ { lo_int->runtime } µs ] { response }|.
+        response = lo_interpreter->eval_repl( EXPORTING code = code
+                                              IMPORTING output = output ).
+        response = |[ { lo_interpreter->runtime } µs ] { response }|.
 
       CATCH cx_root INTO DATA(lx_root).
         response = lx_root->get_text( ).
