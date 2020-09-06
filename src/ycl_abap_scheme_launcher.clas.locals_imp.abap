@@ -128,6 +128,7 @@
            real          VALUE 'R',
            complex       VALUE 'z',
            rational      VALUE 'r',
+           bigint        VALUE 'B',
            string        VALUE '"',
 
            boolean       VALUE 'b',
@@ -368,6 +369,44 @@
       DATA int TYPE tv_int READ-ONLY.
     PROTECTED SECTION.
       METHODS constructor IMPORTING value TYPE any.
+  ENDCLASS.
+
+  CLASS lcl_lisp_bigint DEFINITION INHERITING FROM lcl_lisp_integer CREATE PROTECTED FRIENDS lcl_lisp_new.
+    PUBLIC SECTION.
+      TYPES: BEGIN OF ENUM tv_order BASE TYPE i,
+               smaller VALUE -1,
+               equal   VALUE IS INITIAL,
+               larger  VALUE +1,
+             END OF ENUM tv_order.
+
+      TYPES tv_sign_char TYPE c LENGTH 1.
+
+      TYPES: BEGIN OF ENUM tv_sign BASE TYPE c,
+               positive  VALUE IS INITIAL,
+               negative  VALUE '-',
+             END OF ENUM tv_sign.
+
+      TYPES tr_bigint TYPE REF TO lcl_lisp_bigint.
+      TYPES tt_bigint TYPE STANDARD TABLE OF tr_bigint.
+
+      CLASS-DATA zero TYPE tr_bigint READ-ONLY.
+      CLASS-DATA one TYPE tr_bigint READ-ONLY.
+      CLASS-DATA minus_one TYPE tr_bigint READ-ONLY.
+
+    PROTECTED SECTION.
+      TYPES tv_chunk TYPE tv_real.
+      TYPES tt_chunk TYPE STANDARD TABLE OF tv_chunk.
+
+      CONSTANTS fzero TYPE tv_chunk VALUE 0.
+      CONSTANTS fhalf TYPE tv_chunk VALUE '0.5'.
+
+      CLASS-DATA chunksize TYPE tv_int VALUE 16.
+      CLASS-DATA dchunksize TYPE tv_int VALUE 32.
+      CLASS-DATA chunkmod TYPE tv_chunk VALUE `1e16`.       "#EC NOTEXT.
+      CLASS-DATA dchunkmod TYPE tv_chunk VALUE `1e32`.      "#EC NOTEXT.
+
+      DATA sign TYPE tv_sign.
+      DATA dat TYPE tt_chunk.
   ENDCLASS.
 
   CLASS lcl_lisp_rational DEFINITION INHERITING FROM lcl_lisp_integer CREATE PROTECTED FRIENDS lcl_lisp_new.
@@ -7126,6 +7165,9 @@
             ENDCASE.
 
 *            WHEN complex.
+
+*            WHEN bigint.
+
           WHEN OTHERS.
             cell->raise_nan( |+| ).
         ENDCASE.
@@ -7228,6 +7270,8 @@
             ENDCASE.
 
 *          WHEN complex.
+
+*          WHEN bigint.
           WHEN OTHERS.
             cell->raise_nan( |*| ).
         ENDCASE.
@@ -7334,6 +7378,9 @@
           ENDCASE.
 
 *        WHEN complex.
+
+*        WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |-| ).
       ENDCASE.
@@ -7424,6 +7471,9 @@
               ENDCASE.
 
 *            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |-| ).
           ENDCASE.
@@ -7527,7 +7577,10 @@
               res-denom = lo_rat->denominator.
           ENDCASE.
 
-*        WHEN complex.
+*          WHEN complex.
+
+*          WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |/| ).
       ENDCASE.
@@ -7632,7 +7685,10 @@
                       res-denom = lo_rat->denominator.
                   ENDCASE.
 
-*                WHEN complex.
+*                   WHEN complex.
+
+*                   WHEN bigint.
+
                 WHEN OTHERS.
                   cell->raise_nan( |/| ).
               ENDCASE.
@@ -7675,7 +7731,10 @@
         WHEN rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
-*      WHEN complex.
+
+*        WHEN complex.
+
+*        WHEN bigint.
 
         WHEN OTHERS.
           cell->raise_nan( |>| ).
@@ -7719,7 +7778,11 @@
             ENDIF.
             carry = lo_rat->int / lo_rat->denominator.
 
-*               WHEN complex.
+*          WHEN complex.
+
+
+*          WHEN bigint.
+
           WHEN OTHERS.
             cell->car->raise_nan( |>| ).
         ENDCASE.
@@ -7755,7 +7818,10 @@
         WHEN rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
-*      WHEN complex.
+
+*        WHEN complex.
+
+*        WHEN bigint.
 
         WHEN OTHERS.
           cell->raise_nan( |>=| ).
@@ -7799,7 +7865,10 @@
             ENDIF.
             carry = lo_rat->int / lo_rat->denominator.
 
-*               WHEN complex.
+*          WHEN complex.
+
+*          WHEN bigint.
+
           WHEN OTHERS.
             cell->car->raise_nan( |>=| ).
         ENDCASE.
@@ -7835,7 +7904,11 @@
         WHEN rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
-*      WHEN complex.
+
+*        WHEN complex.
+
+*        WHEN bigint.
+
 
         WHEN OTHERS.
           cell->raise_nan( |<| ).
@@ -7879,7 +7952,10 @@
             ENDIF.
             carry = lo_rat->int / lo_rat->denominator.
 
-*               WHEN complex.
+*          WHEN complex.
+
+*          WHEN bigint.
+
           WHEN OTHERS.
             cell->car->raise_nan( |<| ).
         ENDCASE.
@@ -7915,7 +7991,10 @@
         WHEN rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
-*      WHEN complex.
+
+*        WHEN complex.
+
+*        WHEN bigint.
 
         WHEN OTHERS.
           cell->raise_nan( |<=| ).
@@ -7959,7 +8038,10 @@
             ENDIF.
             carry = lo_rat->int / lo_rat->denominator.
 
-*               WHEN complex.
+*          WHEN complex.
+
+*          WHEN bigint.
+
           WHEN OTHERS.
             cell->car->raise_nan( |<=| ).
         ENDCASE.
@@ -7988,7 +8070,11 @@
         WHEN rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
-*      WHEN complex.
+
+*        WHEN complex.
+
+*        WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |zero?| ).
       ENDCASE.
@@ -8018,7 +8104,11 @@
         WHEN rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
-*      WHEN complex.
+
+*        WHEN complex.
+
+*        WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |positive?| ).
       ENDCASE.
@@ -8048,7 +8138,11 @@
         WHEN rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
-*      WHEN complex.
+
+*        WHEN complex.
+
+*        WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |negative?| ).
       ENDCASE.
@@ -8115,7 +8209,8 @@
           WHEN integer
             OR real
             OR rational
-            OR complex.
+            OR complex
+            OR bigint.
           WHEN OTHERS.
             lo_ptr->car->raise_nan( |=| ) ##NO_TEXT.
         ENDCASE.
@@ -8163,6 +8258,16 @@
                 ENDIF.
 
 *              WHEN complex.
+
+              WHEN bigint.
+*                DATA(lo_big) = CAST lcl_lisp_bigint( lo_ptr->cdr->car ).
+*                IF lo_big->cmp( lv_int ) = lo_big->equal.
+*                  result = true.
+*                ELSE.
+*                  result = false.
+*                  EXIT.
+*                ENDIF.
+
             ENDCASE.
 
           WHEN real.
@@ -8196,6 +8301,9 @@
                 ENDIF.
 
 *              WHEN complex.
+
+*              WHEN bigint.
+
             ENDCASE.
 
           WHEN rational.
@@ -8231,9 +8339,15 @@
                 ENDIF.
 
 *              WHEN complex.
+
+*              WHEN bigint.
+
             ENDCASE.
 
 *          WHEN complex.
+
+*          WHEN bigint.
+
         ENDCASE.
 
         lo_ptr = lo_ptr->cdr.
@@ -8511,6 +8625,8 @@
       CASE list->car->type.
         WHEN integer.
           result = true.
+        WHEN bigint.
+          lcl_lisp=>throw( `BigInt IS_INTEGER( ) not implemented` ).
         WHEN rational.
           CHECK CAST lcl_lisp_rational( list->car )->denominator EQ 1.
           result = true.
@@ -8681,6 +8797,9 @@
               result = lcl_lisp_new=>rational( nummer = abs( lo_rat->int )
                                                denom = abs( lo_rat->denominator ) ).
 *            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               list->car->raise_nan( |abs| ).
           ENDCASE.
@@ -8710,7 +8829,11 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*                  WHEN complex.
+
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |sin| ).
           ENDCASE.
@@ -8743,7 +8866,11 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*                  WHEN complex.
+
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |cos| ).
           ENDCASE.
@@ -8776,7 +8903,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*                  WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |tan| ).
           ENDCASE.
@@ -8809,7 +8939,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*                  WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |asin| ).
           ENDCASE.
@@ -8842,7 +8975,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*                  WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |acos| ).
           ENDCASE.
@@ -8875,7 +9011,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*                  WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |atan| ).
           ENDCASE.
@@ -8908,7 +9047,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*                  WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |sinh| ).
           ENDCASE.
@@ -8941,7 +9083,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*                  WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |cosh| ).
           ENDCASE.
@@ -8974,7 +9119,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*                  WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |tanh| ).
           ENDCASE.
@@ -9006,7 +9154,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*              WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |asinh| ).
           ENDCASE.
@@ -9038,7 +9189,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*              WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |acosh| ).
           ENDCASE.
@@ -9070,7 +9224,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*              WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |atanh| ).
           ENDCASE.
@@ -9107,6 +9264,9 @@
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           base1 = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
+
+*          WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |expt| ).
       ENDCASE.
@@ -9129,6 +9289,9 @@
               exp1 = lo_rat->int / lo_rat->denominator.
               result = lcl_lisp_new=>number( base1 ** exp1 ).
 *            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |expt| ).
           ENDCASE.
@@ -9158,7 +9321,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |exp| ).
           ENDCASE.
@@ -9190,7 +9356,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |log| ).
           ENDCASE.
@@ -9222,7 +9391,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |sqrt| ).
           ENDCASE.
@@ -9254,7 +9426,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |square| ).
           ENDCASE.
@@ -9287,7 +9462,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |floor| ).
           ENDCASE.
@@ -9318,7 +9496,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |floor/| ).
           ENDCASE.
@@ -9333,7 +9514,10 @@
             WHEN rational.
               lo_rat = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |floor/| ).
           ENDCASE.
@@ -9367,7 +9551,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |ceil| ).
           ENDCASE.
@@ -9400,7 +9587,10 @@
             WHEN rational.
               DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |truncate| ).
           ENDCASE.
@@ -9432,7 +9622,10 @@
         WHEN rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           carry = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*         WHEN complex.
+
+*         WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |round| ).
       ENDCASE.
@@ -9470,7 +9663,10 @@
 
         WHEN rational.
           result = lcl_lisp_new=>integer( CAST lcl_lisp_rational( cell )->int ).
-*        WHEN complex.
+*         WHEN complex.
+
+*         WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |numerator| ).
       ENDCASE.
@@ -9505,7 +9701,10 @@
 
         WHEN rational.
           result = lcl_lisp_new=>integer( CAST lcl_lisp_rational( cell )->denominator ).
-*        WHEN complex.
+*         WHEN complex.
+
+*         WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |denominator| ).
       ENDCASE.
@@ -9530,7 +9729,10 @@
         WHEN rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           numerator = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*         WHEN complex.
+
+*         WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |remainder| ).
       ENDCASE.
@@ -9547,7 +9749,10 @@
         WHEN rational.
           lo_rat ?= cell.
           denominator = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*        WHEN complex.
+
+*        WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |remainder| ).
       ENDCASE.
@@ -9580,7 +9785,10 @@
         WHEN rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           numerator = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*        WHEN complex.
+
+*        WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |quotient| ).
       ENDCASE.
@@ -9598,7 +9806,10 @@
         WHEN rational.
           lo_rat = CAST lcl_lisp_rational( cell ).
           denominator = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*        WHEN complex.
+
+*        WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |quotient| ).
       ENDCASE.
@@ -9631,7 +9842,10 @@
         WHEN rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           numerator = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*        WHEN complex.
+
+*        WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |modulo| ).
       ENDCASE.
@@ -9649,7 +9863,10 @@
         WHEN rational.
           lo_rat = CAST lcl_lisp_rational( cell ).
           base = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*        WHEN complex.
+
+*        WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |modulo| ).
       ENDCASE.
@@ -10385,7 +10602,11 @@
         WHEN rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           lv_max = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+
+*         WHEN complex.
+
+*         WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |max| ).
       ENDCASE.
@@ -10405,7 +10626,10 @@
           WHEN rational.
             lo_rat = CAST lcl_lisp_rational( cell ).
             carry = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*         WHEN complex.
+
+*         WHEN bigint.
+
           WHEN OTHERS.
             cell->raise_nan( |max| ).
         ENDCASE.
@@ -10433,7 +10657,10 @@
         WHEN rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
           lv_min = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*         WHEN complex.
+
+*         WHEN bigint.
+
         WHEN OTHERS.
           cell->raise_nan( |min| ).
       ENDCASE.
@@ -10454,6 +10681,9 @@
             lo_rat = CAST lcl_lisp_rational( cell ).
             carry = lo_rat->int / lo_rat->denominator.
 *          WHEN complex.
+
+*          WHEN bigint.
+
           WHEN OTHERS.
             cell->raise_nan( |min| ).
         ENDCASE.
@@ -10488,7 +10718,10 @@
           WHEN rational.
             DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
             lv_gcd = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*         WHEN complex.
+
+*         WHEN bigint.
+
           WHEN OTHERS.
             cell->raise_nan( |gcd| ).
         ENDCASE.
@@ -10509,7 +10742,10 @@
             WHEN rational.
               lo_rat = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*              WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |gcd| ).
           ENDCASE.
@@ -10545,7 +10781,10 @@
           WHEN rational.
             DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
             lv_lcm = lo_rat->int / lo_rat->denominator.
-*          WHEN complex.
+*         WHEN complex.
+
+*         WHEN bigint.
+
           WHEN OTHERS.
             cell->raise_nan( |lcm| ).
         ENDCASE.
@@ -10565,7 +10804,10 @@
             WHEN rational.
               lo_rat = CAST lcl_lisp_rational( cell ).
               carry = lo_rat->int / lo_rat->denominator.
-*              WHEN complex.
+*            WHEN complex.
+
+*            WHEN bigint.
+
             WHEN OTHERS.
               cell->raise_nan( |lcm| ).
           ENDCASE.
@@ -12543,7 +12785,10 @@
               WHEN rational.
                 DATA(lo_rat) = CAST lcl_lisp_rational( cell ).
                 lv_real = lo_rat->int / lo_rat->denominator.
-*                  WHEN complex.
+*             WHEN complex.
+
+*             WHEN bigint.
+
               WHEN OTHERS.
                 cell->raise( | is not a number in turtles| ).
             ENDCASE.
