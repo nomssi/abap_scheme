@@ -5185,6 +5185,11 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        METHODS turtle_size FOR TESTING.
        METHODS turtle_move FOR TESTING.
        METHODS turtle_move_offset FOR TESTING.
+       METHODS turtle_turn FOR TESTING.
+       METHODS turtle_turn_radian FOR TESTING.
+       METHODS turtle_set_pen_width FOR TESTING.
+       METHODS turtle_set_pen_color FOR TESTING.
+       METHODS turtle_examples FOR TESTING.
    ENDCLASS.
 
    CLASS ltc_turtles IMPLEMENTATION.
@@ -5234,6 +5239,46 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
                expected = '<ABAP turtle>' ).
        scheme( code = |(turtle-state t)|
                expected = '( #( 350 250 90 ) )' ).
+     ENDMETHOD.
+
+     METHOD turtle_turn.
+       new_turtle( ).
+       scheme( code = |(turn 90 t) |
+               expected = '<ABAP turtle>' ).
+       scheme( code = |(turtle-state t)|
+               expected = '( #( 300 200 180 ) )' ).
+     ENDMETHOD.
+
+     METHOD turtle_turn_radian.
+       new_turtle( ).
+       scheme( code = |(turn/radians 3.1415926535897932384626433832795 t) |
+               expected = '<ABAP turtle>' ).
+       scheme( code = |(turtle-state t)|
+               expected = '( #( 300 200 270 ) )' ).
+     ENDMETHOD.
+
+     METHOD turtle_set_pen_width.
+       new_turtle( ).
+       scheme( code = |(set-pen-width t 5) |
+               expected = '<ABAP turtle>' ).
+       scheme( code = |(turtles-pen-width t)|
+               expected = '5' ).
+     ENDMETHOD.
+
+     METHOD turtle_set_pen_color.
+       new_turtle( ).
+       scheme( code = |(set-pen-color t "23444") |
+               expected = '<ABAP turtle>' ).
+       scheme( code = |(turtles-pen-color t)|
+               expected = `"23444"` ).
+     ENDMETHOD.
+
+     METHOD turtle_examples.
+       new_turtle( ).
+       scheme( code = |(regular-poly 8 100 t) |  " sides radius
+               expected = '<ABAP turtle>' ).
+       scheme( code = |(regular-polys 10 100 t) |  " number, side
+               expected = '<ABAP turtle>' ).
      ENDMETHOD.
 
    ENDCLASS.

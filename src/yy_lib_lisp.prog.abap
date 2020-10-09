@@ -8356,19 +8356,21 @@
     ENDMETHOD.
 
     METHOD proc_turtle_turn_degrees. "turn
+      DATA theta TYPE tv_real.
+      _data_local_numeric_cell.
+
       _validate: list, list->cdr.
 *      (turn theta turtles) → turtles?
 *        theta : real?
 *        turtles : turtles?
       _validate_number list->car `turtles turn`.
-      DATA lo_theta TYPE REF TO lcl_lisp_real.
-      lo_theta ?= list->car.
+      _get_number theta list->car `turtles turn`.
 
       _validate_turtle list->cdr->car `turn`.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->cdr->car.
 
-      DATA(angle) = ( lo_turtles->turtle->position-angle + lo_theta->real ) MOD 360.
+      DATA(angle) = ( lo_turtles->turtle->position-angle + theta ) MOD 360.
       lo_turtles->turtle->set_position( VALUE #( x = lo_turtles->turtle->position-x
                                                  y = lo_turtles->turtle->position-y
                                                  angle = angle ) ).
@@ -8376,19 +8378,20 @@
     ENDMETHOD.
 
     METHOD proc_turtle_turn_radians. "turn/radians
+      DATA theta TYPE tv_real.
+      _data_local_numeric_cell.
+
       _validate: list, list->cdr.
 *      (turn/radians theta turtles) → turtles?
 *        theta : real?
 *        turtles : turtles?
-      _validate_number list->car `turn/radians theta`.
-      DATA lo_theta TYPE REF TO lcl_lisp_real.
-      lo_theta ?= list->car.
+      _get_number theta list->car `turtles turn/radians theta`.
 
       _validate_turtle list->cdr->car `turn/radians`.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->cdr->car.
 
-      DATA(angle) = lcl_turtle_convert=>degrees_to_radians( lo_turtles->turtle->position-angle MOD 360 ) + lo_theta->real.
+      DATA(angle) = lcl_turtle_convert=>degrees_to_radians( lo_turtles->turtle->position-angle MOD 360 ) + theta.
       angle = lcl_turtle_convert=>radians_to_degrees( angle ) MOD 360.
 
       lo_turtles->turtle->set_position( VALUE #( x = lo_turtles->turtle->position-x

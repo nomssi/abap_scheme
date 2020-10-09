@@ -5,9 +5,6 @@
 
 CLASS lcl_turtle_examples DEFINITION.
   PUBLIC SECTION.
-    CLASS-METHODS demo IMPORTING title TYPE string OPTIONAL
-                       RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
-
     CLASS-METHODS polygon_flower
       IMPORTING polygons      TYPE i
                 polygon_sides TYPE i
@@ -20,6 +17,10 @@ CLASS lcl_turtle_examples DEFINITION.
       IMPORTING num_sides     TYPE i
                 side_length   TYPE i
       RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
+
+  PRIVATE SECTION.
+    CLASS-METHODS demo IMPORTING title TYPE string OPTIONAL
+                       RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 ENDCLASS.
 
 CLASS lcl_turtle_examples IMPLEMENTATION.
@@ -35,19 +36,19 @@ CLASS lcl_turtle_examples IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD filled_square.
-    demo( )->filled_square( side_length = 100
-                            start = VALUE lcl_turtle=>t_point( x = 100 y = 100 ) ).
+    turtle = demo( )->filled_square( side_length = 100
+                                     start = VALUE lcl_turtle=>t_point( x = 100 y = 100 ) ).
   ENDMETHOD.
 
   METHOD polygon_flower.
-    demo( title = |Polygons:{ polygons } Sides: { polygon_sides }|
+    turtle = demo( title = |Polygons:{ polygons } Sides: { polygon_sides }|
          )->polygon_flower( number_of_polygons = polygons
                             polygon_sides = polygon_sides
                             side_length = 50 ).
   ENDMETHOD.
 
   METHOD polygon_using_lines.
-    demo( )->regular_polygon( num_sides = num_sides
+    turtle = demo( )->regular_polygon( num_sides = num_sides
                               side_length = side_length ).
   ENDMETHOD.
 ENDCLASS.

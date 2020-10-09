@@ -159,7 +159,7 @@ ENDCLASS.
 
 CLASS lcl_turtle DEFINITION DEFERRED.
 
-CLASS lcl_turtle_svg DEFINITION.
+CLASS lcl_turtle_svg DEFINITION CREATE PRIVATE.
   PUBLIC SECTION.
     TYPES:
       BEGIN OF t_point,
@@ -194,35 +194,28 @@ CLASS lcl_turtle_svg DEFINITION.
         radius   TYPE i,
       END OF circle_params.
 
-    CLASS-METHODS:
-      new
-        IMPORTING turtle        TYPE REF TO lcl_turtle
-        RETURNING VALUE(result) TYPE REF TO lcl_turtle_svg.
+    CLASS-METHODS new IMPORTING turtle TYPE REF TO lcl_turtle
+                      RETURNING VALUE(result) TYPE REF TO lcl_turtle_svg.
 
-    METHODS:
-      line
-        IMPORTING params          TYPE line_params
-        RETURNING VALUE(svg_line) TYPE string,
+    METHODS: line IMPORTING params          TYPE line_params
+                  RETURNING VALUE(svg_line) TYPE string,
 
-      polygon
-        IMPORTING params             TYPE polygon_params
-        RETURNING VALUE(svg_polygon) TYPE string,
+      polygon IMPORTING params             TYPE polygon_params
+              RETURNING VALUE(svg_polygon) TYPE string,
 
-      polyline
-        IMPORTING params              TYPE polyline_params
-        RETURNING VALUE(svg_polyline) TYPE string,
+      polyline IMPORTING params              TYPE polyline_params
+               RETURNING VALUE(svg_polyline) TYPE string,
 
-      text
-        IMPORTING params          TYPE text_params
-        RETURNING VALUE(svg_text) TYPE string,
+      text IMPORTING params          TYPE text_params
+           RETURNING VALUE(svg_text) TYPE string,
 
-      circle
-        IMPORTING params            TYPE circle_params
-        RETURNING VALUE(svg_circle) TYPE string.
+      circle IMPORTING params            TYPE circle_params
+             RETURNING VALUE(svg_circle) TYPE string.
 
-    DATA turtle TYPE REF TO lcl_turtle READ-ONLY.
   PROTECTED SECTION.
-  PRIVATE SECTION.
+    DATA turtle TYPE REF TO lcl_turtle.
+
+    METHODS constructor IMPORTING turtle TYPE REF TO lcl_turtle.
 ENDCLASS.
 
 CLASS lcl_turtle DEFINITION CREATE PRIVATE.
@@ -376,6 +369,7 @@ CLASS lcl_turtle IMPLEMENTATION.
     me->color_scheme = lcl_turtle_colors=>default_color_scheme.
     me->use_random_colors = abap_true.
     me->title = title.
+    me->svg_builder = lcl_turtle_svg=>new( me ).
   ENDMETHOD.
 
   METHOD disable_random_colors.
@@ -618,7 +612,7 @@ CLASS lcl_turtle IMPLEMENTATION.
                                    ( x = start-x + side_length y = start-y + side_length )
                                    ( x = start-x y = start-y + side_length ) ).
 
-    append_svg( turtle->svg_builder->polyline( VALUE #( points = points ) )  ).
+    append_svg( svg_builder->polyline( VALUE #( points = points ) )  ).
 
     turtle = me.
   ENDMETHOD.
@@ -657,7 +651,7 @@ CLASS lcl_turtle_lsystem DEFINITION.
 
     TYPES:
       BEGIN OF lsystem_instruction,
-        symbol TYPE c LENGTH 1,
+        symbol TYPE char01,
         kind   TYPE lsystem_instruction_kind,
         "! Distance or angle (if the operation requires it)
         amount TYPE i,
@@ -837,11 +831,13 @@ CLASS lcl_turtle_svg IMPLEMENTATION.
       && |stroke="{ turtle->pen-stroke_color }" stroke-width="{ turtle->pen-stroke_width }"/>|.
   ENDMETHOD.
 
-  METHOD new.
-    result = NEW #( ).
-    result->turtle = turtle.
+  METHOD constructor.
+    me->turtle = turtle.
   ENDMETHOD.
 
+  METHOD new.
+    result = NEW #( turtle ).
+  ENDMETHOD.
 
   METHOD polygon.
     DATA(point_data) = REDUCE string(
@@ -849,10 +845,9 @@ CLASS lcl_turtle_svg IMPLEMENTATION.
       FOR point IN params-points
       NEXT res = res && |{ point-x },{ point-y } | ).
 
-    svg_polygon = |<polygon points="{ point_data }"|
+    svg_polygon = |<polygon points="{ point_data }" |
       && | stroke="{ turtle->pen-stroke_color }"|
       && | stroke-width="{ turtle->pen-stroke_width }" fill="{ turtle->pen-fill_color }" />|.
-
   ENDMETHOD.
 
   METHOD polyline.
@@ -861,10 +856,9 @@ CLASS lcl_turtle_svg IMPLEMENTATION.
       FOR point IN params-points
       NEXT res = res && |{ point-x },{ point-y } | ).
 
-    svg_polyline = |<polyline points="{ point_data }"|
+    svg_polyline = |<polyline points="{ point_data }" |
       && |stroke="{ turtle->pen-stroke_color }" |
       && |stroke-width="{ turtle->pen-stroke_width }" fill="{ turtle->pen-fill_color }" />|.
-
   ENDMETHOD.
 
   METHOD text.
