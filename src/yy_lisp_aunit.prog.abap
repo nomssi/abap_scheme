@@ -9,12 +9,13 @@
 *&---------------------------------------------------------------------*
 *& Martin Ceronio, martin.ceronio@infosize.co.za June 2015
 *& Jacques Nomssi, nomssi@gmail.com
+*& Turtle Graphics from Frederik Hudák, placed under The Unlicense
 *& MIT License (see below)
 *&---------------------------------------------------------------------*
 *  The MIT License (MIT)
 *
 *  Copyright (c) 2015 Martin Ceronio
-*  Copyright (c) 2017, 2018 Jacques Nomssi Nzali
+*  Copyright (c) 2017, 2018, 2020 Jacques Nomssi Nzali
 *
 *  Permission is hereby granted, free of charge, to any person obtaining a copy
 *  of this software and associated documentation files (the "Software"), to deal
@@ -97,12 +98,13 @@
    CLASS ltc_interpreter IMPLEMENTATION.
 
      METHOD new_interpreter.
-       CREATE OBJECT mo_port
-         EXPORTING
+       mo_port ?= lcl_lisp_new=>port(
+           iv_port_type =  lcl_lisp_port=>c_port_textual
+           iv_buffered = abap_true
            iv_input  = abap_false
            iv_output = abap_true
            iv_error  = abap_true
-           iv_string = abap_false.
+           iv_string = abap_false ).
        mo_int = lcl_lisp_interpreter=>new( io_port = mo_port
                                            ii_log = mo_port ).
      ENDMETHOD.                    "new_interpreter
@@ -1149,12 +1151,13 @@
    CLASS ltc_string IMPLEMENTATION.
 
      METHOD setup.
-       CREATE OBJECT mo_port
-         EXPORTING
+       mo_port ?= lcl_lisp_new=>port(
+           iv_port_type = lcl_lisp_port=>c_port_textual
+           iv_buffered = abap_true
            iv_input  = abap_false
            iv_output = abap_true
            iv_error  = abap_true
-           iv_string = abap_true.
+           iv_string = abap_true ).
        mo_int = lcl_lisp_interpreter=>new( io_port = mo_port
                                            ii_log = mo_port ).
      ENDMETHOD.                    "setup

@@ -6,16 +6,16 @@
 CLASS lcl_turtle_examples DEFINITION.
   PUBLIC SECTION.
     CLASS-METHODS polygon_flower
-      IMPORTING polygons      TYPE i
-                polygon_sides TYPE i
+      IMPORTING polygons      TYPE tv_int
+                polygon_sides TYPE tv_int
       RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 
     CLASS-METHODS filled_square
       RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 
     CLASS-METHODS polygon_using_lines
-      IMPORTING num_sides     TYPE i
-                side_length   TYPE i
+      IMPORTING num_sides     TYPE tv_int
+                side_length   TYPE tv_int
       RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 
   PRIVATE SECTION.
@@ -49,7 +49,7 @@ CLASS lcl_turtle_examples IMPLEMENTATION.
 
   METHOD polygon_using_lines.
     turtle = demo( )->regular_polygon( num_sides = num_sides
-                              side_length = side_length ).
+                                       side_length = side_length ).
   ENDMETHOD.
 ENDCLASS.
 
@@ -61,8 +61,8 @@ CLASS lcl_turtle_lsystem_examples DEFINITION.
     CLASS-METHODS plant_2.
   PRIVATE SECTION.
     CLASS-METHODS execute IMPORTING title TYPE string OPTIONAL
-                                    x     TYPE i DEFAULT 200
-                                    y     TYPE i DEFAULT 200
+                                    x     TYPE tv_int DEFAULT 200
+                                    y     TYPE tv_int DEFAULT 200
                                     angle TYPE tv_real OPTIONAL
                                     parameters TYPE lcl_turtle_lsystem=>params.
 ENDCLASS.

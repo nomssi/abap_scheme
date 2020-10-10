@@ -31,11 +31,11 @@ ENDCLASS.
 
 CLASS lcl_turtle_math DEFINITION.
   PUBLIC SECTION.
-    TYPES numbers_i TYPE STANDARD TABLE OF i WITH DEFAULT KEY.
+    TYPES numbers_i TYPE STANDARD TABLE OF tv_int WITH DEFAULT KEY.
 
     CLASS-METHODS find_max_int
       IMPORTING numbers       TYPE numbers_i
-      RETURNING VALUE(result) TYPE i.
+      RETURNING VALUE(result) TYPE tv_int.
 ENDCLASS.
 
 CLASS lcl_turtle_math IMPLEMENTATION.
@@ -222,8 +222,8 @@ CLASS lcl_turtle DEFINITION CREATE PRIVATE.
   PUBLIC SECTION.
     CONSTANTS:
       BEGIN OF defaults,
-        height TYPE i VALUE 800,
-        width  TYPE i VALUE 600,
+        height TYPE tv_int VALUE 800,
+        width  TYPE tv_int VALUE 600,
         title  TYPE string VALUE `abapTurtle`,
       END OF defaults.
 
@@ -236,16 +236,16 @@ CLASS lcl_turtle DEFINITION CREATE PRIVATE.
 
     TYPES:
       BEGIN OF turtle_position,
-        x     TYPE i,
-        y     TYPE i,
+        x     TYPE tv_int,
+        y     TYPE tv_int,
         angle TYPE tv_real,
       END OF turtle_position.
 
     TYPES multiple_turtles TYPE STANDARD TABLE OF REF TO lcl_turtle.
 
     CLASS-METHODS new
-      IMPORTING height           TYPE i DEFAULT defaults-height
-                width            TYPE i DEFAULT defaults-width
+      IMPORTING height           TYPE tv_int DEFAULT defaults-height
+                width            TYPE tv_int DEFAULT defaults-width
                 background_color TYPE rgb_hex_color OPTIONAL
                 title            TYPE string DEFAULT defaults-title
       RETURNING VALUE(turtle)    TYPE REF TO lcl_turtle.
@@ -260,8 +260,8 @@ CLASS lcl_turtle DEFINITION CREATE PRIVATE.
       RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 
     METHODS constructor
-      IMPORTING height           TYPE i
-                width            TYPE i
+      IMPORTING height           TYPE tv_int
+                width            TYPE tv_int
                 background_color TYPE rgb_hex_color OPTIONAL
                 title            TYPE string.
 
@@ -276,13 +276,13 @@ CLASS lcl_turtle DEFINITION CREATE PRIVATE.
                     RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 
     METHODS goto
-      IMPORTING x             TYPE i
-                y             TYPE i
+      IMPORTING x             TYPE tv_int
+                y             TYPE tv_int
       RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 
     METHODS set_angle IMPORTING angle TYPE tv_real.
 
-    METHODS forward IMPORTING how_far       TYPE i
+    METHODS forward IMPORTING how_far       TYPE tv_int
                     RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 
     METHODS to_offset
@@ -290,7 +290,7 @@ CLASS lcl_turtle DEFINITION CREATE PRIVATE.
                 delta_y       TYPE numeric
       RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 
-    METHODS back IMPORTING how_far       TYPE i
+    METHODS back IMPORTING how_far       TYPE tv_int
                  RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 
     METHODS pen_up RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
@@ -301,17 +301,17 @@ CLASS lcl_turtle DEFINITION CREATE PRIVATE.
       IMPORTING size          TYPE string DEFAULT cl_abap_browser=>xlarge
       RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 
-    METHODS polygon_flower IMPORTING number_of_polygons TYPE i
-                                     polygon_sides      TYPE i
-                                     side_length        TYPE i
+    METHODS polygon_flower IMPORTING number_of_polygons TYPE tv_int
+                                     polygon_sides      TYPE tv_int
+                                     side_length        TYPE tv_int
                            RETURNING VALUE(turtle)      TYPE REF TO lcl_turtle.
 
-    METHODS filled_square IMPORTING side_length TYPE i
+    METHODS filled_square IMPORTING side_length TYPE tv_int
                                     start TYPE t_point
                           RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 
-    METHODS regular_polygon IMPORTING num_sides     TYPE i
-                                      side_length   TYPE i
+    METHODS regular_polygon IMPORTING num_sides     TYPE tv_int
+                                      side_length   TYPE tv_int
                             RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 
     METHODS download
@@ -327,14 +327,14 @@ CLASS lcl_turtle DEFINITION CREATE PRIVATE.
       get_position RETURNING VALUE(result) TYPE turtle_position,
       set_position IMPORTING position TYPE turtle_position,
       set_color_scheme IMPORTING color_scheme TYPE rgb_hex_colors,
-      set_width IMPORTING width TYPE i,
-      set_height IMPORTING height TYPE i,
+      set_width IMPORTING width TYPE tv_int,
+      set_height IMPORTING height TYPE tv_int,
       set_svg IMPORTING svg TYPE string.
 
     DATA: title        TYPE string READ-ONLY,
           svg          TYPE string READ-ONLY,
-          width        TYPE i READ-ONLY,
-          height       TYPE i READ-ONLY,
+          width        TYPE tv_int READ-ONLY,
+          height       TYPE tv_int READ-ONLY,
           position     TYPE turtle_position READ-ONLY,
           pen          TYPE t_pen READ-ONLY,
           color_scheme TYPE rgb_hex_colors READ-ONLY,
@@ -347,10 +347,10 @@ CLASS lcl_turtle DEFINITION CREATE PRIVATE.
     METHODS get_html RETURNING VALUE(html) TYPE string.
 
     METHODS line
-      IMPORTING x_from        TYPE i
-                y_from        TYPE i
-                x_to          TYPE i
-                y_to          TYPE i
+      IMPORTING x_from        TYPE tv_int
+                y_from        TYPE tv_int
+                x_to          TYPE tv_int
+                y_to          TYPE tv_int
       RETURNING VALUE(turtle) TYPE REF TO lcl_turtle.
 ENDCLASS.
 
@@ -370,6 +370,22 @@ CLASS lcl_turtle IMPLEMENTATION.
     me->use_random_colors = abap_true.
     me->title = title.
     me->svg_builder = lcl_turtle_svg=>new( me ).
+
+    IF background_color IS NOT INITIAL.
+      me->set_pen( VALUE #( fill_color = background_color ) ).
+      DATA(side_length) = 100.
+
+      DATA(points) = VALUE t_points( ( x = 0         y = 0 )
+                                     ( x = 0 + width y = 0 )
+                                     ( x = 0 + width y = 0 + height )
+                                     ( x = 0         y = 0 + height )  ).
+
+      me->append_svg( me->svg_builder->polyline( VALUE #( points = points ) )  ).
+    ENDIF.
+
+    me->pen = VALUE #( stroke_width = 1
+                       stroke_color = `#FF0000`
+                       is_up = abap_false ).
   ENDMETHOD.
 
   METHOD disable_random_colors.
@@ -654,8 +670,8 @@ CLASS lcl_turtle_lsystem DEFINITION.
         symbol TYPE char01,
         kind   TYPE lsystem_instruction_kind,
         "! Distance or angle (if the operation requires it)
-        amount TYPE i,
-*        move_distance  TYPE i,        "! For move instructions, how many pixels to move by
+        amount TYPE tv_int,
+*        move_distance  TYPE tv_int,  "! For move instructions, how many pixels to move by
 *        rotate_by      TYPE tv_real, "! For rotate instructions, how many degrees to rotate by
       END OF lsystem_instruction,
       lsystem_instructions TYPE HASHED TABLE OF lsystem_instruction WITH UNIQUE KEY symbol.

@@ -1435,9 +1435,7 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
         lo_real ?= io_elem.
         rv_node = |{ lo_real->real }|.
       WHEN lcl_lisp=>type_integer.
-        DATA lo_int TYPE REF TO lcl_lisp_integer.
-        lo_int ?= io_elem.
-        rv_node = |{ lo_int->integer }|.
+        rv_node = |{ CAST lcl_lisp_integer( io_elem )->int }|.
       WHEN OTHERS.
         rv_node = io_elem->value.
     ENDCASE.
