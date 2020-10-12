@@ -603,7 +603,7 @@ CLASS lcl_ide IMPLEMENTATION.
     DATA lx_error TYPE REF TO cx_root.
     FIELD-SYMBOLS <lt_table> TYPE STANDARD TABLE.
 
-    CHECK element->type EQ lcl_lisp=>type_abap_table.
+    CHECK element->type EQ type_abap_table.
     TRY.
         ASSIGN element->data->* TO <lt_table>.
         cl_salv_table=>factory(
@@ -621,13 +621,13 @@ CLASS lcl_ide IMPLEMENTATION.
 
   METHOD display.
     CASE element->type.
-      WHEN lcl_lisp=>type_abap_table.
+      WHEN type_abap_table.
         DATA lo_table TYPE REF TO lcl_lisp_table.
 
         lo_table ?= element.
         view_table( lo_table ).
 
-      WHEN lcl_lisp=>type_abap_turtle.
+      WHEN type_abap_turtle.
         DATA lo_turtle TYPE REF TO lcl_lisp_turtle.
 
         lo_turtle ?= element.
@@ -689,24 +689,27 @@ CLASS lcl_ide IMPLEMENTATION.
              time TYPE syuzeit,
            END OF ts_header.
     DATA header TYPE ts_header.
+    DATA out TYPE REF TO lcl_demo_output.
+
     header-user = sy-uname.
     header-time = sy-uzeit.
+    out = NEW #( out = cl_demo_output=>new( ) ).
     gv_lisp_trace = abap_true.
-    lcl_demo_output=>begin_section( `ABAP LISP Workbench` ).
-    lcl_demo_output=>write( header ).
+    out->begin_section( `ABAP LISP Workbench` ).
+    out->write( header ).
     " cl_demo_output=>set_mode( cl_demo_output=>text_mode  ).
 
-    lcl_demo_output=>begin_section( `Scheme Code` ).
-    lcl_demo_output=>write( mi_source->to_string( ) ).
+    out->begin_section( `Scheme Code` ).
+    out->write( mi_source->to_string( ) ).
 
-    lcl_demo_output=>begin_section( `Trace Output` ).
+    out->begin_section( `Trace Output` ).
 
 *   Run
     evaluate( ).
 
     gv_lisp_trace = abap_false.
 
-    lcl_demo_output=>display( ).
+    out->display( ).
 
   ENDMETHOD.
 
@@ -1426,15 +1429,15 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
 
   METHOD print.
     CASE io_elem->type.
-      WHEN lcl_lisp=>type_pair.
+      WHEN type_pair.
         rv_node = get_object_id( io_elem ).
-      WHEN lcl_lisp=>type_null.
+      WHEN type_null.
         rv_node = space.
-      WHEN lcl_lisp=>type_real.
+      WHEN type_real.
         DATA lo_real TYPE REF TO lcl_lisp_real.
         lo_real ?= io_elem.
         rv_node = |{ lo_real->real }|.
-      WHEN lcl_lisp=>type_integer.
+      WHEN type_integer.
         rv_node = |{ CAST lcl_lisp_integer( io_elem )->int }|.
       WHEN OTHERS.
         rv_node = io_elem->value.
@@ -1448,7 +1451,7 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
 
   METHOD node.
     CASE elem->type.
-      WHEN lcl_lisp=>type_pair.
+      WHEN type_pair.
 
         IF elem->cdr NE lcl_lisp=>nil.
           add( |if ({ print( elem ) }) then ({ get_object_id( elem->car ) })\n| ).
@@ -1466,11 +1469,11 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
           detach( ).
         ENDIF.
 
-      WHEN lcl_lisp=>type_null.
+      WHEN type_null.
 *      do nothing
         add( |  :; \n| ).
 
-      WHEN lcl_lisp=>type_symbol.
+      WHEN type_symbol.
         add( |  :{ print( elem ) }; \n| ).
 
       WHEN OTHERS.

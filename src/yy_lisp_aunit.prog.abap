@@ -235,8 +235,6 @@
    CLASS ltc_parse DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
-       METHODS setup.
-       METHODS teardown.
        METHODS parse IMPORTING code TYPE string.
        METHODS assert_parse IMPORTING code     TYPE string
                                       expected TYPE string
@@ -254,14 +252,6 @@
 *
 *----------------------------------------------------------------------*
    CLASS ltc_parse IMPLEMENTATION.
-
-     METHOD setup.
-       new_interpreter( ).
-     ENDMETHOD.                    "setup
-
-     METHOD teardown.
-       FREE mo_int.
-     ENDMETHOD.                    "teardown
 
      METHOD parse.
        DATA elements TYPE lcl_lisp_interpreter=>tt_element.
@@ -330,10 +320,6 @@
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PUBLIC SECTION.
        METHODS constructor.
-     PRIVATE SECTION.
-
-       METHODS setup.
-       METHODS teardown.
 
        METHODS call_no_lambda FOR TESTING.
 
@@ -519,10 +505,6 @@
    CLASS ltc_conditionals DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
-
-       METHODS setup.
-       METHODS teardown.
-
        METHODS if_1 FOR TESTING.
        METHODS if_2 FOR TESTING.
        METHODS if_3 FOR TESTING.
@@ -574,10 +556,6 @@
    CLASS ltc_quote DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
-
-       METHODS setup.
-       METHODS teardown.
-
        METHODS quasiquote_1 FOR TESTING.
        METHODS quasiquote_2 FOR TESTING.
        METHODS quasiquote_2_args FOR TESTING.
@@ -602,10 +580,6 @@
    CLASS ltc_macro DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
-
-       METHODS setup.
-       METHODS teardown.
-
        METHODS macro_while FOR TESTING.
 
        METHODS macro_1 FOR TESTING.
@@ -630,9 +604,6 @@
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
 
-       METHODS setup.
-       METHODS teardown.
-
        METHODS select_1 FOR TESTING.
 
    ENDCLASS.                    "ltc_query DEFINITION
@@ -647,13 +618,6 @@
      METHOD constructor.
        super->constructor( ).
      ENDMETHOD.                    "constructor
-     METHOD setup.
-       new_interpreter( ).
-     ENDMETHOD.                    "setup
-
-     METHOD teardown.
-       FREE mo_int.
-     ENDMETHOD.                    "teardown
 
      METHOD call_no_lambda.
        scheme( code = '(1 2)'
@@ -1642,7 +1606,7 @@
                          |  (write (car x) q)| &
                          |  (write (cdr x) q)| &
                          |  (get-output-string q))|
-               expected = '"a( b c )"' ).
+               expected = '"a ( b c )"' ).
      ENDMETHOD.                    "output_string_1
 
      METHOD write_1.
@@ -1667,14 +1631,6 @@
 *
 *----------------------------------------------------------------------*
    CLASS ltc_conditionals IMPLEMENTATION.
-
-     METHOD setup.
-       new_interpreter( ).
-     ENDMETHOD.                    "setup
-
-     METHOD teardown.
-       FREE mo_int.
-     ENDMETHOD.                    "teardown
 
      METHOD if_1.
        scheme( code = |(if (> 3 2) 'yes 'no)|
@@ -2248,8 +2204,6 @@
    CLASS ltc_math DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
-       METHODS setup.
-       METHODS teardown.
 
        METHODS math_addition FOR TESTING.
 
@@ -2293,8 +2247,10 @@
        METHODS math_log FOR TESTING.
 
        METHODS math_floor FOR TESTING.
+       METHODS math_floor_new FOR TESTING.
        METHODS math_ceiling FOR TESTING.
        METHODS math_truncate FOR TESTING.
+       METHODS math_truncate_new FOR TESTING.
        METHODS math_round FOR TESTING.
 
        METHODS math_numerator FOR TESTING.
@@ -2326,14 +2282,6 @@
 *
 *----------------------------------------------------------------------*
    CLASS ltc_math IMPLEMENTATION.
-
-     METHOD setup.
-       new_interpreter( ).
-     ENDMETHOD.                    "setup
-
-     METHOD teardown.
-       FREE mo_int.
-     ENDMETHOD.                    "teardown
 
      METHOD math_addition.
        scheme( code = '(+ 22 24 25)'
@@ -2479,19 +2427,19 @@
 
      METHOD math_atan.
        code_test_f( code =  '(atan 1)'
-                 expected = '0.78539816339744830961566084581988' ) ##literal.
+                    expected = '0.78539816339744830961566084581988' ) ##literal.
      ENDMETHOD.                    "math_atan
 
      METHOD math_exp.
        code_test_f( code =  '(exp 2)'
-                 expected = '7.389056098930650227230427460575' ) ##literal.
+                    expected = '7.389056098930650227230427460575' ) ##literal.
      ENDMETHOD.                    "math_exp
 
      METHOD math_expt.
        scheme( code =  '(expt 2 10)'
                expected = '1024' ).
        code_test_f( code =  '(expt 2 0.5)'
-                 expected = '1.4142135623730950488016887242097' ) ##literal.
+                    expected = '1.4142135623730950488016887242097' ) ##literal.
      ENDMETHOD.                    "math_expt
 
      METHOD math_expt_1.
@@ -2501,7 +2449,11 @@
 
      METHOD math_sqrt.
        code_test_f( code =  '(sqrt 2)'
-                 expected = '1.4142135623730950488016887242097' ) ##literal.
+                    expected = '1.4142135623730950488016887242097' ) ##literal.
+       scheme( code =  '(sqrt 9)'
+               expected = '3' ).
+       scheme( code =  '(sqrt -1)'
+               expected = '+i' ).
      ENDMETHOD.                    "math_sqrt
 
      METHOD math_log.
@@ -2512,31 +2464,75 @@
      METHOD math_floor.
        "(floor x) - This returns the largest integer that is no larger than x.
        scheme( code =  '(floor 7.3890560989306504)'
-               expected = '7' ).
+               expected = '7.0' ).
+       scheme( code =  '(floor 3.5)'
+               expected = '3.0' ).
+       scheme( code =  '(floor 3)'
+               expected = '3' ).
      ENDMETHOD.                    "math_floor
+
+     METHOD math_floor_new.
+       "Integer division
+       scheme( code =  '(floor/ 5 2)'
+               expected = ' 2 1' ).
+       scheme( code =  '(floor/ -5 2)'
+               expected = ' -3 1' ).
+       scheme( code =  '(floor/ 5 -2)'
+               expected = ' -3 -1' ).
+       scheme( code =  '(floor/ -5 -2)'
+               expected = ' 2 -1' ).
+     ENDMETHOD.
 
      METHOD math_ceiling.
        "(ceiling x) - This returns the smallest integer that is no smaller than x.
        scheme( code =  '(ceiling 1.4142135623730951)'
-               expected = '2' ).
+               expected = '2.0' ).
+       scheme( code =  '(ceiling -4.3)'
+               expected = '-4.0' ).
      ENDMETHOD.                    "math_ceiling
 
      METHOD math_truncate.
        "(truncate x) - returns the integer value closest to x that is no larger than the absolute value of x.
        scheme( code =  '(truncate -2.945)'
-               expected = '-2' ).
+               expected = '-2.0' ).
+       scheme( code =  '(truncate -4.3)'
+               expected = '-4.0' ).
+       scheme( code =  '(truncate 3.5)'
+               expected = '3.0' ).
+       scheme( code =  '(truncate 3)'
+               expected = '3' ).
      ENDMETHOD.                    "math_truncate
+
+     METHOD math_truncate_new.
+       "Integer division
+       scheme( code =  '(truncate/ 5 2)'
+               expected = ' 2 1' ).
+       scheme( code =  '(truncate/ -5 2)'
+               expected = ' -2 -1' ).
+       scheme( code =  '(truncate/ 5 -2)'
+               expected = ' -2 1' ).
+       scheme( code =  '(truncate/ -5 -2)'
+               expected = ' 2 -1' ).
+       scheme( code =  '(truncate/ -5.0 -2)'
+               expected = ' 2.0 -1.0' ).
+     ENDMETHOD.
 
      METHOD math_round.
        "(round x) -
 *   This rounds value of x to the nearest integer as is usual in mathematics.
 *   It even works when halfway between values.
        scheme( code =  '(round 7.389056)'
-               expected = '7' ).
+               expected = '7.0' ).
        scheme( code =  '(round 7.789056)'
-               expected = '8' ).
+               expected = '8.0' ).
        scheme( code =  '(round -7.789056)'
-               expected = '-8' ).
+               expected = '-8.0' ).
+       scheme( code =  '(round -4.3)'
+               expected = '-4.0' ).
+       scheme( code =  '(round 7/2)'   " exact
+               expected = '4' ).
+       scheme( code =  '(round 7)'   " exact
+               expected = '7' ).
      ENDMETHOD.                    "math_round
 
      METHOD math_remainder.
@@ -3554,7 +3550,7 @@
 
      METHOD string_to_number_3.
        scheme( code = |(string->number "1e2")|
-               expected = '100' ).
+               expected = '100.0' ).
      ENDMETHOD.                    "string_to_number_3
 
      METHOD string_to_number_4.
@@ -3701,7 +3697,8 @@ ENDCLASS.                    "ltc_list IMPLEMENTATION
 
      METHOD vector_ref_2.
        scheme( code = |(vector-ref '#(1 1 2 3 5 8 13 21)| &
-                         |    (round (* 2 (acos -1))) )|
+                         |   (exact                     | &
+                         |    (round (* 2 (acos -1))) ))|
                expected = '13' ).
      ENDMETHOD.                    "vector_ref_2
 
@@ -4144,9 +4141,6 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
    CLASS ltc_comparison DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
-       METHODS setup.
-       METHODS teardown.
-
        METHODS compa_gt_1 FOR TESTING.
        METHODS compa_gt_2 FOR TESTING.
        METHODS compa_gt_3 FOR TESTING.
@@ -4223,14 +4217,6 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
 *
 *----------------------------------------------------------------------*
    CLASS ltc_comparison IMPLEMENTATION.
-
-     METHOD setup.
-       new_interpreter( ).
-     ENDMETHOD.                    "setup
-
-     METHOD teardown.
-       FREE mo_int.
-     ENDMETHOD.                    "teardown
 
      METHOD compa_gt_1.
 *   Test GT
@@ -4582,9 +4568,6 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
    CLASS ltc_basic_functions DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
-       METHODS setup.
-       METHODS teardown.
-
        METHODS funct_lambda_0 FOR TESTING.
        METHODS funct_lambda_1 FOR TESTING.
        METHODS funct_lambda_2 FOR TESTING.
@@ -4609,14 +4592,6 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
 *
 *----------------------------------------------------------------------*
    CLASS ltc_basic_functions IMPLEMENTATION.
-
-     METHOD setup.
-       new_interpreter( ).
-     ENDMETHOD.                    "setup
-
-     METHOD teardown.
-       FREE mo_int.
-     ENDMETHOD.                    "teardown
 
      METHOD funct_lambda_0.
        scheme( code = '(define (b n) (* 11 n))'
@@ -4985,14 +4960,6 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
 *----------------------------------------------------------------------*
    CLASS ltc_quote IMPLEMENTATION.
 
-     METHOD setup.
-       new_interpreter( ).
-     ENDMETHOD.                    "setup
-
-     METHOD teardown.
-       FREE mo_int.
-     ENDMETHOD.                    "teardown
-
      METHOD quasiquote_1.
        scheme( code = '`(list ,(+ 1 2) 4)'
                expected = '( list 3 4 )' ).
@@ -5064,14 +5031,6 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
 *
 *----------------------------------------------------------------------*
    CLASS ltc_macro IMPLEMENTATION.
-
-     METHOD setup.
-       new_interpreter( ).
-     ENDMETHOD.                    "setup
-
-     METHOD teardown.
-       FREE mo_int.
-     ENDMETHOD.                    "teardown
 
      METHOD macro_while.
 *      (define­syntax while
@@ -5162,14 +5121,6 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
 *----------------------------------------------------------------------*
    CLASS ltc_query IMPLEMENTATION.
 
-     METHOD setup.
-       new_interpreter( ).
-     ENDMETHOD.                    "setup
-
-     METHOD teardown.
-       FREE mo_int.
-     ENDMETHOD.                    "teardown
-
      METHOD select_1.
        scheme( code = |(sql-query "SELECT * FROM USR01 WHERE BNAME = 'DEVELOPER' ")|
                expected = '<ABAP Query Result Set>' ).
@@ -5225,7 +5176,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = |(turtles-height t)|
                expected = '400' ).
        scheme( code = |(turtle-state t)|
-               expected = '( #( 300 200 90 ) )' ).
+               expected = '( #( 300 200 90.0 ) )' ).
      ENDMETHOD.
 
      METHOD turtle_move.
@@ -5233,7 +5184,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = |(move 100 t) |
                expected = '<ABAP turtle>' ).
        scheme( code = |(turtle-state t)|
-               expected = '( #( 300 300 90 ) )' ).
+               expected = '( #( 300 300 90.0 ) )' ).
      ENDMETHOD.
 
      METHOD turtle_move_offset.
@@ -5241,7 +5192,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = |(move-offset 50 50 t) |
                expected = '<ABAP turtle>' ).
        scheme( code = |(turtle-state t)|
-               expected = '( #( 350 250 90 ) )' ).
+               expected = '( #( 350 250 90.0 ) )' ).
      ENDMETHOD.
 
      METHOD turtle_turn.
@@ -5249,7 +5200,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = |(turn 90 t) |
                expected = '<ABAP turtle>' ).
        scheme( code = |(turtle-state t)|
-               expected = '( #( 300 200 180 ) )' ).
+               expected = '( #( 300 200 180.0 ) )' ).
      ENDMETHOD.
 
      METHOD turtle_turn_radian.
@@ -5257,7 +5208,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = |(turn/radians 3.1415926535897932384626433832795 t) |
                expected = '<ABAP turtle>' ).
        scheme( code = |(turtle-state t)|
-               expected = '( #( 300 200 270 ) )' ).
+               expected = '( #( 300 200 270.0 ) )' ).
      ENDMETHOD.
 
      METHOD turtle_set_pen_width.
