@@ -234,6 +234,43 @@
     ENDCASE.
   END-OF-DEFINITION.
 
+  DEFINE _get_2_ints.
+    _validate: &4, &4->car, &4->cdr, &4->cdr->car.
+
+    CASE &4->car->type.
+      WHEN type_integer.
+         lo_int = CAST lcl_lisp_integer( &4->car ).
+         &1 = lo_int->int.
+         &3 = lo_int->exact.
+      WHEN type_real.
+         TRY.
+           lo_real = CAST lcl_lisp_real( &4->car ).
+           MOVE EXACT lo_real->real TO &1.
+           &3 = lo_real->exact.
+         CATCH cx_sy_conversion_error.
+           throw( lo_real->to_string( ) && | is not an integer in [{ &5 }]| ).
+         ENDTRY.
+      WHEN OTHERS.
+        throw( &4->car->to_string( ) && | is not an integer in [{ &5 }]| ).
+    ENDCASE.
+
+    CASE &4->cdr->car->type.
+      WHEN type_integer.
+         lo_int = CAST lcl_lisp_integer( &4->cdr->car ).
+         &2 = lo_int->int.
+        IF &2 EQ 0.
+          throw( | second parameter cannot be zero in [{ &5 }]| ).
+        ENDIF.
+        IF exact EQ abap_true.
+          exact = lo_int->exact.
+        ENDIF.
+      WHEN OTHERS.
+        throw( &4->cdr->car->to_string( ) && | is not an integer in [{ &5 }]| ).
+    ENDCASE.
+
+    &4->cdr->assert_last_param( ).
+  END-OF-DEFINITION.
+
   DEFINE _data_local_numeric.
     DATA lo_rat TYPE REF TO lcl_lisp_rational.
     DATA lo_int TYPE REF TO lcl_lisp_integer.
@@ -476,6 +513,7 @@
 *    type_abap_method   TYPE tv_type VALUE 'm',
 
     "type_env_spec    TYPE tv_type VALUE 'e',
+    type_values      TYPE tv_type VALUE 'V',
     type_abap_turtle TYPE tv_type VALUE 't'.  " for Turtles graphic
 
   TYPES: BEGIN OF ts_result,
@@ -586,6 +624,8 @@
       METHODS constructor IMPORTING type TYPE tv_type.
       METHODS list_to_string RETURNING VALUE(str) TYPE string
                              RAISING   lcx_lisp_exception.
+      METHODS values_to_string RETURNING VALUE(str) TYPE string
+                               RAISING   lcx_lisp_exception.
 
       METHODS format_quasiquote IMPORTING io_elem TYPE REF TO lcl_lisp
                                 EXPORTING ev_skip TYPE flag
@@ -694,7 +734,8 @@
     PUBLIC SECTION.
       DATA int TYPE tv_int READ-ONLY.
     PROTECTED SECTION.
-      METHODS constructor IMPORTING value TYPE any.
+      METHODS constructor IMPORTING value TYPE any
+                                    iv_exact TYPE flag.
   ENDCLASS.
 
   CLASS lcl_lisp_rational DEFINITION INHERITING FROM lcl_lisp_integer
@@ -702,6 +743,7 @@
     PUBLIC SECTION.
       CLASS-METHODS new IMPORTING nummer        TYPE tv_int
                                   denom         TYPE tv_int
+                                  iv_exact      TYPE flag
                         RETURNING VALUE(result) TYPE REF TO lcl_lisp_integer.
 
       DATA denominator TYPE tv_int READ-ONLY.
@@ -712,7 +754,8 @@
                         RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
       METHODS constructor IMPORTING nummer TYPE tv_int
-                                    denom  TYPE tv_int.
+                                    denom  TYPE tv_int
+                                    iv_exact TYPE flag.
       METHODS normalize RAISING lcx_lisp_exception.
   ENDCLASS.
 
@@ -721,7 +764,7 @@
     METHOD constructor.
       super->constructor( type_integer ).
       int = value.
-      exact = abap_true.
+      exact = iv_exact.
     ENDMETHOD.
 
   ENDCLASS.
@@ -733,17 +776,20 @@
       CREATE OBJECT lo_rat
         EXPORTING
           nummer = nummer
-          denom  = denom.
+          denom  = denom
+          iv_exact = iv_exact.
       IF lo_rat->denominator EQ 1.
         CREATE OBJECT result TYPE lcl_lisp_integer
-          EXPORTING value = lo_rat->int.
+          EXPORTING value = lo_rat->int
+                     iv_exact = iv_exact.
       ELSE.
         result = lo_rat.
       ENDIF.
     ENDMETHOD.
 
     METHOD constructor.
-      super->constructor( nummer ).
+      super->constructor( value = nummer
+                          iv_exact = iv_exact ).
       type = type_rational.
       denominator = denom.
       normalize( ).
@@ -871,6 +917,17 @@
   CLASS lcl_lisp_pair DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
     PROTECTED SECTION.
+  ENDCLASS.
+
+  CLASS lcl_lisp_values DEFINITION INHERITING FROM lcl_lisp_pair FRIENDS lcl_lisp_new.
+    PUBLIC SECTION.
+      DATA size TYPE tv_int READ-ONLY.
+      DATA head TYPE REF TO lcl_lisp READ-ONLY.
+      METHODS constructor.
+      METHODS add IMPORTING io_value TYPE REF TO lcl_lisp
+                  RETURNING VALUE(result) TYPE REF TO lcl_lisp_values.
+    PROTECTED SECTION.
+      DATA last TYPE REF TO lcl_lisp.
   ENDCLASS.
 
   CLASS lcl_lisp_lambda DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
@@ -1114,9 +1171,11 @@
       CLASS-METHODS boolean IMPORTING value          TYPE any
                             RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS integer IMPORTING value          TYPE any
+                                      iv_exact       TYPE flag DEFAULT abap_true
                             RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_integer.
       CLASS-METHODS rational IMPORTING nummer         TYPE tv_int
                                        denom          TYPE tv_int
+                                       iv_exact       TYPE flag DEFAULT abap_true
                              RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_integer
                              RAISING   lcx_lisp_exception.
 
@@ -1238,6 +1297,29 @@
                                       init_y           TYPE REF TO lcl_lisp_integer
                                       init_angle       TYPE REF TO lcl_lisp_real
                             RETURNING VALUE(ro_turtle) TYPE REF TO lcl_lisp_turtle.
+
+
+      CLASS-METHODS values RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_values.
+  ENDCLASS.
+
+  CLASS lcl_lisp_values IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( type_values ).
+      last = head = nil.
+    ENDMETHOD.
+
+    METHOD add.
+      DATA(lo_value) = lcl_lisp_new=>cons( io_car = io_value ).
+      IF head = nil.
+        head = last = lo_value.
+      ELSE.
+        last = last->cdr = lo_value.
+      ENDIF.
+      size = size + 1.
+      result = me.
+    ENDMETHOD.
+
   ENDCLASS.
 
   CLASS lcl_port_dummy DEFINITION INHERITING FROM lcl_lisp_port.
@@ -1959,6 +2041,14 @@
       proc_expt,     ##called
       proc_log,      ##called
       proc_sqrt,     ##called
+      proc_square,   ##called
+
+      proc_int_sqrt,        ##called
+      proc_floor_quotient,  ##called
+      proc_floor_remainder, ##called
+      proc_trunc_quotient,  ##called
+      proc_trunc_remainder, ##called
+      proc_rationalize,     ##called
 
       proc_is_zero,      ##called
       proc_is_positive,  ##called
@@ -2144,6 +2234,13 @@
         RAISING   lcx_lisp_exception.
 
       METHODS bind_symbol
+        IMPORTING element       TYPE REF TO lcl_lisp
+                  environment   TYPE REF TO lcl_lisp_environment
+                  iv_category   TYPE tv_category DEFAULT tv_category_standard
+        RETURNING VALUE(result) TYPE  REF TO lcl_lisp
+        RAISING   lcx_lisp_exception.
+
+      METHODS define_values
         IMPORTING element       TYPE REF TO lcl_lisp
                   environment   TYPE REF TO lcl_lisp_environment
                   iv_category   TYPE tv_category DEFAULT tv_category_standard
@@ -2963,24 +3060,24 @@
     METHOD bind_symbol.
       DATA lv_symbol TYPE string.
       DATA lo_params TYPE REF TO lcl_lisp.
-*     Scheme does not return a value for define; but we are returning the new symbol reference
+      " Scheme does not return a value for define; but we are returning the new symbol reference
       DATA(lo_head) = element->car.
       CASE lo_head->type.
         WHEN type_symbol.
-*         call the set method of the current environment using the unevaluated first parameter
-*         (second list element) as the symbol key and the evaluated second parameter as the value.
+          " call the set method of the current environment using the unevaluated first parameter
+          " (second list element) as the symbol key and the evaluated second parameter as the value.
           lo_params = eval( element = element->cdr->car
                             environment = environment ).
           lo_params->category = iv_category.
           lv_symbol = lo_head->value.
 
-*       Function shorthand (define (id arg ... ) body ...+)
+        " Function shorthand (define (id arg ... ) body ...+)
         WHEN type_pair.
           IF element->cdr EQ nil.
             throw( |{ lo_head->to_string( ) } no expression in body| ).
           ENDIF.
-*         define's function shorthand allows us to define a function by specifying a list as the
-*         first argument where the first element is a symbol and consecutive elements are arguments
+          " define's function shorthand allows us to define a function by specifying a list as the
+          " first argument where the first element is a symbol and consecutive elements are arguments
           lo_params = lcl_lisp_new=>lambda( io_car = lo_head->cdr  "List of params following function symbol
                                             io_cdr = element->cdr
                                             io_env = environment
@@ -2991,7 +3088,7 @@
           throw( |{ lo_head->to_string( ) } cannot be a variable identifier| ).
       ENDCASE.
 
-*     Add function to the environment with symbol
+      " Add function to the environment with symbol
       environment->set( symbol  = lv_symbol
                         element = lo_params
                         once = xsdbool( env NE environment ) ). " Internal definition => once!
@@ -3004,6 +3101,52 @@
       result = bind_symbol( element = element
                             environment = environment
                             iv_category = tv_category_macro ).
+    ENDMETHOD.
+
+    METHOD define_values.
+      DATA lv_symbol TYPE string.
+      DATA lo_params TYPE REF TO lcl_lisp.
+      DATA lo_values TYPE REF TO lcl_lisp_values.
+
+      DATA(lo_head) = element->car.
+      CASE lo_head->type.
+        WHEN type_symbol.
+          " call the set method of the current environment using the unevaluated first parameter
+          " (second list element) as the symbol key and the evaluated second parameter as the value.
+          lo_params = eval( element = element->cdr->car
+                            environment = environment ).
+          lo_params->category = iv_category.
+          " Add function to the environment with symbol
+          environment->set( symbol  = lo_head->value
+                            element = lo_params
+                            once = xsdbool( env NE environment ) ). " Internal definition => once!
+
+        WHEN type_pair.
+          IF element->cdr EQ nil.
+            throw( |{ lo_head->to_string( ) } no expression in body| ).
+          ENDIF.
+          lo_params = eval( element = element->cdr->car
+                            environment = environment ).
+          CASE lo_params->type.
+            WHEN type_values.
+              lo_values ?= lo_params.
+              lo_params = lo_values->head.
+              " Add function to the environment with symbol
+              environment->parameters_to_symbols( io_pars = lo_params
+                                                  io_args = lo_values->head ).
+            WHEN OTHERS.
+              lv_symbol = lo_head->car->value.
+              " Add function to the environment with symbol
+              environment->set( symbol  = lv_symbol
+                                element = lo_params
+                                once = xsdbool( env NE environment ) ). " Internal definition => once!
+          ENDCASE.
+
+        WHEN OTHERS.
+          throw( |{ lo_head->to_string( ) } cannot be a variable identifier| ).
+      ENDCASE.
+
+      result = nil.
     ENDMETHOD.
 
     METHOD is_macro_call.
@@ -3934,6 +4077,10 @@
 
                   WHEN 'define-syntax'.
                     result = define_syntax( element = lr_tail
+                                            environment = lo_env ).
+
+                  WHEN 'define-values'.
+                    result = define_values( element = lr_tail
                                             environment = lo_env ).
 
                   WHEN 'set!'.                        " Re-Assign symbol
@@ -6343,31 +6490,220 @@
       _math sqrt '[sqrt]'.
     ENDMETHOD.                    "proc_sqrt
 
+    METHOD proc_square.
+      "_math square '[square]' real.
+      DATA carry TYPE tv_real.
+      _data_local_numeric_cell.
+
+      result = nil.
+      _validate list.
+      TRY.
+          _get_number carry list->car 'square'.
+          list->assert_last_param( ).
+
+          result = lcl_lisp_new=>number( value = carry * carry
+                                         iv_exact = CAST lcl_lisp_number( cell )->exact ).
+        _catch_arithmetic_error.
+      ENDTRY.
+    ENDMETHOD.                    "proc_square
+
     METHOD proc_floor.
       _math floor '[floor]'.
     ENDMETHOD.                    "proc_floor
 
+    METHOD proc_int_sqrt.
+      " procedure (exact-integer-sqrt k) returns two non-negative exact integers s and r where k = s^2 + r and k < (s + 1)^2.
+      " (exact-integer-sqrt 4) =) 2 0
+      " (exact-integer-sqrt 5) =) 2 1
+      DATA lv_int TYPE tv_int.
+      DATA lv_rest TYPE tv_int.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+
+      result = nil.
+      TRY.
+            _validate: list, list->car, list->cdr.
+
+            CASE list->car->type.
+              WHEN type_integer.
+                 lo_int = CAST lcl_lisp_integer( list->car ).
+                 IF lo_int->exact EQ abap_false.
+                   throw( list->car->to_string( ) && | is a not an exact integer in [exact-integer-sqrt]| ).
+                 ENDIF.
+                 lv_int = lo_int->int.
+                 IF lv_int LT 0.
+                   throw( list->car->to_string( ) && | is a negative integer in [exact-integer-sqrt]| ).
+                 ELSEIF lv_int GT 1.
+                   lv_int = trunc( sqrt( lo_int->int ) ).
+                 ENDIF.
+                 lv_rest = lo_int->int - lv_int * lv_int.
+              WHEN OTHERS.
+                throw( list->car->to_string( ) && | is not an integer in [exact-integer-sqrt]| ).
+            ENDCASE.
+
+            list->assert_last_param( ).
+
+            result = lcl_lisp_new=>values(
+                    )->add( lcl_lisp_new=>integer( value = lv_int
+                                                   iv_exact = abap_true )
+                    )->add( lcl_lisp_new=>integer( value = lv_rest
+                                                   iv_exact = abap_true ) ).
+        _catch_arithmetic_error.
+      ENDTRY.
+    ENDMETHOD.
+
     METHOD proc_floor_new.
       DATA carry TYPE tv_real.
-      _data_local_numeric_cell.
-
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
+      DATA n1 TYPE tv_int.
+      DATA n2 TYPE tv_int.
+      DATA nq TYPE tv_int.  " quotient
+      DATA nr TYPE tv_int.  " remainder
+      DATA exact TYPE flag.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       TRY.
-          _get_number carry list->car 'floor/'.
+          _get_2_ints n1 n2 exact list 'floor/'.
 
-          _get_number carry list->cdr->car 'floor/'.
+          carry = n1 / n2.    " first convert to float, or 3 = trunc( 5 / 2 ) coercion happens with ABAP rules
+          nq = floor( carry ).
+          nr = n1 - n2 * nq.
 
-          list->cdr->assert_last_param( ).
+          DATA(lo_values) = lcl_lisp_new=>values( ).
 
-          throw( `floor/ not implemented yet` ).
+          lo_values->add( lcl_lisp_new=>integer( value = nq
+                                                 iv_exact = exact ) ).
 
-          result = lcl_lisp_new=>number( floor( carry ) ).
+          lo_values->add( lcl_lisp_new=>integer( value = nr
+                                                 iv_exact = exact ) ).
+          result = lo_values.
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
       ENDTRY.
+    ENDMETHOD.
+
+    METHOD proc_floor_quotient.
+      DATA carry TYPE tv_real.
+      DATA n1 TYPE tv_int.
+      DATA n2 TYPE tv_int.
+      DATA nq TYPE tv_int.  " quotient
+      DATA exact TYPE flag.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+
+      TRY.
+          _get_2_ints n1 n2 exact list 'floor-quotient'.
+
+          carry = n1 / n2.    " first convert to float, or 3 = trunc( 5 / 2 ) coercion happens with ABAP rules
+          nq = floor( carry ).
+          result = lcl_lisp_new=>integer( value = nq
+                                          iv_exact = exact ).
+        CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
+          throw( lx_error->get_text( ) ).
+      ENDTRY.
+    ENDMETHOD.
+
+    METHOD proc_floor_remainder.
+      " (floor-remainder n1 n2) -- equivalent to (modulo n1 n2)
+      DATA carry TYPE tv_real.
+      DATA n1 TYPE tv_int.
+      DATA n2 TYPE tv_int.
+      DATA nq TYPE tv_int.  " quotient
+      DATA nr TYPE tv_int.  " remainder
+      DATA exact TYPE flag.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+
+      TRY.
+          _get_2_ints n1 n2 exact list 'floor-remainder'.
+
+          carry = n1 / n2.    " first convert to float, or 3 = trunc( 5 / 2 ) coercion happens with ABAP rules
+          nq = floor( carry ).
+          nr = n1 - n2 * nq.
+
+          result = lcl_lisp_new=>number( value = nr
+                                         iv_exact = exact ).
+
+        CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
+          throw( lx_error->get_text( ) ).
+      ENDTRY.
+    ENDMETHOD.
+
+    METHOD proc_truncate_new.
+      DATA carry TYPE tv_real.
+      DATA n1 TYPE tv_int.
+      DATA n2 TYPE tv_int.
+      DATA nq TYPE tv_int.  " quotient
+      DATA nr TYPE tv_int.  " remainder
+      DATA exact TYPE flag.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+
+      TRY.
+          _get_2_ints n1 n2 exact list 'truncate/'.
+
+          carry = n1 / n2.    " first convert to float, or 3 = trunc( 5 / 2 ) coercion happens with ABAP rules
+          nq = trunc( carry ).
+          nr = n1 - n2 * nq.
+
+          DATA(lo_values) = lcl_lisp_new=>values( ).
+          lo_values->add( lcl_lisp_new=>integer( value = nq
+                                                 iv_exact = exact ) ).
+          lo_values->add( lcl_lisp_new=>integer( value = nr
+                                                 iv_exact = exact ) ).
+          result = lo_values.
+        CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
+          throw( lx_error->get_text( ) ).
+      ENDTRY.
+    ENDMETHOD.
+
+    METHOD proc_trunc_quotient.
+      " (truncate-quotient n1 n2) -- equivalent to (quotient n1 n2)
+      DATA carry TYPE tv_real.
+      DATA n1 TYPE tv_int.
+      DATA n2 TYPE tv_int.
+      DATA nq TYPE tv_int.  " quotient
+      DATA exact TYPE flag.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+
+      TRY.
+          _get_2_ints n1 n2 exact list 'truncate-quotient'.
+
+          carry = n1 / n2.    " first convert to float, or 3 = trunc( 5 / 2 ) coercion happens with ABAP rules
+          nq = trunc( carry ).
+          result = lcl_lisp_new=>integer( value = nq
+                                          iv_exact = exact ).
+        CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
+          throw( lx_error->get_text( ) ).
+      ENDTRY.
+    ENDMETHOD.
+
+    METHOD proc_trunc_remainder.
+    " (truncate-remainder n1 n2) -- equivalent to (remainder n1 n2)
+      DATA carry TYPE tv_real.
+      DATA n1 TYPE tv_int.
+      DATA n2 TYPE tv_int.
+      DATA nq TYPE tv_int.  " quotient
+      DATA nr TYPE tv_int.  " remainder
+      DATA exact TYPE flag.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+
+      TRY.
+          _get_2_ints n1 n2 exact list 'truncate-remainder/'.
+
+          carry = n1 / n2.    " first convert to float, or 3 = trunc( 5 / 2 ) coercion happens with ABAP rules
+          nq = trunc( carry ).
+          nr = n1 - n2 * nq.     " n1 = n2 * nq + nr.
+          result = lcl_lisp_new=>integer( value = nr
+                                          iv_exact = exact ).
+        CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
+          throw( lx_error->get_text( ) ).
+      ENDTRY.
+    ENDMETHOD.
+
+    METHOD proc_rationalize.
+      throw( `rationalize not implemented yet` ).
     ENDMETHOD.
 
     METHOD proc_ceiling.
@@ -6377,10 +6713,6 @@
     METHOD proc_truncate.
       _math trunc '[truncate]'.
     ENDMETHOD.                    "proc_truncate
-
-    METHOD proc_truncate_new.
-       throw( `truncate/ not implemented yet` ).
-    ENDMETHOD.
 
     METHOD proc_round.
       DATA carry TYPE tv_real.
@@ -8966,12 +9298,12 @@
     ENDMETHOD.                    "parameters_to_symbols
 
     METHOD prepare.
-*     Create symbols for nil, true and false values
+      " Create symbols for nil, true and false values
       set( symbol = 'nil' element = lcl_lisp=>nil ).
       set( symbol = '#f' element = lcl_lisp=>true ).
       set( symbol = '#t' element = lcl_lisp=>false ).
 
-*     Add primitive functions to environment
+      " Add primitive functions to environment
       define_value( symbol = 'define'          type = type_syntax value   = 'define' ).
       define_value( symbol = 'lambda'          type = type_syntax value   = 'lambda' ).
       define_value( symbol = 'if'              type = type_syntax value   = 'if' ).
@@ -9191,6 +9523,15 @@
       define_value( symbol = 'exp'   type = type_native value = 'PROC_EXP' ).
       define_value( symbol = 'log'   type = type_native value = 'PROC_LOG' ).
       define_value( symbol = 'sqrt'  type = type_native value = 'PROC_SQRT' ).
+
+      " not implemented yet
+      define_value( symbol = 'square'             type = type_native value = 'PROC_SQUARE' ).
+      define_value( symbol = 'exact-integer-sqrt' type = type_native value = 'PROC_INT_SQRT' ).
+      define_value( symbol = 'floor-quotient'     type = type_native value = 'PROC_FLOOR_QUOTIENT' ).
+      define_value( symbol = 'floor-remainder'    type = type_native value = 'PROC_FLOOR_REMAINDER' ).
+      define_value( symbol = 'truncate-remainder' type = type_native value = 'PROC_TRUNC_REMAINDER' ).
+      define_value( symbol = 'truncate-quotient'  type = type_native value = 'PROC_TRUNC_QUOTIENT' ).
+      define_value( symbol = 'rationalize'        type = type_native value = 'PROC_RATIONALIZE' ).
 
       define_value( symbol = 'floor'     type = type_native value = 'PROC_FLOOR' ).
       define_value( symbol = 'floor/'    type = type_native value = 'PROC_FLOOR_NEW' ).
@@ -9580,6 +9921,28 @@
       ENDCASE.
     ENDMETHOD.
 
+    METHOD values_to_string.
+      DATA lo_values TYPE REF TO lcl_lisp_values.
+      DATA lo_elem TYPE REF TO lcl_lisp.
+      DATA lv_str TYPE string.
+
+      lo_values ?= me.
+      lo_elem = lo_values->head.
+
+      WHILE lo_elem IS BOUND AND lo_elem NE nil.
+        _validate lo_elem->car.
+        lv_str = lo_elem->car->to_string( ).
+        IF str IS INITIAL.
+          str = lv_str.
+        ELSE.
+          str = str && ` ` && lv_str.
+        ENDIF.
+
+        lo_elem = lo_elem->cdr.
+      ENDWHILE.
+
+    ENDMETHOD.
+
     METHOD list_to_string.
       DATA lv_str TYPE string.
       DATA lv_skip TYPE flag.
@@ -9694,6 +10057,10 @@
           str = lv_real.
           str = condense( str ).
 
+          IF lo_int->exact EQ abap_false AND str CN `.`.
+            str = str && `.0`.
+          ENDIF.
+
         WHEN type_real.
           DATA lo_real TYPE REF TO lcl_lisp_real.
           lo_real ?= me.
@@ -9723,6 +10090,9 @@
           str = |#{ lo_vec->to_list( )->to_string( ) }|.
         WHEN type_port.
           str = '<port>'.
+        WHEN type_values.
+          str = values_to_string( ).
+
 *--------------------------------------------------------------------*
 *        Additions for ABAP Types:
         WHEN type_abap_function.
@@ -9943,7 +10313,8 @@
     ENDMETHOD.
 
     METHOD integer.
-      ro_elem = NEW lcl_lisp_integer( value ).
+      ro_elem = NEW lcl_lisp_integer( value = value
+                                      iv_exact = iv_exact ).
     ENDMETHOD.
 
     METHOD real.
@@ -9974,7 +10345,8 @@
               lv_nummer_str = value.
               IF NOT contains( val = lv_nummer_str sub = '.' ) OR iv_exact EQ abap_true.
                 MOVE EXACT value TO lv_int.
-                ro_elem = integer( lv_int ).
+                ro_elem = integer( value = lv_int
+                                   iv_exact = abap_true ).
                 RETURN.
               ENDIF.
             CATCH cx_sy_conversion_error ##NO_HANDLER.
@@ -10231,7 +10603,8 @@
 
     METHOD rational.
       ro_elem = lcl_lisp_rational=>new( nummer = nummer
-                                        denom = denom ).
+                                        denom = denom
+                                        iv_exact = iv_exact ).
     ENDMETHOD.
 
     METHOD data.
@@ -10278,6 +10651,10 @@
       ro_vec->vector = it_vector.
       ro_vec->mutable = iv_mutable.
       ro_vec->mo_length = number( lines( it_vector ) ).
+    ENDMETHOD.
+
+    METHOD values.
+      ro_elem = NEW lcl_lisp_values( ).
     ENDMETHOD.
 
     METHOD turtles.

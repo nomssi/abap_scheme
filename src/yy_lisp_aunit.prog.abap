@@ -364,6 +364,9 @@
        METHODS letrec_star_0 FOR TESTING.
        METHODS values_0 FOR TESTING.
 
+       METHODS define_values_0 FOR TESTING.
+       METHODS define_values_1 FOR TESTING.
+
        METHODS call_cc_0 FOR TESTING.
        METHODS call_cc_1 FOR TESTING.
        METHODS call_cc_values FOR TESTING.
@@ -935,6 +938,20 @@
 *                         |     (lambda (cont) (apply cont things)))) |
 *               expected = 'values' ).
      ENDMETHOD.                    "call_cc_values
+
+     METHOD define_values_0.
+       scheme( code = |(define-values (x y) (exact-integer-sqrt 17))|
+               expected = '' ).
+       scheme( code = |(list x y)|
+               expected = '(4 1)' ).
+     ENDMETHOD.
+
+     METHOD define_values_1.
+       scheme( code = |(define-values (x y) (values 1 2))|
+               expected = '' ).
+       scheme( code = |(+ x y)|
+               expected = '3' ).
+     ENDMETHOD.
 
      METHOD is_symbol_true_1.
        scheme( code = |(define x 5)|
@@ -2244,6 +2261,9 @@
        METHODS math_expt FOR TESTING.
        METHODS math_expt_1 FOR TESTING.
        METHODS math_sqrt FOR TESTING.
+       METHODS math_int_sqrt FOR TESTING.
+       METHODS math_square FOR TESTING.
+       METHODS math_complex FOR TESTING.
        METHODS math_log FOR TESTING.
 
        METHODS math_floor FOR TESTING.
@@ -2452,9 +2472,28 @@
                     expected = '1.4142135623730950488016887242097' ) ##literal.
        scheme( code =  '(sqrt 9)'
                expected = '3' ).
+     ENDMETHOD.                    "math_sqrt
+
+     METHOD math_int_sqrt.
+       scheme( code =  '(exact-integer-sqrt 17)'
+               expected = '4 1' ).
+       scheme( code =  '(exact-integer-sqrt 4)'
+               expected = '2 0' ).
+       scheme( code =  '(exact-integer-sqrt 5)'
+               expected = '2 1' ).
+     ENDMETHOD.
+
+     METHOD math_square.
+       scheme( code =  '(square 2.0)'
+               expected = '4.0' ).
+       scheme( code =  '(square 42)'
+               expected = '1764' ).
+     ENDMETHOD.
+
+     METHOD math_complex.
        scheme( code =  '(sqrt -1)'
                expected = '+i' ).
-     ENDMETHOD.                    "math_sqrt
+     ENDMETHOD.
 
      METHOD math_log.
        code_test_f( code =  '(log 7.389056)'
@@ -2474,13 +2513,13 @@
      METHOD math_floor_new.
        "Integer division
        scheme( code =  '(floor/ 5 2)'
-               expected = ' 2 1' ).
+               expected = '2 1' ).
        scheme( code =  '(floor/ -5 2)'
-               expected = ' -3 1' ).
+               expected = '-3 1' ).
        scheme( code =  '(floor/ 5 -2)'
-               expected = ' -3 -1' ).
+               expected = '-3 -1' ).
        scheme( code =  '(floor/ -5 -2)'
-               expected = ' 2 -1' ).
+               expected = '2 -1' ).
      ENDMETHOD.
 
      METHOD math_ceiling.
@@ -2506,15 +2545,15 @@
      METHOD math_truncate_new.
        "Integer division
        scheme( code =  '(truncate/ 5 2)'
-               expected = ' 2 1' ).
+               expected = '2 1' ).
        scheme( code =  '(truncate/ -5 2)'
-               expected = ' -2 -1' ).
+               expected = '-2 -1' ).
        scheme( code =  '(truncate/ 5 -2)'
-               expected = ' -2 1' ).
+               expected = '-2 1' ).
        scheme( code =  '(truncate/ -5 -2)'
-               expected = ' 2 -1' ).
+               expected = '2 -1' ).
        scheme( code =  '(truncate/ -5.0 -2)'
-               expected = ' 2.0 -1.0' ).
+               expected = '2.0 -1.0' ).
      ENDMETHOD.
 
      METHOD math_round.
