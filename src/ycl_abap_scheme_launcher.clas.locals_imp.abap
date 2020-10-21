@@ -8117,7 +8117,7 @@
         RETURN.
       ENDIF.
       result = true.
-    ENDMETHOD.                    "proc_gte
+    ENDMETHOD.
 
     METHOD proc_is_negative.
       "_sign -1 '[negative?]'.
@@ -8600,8 +8600,7 @@
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-*     (exact-integer? z) procedure
-*     Returns #t if z is both exact and an integer; otherwise returns #f.
+      " (exact-integer? z) procedure - Returns #t if z is both exact and an integer; otherwise returns #f.
       result = false.
       CHECK list->car IS BOUND.
       CASE list->car->type.
@@ -8618,9 +8617,9 @@
         lcl_lisp=>throw( c_error_incorrect_input ).
       ENDIF.
 
-*     If x is an inexact real number, then (integer? x) is true if and only if (= x (round x)).
-
+      " If x is an inexact real number, then (integer? x) is true if and only if (= x (round x)).
       result = false.
+
       CHECK list->car IS BOUND.
       CASE list->car->type.
         WHEN integer.
@@ -9330,7 +9329,8 @@
           ENDCASE.
           list->assert_last_param( ).
 
-          result = lcl_lisp_new=>number( value = exp( carry ) ).
+          result = lcl_lisp_new=>number( value = exp( carry )
+                                         iv_exact = abap_false ).
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
       ENDTRY.
@@ -9541,7 +9541,7 @@
       ENDIF.
 
       TRY.
-          "_get_number carry list->car &2..
+          "_get_number carry list->car &2.
           DATA(cell) = list->car.
           CASE cell->type.
             WHEN integer.
@@ -10465,7 +10465,11 @@
       ENDIF.
 
       lv_index = CAST lcl_lisp_integer( list->cdr->car )->int.
-      lv_char = list->car->value+lv_index(1).
+      TRY.
+          lv_char = list->car->value+lv_index(1).
+      CATCH cx_sy_range_out_of_bounds.
+        list->cdr->car->raise( ` index is out of range in string-ref` ) ##NO_TEXT.
+      ENDTRY.
 
       result = lcl_lisp_new=>char( lv_char ).
     ENDMETHOD.
@@ -14632,10 +14636,15 @@
             DATA lv_dec_str TYPE string.
             SPLIT lv_nummer_str AT lcl_parser=>c_lisp_dot INTO lv_int_str lv_dec_str.
             lv_int_str &&= lv_dec_str.
-            lv_int = lv_int_str.
-            lv_denom = ipow( base = 10 exp = numofchar( lv_dec_str ) ).
-            ro_elem = rational( nummer = lv_int
-                                denom = lv_denom ).
+            TRY.
+              lv_int = lv_int_str.
+              lv_denom = ipow( base = 10 exp = numofchar( lv_dec_str ) ).
+              ro_elem = rational( nummer = lv_int
+                                  denom = lv_denom ).
+            CATCH cx_sy_conversion_overflow.
+              ro_elem = real( value = lv_real
+                              exact = abap_false ).
+            ENDTRY.
             RETURN.
           ENDIF.
 
@@ -14665,19 +14674,19 @@
     METHOD numeric.
       CASE record-type.
         WHEN integer.
-          ro_elem = lcl_lisp_new=>integer( record-int ).
+          ro_elem = integer( record-int ).
 
         WHEN rational.
           IF record-denom EQ 1.
-            ro_elem = lcl_lisp_new=>integer( record-nummer ).
+            ro_elem = integer( record-nummer ).
           ELSE.
-            ro_elem = lcl_lisp_new=>rational( nummer = record-nummer
-                                              denom = record-denom ).
+            ro_elem = rational( nummer = record-nummer
+                                denom = record-denom ).
           ENDIF.
 
         WHEN real.
-          ro_elem = lcl_lisp_new=>real( value = record-real
-                                        exact = record-exact ).
+          ro_elem = real( value = record-real
+                          exact = record-exact ).
 
         WHEN OTHERS.
           lcl_lisp=>throw( |Error in result of [{ record-operation }]| ).
@@ -15005,7 +15014,7 @@
       DATA(lo_head) = list.
       CHECK lo_head->type = pair.
 
-*     Can accept a parameter which should be a list of alternating symbols/strings and elements
+      " Can accept a parameter which should be a list of alternating symbols/strings and elements
       DATA(lo_iter) = lo_head->new_iterator( ).
       WHILE lo_iter->has_next( ).
         DATA(lo_key) = lo_iter->next( ).
@@ -15112,10 +15121,8 @@
     METHOD get_list.
       ro_head = nil.
 
-      DATA(lv_end) = COND tv_index( WHEN to IS SUPPLIED
-                                      THEN to                       " end is Exclusive
+      DATA(lv_end) = COND tv_index( WHEN to IS SUPPLIED THEN to     " end is Exclusive
                                       ELSE lines( array ) ).        " End of vector
-
       DATA(lv_start) = from + 1.         " start is Inclusive
 
       IF lv_end LT 1 OR lv_start GT lv_end.
@@ -15143,8 +15150,7 @@
     ENDMETHOD.
 
     METHOD set.
-      "_validate_mutable me `vector`.
-      IF me->mutable EQ abap_false.
+      IF me->mutable EQ abap_false.      "_validate_mutable me `vector`.
         throw( |constant list in vector cannot be changed| ) ##NO_TEXT.
       ENDIF.
 
@@ -15169,11 +15175,8 @@
 
       DATA(lv_start) = from + 1.         " start is Inclusive
       DATA(lv_size) = lines( array ).
-      IF to IS SUPPLIED.
-        lv_end = to.                     " end is Exclusive
-      ELSE.
-        lv_end = lv_size.        " End of vector
-      ENDIF.
+      lv_end = COND #( WHEN to IS SUPPLIED THEN to         " end is Exclusive
+                                           ELSE lv_size ). " End of vector
 
       IF lv_end LT 1 OR lv_end GT lv_size OR lv_start GT lv_end.
         throw( |vector-fill!: out-of-bound range| ).
