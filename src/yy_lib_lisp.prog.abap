@@ -159,6 +159,13 @@
     ENDIF.
   END-OF-DEFINITION.
 
+  DEFINE _validate_byte.
+    _validate_integer &1 &2.
+    IF CAST lcl_lisp_integer( &1 )->int NOT BETWEEN 0 AND 255.
+      &1->raise( ` is not a byte in ` && &2 ) ##NO_TEXT.
+    ENDIF.
+  END-OF-DEFINITION.
+
   DEFINE _validate_index.
     _validate_integer &1 &2.
     IF CAST lcl_lisp_integer( &1 )->int LT 0.
@@ -176,6 +183,10 @@
 
   DEFINE _validate_vector.
     _validate_type &1 &2 vector `vector`.
+  END-OF-DEFINITION.
+
+  DEFINE _validate_bytevector.
+    _validate_type &1 &2 bytevector `bytevector`.
   END-OF-DEFINITION.
 
   DEFINE _validate_port.
@@ -634,6 +645,9 @@
 
   TYPES tt_lisp TYPE STANDARD TABLE OF REF TO lcl_lisp WITH EMPTY KEY.
 
+  TYPES tv_byte TYPE int1.
+  TYPES tt_byte TYPE STANDARD TABLE OF tv_byte WITH EMPTY KEY.
+
   CLASS lcl_lisp_char DEFINITION INHERITING FROM lcl_lisp
     CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
@@ -923,7 +937,7 @@
     PUBLIC SECTION.
       DATA size TYPE tv_int READ-ONLY.
       DATA head TYPE REF TO lcl_lisp READ-ONLY.
-      METHODS constructor.
+      METHODS constructor IMPORTING io_elem TYPE REF TO lcl_lisp.
       METHODS add IMPORTING io_value TYPE REF TO lcl_lisp
                   RETURNING VALUE(result) TYPE REF TO lcl_lisp_values.
     PROTECTED SECTION.
@@ -1058,6 +1072,7 @@
   ENDINTERFACE.
 
   CLASS lcl_lisp_vector DEFINITION DEFERRED.
+  CLASS lcl_lisp_bytevector DEFINITION DEFERRED.
   CLASS lcl_lisp_abapfunction DEFINITION DEFERRED.
   CLASS lcl_lisp_hash DEFINITION DEFERRED.
 
@@ -1254,6 +1269,10 @@
                                      iv_mutable    TYPE flag
                            RETURNING VALUE(ro_vec) TYPE REF TO lcl_lisp_vector.
 
+      CLASS-METHODS bytevector IMPORTING it_byte       TYPE tt_byte
+                                         iv_mutable    TYPE flag
+                               RETURNING VALUE(ro_u8) TYPE REF TO lcl_lisp_bytevector.
+
       CLASS-METHODS lambda IMPORTING io_car              TYPE REF TO lcl_lisp
                                      io_cdr              TYPE REF TO lcl_lisp
                                      io_env              TYPE REF TO lcl_lisp_environment
@@ -1299,14 +1318,15 @@
                             RETURNING VALUE(ro_turtle) TYPE REF TO lcl_lisp_turtle.
 
 
-      CLASS-METHODS values RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_values.
+      CLASS-METHODS values IMPORTING io_elem TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
+                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_values.
   ENDCLASS.
 
   CLASS lcl_lisp_values IMPLEMENTATION.
 
     METHOD constructor.
       super->constructor( type_values ).
-      last = head = nil.
+      last = head = io_elem.
     ENDMETHOD.
 
     METHOD add.
@@ -1648,6 +1668,205 @@
     PROTECTED SECTION.
       DATA vector TYPE tt_lisp.
       DATA mo_length TYPE REF TO lcl_lisp.
+  ENDCLASS.
+
+  CLASS lcl_lisp_bytevector DEFINITION INHERITING FROM lcl_lisp
+    CREATE PROTECTED FRIENDS lcl_lisp_new.
+    PUBLIC SECTION.
+      DATA bytes TYPE tt_byte READ-ONLY.
+
+      CLASS-METHODS init IMPORTING size         TYPE tv_index
+                                   iv_fill      TYPE tv_byte
+                                   iv_mutable   TYPE flag DEFAULT abap_true
+                         RETURNING VALUE(ro_u8) TYPE REF TO lcl_lisp_bytevector
+                         RAISING   lcx_lisp_exception.
+
+      CLASS-METHODS utf8_from_string IMPORTING iv_text      TYPE string
+                                               iv_mutable   TYPE flag DEFAULT abap_true
+                                     RETURNING VALUE(ro_u8) TYPE REF TO lcl_lisp_bytevector
+                                     RAISING   lcx_lisp_exception.
+
+      CLASS-METHODS from_list IMPORTING io_list      TYPE REF TO lcl_lisp
+                                        iv_mutable   TYPE flag DEFAULT abap_true
+                              RETURNING VALUE(ro_u8) TYPE REF TO lcl_lisp_bytevector
+                              RAISING   lcx_lisp_exception.
+
+      METHODS to_list RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
+                      RAISING   lcx_lisp_exception.
+
+      METHODS utf8_to_string RETURNING VALUE(rv_text) TYPE string
+                             RAISING   lcx_lisp_exception.
+
+      METHODS set IMPORTING index         TYPE tv_index
+                            iv_byte       TYPE tv_byte
+                  RAISING   lcx_lisp_exception.
+
+      METHODS get IMPORTING index          TYPE tv_index
+                  RETURNING VALUE(rv_byte) TYPE tv_byte
+                  RAISING   lcx_lisp_exception.
+
+      METHODS copy_new IMPORTING from           TYPE tv_index DEFAULT 0
+                                 to             TYPE tv_index OPTIONAL
+                       RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_bytevector
+                       RAISING   lcx_lisp_exception.
+
+      METHODS copy IMPORTING at             TYPE tv_index DEFAULT 0
+                             io_from        TYPE REF TO lcl_lisp_bytevector
+                             start          TYPE tv_index OPTIONAL
+                             end            TYPE tv_index OPTIONAL
+                   RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_bytevector
+                   RAISING   lcx_lisp_exception.
+
+      METHODS length RETURNING VALUE(ro_length) TYPE REF TO lcl_lisp.
+
+      METHODS to_string REDEFINITION.
+      METHODS is_equal REDEFINITION.
+      "METHODS set_shared_structure REDEFINITION.
+
+
+    PROTECTED SECTION.
+      DATA mo_length TYPE REF TO lcl_lisp.
+  ENDCLASS.
+
+  CLASS lcl_lisp_bytevector IMPLEMENTATION.
+
+      METHOD init.
+        DATA lt_byte TYPE tt_byte.
+
+        DO size TIMES.
+          APPEND iv_fill TO lt_byte.
+        ENDDO.
+        ro_u8 = lcl_lisp_new=>bytevector( it_byte = lt_byte
+                                          iv_mutable = iv_mutable ).
+      ENDMETHOD.
+
+      METHOD from_list.
+        DATA lt_byte TYPE tt_byte.
+        DATA lv_int TYPE tv_int.
+
+        DATA(lo_ptr) = io_list.
+        WHILE lo_ptr NE nil.
+          _validate_byte lo_ptr->car `bytevector`.
+          _to_integer lo_ptr->car lv_int.
+          APPEND lv_int TO lt_byte.
+          lo_ptr = lo_ptr->cdr.
+        ENDWHILE.
+        ro_u8 = lcl_lisp_new=>bytevector( it_byte = lt_byte
+                                          iv_mutable = iv_mutable ).
+      ENDMETHOD.
+
+      METHOD to_list.
+        ro_elem = nil.
+        LOOP AT bytes ASSIGNING FIELD-SYMBOL(<byte>).
+          DATA(lo_byte) = lcl_lisp_new=>integer( value = <byte>
+                                                 iv_exact = abap_true ).
+          AT FIRST.
+            ro_elem = lcl_lisp_new=>cons( io_car = lo_byte ).
+            DATA(lo_ptr) = ro_elem.
+            CONTINUE.
+          ENDAT.
+          lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = lo_byte ).
+        ENDLOOP.
+      ENDMETHOD.
+
+    METHOD to_string.
+      IF bytes IS INITIAL.
+        str = |#u8()|.
+      ELSE.
+        str = super->to_string( ).
+      ENDIF.
+    ENDMETHOD.
+
+      METHOD utf8_from_string.
+        throw( |utf8_from_string not implemented yet| ).
+      ENDMETHOD.
+
+      METHOD utf8_to_string.
+        throw( |utf8_to_string not implemented yet| ).
+      ENDMETHOD.
+
+      METHOD set.
+        _validate_mutable me `bytevector`.
+
+        DATA(lv_start) = index + 1.
+
+        IF lv_start BETWEEN 1 AND lines( bytes ).
+          bytes[ lv_start ] = iv_byte.
+        ELSE.
+          throw( |bytevector-u8-set!: out-of-bound position { index }| ).
+        ENDIF.
+      ENDMETHOD.
+
+      METHOD get.
+        DATA(lv_start) = index + 1.
+
+        IF lv_start BETWEEN 1 AND lines( bytes ).
+          rv_byte = bytes[ lv_start ].
+        ELSE.
+          throw( |bytevector-u8-ref: out-of-bound position { index }| ).
+        ENDIF.
+      ENDMETHOD.
+
+      METHOD copy_new.
+        DATA lt_byte TYPE tt_byte.
+        DATA lv_u8 TYPE tv_byte.
+        DATA lv_to TYPE tv_index.
+
+        DATA(lv_from) = from + 1.          " from is Inclusive
+
+        IF to IS INITIAL.
+          lv_to = lines( bytes ).   " to is Exclusive
+        ELSE.
+          lv_to = to.               " End of bytevector
+        ENDIF.
+
+        LOOP AT bytes INTO lv_u8 FROM lv_from TO lv_to.
+          APPEND lv_u8 TO lt_byte.
+        ENDLOOP.
+
+        ro_elem ?= lcl_lisp_new=>bytevector( it_byte = lt_byte
+                                             iv_mutable = mutable ).
+      ENDMETHOD.
+
+      METHOD copy.
+        " ( |bytevector-copy!:| ).
+        DATA lv_end TYPE tv_index.
+
+        DATA(lv_start) = start + 1.          " from is Inclusive
+
+        IF end IS INITIAL.
+          lv_end = lines( io_from->bytes ).   " to is Exclusive
+        ELSE.
+          lv_end = end.                       " End of bytevector
+        ENDIF.
+
+        DATA(lv_at) = at + 1.
+        DATA(lv_max) = lv_end - lv_start + lv_at.
+
+        DATA(lv_idx) = lv_start.
+        LOOP AT bytes FROM lv_at TO lv_max ASSIGNING FIELD-SYMBOL(<lv_byte>).
+          <lv_byte> = io_from->bytes[ lv_idx ].
+          lv_idx = lv_idx + 1.
+        ENDLOOP.
+
+      ENDMETHOD.
+
+      METHOD length.
+        ro_length = mo_length.
+      ENDMETHOD.
+
+      METHOD is_equal.
+        DATA lo_u8 TYPE REF TO lcl_lisp_bytevector.
+
+        result = false.
+        CHECK io_elem->type EQ type_bytevector.
+
+        lo_u8 ?= io_elem.
+        CHECK bytes = lo_u8->bytes.
+
+        result = true.
+      ENDMETHOD.
+
   ENDCLASS.
 
 *----------------------------------------------------------------------*
@@ -1998,6 +2217,8 @@
       proc_eqv       ##called,
       proc_not       ##called,
 
+      proc_values           ##called,
+
       proc_is_number        ##called,
       proc_is_integer       ##called,
       proc_is_exact_integer ##called,
@@ -2179,6 +2400,20 @@
       proc_vector_fill,    ##called
       proc_vector_ref,     ##called
       proc_vector_to_list. ##called
+
+      " bytevectors:
+      _proc_meth:
+      proc_is_bytevector,         ##called
+      proc_make_bytevector,       ##called
+      proc_bytevector,            ##called
+      proc_bytevector_length,     ##called
+      proc_bytevector_u8_set,     ##called
+      proc_bytevector_u8_ref,     ##called
+      proc_bytevector_append,     ##called
+      proc_bytevector_new_copy,   ##called
+      proc_bytevector_copy,       ##called
+      proc_string_to_utf8,        ##called
+      proc_utf8_to_string.        ##called
 
 * Functions for dealing with hashes:
       _proc_meth:
@@ -2611,7 +2846,7 @@
     ENDMETHOD.
 
     METHOD peek_bytevector.
-      CONSTANTS c_prefix TYPE char03 VALUE 'U8('.
+      CONSTANTS c_prefix TYPE char03 VALUE 'u8('.
       DATA lv_token TYPE string.
 
       DATA(lv_idx) = index.
@@ -2620,7 +2855,7 @@
         lv_idx = lv_idx + 1.
 
         IF lv_idx < length.
-          lv_token = to_upper( lv_token ).
+          "lv_token = to_upper( lv_token ).
           CONCATENATE lv_token code+lv_idx(1) INTO lv_token RESPECTING BLANKS.
         ELSE.
           RETURN.
@@ -2996,8 +3231,13 @@
               "will be handled in match_atom( )
 
               IF peek_bytevector( ).
-**               Bytevector constant #u8( ... )
-*
+                " Bytevector constant #u8( ... )
+                next_char( ).      " skip #
+                next_char( ).      " skip U
+                next_char( ).      " skip 8
+                element = lcl_lisp_bytevector=>from_list( io_list = parse_list( )
+                                                          iv_mutable = abap_false ).
+                RETURN.
               ENDIF.
 
 *             Referencing other literal data #<n>= #<n>#
@@ -4609,6 +4849,15 @@
       result = list_reverse( list->car ).
     ENDMETHOD.                    "proc_reverse
 
+    METHOD proc_values.
+      _validate: list, list->cdr.
+
+      result = lcl_lisp_new=>values( list->cdr ).
+
+*      result = lcl_lisp_new=>values( evaluate_parameters( io_list = lr_tail
+*                                                          environment = environment ) ).
+    ENDMETHOD.
+
     METHOD table_of_lists.
       _validate io_head.
 
@@ -5242,6 +5491,230 @@
       result = lcl_lisp_vector=>from_list( list->car ).
     ENDMETHOD.
 
+    METHOD proc_bytevector.
+      "(bytevector 1 3 5 1 3 5) => #u8(1 3 5 1 3 5)
+      "(bytevector) => #u8()
+      _validate list.
+
+      result = lcl_lisp_bytevector=>from_list( list ).
+    ENDMETHOD.
+
+    METHOD proc_bytevector_length.
+      _validate list.
+      _validate_bytevector list->car 'bytevector-length'.
+      _assert_last_param list.
+
+      result = CAST lcl_lisp_bytevector( list->car )->length( ).
+    ENDMETHOD.
+
+    METHOD proc_bytevector_u8_set.
+      " (bytevector-u8-set! bytevector k byte)
+      DATA lo_u8 TYPE REF TO lcl_lisp_bytevector.
+      DATA lv_byte TYPE tv_byte.
+
+      _validate: list, list->cdr, list->cdr->cdr.
+      _validate_bytevector list->car `bytevector-u8-set!`.
+      lo_u8 ?= list->car.
+
+      _validate_index list->cdr->car `bytevector-u8-set!`.
+      DATA(lv_index) = CAST lcl_lisp_integer( list->cdr->car )->int.
+
+      DATA(lo_last) = list->cdr->cdr.
+      _validate_byte lo_last->car `bytevector-u8-set!`.
+      lv_byte = CAST lcl_lisp_integer( lo_last->car )->int.
+
+      _assert_last_param lo_last.
+
+      lo_u8->set( index = lv_index
+                  iv_byte = lv_byte ).
+      result = lo_u8.
+    ENDMETHOD.
+
+    METHOD proc_bytevector_u8_ref.
+      " (bytevector-u8-ref bytevector k)
+      DATA lo_u8 TYPE REF TO lcl_lisp_bytevector.
+      DATA lv_index TYPE tv_int.
+
+      _validate: list, list->cdr.
+      _validate_bytevector list->car `bytevector-u8-ref`.
+      lo_u8 ?= list->car.
+
+      DATA(lo_last) = list->cdr.
+      _validate_index lo_last->car `bytevector-u8-ref`.
+      lv_index = CAST lcl_lisp_integer( lo_last->car )->int.
+
+      _assert_last_param lo_last.
+
+      result = lcl_lisp_new=>integer( value = lo_u8->get( index = lv_index )
+                                      iv_exact = abap_true ).
+    ENDMETHOD.
+
+    METHOD proc_bytevector_append.
+      " (bytevector-append bytevector ... ) procedure
+      " Returns a newly allocated bytevector whose elements are the concatenation of the elements in the given bytevectors.
+      DATA lt_byte TYPE tt_byte.
+      DATA lo_ptr TYPE REF TO lcl_lisp.
+      DATA lo_bytes TYPE REF TO lcl_lisp_bytevector.
+      DATA lv_mutable TYPE flag.
+      _validate list.
+
+      lo_ptr = list.
+      lv_mutable = abap_true.
+      WHILE lo_ptr->type = type_pair AND lo_ptr->car->type EQ type_bytevector.
+        lo_bytes = CAST lcl_lisp_bytevector( lo_ptr->car ).
+        APPEND LINES OF lo_bytes->bytes TO lt_byte.
+        IF lo_bytes->mutable EQ abap_false.
+          lv_mutable = abap_false.
+        ENDIF.
+        lo_ptr = lo_ptr->cdr.
+      ENDWHILE.
+      IF lo_ptr NE nil.
+        lo_ptr->car->raise( ` is not a bytevector in bytevector-append` ).
+      ENDIF.
+      result = lcl_lisp_new=>bytevector( it_byte = lt_byte
+                                         iv_mutable = lv_mutable ).
+    ENDMETHOD.
+
+    METHOD proc_is_bytevector.
+      _validate list.
+      _is_type bytevector.
+    ENDMETHOD.
+
+    METHOD proc_make_bytevector.
+      DATA lo_fill TYPE REF TO lcl_lisp_integer.
+      DATA lv_fill TYPE tv_byte.
+      _validate: list, list->cdr.
+
+      DATA(lo_size) = list->car.
+
+      _validate_index lo_size `make-bytevector`.
+
+      IF list->cdr NE lcl_lisp=>nil.
+        _validate_byte list->cdr->car `make-bytevector`.
+        lo_fill ?= list->cdr->car.
+        lv_fill = lo_fill->int.
+        _assert_last_param list->cdr.
+      ELSE.
+        lv_fill = 0.
+        _assert_last_param list.
+      ENDIF.
+
+      result = lcl_lisp_bytevector=>init( size = CAST lcl_lisp_integer( lo_size )->int
+                                          iv_fill = lv_fill ).
+    ENDMETHOD.
+
+    METHOD proc_utf8_to_string.
+      throw( `proc_utf8_to_string to be implemented` ).
+      result = nil.
+    ENDMETHOD.
+
+    METHOD proc_string_to_utf8.
+      throw( `proc_string_to_utf8 to be implemented` ).
+      result = nil.
+    ENDMETHOD.
+
+    METHOD proc_bytevector_new_copy.
+*    (bytevector-copy bytevector) procedure
+*    (bytevector-copy bytevector start) procedure
+*    (bytevector-copy bytevector start end) procedure
+*    Returns a newly allocated bytevector containing the bytes
+*    in bytevector between start and end.
+     " (define a #u8(1 2 3 4 5))
+     " (bytevector-copy a 2 4)) =) #u8(3 4)
+
+      DATA lo_u8 TYPE REF TO lcl_lisp_bytevector.
+      DATA lv_start TYPE tv_index.
+      DATA lv_end TYPE tv_index.
+
+      _validate list.
+      _validate_bytevector list->car `bytevector-copy`.
+      lo_u8 ?= list->car.
+
+      lv_start = 0.
+      lv_end = lines( lo_u8->bytes ).
+
+      IF list->cdr IS BOUND AND list->cdr NE nil.
+        _validate_index list->cdr->car `bytevector-copy start`.
+        lv_start = CAST lcl_lisp_integer( list->cdr->car )->int.
+
+          IF list->cdr->cdr IS BOUND.
+            DATA(lo_last) = list->cdr->cdr.
+            IF lo_last NE nil.
+              _validate_index lo_last->car `bytevector-copy end`.
+              lv_end = CAST lcl_lisp_integer( lo_last->car )->int.
+
+              _assert_last_param lo_last.
+            ENDIF.
+          ENDIF.
+
+      ENDIF.
+
+      result = lo_u8->copy_new( from = lv_start
+                                to = lv_end ).
+    ENDMETHOD.
+
+    METHOD proc_bytevector_copy.
+      "(bytevector-copy! to at from) procedure
+      "(bytevector-copy! to at from start) procedure
+      "(bytevector-copy! to at from start end) procedure
+" Copies the bytes of bytevector from between start and end to bytevector to, starting at at.
+
+" The order in which bytes are copied is unspecified, except that if the source and destination overlap,
+" copying takes place as if the source is first copied into a temporary bytevector and then into the destination.
+" This can be achieved without allocating storage by making sure to copy in the correct direction in such circumstances.
+      DATA lo_u8_to TYPE REF TO lcl_lisp_bytevector.
+      DATA lo_u8_from TYPE REF TO lcl_lisp_bytevector.
+      DATA lv_start TYPE tv_index.
+      DATA lv_end TYPE tv_index.
+      DATA lv_at TYPE tv_index.
+      DATA lv_length_to TYPE tv_index.
+      DATA lo_ptr TYPE REF TO lcl_lisp.
+
+      _validate: list, list->cdr, list->cdr->cdr.
+      _validate_bytevector list->car `bytevector-copy! to`.
+      lo_u8_to ?= list->car.
+      lv_length_to = lines( lo_u8_to->bytes ).
+
+      lo_ptr = list->cdr.
+      _validate_index lo_ptr->car `bytevector-copy! at`.
+      _to_integer lo_ptr->car lv_at.
+      IF lv_at GT lv_length_to.
+        lo_ptr->car->raise( ` "at" is greater than the length of "to" in bytevector-copy!` ).
+      ENDIF.
+
+      lo_ptr = lo_ptr->cdr.
+      _validate_bytevector lo_ptr->car `bytevector-copy! from`.
+      lo_u8_from ?= lo_ptr->car.
+
+      lv_start = 0.
+      lv_end = lines( lo_u8_from->bytes ) - 1.
+      lo_ptr = lo_ptr->cdr.
+      IF lo_ptr IS BOUND AND lo_ptr NE nil.
+        _validate_index lo_ptr->car `bytevector-copy! start`.
+        _to_integer lo_ptr->car lv_start.
+
+        lo_ptr = lo_ptr->cdr.
+        IF lo_ptr IS BOUND AND lo_ptr NE nil.
+          _validate_index lo_ptr->car `bytevector-copy! end`.
+          _to_integer lo_ptr->car lv_end.
+
+          _assert_last_param lo_ptr.
+        ENDIF.
+     ENDIF.
+
+      "  It is also an error if (- (bytevector-length to) at) is less than (- end start).
+      IF ( lv_length_to - lv_at ) < ( lv_end - lv_start ).
+        lo_u8_to->raise( ` (- (bytevector-length to) at) is less than (- end start) to in bytevector-copy!` ).
+      ENDIF.
+
+      lo_u8_to->copy( at = lv_at
+                      io_from = lo_u8_from
+                      start = lv_start
+                      end = lv_end ).
+
+      result = lo_u8_to.
+    ENDMETHOD.
+
 * (memq obj list)  return the first sublist of
 * list whose car is obj,  where  the  sublists  of list are the non-empty lists
 * returned by (list-tail list  k) for k less than the length of list.
@@ -5549,7 +6022,7 @@
                      operation = '+' ).
       WHILE iter->has_next( ).
         cell = iter->next( ).
-        _cell_arith + `[+]`.
+        _cell_arith + `+`.
       ENDWHILE.
 
       result = lcl_lisp_new=>numeric( res ).
@@ -9311,6 +9784,8 @@
       define_value( symbol = c_eval_quasiquote type = type_syntax value   = '`' ).
       define_value( symbol = 'set!'            type = type_syntax value   = 'set!' ).
 
+      define_value( symbol = 'define-values'   type = type_syntax value   = 'define-values' ).
+
       define_value( symbol = 'define-macro'    type = type_syntax value   = 'define-macro' ).
       define_value( symbol = 'define-syntax'   type = type_syntax value   = 'define-syntax' ).
       define_value( symbol = 'macroexpand'     type = type_syntax value   = 'macroexpand' ).
@@ -9350,6 +9825,8 @@
       define_value( symbol = 'length'   type = type_native value   = 'PROC_LENGTH' ).
       define_value( symbol = 'reverse'  type = type_native value   = 'PROC_REVERSE' ).
       define_value( symbol = 'not'      type = type_native value   = 'PROC_NOT' ).
+
+      define_value( symbol = 'values'   type = type_native value   = 'PROC_VALUES' ).
 
       define_value( symbol = 'make-list'    type = type_native value   = 'PROC_MAKE_LIST' ).
       define_value( symbol = 'list-tail'    type = type_native value   = 'PROC_LIST_TAIL' ).
@@ -9434,6 +9911,18 @@
       define_value( symbol = 'vector->list'  type = type_native value   = 'PROC_VECTOR_TO_LIST' ).
       define_value( symbol = 'make-vector'   type = type_native value   = 'PROC_MAKE_VECTOR' ).
 
+*     bytevector-related functions
+      define_value( symbol = 'bytevector'           type = type_native value   = 'PROC_BYTEVECTOR' ).
+      define_value( symbol = 'bytevector-length'    type = type_native value   = 'PROC_BYTEVECTOR_LENGTH' ).
+      define_value( symbol = 'bytevector-u8-set!'   type = type_native value   = 'PROC_BYTEVECTOR_U8_SET' ).
+      define_value( symbol = 'bytevector-u8-ref'    type = type_native value   = 'PROC_BYTEVECTOR_U8_REF' ).
+      define_value( symbol = 'bytevector-append'    type = type_native value   = 'PROC_BYTEVECTOR_APPEND' ).
+      define_value( symbol = 'bytevector-copy'      type = type_native value   = 'PROC_BYTEVECTOR_NEW_COPY' ).
+      define_value( symbol = 'bytevector-copy!'     type = type_native value   = 'PROC_BYTEVECTOR_COPY' ).
+      define_value( symbol = 'utf8->string'         type = type_native value   = 'PROC_UTF8_TO_STRING' ).
+      define_value( symbol = 'string->utf8'         type = type_native value   = 'PROC_STRING_TO_UTF8' ).
+      define_value( symbol = 'make-bytevector'      type = type_native value   = 'PROC_MAKE_BYTEVECTOR' ).
+
 *     Hash-related functions
       define_value( symbol = 'make-hash'   type = type_native value   = 'PROC_MAKE_HASH' ).
       define_value( symbol = 'hash-get'    type = type_native value   = 'PROC_HASH_GET' ).
@@ -9453,6 +9942,7 @@
       define_value( symbol = 'list?'       type = type_native value = 'PROC_IS_LIST' ).
       define_value( symbol = 'pair?'       type = type_native value = 'PROC_IS_PAIR' ).
       define_value( symbol = 'vector?'     type = type_native value = 'PROC_IS_VECTOR' ).
+      define_value( symbol = 'bytevector?' type = type_native value = 'PROC_IS_BYTEVECTOR' ).
       define_value( symbol = 'boolean?'    type = type_native value = 'PROC_IS_BOOLEAN' ).
       define_value( symbol = 'alist?'      type = type_native value = 'PROC_IS_ALIST' ).
       define_value( symbol = 'procedure?'  type = type_native value = 'PROC_IS_PROCEDURE' ).
@@ -10088,6 +10578,10 @@
           DATA lo_vec TYPE REF TO lcl_lisp_vector.
           lo_vec ?= me.
           str = |#{ lo_vec->to_list( )->to_string( ) }|.
+        WHEN type_bytevector.
+          DATA lo_u8 TYPE REF TO lcl_lisp_bytevector.
+          lo_u8 ?= me.
+          str = |#u8{ lo_u8->to_list( )->to_string( ) }|.
         WHEN type_port.
           str = '<port>'.
         WHEN type_values.
@@ -10653,8 +11147,15 @@
       ro_vec->mo_length = number( lines( it_vector ) ).
     ENDMETHOD.
 
+    METHOD bytevector.
+      ro_u8 = NEW lcl_lisp_bytevector( type_bytevector ).
+      ro_u8->bytes = it_byte.
+      ro_u8->mutable = iv_mutable.
+      ro_u8->mo_length = number( lines( it_byte ) ).
+    ENDMETHOD.
+
     METHOD values.
-      ro_elem = NEW lcl_lisp_values( ).
+      ro_elem = NEW lcl_lisp_values( io_elem ).
     ENDMETHOD.
 
     METHOD turtles.

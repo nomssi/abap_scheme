@@ -70,7 +70,6 @@
      PRIVATE SECTION.
        METHODS setup.
        METHODS teardown.
-
        METHODS closing_1 FOR TESTING.
        METHODS closing_2 FOR TESTING.
 
@@ -508,6 +507,9 @@
    CLASS ltc_conditionals DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
+       METHODS setup.
+       METHODS teardown.
+
        METHODS if_1 FOR TESTING.
        METHODS if_2 FOR TESTING.
        METHODS if_3 FOR TESTING.
@@ -559,6 +561,9 @@
    CLASS ltc_quote DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
+       METHODS setup.
+       METHODS teardown.
+
        METHODS quasiquote_1 FOR TESTING.
        METHODS quasiquote_2 FOR TESTING.
        METHODS quasiquote_2_args FOR TESTING.
@@ -583,6 +588,9 @@
    CLASS ltc_macro DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
+       METHODS setup.
+       METHODS teardown.
+
        METHODS macro_while FOR TESTING.
 
        METHODS macro_1 FOR TESTING.
@@ -895,10 +903,10 @@
           |            (mean / /))))|
                expected = 'means' ).
 
-**      evaluating (means '(3 (1 4))) returns three values:
-**       8/3, 2.28942848510666 (approximately), and 36/19.
-*       scheme( code = |(means '(3 (1 4)))|
-*               expected = |8/3 2.28942848510666 36/19| ).
+       " evaluating (means '(3 (1 4))) returns three values:
+       " 8/3, 2.28942848510666 (approximately), and 36/19.
+       scheme( code = |(means '(3 (1 4)))|
+               expected = |8/3 2.28942848510666 36/19| ).
      ENDMETHOD.                    "values_0
 
      METHOD call_cc_0.
@@ -1648,6 +1656,14 @@
 *
 *----------------------------------------------------------------------*
    CLASS ltc_conditionals IMPLEMENTATION.
+
+     METHOD setup.
+       new_interpreter( ).
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
 
      METHOD if_1.
        scheme( code = |(if (> 3 2) 'yes 'no)|
@@ -3807,6 +3823,138 @@ ENDCLASS.                    "ltc_list IMPLEMENTATION
 
 ENDCLASS.                    "ltc_vector IMPLEMENTATION
 
+   CLASS ltc_bytevector DEFINITION INHERITING FROM ltc_interpreter
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PRIVATE SECTION.
+       METHODS setup.
+       METHODS teardown.
+
+       METHODS is_bytevector_0 FOR TESTING.
+
+       METHODS make_bytevector_0 FOR TESTING.
+       METHODS make_bytevector_1 FOR TESTING.
+
+       METHODS bytevector_0 FOR TESTING.
+       METHODS bytevector_1 FOR TESTING.
+
+       METHODS bytevector_length_0 FOR TESTING.
+       METHODS bytevector_length_1 FOR TESTING.
+       METHODS bytevector_length_2 FOR TESTING.
+
+       METHODS bytevector_ref_1 FOR TESTING.
+
+       METHODS bytevector_set_1 FOR TESTING.
+
+       METHODS bytevector_copy_new_1 FOR TESTING.
+
+       METHODS bytevector_copy_1 FOR TESTING.
+
+       METHODS bytevector_append_1 FOR TESTING.
+
+       METHODS utf8_to_string_1 FOR TESTING.
+
+       METHODS string_to_utf8_1 FOR TESTING.
+
+   ENDCLASS.
+
+   CLASS ltc_bytevector IMPLEMENTATION.
+
+     METHOD setup.
+       new_interpreter( ).
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
+
+     METHOD is_bytevector_0.
+       scheme( code = |(bytevector? -2)|
+               expected = |#f| ).
+       scheme( code = |(bytevector? #u8(0 10 5))|
+               expected = |#t| ).
+     ENDMETHOD.
+
+     METHOD make_bytevector_0.
+       scheme( code = |(make-bytevector 3)|
+               expected = |#u8( 0 0 0 )| ).
+     ENDMETHOD.
+
+     METHOD make_bytevector_1.
+       scheme( code = |(make-bytevector 2 12)|
+               expected = |#u8( 12 12 )| ).
+     ENDMETHOD.
+
+     METHOD bytevector_0.
+       scheme( code = |(bytevector 1 3 5 1 3 5)|
+               expected = |#u8( 1 3 5 1 3 5 )| ).
+     ENDMETHOD.
+
+     METHOD bytevector_1.
+       scheme( code = |(bytevector)|
+               expected = |#u8()| ).
+     ENDMETHOD.
+
+     METHOD bytevector_length_0.
+       scheme( code = |(bytevector-length #u8(1 3 5 1 3 5))|
+               expected = |6| ).
+     ENDMETHOD.
+
+     METHOD bytevector_length_1.
+       scheme( code = |(bytevector-length #u8())|
+               expected = |0| ).
+     ENDMETHOD.
+
+     METHOD bytevector_length_2.
+       scheme( code = |(bytevector-length 2)|
+               expected = |Eval: 2 is not a bytevector in bytevector-length| ).
+     ENDMETHOD.
+
+     METHOD bytevector_ref_1.
+       scheme( code = |(bytevector-u8-ref '#u8(1 1 2 3 5 8 13 21) 5)|
+               expected = |8| ).
+     ENDMETHOD.
+
+     METHOD bytevector_set_1.
+       scheme( code = |(let ((bv (bytevector 1 2 3 4)))| &
+                      | (bytevector-u8-set! bv 1 3)| &
+                      | bv)|
+               expected = |#u8( 1 3 3 4 )| ).
+     ENDMETHOD.
+
+     METHOD bytevector_copy_new_1.
+       scheme( code = |(define a #u8(1 2 3 4 5))|
+               expected = |a| ).
+       scheme( code = |(bytevector-copy a 2 4)|
+               expected = |#u8( 3 4 )| ).
+     ENDMETHOD.
+
+     METHOD bytevector_copy_1.
+       scheme( code = |(define a (bytevector 1 2 3 4 5))| &
+                      |(define b (bytevector 10 20 30 40 50))| &
+                      |(bytevector-copy! b 1 a 0 2)|
+               expected = |a b #u8( 10 1 2 40 50 )| ).
+       scheme( code = |b|
+               expected = |#u8( 10 1 2 40 50 )| ).
+     ENDMETHOD.
+
+     METHOD bytevector_append_1.
+       scheme( code = |(bytevector-append #u8(0 1 2) #u8(3 4 5))|
+               expected = |#u8( 0 1 2 3 4 5 )| ).
+     ENDMETHOD.
+
+     METHOD utf8_to_string_1.
+       scheme( code = |(utf8->string #u8(#x41))|
+               expected = '"A"' ).
+     ENDMETHOD.
+
+     METHOD string_to_utf8_1.
+       scheme( code = |(string->utf8 "")|
+               expected = '#u8( #xCE #xBB )' ).
+     ENDMETHOD.
+
+
+   ENDCLASS.
+
 *----------------------------------------------------------------------*
 *       CLASS ltc_library_function DEFINITION
 *----------------------------------------------------------------------*
@@ -4607,6 +4755,9 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
    CLASS ltc_basic_functions DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
+       METHODS setup.
+       METHODS teardown.
+
        METHODS funct_lambda_0 FOR TESTING.
        METHODS funct_lambda_1 FOR TESTING.
        METHODS funct_lambda_2 FOR TESTING.
@@ -4631,6 +4782,14 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
 *
 *----------------------------------------------------------------------*
    CLASS ltc_basic_functions IMPLEMENTATION.
+
+     METHOD setup.
+       new_interpreter( ).
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
 
      METHOD funct_lambda_0.
        scheme( code = '(define (b n) (* 11 n))'
@@ -4999,6 +5158,14 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
 *----------------------------------------------------------------------*
    CLASS ltc_quote IMPLEMENTATION.
 
+     METHOD setup.
+       new_interpreter( ).
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
+
      METHOD quasiquote_1.
        scheme( code = '`(list ,(+ 1 2) 4)'
                expected = '( list 3 4 )' ).
@@ -5070,6 +5237,14 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
 *
 *----------------------------------------------------------------------*
    CLASS ltc_macro IMPLEMENTATION.
+
+     METHOD setup.
+       new_interpreter( ).
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
 
      METHOD macro_while.
 *      (define­syntax while
