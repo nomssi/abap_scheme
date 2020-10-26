@@ -1970,6 +1970,7 @@
        METHODS inexact_2 FOR TESTING.
        METHODS inexact_3 FOR TESTING.
        METHODS inexact_4 FOR TESTING.
+       METHODS inexact_5 FOR TESTING.
 
        METHODS binary_1 FOR TESTING.
        METHODS octal_1 FOR TESTING.
@@ -2185,6 +2186,11 @@
                expected = '#t' ).
      ENDMETHOD.                    "inexact_4
 
+     METHOD inexact_5.
+       scheme( code = '(eq? 1/3 #i1/3)'
+               expected = '#f' ).
+     ENDMETHOD.
+
      METHOD binary_1.
        scheme( code = '#b100101'
                expected = '37' ).
@@ -2225,7 +2231,6 @@
        scheme( code = '#X1a'
                expected = '26' ).
      ENDMETHOD.                    "hexadecimal_1
-
 
    ENDCLASS.                    "ltc_numbers IMPLEMENTATION
 

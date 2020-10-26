@@ -810,7 +810,10 @@
     ENDMETHOD.
 
     METHOD to_string.
-      str = |{ int }/{ denominator }|.
+      IF exact EQ abap_false.
+        str = `#i`.
+      ENDIF.
+      str = str && |{ int }/{ denominator }|.
     ENDMETHOD.
 
     METHOD normalize.
@@ -822,7 +825,7 @@
         int = - int.
         denominator = - denominator.
       ENDIF.
-      exact = xsdbool( denominator NE 0 ).
+      exact = xsdbool( denominator NE 0 AND exact EQ abap_true ).
     ENDMETHOD.
 
     METHOD gcd.
@@ -885,7 +888,7 @@
       result = abap_false.
       IF real EQ iv_real.
         result = abap_true.
-      ELSE.
+      ELSEIF exact EQ abap_false.
         abs_a = abs( real ).
         abs_b = abs( iv_real ).
         diff = abs( real - iv_real ).
@@ -6471,7 +6474,9 @@
         ENDIF.
         CASE lo_ptr->car->type.
           WHEN type_integer.
-            IF CAST lcl_lisp_integer( lo_ref )->int = CAST lcl_lisp_integer( lo_ptr->cdr->car )->int.
+            DATA(lo_int) = CAST lcl_lisp_integer( lo_ref ).
+            DATA(lo_next_int) = CAST lcl_lisp_integer( lo_ptr->cdr->car ).
+            IF lo_int->int = lo_next_int->int AND lo_int->exact = lo_next_int->exact.
               result = true.
             ELSE.
               result = false.
@@ -6479,9 +6484,10 @@
             ENDIF.
 
           WHEN type_rational.
-            DATA(lo_ref_rat) = CAST lcl_lisp_rational( lo_ref ).
-            DATA(lo_target_rat) = CAST lcl_lisp_rational( lo_ptr->cdr->car ).
-            IF lo_ref_rat->int = lo_target_rat->int AND lo_ref_rat->denominator = lo_target_rat->denominator.
+            DATA(lo_rat) = CAST lcl_lisp_rational( lo_ref ).
+            DATA(lo_next_rat) = CAST lcl_lisp_rational( lo_ptr->cdr->car ).
+            IF lo_rat->int = lo_next_rat->int AND lo_rat->exact = lo_next_rat->exact
+              AND lo_rat->denominator = lo_next_rat->denominator.
               result = true.
             ELSE.
               result = false.
@@ -6489,7 +6495,9 @@
             ENDIF.
 
           WHEN type_real.
-            IF CAST lcl_lisp_real( lo_ref )->float_eq( CAST lcl_lisp_real( lo_ptr->cdr->car )->real ).
+            DATA(lo_real) = CAST lcl_lisp_real( lo_ref ).
+            DATA(lo_real_next) = CAST lcl_lisp_real( lo_ptr->cdr->car ).
+            IF lo_real->exact EQ lo_real_next->exact AND lo_real->float_eq( lo_real_next->real ).
               result = true.
             ELSE.
               result = false.
@@ -10014,13 +10022,14 @@
       define_value( symbol = 'log'   type = type_native value = 'PROC_LOG' ).
       define_value( symbol = 'sqrt'  type = type_native value = 'PROC_SQRT' ).
 
-      " not implemented yet
       define_value( symbol = 'square'             type = type_native value = 'PROC_SQUARE' ).
       define_value( symbol = 'exact-integer-sqrt' type = type_native value = 'PROC_INT_SQRT' ).
       define_value( symbol = 'floor-quotient'     type = type_native value = 'PROC_FLOOR_QUOTIENT' ).
       define_value( symbol = 'floor-remainder'    type = type_native value = 'PROC_FLOOR_REMAINDER' ).
       define_value( symbol = 'truncate-remainder' type = type_native value = 'PROC_TRUNC_REMAINDER' ).
       define_value( symbol = 'truncate-quotient'  type = type_native value = 'PROC_TRUNC_QUOTIENT' ).
+
+      " not implemented yet
       define_value( symbol = 'rationalize'        type = type_native value = 'PROC_RATIONALIZE' ).
 
       define_value( symbol = 'floor'     type = type_native value = 'PROC_FLOOR' ).
@@ -10211,6 +10220,7 @@
     METHOD is_equivalent. "eqv?
       _validate io_elem.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_rat TYPE REF TO lcl_lisp_rational.
       DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = false.
@@ -10230,7 +10240,16 @@
         WHEN type_integer.
 * obj1 and obj2 are both exact numbers and are numerically equal (in the sense of =).
           lo_int ?= b.
-          CHECK CAST lcl_lisp_integer( me )->int = lo_int->int.
+          DATA(lo_me_int) = CAST lcl_lisp_integer( me ).
+          CHECK lo_me_int->int = lo_int->int
+            AND lo_me_int->exact = lo_int->exact.
+
+        WHEN type_rational.
+          lo_rat ?= b.
+          DATA(lo_me_rat) = CAST lcl_lisp_rational( me ).
+          CHECK lo_me_rat->int = lo_rat->int
+            AND lo_me_rat->denominator = lo_rat->denominator
+            AND lo_me_rat->exact = lo_rat->exact.
 
         WHEN type_real.
 *obj1 and obj2 are both inexact numbers such that they are numerically equal (in the sense of =)
@@ -10238,7 +10257,9 @@
 *procedure that can be defined as a finite composition of Scheme’s standard arithmetic procedures,
 *provided it does not result in a NaN value.
           lo_real ?= b.
-          CHECK CAST lcl_lisp_real( me )->float_eq( lo_real->real ).
+          DATA(lo_me_real) = CAST lcl_lisp_real( me ).
+          CHECK lo_me_real->float_eq( lo_real->real )
+            AND lo_me_real->exact = lo_real->exact.
 
         WHEN type_symbol.
 * obj1 and obj2 are both symbols and are the same symbol according to the symbol=? procedure (section 6.5).
@@ -10756,7 +10777,7 @@
 
         WHEN OTHERS.
           TRY.
-              ro_elem = number( value ).
+              ro_elem = number( value = value ).
             CATCH cx_sy_conversion_no_number.
 *             otherwise treat it as a symbol
               ro_elem = symbol( value ).
@@ -10855,7 +10876,8 @@
               lv_int = lv_int_str.
               lv_denom = ipow( base = 10 exp = numofchar( lv_dec_str ) ).
               ro_elem = rational( nummer = lv_int
-                                  denom = lv_denom ).
+                                  denom = lv_denom
+                                  iv_exact = iv_exact ).
             CATCH cx_sy_conversion_overflow.
               ro_elem = real( value = lv_real
                               exact = abap_false ).
@@ -10873,8 +10895,15 @@
           IF sy-subrc EQ 0 AND lv_denom_str IS NOT INITIAL.
             MOVE EXACT lv_nummer_str TO lv_int.
             MOVE EXACT lv_denom_str TO lv_denom.
+            DATA(lv_exact) = iv_exact.
+            IF iv_exact IS SUPPLIED.
+              lv_exact = iv_exact.
+            ELSE.
+              lv_exact = abap_true.
+            ENDIF.
             ro_elem = rational( nummer = lv_int
-                                denom = lv_denom ).
+                                denom = lv_denom
+                                iv_exact = lv_exact ).
             RETURN.
           ENDIF.
 
