@@ -1827,8 +1827,8 @@
           APPEND lv_u8 TO lt_byte.
         ENDLOOP.
 
-        ro_elem ?= lcl_lisp_new=>bytevector( it_byte = lt_byte
-                                             iv_mutable = mutable ).
+        ro_elem = lcl_lisp_new=>bytevector( it_byte = lt_byte
+                                            iv_mutable = mutable ).
       ENDMETHOD.
 
       METHOD copy.
@@ -2149,62 +2149,62 @@
       _proc_meth:
       proc_append          ##called,
       proc_append_unsafe   ##called,
-      proc_reverse,         ##called
-      proc_set_car,         ##called
-      proc_set_cdr,         ##called
-      proc_car,             ##called
-      proc_cdr,             ##called
+      proc_reverse         ##called,
+      proc_set_car         ##called,
+      proc_set_cdr         ##called,
+      proc_car             ##called,
+      proc_cdr             ##called,
 
-      proc_caar,             ##called
-      proc_cadr,             ##called
-      proc_cdar,             ##called
-      proc_cddr,             ##called
+      proc_caar             ##called,
+      proc_cadr             ##called,
+      proc_cdar             ##called,
+      proc_cddr             ##called,
 
-      proc_caaar,            ##called
-      proc_cdaar,            ##called
-      proc_caadr,            ##called
-      proc_cdadr,            ##called
-      proc_cadar,            ##called
-      proc_cddar,            ##called
-      proc_caddr,            ##called
-      proc_cdddr,            ##called
-      proc_caaaar,           ##called
-      proc_cdaaar,           ##called
-      proc_cadaar,           ##called
-      proc_cddaar,           ##called
-      proc_caaadr,           ##called
-      proc_cdaadr,           ##called
-      proc_cadadr,           ##called
-      proc_cddadr,           ##called
-      proc_caadar,           ##called
-      proc_cdadar,           ##called
-      proc_caddar,           ##called
-      proc_cdddar,           ##called
-      proc_caaddr,           ##called
-      proc_cdaddr,           ##called
-      proc_cadddr,           ##called
-      proc_cddddr,           ##called
+      proc_caaar            ##called,
+      proc_cdaar            ##called,
+      proc_caadr            ##called,
+      proc_cdadr            ##called,
+      proc_cadar            ##called,
+      proc_cddar            ##called,
+      proc_caddr            ##called,
+      proc_cdddr            ##called,
+      proc_caaaar           ##called,
+      proc_cdaaar           ##called,
+      proc_cadaar           ##called,
+      proc_cddaar           ##called,
+      proc_caaadr           ##called,
+      proc_cdaadr           ##called,
+      proc_cadadr           ##called,
+      proc_cddadr           ##called,
+      proc_caadar           ##called,
+      proc_cdadar           ##called,
+      proc_caddar           ##called,
+      proc_cdddar           ##called,
+      proc_caaddr           ##called,
+      proc_cdaddr           ##called,
+      proc_cadddr           ##called,
+      proc_cddddr           ##called,
 
-      proc_memq,     ##called
-      proc_memv,     ##called
-      proc_member,   ##called
-      proc_assq,     ##called
-      proc_assv,     ##called
-      proc_assoc,    ##called
+      proc_memq             ##called,
+      proc_memv             ##called,
+      proc_member           ##called,
+      proc_assq             ##called,
+      proc_assv             ##called,
+      proc_assoc            ##called,
 
 *     Constructor
-      proc_cons,           ##called
-      proc_list            ##called,
-      proc_make_list       ##called,
-      proc_iota,           ##called
-      proc_list_copy       ##called,
+      proc_cons             ##called,
+      proc_list             ##called,
+      proc_make_list        ##called,
+      proc_iota,            ##called
+      proc_list_copy        ##called,
 
-      proc_list_tail       ##called,
-      proc_list_ref        ##called,
-      proc_list_to_vector  ##called,
+      proc_list_tail        ##called,
+      proc_list_ref         ##called,
+      proc_list_to_vector   ##called,
 
-      proc_length    ##called,
-      proc_nilp      ##called.
+      proc_length           ##called,
+      proc_nilp             ##called.
 
 * Native functions:
       _proc_meth:
@@ -6000,18 +6000,6 @@
         WHEN OTHERS.
           cell->raise_nan( &2 ).
       ENDCASE.
-    END-OF-DEFINITION.
-
-    DEFINE _result_arith.
-      result = lcl_lisp_new=>numeric( res ).
-    END-OF-DEFINITION.
-
-    DEFINE _to_number.
-      TRY.
-        &2 ?= &1.
-      CATCH cx_sy_move_cast_error.
-        &1->raise_nan( &3 ).
-      ENDTRY.
     END-OF-DEFINITION.
 
     METHOD proc_add.
