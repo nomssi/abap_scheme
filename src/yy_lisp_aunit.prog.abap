@@ -2868,6 +2868,7 @@
        METHODS list_has FOR TESTING.
 
        METHODS list_tail FOR TESTING.
+       METHODS list_tail_nil FOR TESTING.
 
        METHODS iota_1 FOR TESTING.
        METHODS iota_2 FOR TESTING.
@@ -3548,6 +3549,11 @@
        scheme( code = |(list-tail '(a b c d) 2)|
                expected = '( c d )' ).
      ENDMETHOD.                    "list_tail
+
+     METHOD list_tail_nil.
+       scheme( code = |(list-tail '() 0)|
+               expected = |'()| ).
+     ENDMETHOD.                    "list_tail_nil
 
      METHOD iota_1.
        scheme( code = |(iota 3)|

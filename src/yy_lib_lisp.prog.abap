@@ -1423,7 +1423,7 @@
 
       CLEAR rv_input.
       lt_fields = VALUE #( ( tabname = 'ABDBG'     " Text: Input Line
-                             fieldname = 'LTEXT'
+                             fieldname = 'LVALUE'
                              fieldtext = iv_title
                              field_obl = 'X' ) ).
 
@@ -2261,7 +2261,9 @@
       proc_turtle_regular_polys,  ##called
 
 * Continuation
-      proc_call_cc,              ##called
+      proc_call_cc               ##called,
+      proc_dynamic_wind          ##called,
+      proc_call_with_values      ##called,
 * Exceptions
       proc_error,                ##called
       proc_raise,                ##called
@@ -3178,6 +3180,22 @@
       lcl_lisp=>throw( message ).
     ENDMETHOD.                    "throw
 
+    METHOD assign_symbol.
+      " set! -> reassign a bound symbol
+      _validate: element, element->car.
+      result = element->car.
+
+      CASE result->type.
+        WHEN type_symbol.
+*         re-define symbol in the original environment, but evaluate parameters in the current environment
+          environment->scope_of( result->value )->set( symbol  = result->value
+                                                       element = eval( VALUE #( elem = element->cdr->car
+                                                                                env = environment ) ) ).
+        WHEN OTHERS.
+          result->raise( | is not a bound symbol| ).
+      ENDCASE.
+    ENDMETHOD.
+
     METHOD bind_symbol.
       DATA lv_symbol TYPE string.
       DATA lo_params TYPE REF TO lcl_lisp.
@@ -3215,7 +3233,7 @@
                         once = xsdbool( env NE environment ) ). " Internal definition => once!
 
       result = lcl_lisp_new=>symbol( lv_symbol ).
-    ENDMETHOD.                    "assign_symbol
+    ENDMETHOD.
 
     METHOD define_syntax.
 *
@@ -3339,21 +3357,6 @@
       result = lcl_lisp_new=>symbol( value = lv_name
                                      index = lv_index ). " uninterned symbols have integer > 0
     ENDMETHOD.
-
-    METHOD assign_symbol.
-      _validate: element, element->car.
-      result = element->car.
-
-      CASE result->type.
-        WHEN type_symbol.
-*         re-define symbol in the original environment, but evaluate parameters in the current environment
-          environment->scope_of( result->value )->set( symbol  = result->value
-                                                       element = eval( VALUE #( elem = element->cdr->car
-                                                                                env = environment ) ) ).
-        WHEN OTHERS.
-          result->raise( | is not a bound symbol| ).
-      ENDCASE.
-    ENDMETHOD.                    "re_assign_symbol
 
     METHOD evaluate_parameters.
 *     This routine is called very, very often!
@@ -5161,10 +5164,14 @@
 *
 *     we must check that list is a chain of pairs whose length is at least k.
 *     we should not check that it is a list of pairs beyond this length.
-
-      _validate: list, list->cdr.
-
+      _validate list.
       result = list.
+
+      IF k EQ 0 AND list EQ nil.
+        RETURN.
+      ENDIF.
+      _validate list->cdr.
+
       DO k TIMES.
         IF result->type NE type_pair.
           throw( area && `: list too short` ).
@@ -8478,6 +8485,17 @@
       throw( `call/cc not implemented yet` ).
     ENDMETHOD.
 
+    METHOD proc_dynamic_wind.
+      throw( `dynamic-wind not implemented yet` ).
+    ENDMETHOD.
+
+    METHOD proc_call_with_values.
+      _validate: list, list->cdr.
+      _validate list->car.       " procuder
+      _validate list->cdr->car.  " consumer
+      throw( `call-with-values not implemented yet` ).
+    ENDMETHOD.
+
 **********************************************************************
 *       _                   _           _ _ _        _
 *  __ _| |__   __ _ _ __   | |__  _   _(_) | |_     (_)_ __  ___
@@ -9758,7 +9776,6 @@
       define_value( symbol = 'set!'            type = type_syntax value   = 'set!' ).
 
       define_value( symbol = 'define-values'   type = type_syntax value   = 'define-values' ).
-
       define_value( symbol = 'define-macro'    type = type_syntax value   = 'define-macro' ).
       define_value( symbol = 'define-syntax'   type = type_syntax value   = 'define-syntax' ).
       define_value( symbol = 'macroexpand'     type = type_syntax value   = 'macroexpand' ).
@@ -9773,6 +9790,9 @@
       define_value( symbol = 'when'     type = type_syntax value   = 'when' ).
       define_value( symbol = 'begin'    type = type_syntax value   = 'begin' ).
       define_value( symbol = 'let'      type = type_syntax value   = 'let' ).
+*      define_value( symbol = 'let-values'  type = type_syntax value   = 'let-values' ).
+*      define_value( symbol = 'let*-values' type = type_syntax value   = 'let*-values' ).
+*      define_value( symbol = 'let-syntax'  type = type_syntax value   = 'let-syntax' ).
       define_value( symbol = 'let*'     type = type_syntax value   = 'let*' ).
       define_value( symbol = 'letrec'   type = type_syntax value   = 'letrec' ).
       define_value( symbol = 'letrec*'  type = type_syntax value   = 'letrec*' ).
@@ -10023,6 +10043,9 @@
 *     Continuation
       define_value( symbol = 'call-with-current-continuation' type = type_native value = 'PROC_CALL_CC' ).
       define_value( symbol = 'call/cc'                        type = type_native value = 'PROC_CALL_CC' ).
+
+      define_value( symbol = 'dynamic-wind'     type = type_native value = 'PROC_DYNAMIC_WIND' ).
+      define_value( symbol = 'call-with-values' type = type_native value = 'PROC_CALL_WITH_VALUES' ).
 
 *     Native functions for ABAP integration
       define_value( symbol = 'ab-data'       type = type_native value   = 'PROC_ABAP_DATA' ).
