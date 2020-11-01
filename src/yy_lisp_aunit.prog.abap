@@ -906,7 +906,7 @@
        " evaluating (means '(3 (1 4))) returns three values:
        " 8/3, 2.28942848510666 (approximately), and 36/19.
        scheme( code = |(means '(3 (1 4)))|
-               expected = |8/3 2.28942848510666 36/19| ).
+               expected = |8/3 2.289428485106663735616084423879354 36/19| ).
      ENDMETHOD.                    "values_0
 
      METHOD call_cc_0.
@@ -949,14 +949,14 @@
 
      METHOD define_values_0.
        scheme( code = |(define-values (x y) (exact-integer-sqrt 17))|
-               expected = '' ).
+               expected = 'x y' ).   " nicht definiert in r7rs
        scheme( code = |(list x y)|
-               expected = '(4 1)' ).
+               expected = '( 4 1 )' ).
      ENDMETHOD.
 
      METHOD define_values_1.
        scheme( code = |(define-values (x y) (values 1 2))|
-               expected = '' ).
+               expected = 'x y' ).    " nicht definiert in r7rs
        scheme( code = |(+ x y)|
                expected = '3' ).
      ENDMETHOD.
@@ -2254,12 +2254,15 @@
        METHODS math_subtract_2 FOR TESTING.
        METHODS math_subtract_3 FOR TESTING.
        METHODS math_subtract_4 FOR TESTING.
+       METHODS math_subtract_5 FOR TESTING.
 
        METHODS math_division_1 FOR TESTING.
        METHODS math_division_2 FOR TESTING.
        METHODS math_division_3 FOR TESTING.
        METHODS math_division_4 FOR TESTING.
        METHODS math_division_5 FOR TESTING.
+       METHODS math_division_6 FOR TESTING.
+       METHODS math_division_7 FOR TESTING.
 
        METHODS math_sin FOR TESTING.
        METHODS math_cos FOR TESTING.
@@ -2351,8 +2354,11 @@
      ENDMETHOD.                    "math_mult_3
 
      METHOD math_subtract_1.
+       " one argument: inverse
        scheme( code = '(- 22)'
                expected = '-22' ).
+       scheme( code = '(- 6)'
+               expected = '-6' ).
      ENDMETHOD.                    "math_subtract_1
 
      METHOD math_subtract_2.
@@ -2369,6 +2375,11 @@
        scheme( code = '(-)'
                expected = 'Eval: no number in [-]' ).
      ENDMETHOD.                    "math_subtract_4
+
+     METHOD math_subtract_5.
+       scheme( code = '(- 0 0 0)'
+               expected = '0' ).
+     ENDMETHOD.
 
      METHOD math_division_1.
 *   Test division
@@ -2395,6 +2406,16 @@
        scheme( code = '(/)'
                expected = 'Eval: no number in [/]' ).
      ENDMETHOD.                    "math_division_5
+
+     METHOD math_division_6.
+       scheme( code = '(/ 1 0)'
+               expected = 'Eval: 0 is invalid in [/]' ).
+     ENDMETHOD.
+
+     METHOD math_division_7.
+       scheme( code = '(/ 0)'
+               expected = 'Eval: 0 division error [1/0]' ).
+     ENDMETHOD.
 
      METHOD math_sin.
        scheme( code =  '(sin 0)'
@@ -3953,7 +3974,7 @@ ENDCLASS.                    "ltc_vector IMPLEMENTATION
      ENDMETHOD.
 
      METHOD string_to_utf8_1.
-       scheme( code = |(string->utf8 "")|
+       scheme( code = |(string->utf8 "λ")|
                expected = '#u8( #xCE #xBB )' ).
      ENDMETHOD.
 
