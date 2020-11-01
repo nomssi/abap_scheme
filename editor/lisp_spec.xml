@@ -85,8 +85,10 @@
 			<Keywords>
 				<Keyword text="define"/>
 				<Keyword text="define-syntax"/>
+				<Keyword text="define-values"/>
 				<Keyword text="define-macro"/>
 				<Keyword text="lambda"/>
+				<Keyword text="case-lambda"/>
 				<Keyword text="and"/>
 				<Keyword text="or"/>
 				<Keyword text="if"/>
@@ -103,10 +105,18 @@
 				<Keyword text="unquote-splicing"/>
 				<Keyword text="do"/>
 				<Keyword text="case"/>
+				<Keyword text="parameterize"/>
+				<Keyword text="guard"/>
+				<Keyword text=",@"/>	
 			</Keywords>
 		</TextType>
 		<TextType id="52" name="Procedures" ImageIdx="13" bold="0" italic="0" underline="0" clr="16711680" bkclr="-1">
 			<Keywords>
+				<Keyword text="define-values"/>
+				<Keyword text="call-with-values"/>
+				<Keyword text="values"/>
+				<Keyword text="raise"/>
+
 				<Keyword text="eq?"/>
 				<Keyword text="eqv?"/>
 				<Keyword text="equal?"/>
@@ -162,7 +172,9 @@
 				<Keyword text="real?"/>
 				<Keyword text="rational?"/>												
 				<Keyword text="exact?"/>
+				<Keyword text="exact-integer?"/>
 				<Keyword text="inexact?"/>
+				<Keyword text="bytevector?"/>
 				<Keyword text="vector?"/>
 				<Keyword text="list?"/>
 				<Keyword text="alist?"/>
@@ -201,6 +213,19 @@
 				<Keyword text="vector->list"/>
 				<Keyword text="make-vector"/>
 
+				<Keyword text="make-parameter"/>				
+
+				<Keyword text="bytevector"/>
+				<Keyword text="make-bytevector"/>
+				<Keyword text="bytevector-length"/>
+				<Keyword text="bytevector-copy"/>
+				<Keyword text="bytevector-copy!"/>
+				<Keyword text="bytevector-append"/>
+				<Keyword text="utf8->string"/>
+				<Keyword text="string->utf8"/>
+				<Keyword text="bytevector-u8-set!"/>
+				<Keyword text="bytevector-u8-ref"/>
+
 				<Keyword text="empty?"/>
 				<Keyword text="first"/>
 				<Keyword text="rest"/>
@@ -225,7 +250,6 @@
                 <Keyword text="get-output-string"/>
 				<Keyword text="peek-char"/>
 				<Keyword text="char-ready?"/>
-				<Keyword text="parameterize"/>			
       
                 <Keyword text="char-alphabetic?"/>
                 <Keyword text="char-numeric?"/>
@@ -260,12 +284,20 @@
 				<Keyword text="exp"/>
 				<Keyword text="log"/>
 				<Keyword text="sqrt"/>
+				<Keyword text="square"/>
 				<Keyword text="floor"/>
+				<Keyword text="floor/"/>
+				<Keyword text="floor-remainder"/>
+				<Keyword text="floor-quotient"/>
 				<Keyword text="ceiling"/>
 				<Keyword text="truncate"/>
+				<Keyword text="truncate/"/>
+				<Keyword text="truncate-remainder"/>
+				<Keyword text="truncate-quotient"/>
 				<Keyword text="round"/>
 				<Keyword text="modulo"/>
 				<Keyword text="quotient"/>
+				<Keyword text="exact-integer-sqrt"/>
 				<Keyword text="zero?"/>
 				<Keyword text="positive?"/>
 				<Keyword text="negative?"/>
