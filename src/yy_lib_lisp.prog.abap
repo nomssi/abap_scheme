@@ -209,6 +209,13 @@
     ENDCASE.
   END-OF-DEFINITION.
 
+  DEFINE _validate_escape.
+    _validate &1.
+    IF &1->type NE type_escape_proc.
+      &1->raise( ` is not an escape procedure in ` && &2 ) ##NO_TEXT.
+    ENDIF.
+  END-OF-DEFINITION.
+
   DEFINE _error_no_list.
     throw( |{ &2 }: { &1->to_string( ) } is not a proper list| ) ##NO_TEXT.
   END-OF-DEFINITION.
@@ -516,6 +523,7 @@
     type_real     TYPE tv_type VALUE 'R',
     type_complex  TYPE tv_type VALUE 'z',
     type_rational TYPE tv_type VALUE 'r',
+    type_bigint   TYPE tv_type VALUE 'B',   " not used?
     type_string   TYPE tv_type VALUE '"',
 
     type_boolean     TYPE tv_type VALUE 'b',
@@ -532,6 +540,8 @@
     type_bytevector  TYPE tv_type VALUE '8',
     type_port        TYPE tv_type VALUE 'o',
     type_not_defined TYPE tv_type VALUE space,
+
+    type_escape_proc TYPE tv_type VALUE '@',
 
      " Types for ABAP integration:
     type_abap_data     TYPE tv_type VALUE 'D',
@@ -771,6 +781,44 @@
                                     iv_exact TYPE flag.
   ENDCLASS.
 
+  CLASS lcl_lisp_bigint DEFINITION INHERITING FROM lcl_lisp_integer CREATE PROTECTED FRIENDS lcl_lisp_new.
+    PUBLIC SECTION.
+      TYPES: BEGIN OF ENUM tv_order BASE TYPE i,
+               smaller VALUE -1,
+               equal   VALUE IS INITIAL,
+               larger  VALUE +1,
+             END OF ENUM tv_order.
+
+      TYPES tv_sign_char TYPE c LENGTH 1.
+
+      TYPES: BEGIN OF ENUM tv_sign BASE TYPE c,
+               positive  VALUE IS INITIAL,
+               negative  VALUE '-',
+             END OF ENUM tv_sign.
+
+      TYPES tr_bigint TYPE REF TO lcl_lisp_bigint.
+      TYPES tt_bigint TYPE STANDARD TABLE OF tr_bigint.
+
+      CLASS-DATA zero TYPE tr_bigint READ-ONLY.
+      CLASS-DATA one TYPE tr_bigint READ-ONLY.
+      CLASS-DATA minus_one TYPE tr_bigint READ-ONLY.
+
+    PROTECTED SECTION.
+      TYPES tv_chunk TYPE tv_real.
+      TYPES tt_chunk TYPE STANDARD TABLE OF tv_chunk.
+
+      CONSTANTS fzero TYPE tv_chunk VALUE 0.
+      CONSTANTS fhalf TYPE tv_chunk VALUE '0.5'.
+
+      CLASS-DATA chunksize TYPE tv_int VALUE 16.
+      CLASS-DATA dchunksize TYPE tv_int VALUE 32.
+      CLASS-DATA chunkmod TYPE tv_chunk VALUE `1e16`.       "#EC NOTEXT.
+      CLASS-DATA dchunkmod TYPE tv_chunk VALUE `1e32`.      "#EC NOTEXT.
+
+      DATA sign TYPE tv_sign.
+      DATA dat TYPE tt_chunk.
+  ENDCLASS.
+
   CLASS lcl_lisp_rational DEFINITION INHERITING FROM lcl_lisp_integer
     CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
@@ -915,7 +963,7 @@
 
         IF real = 0 OR iv_real = 0 OR sum < c_min_normal.
 *         real or iv_real is zero or both are extremely close to it
-*         relative error is less meaningfull here
+*         relative error is less meaningful here
           IF diff < c_epsilon * c_min_normal.
             result = abap_true.
           ELSE. " use relative error
@@ -1097,6 +1145,7 @@
   CLASS lcl_lisp_bytevector DEFINITION DEFERRED.
   CLASS lcl_lisp_abapfunction DEFINITION DEFERRED.
   CLASS lcl_lisp_hash DEFINITION DEFERRED.
+  CLASS lcl_lisp_escape DEFINITION DEFERRED.
 
   INTERFACE lif_input_port.
     METHODS read IMPORTING iv_title        TYPE string OPTIONAL
@@ -1115,7 +1164,7 @@
 
   CLASS lcl_lisp_port DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
-      TYPES tv_port_type TYPE char01.
+      TYPES tv_port_type TYPE tv_char.
       CONSTANTS:
         c_port_textual TYPE tv_port_type VALUE 't',
         c_port_binary  TYPE tv_port_type VALUE 'b'.
@@ -1149,7 +1198,7 @@
       DATA last_len TYPE tv_index.
       DATA finite_size TYPE flag.
 
-      METHODS block_read RETURNING VALUE(rv_char) TYPE char01.
+      METHODS block_read RETURNING VALUE(rv_char) TYPE tv_char.
   ENDCLASS.
 
   CLASS lcl_lisp_buffered_port DEFINITION INHERITING FROM lcl_lisp_port FRIENDS lcl_lisp_new.
@@ -1160,7 +1209,7 @@
       METHODS lif_input_port~peek_char REDEFINITION.
       METHODS display REDEFINITION.
       METHODS flush RETURNING VALUE(rv_text) TYPE string.
-      METHODS constructor IMPORTING iv_port_type TYPE lcl_lisp_port=>tv_port_type DEFAULT c_port_textual
+      METHODS constructor IMPORTING iv_port_type TYPE tv_port_type DEFAULT c_port_textual
                                     iv_input     TYPE flag
                                     iv_output    TYPE flag
                                     iv_error     TYPE flag DEFAULT abap_false
@@ -1341,9 +1390,14 @@
                                       init_angle       TYPE REF TO lcl_lisp_real
                             RETURNING VALUE(ro_turtle) TYPE REF TO lcl_lisp_turtle.
 
+      CLASS-METHODS throw_radix IMPORTING message TYPE string
+                                RAISING   lcx_lisp_exception.
 
       CLASS-METHODS values IMPORTING io_elem TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_values.
+
+      CLASS-METHODS escape IMPORTING value TYPE any
+                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_escape.
   ENDCLASS.
 
   CLASS lcl_lisp_values IMPLEMENTATION.
@@ -1904,6 +1958,12 @@
 
   ENDCLASS.
 
+  CLASS lcl_lisp_escape DEFINITION INHERITING FROM lcl_lisp
+    CREATE PROTECTED FRIENDS lcl_lisp_new.
+    PUBLIC SECTION.
+      DATA ms_cont TYPE ts_continuation READ-ONLY.
+  ENDCLASS.
+
 *----------------------------------------------------------------------*
 *       CLASS lcl_parser DEFINITION
 *----------------------------------------------------------------------*
@@ -1985,6 +2045,30 @@
       METHODS skip_block_comment RAISING lcx_lisp_exception.
 
   ENDCLASS.                    "lcl_parser DEFINITION
+
+  CLASS lcx_lisp_escape DEFINITION INHERITING FROM lcx_lisp_exception.
+    PUBLIC SECTION.
+      DATA ms_cont TYPE ts_continuation READ-ONLY.
+      CLASS-METHODS throw IMPORTING is_cont TYPE ts_continuation
+                          RAISING lcx_lisp_escape.
+
+      METHODS constructor IMPORTING is_cont TYPE ts_continuation.
+  ENDCLASS.
+
+  CLASS lcx_lisp_escape IMPLEMENTATION.
+
+    METHOD throw.
+      RAISE EXCEPTION TYPE lcx_lisp_escape
+        EXPORTING is_cont = is_cont.
+    ENDMETHOD.
+
+    METHOD constructor.
+      super->constructor( message = `Escape continuation`
+                          area = `Eval` ).
+      ms_cont = is_cont.
+    ENDMETHOD.
+
+  ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp_interpreter DEFINITION
@@ -2863,22 +2947,34 @@
         c_esc_vline      TYPE char1 VALUE '|'.
 
       DATA pchar TYPE char1.
+      DATA escape_mode TYPE flag VALUE abap_false.
 *     " is included in a string as \"
 
       next_char( ).                 " Skip past opening quote
-      WHILE index < length AND NOT ( char = c_text_quote AND pchar NE c_escape_char ).
+      WHILE index < length AND ( char NE c_text_quote OR escape_mode EQ abap_true ).
 *       cv_val = |{ cv_val }{ char }|.
         pchar = char.
+
+        IF pchar EQ c_escape_char AND escape_mode EQ abap_false.
+          escape_mode = abap_true.
+        ELSE.
+          escape_mode = abap_false.
+        ENDIF.
+
         next_char( ).
-        IF pchar EQ c_escape_char.
+        IF escape_mode EQ abap_true.
           CASE char.
             WHEN space.         " \ : intraline whitespace
               skip_whitespace( ).
               CONTINUE.
 
             WHEN c_text_quote   " \" : double quote, U+0022
-              OR c_escape_char  " \\ : backslash, U+005C
               OR c_esc_vline.   " \| : vertical line, U+007C
+              pchar = char.
+              next_char( ).
+
+            WHEN c_escape_char.  " \\ : backslash, U+005C
+              escape_mode = abap_false.
               pchar = char.
               next_char( ).
 
@@ -4093,6 +4189,8 @@
     METHOD eval.
       DATA(cont) = is_cont.   " partial continuation
       DO.
+        TRY.
+
         _validate cont-elem.
 
         CASE cont-elem.
@@ -4469,6 +4567,15 @@
 
 *                  WHEN 'error'.
 
+                  WHEN 'call/cc' OR 'call-with-current-continuation'.
+                    _validate lr_tail.
+                    DATA(lo_esc) = lcl_lisp_new=>escape( cont ).
+
+                    cont-elem = lcl_lisp_new=>lambda( io_car = lo_esc               " List of parameters
+                                                      io_cdr = lr_tail->cdr         " Body
+                                                      io_env = cont-env ).
+                    _tail_sequence.
+
                   WHEN OTHERS.
 
 *                   EXECUTE PROCEDURE (native or lambda)
@@ -4549,6 +4656,10 @@
         _trace_result result.
         RETURN.
 
+        CATCH lcx_lisp_escape INTO DATA(lx_esc).
+          cont = lx_esc->ms_cont.
+          _tail_sequence.
+        ENDTRY.
       ENDDO.
     ENDMETHOD.
 
@@ -6322,8 +6433,8 @@
       ENDIF.
 
       WHILE lo_ptr->cdr NE nil.
-        _validate_number: lo_ptr->car '[=]',
-                          lo_ptr->cdr->car '[=]'.
+        _validate_number: lo_ptr->car '=',
+                          lo_ptr->cdr->car '='.
         CASE lo_ptr->car->type.
           WHEN type_integer.
             _to_integer lo_ptr->car lv_int.
@@ -8468,7 +8579,7 @@
 
 *implementation in terms of low-level procedures creg-get and creg-set!
 * A)creg-get - capture procedure - converts the implicit continuation passed to
-*             call-with-current-continuationinto some kind of Scheme object with unlimited extent
+*             call-with-current-continuation into some kind of Scheme object with unlimited extent
 *B) creg-set! - throw procedure - takes such an object and installs it as the continuation
 *      for the currently executing procedure overriding the previous implicit continuation.
 * f is called an escape procedure, because a call to the escape procedure will allow control
@@ -8479,10 +8590,13 @@
 *  With this strategy, which we call the gc strategy, creg-get can just return the contents of a
 *  continuation register (which is often called the dynamic link, stack pointer, or frame pointer),
 *  and creg-set! can just store its argument into that register.
+      DATA lo_esc TYPE REF TO lcl_lisp_escape.
 
-      _validate list.
+      _validate_escape list `call/cc`.
+      lo_esc ?= list.
+
+      lcx_lisp_escape=>throw( lo_esc->ms_cont ).
       result = nil.
-      throw( `call/cc not implemented yet` ).
     ENDMETHOD.
 
     METHOD proc_dynamic_wind.
@@ -11181,6 +11295,11 @@
       ro_elem = NEW lcl_lisp_values( io_elem ).
     ENDMETHOD.
 
+    METHOD escape.
+      ro_elem = NEW lcl_lisp_escape( type_abap_table ).
+      ro_elem->ms_cont = value.
+    ENDMETHOD.
+
     METHOD turtles.
       ro_turtle = NEW lcl_lisp_turtle( width = width
                                        height = height
@@ -11256,6 +11375,13 @@
       ro_func = NEW lcl_lisp_abapfunction( type_abap_function ).
 *     Determine the parameters of the function module to populate parameter table
       ro_func->value = ro_func->read_interface( io_list->car->value ).
+    ENDMETHOD.
+
+    METHOD throw_radix.
+      RAISE EXCEPTION TYPE lcx_lisp_exception
+        EXPORTING
+          message = message
+          area    = c_area_radix.
     ENDMETHOD.
 
   ENDCLASS.
@@ -11560,6 +11686,7 @@
           ENDLOOP.
       ELSE.
           LOOP AT bytes ASSIGNING <byte>.
+            lv_hex = <byte>.
             WRITE <byte> TO lv_char2.
             lv_str = lv_str && ` ` && lv_char2.
           ENDLOOP.

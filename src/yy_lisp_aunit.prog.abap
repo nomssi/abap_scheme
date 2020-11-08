@@ -243,6 +243,7 @@
        METHODS lambda FOR TESTING.
        METHODS lambda_comments FOR TESTING.
        METHODS riff_shuffle FOR TESTING.
+       METHODS escape FOR TESTING.
    ENDCLASS.                    "ltc_parse DEFINITION
 
 *----------------------------------------------------------------------*
@@ -307,6 +308,11 @@
    | ( ( combine append ) ( take ( mid deck ) deck ) ( drop ( mid deck ) deck ) ) ) ) )|
              ).
      ENDMETHOD.                    "riff_shuffle
+
+     METHOD escape.
+       assert_parse( code = '(write "#\\")'
+                     expected = '\' ).
+     ENDMETHOD.
 
    ENDCLASS.                    "ltc_parse IMPLEMENTATION
 
@@ -1942,6 +1948,7 @@
        METHODS is_real FOR TESTING.
        METHODS is_real_1 FOR TESTING.
        METHODS is_rational FOR TESTING.
+       METHODS is_rational_inexact FOR TESTING.
        METHODS is_integer FOR TESTING.
 
        METHODS gcd_1 FOR TESTING.
@@ -2035,6 +2042,13 @@
        scheme( code = '(rational? 6/10)'
                expected = '#t' ).
        scheme( code = '(rational? 6/3)'
+               expected = '#t' ).
+     ENDMETHOD.                    "is_rational
+
+     METHOD is_rational_inexact.
+       scheme( code = '(rational? 3.5)'
+               expected = '#t' ).
+       scheme( code = '(rational? 3.1416)'
                expected = '#t' ).
      ENDMETHOD.                    "is_rational
 
