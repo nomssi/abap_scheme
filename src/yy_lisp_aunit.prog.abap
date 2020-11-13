@@ -243,7 +243,7 @@
        METHODS lambda FOR TESTING.
        METHODS lambda_comments FOR TESTING.
        METHODS riff_shuffle FOR TESTING.
-       METHODS escape FOR TESTING.
+       METHODS write_escape FOR TESTING.
    ENDCLASS.                    "ltc_parse DEFINITION
 
 *----------------------------------------------------------------------*
@@ -309,7 +309,7 @@
              ).
      ENDMETHOD.                    "riff_shuffle
 
-     METHOD escape.
+     METHOD write_escape.
        assert_parse( code = '(write "#\\")'
                      expected = '\' ).
      ENDMETHOD.
@@ -916,41 +916,41 @@
      ENDMETHOD.                    "values_0
 
      METHOD call_cc_0.
-*       scheme( code = |(call-with-current-continuation | &
-*                         |  (lambda (exit)           | &
-*                         |    (for-each (lambda (x)  | &
-*                         |       (if (negative? x)   | &
-*                         |         (exit x)))        | &
-*                         |      '(54 0 37 -3 245 19))| &
-*                         |  #t))|
-*               expected = '-3' ).
+       scheme( code = |(call-with-current-continuation | &
+                         |  (lambda (exit)           | &
+                         |    (for-each (lambda (x)  | &
+                         |       (if (negative? x)   | &
+                         |         (exit x)))        | &
+                         |      '(54 0 37 -3 245 19))| &
+                         |  #t))|
+               expected = '-3' ).
      ENDMETHOD.                    "call_cc_0
 
      METHOD call_cc_1.
-*       scheme( code = |(define list-length                              | &
-*                         |  (lambda (obj)                                  | &
-*                         |    (call-with-current-continuation              | &
-*                         |       (lambda (return)                          | &
-*                         |         (letrec ((r                             | &
-*                         |                   (lambda (obj)                 | &
-*                         |                     (cond ((null? obj) 0)       | &
-*                         |                           ((pair? obj)          | &
-*                         |                             (+ (r (cdr obj)) 1))| &
-*                         |                           (else (return #f))))))| &
-*                         |          (r obj)))))) |
-*               expected = 'list-length' ).
-*
-*       scheme( code = |(list-length '(1 2 3 4))|
-*               expected = '4' ).
-*       scheme( code = |(list-length '(a b . c))|
-*               expected = '#f' ).
+       scheme( code = |(define list-length                              | &
+                         |  (lambda (obj)                                  | &
+                         |    (call-with-current-continuation              | &
+                         |       (lambda (return)                          | &
+                         |         (letrec ((r                             | &
+                         |                   (lambda (obj)                 | &
+                         |                     (cond ((null? obj) 0)       | &
+                         |                           ((pair? obj)          | &
+                         |                             (+ (r (cdr obj)) 1))| &
+                         |                           (else (return #f))))))| &
+                         |          (r obj)))))) |
+               expected = 'list-length' ).
+
+       scheme( code = |(list-length '(1 2 3 4))|
+               expected = '4' ).
+       scheme( code = |(list-length '(a b . c))|
+               expected = '#f' ).
      ENDMETHOD.                    "call_cc_1
 
      METHOD call_cc_values.
-*       scheme( code = |(define (values . things)                 | &
-*                         |  (call-with-current-continuation          | &
-*                         |     (lambda (cont) (apply cont things)))) |
-*               expected = 'values' ).
+       scheme( code = |(define (values . things)                 | &
+                         |  (call-with-current-continuation          | &
+                         |     (lambda (cont) (apply cont things)))) |
+               expected = 'values' ).
      ENDMETHOD.                    "call_cc_values
 
      METHOD define_values_0.
@@ -1955,6 +1955,7 @@
        METHODS lcm_1 FOR TESTING.
 
        METHODS to_exact_1 FOR TESTING.
+       METHODS to_exact_2 FOR TESTING.
        METHODS to_inexact_1 FOR TESTING.
 
        METHODS exact_1 FOR TESTING.
@@ -1962,6 +1963,7 @@
        METHODS exact_3 FOR TESTING.
        METHODS exact_4 FOR TESTING.
        METHODS exact_5 FOR TESTING.
+       METHODS exact_6 FOR TESTING.
 
        METHODS compare_eq FOR TESTING.
        METHODS compare_lt FOR TESTING.
@@ -2080,6 +2082,11 @@
                expected = '1/2' ).
      ENDMETHOD.                    "to_exact_1
 
+     METHOD to_exact_2.
+       scheme( code = '(exact 3e10)'
+               expected = '30000000000' ).
+     ENDMETHOD.
+
      METHOD to_inexact_1.
        scheme( code = '(inexact 1/2)'
                expected = '0.5' ).
@@ -2109,6 +2116,11 @@
        scheme( code = '(exact? #e3.0)'
                expected = '#t' ).
      ENDMETHOD.                    "exact_5
+
+     METHOD exact_6.
+       scheme( code = '(exact? #i#xff)'
+               expected = '#f' ).
+     ENDMETHOD.
 
      METHOD compare_eq.
        scheme_incorrect( '(=)' ).
@@ -2733,7 +2745,7 @@
 
      METHOD math_min_3.
        scheme( code =  '(min 0 -2 3.9 4 90)'
-               expected = '-2' ).
+               expected = '-2.0' ).
      ENDMETHOD.                    "math_min_3
 
      METHOD math_max_0.
@@ -2748,12 +2760,12 @@
 
      METHOD math_max_2.
        scheme( code =  '(max 3.9 4)'
-               expected = '4' ).
+               expected = '4.0' ).
      ENDMETHOD.                    "math_max_2
 
      METHOD math_max_3.
        scheme( code =  '(max -3 3.9 9 4)'
-               expected = '9' ).
+               expected = '9.0' ).
      ENDMETHOD.                    "math_max_3
 
    ENDCLASS.                    "ltc_math IMPLEMENTATION
