@@ -2091,13 +2091,18 @@
     PUBLIC SECTION.
       DATA ms_cont TYPE ts_continuation READ-ONLY.
 
-      METHODS escape RAISING lcx_lisp_escape.
+      METHODS escape IMPORTING is_cont TYPE ts_continuation
+                     RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
+                     RAISING lcx_lisp_escape.
   ENDCLASS.
 
   CLASS lcl_lisp_escape IMPLEMENTATION.
 
     METHOD escape.
-      lcx_lisp_escape=>throw( ms_cont ).
+      IF is_cont NE ms_cont.
+        lcx_lisp_escape=>throw( ms_cont ).
+      ENDIF.
+      ro_elem = ms_cont-elem.
     ENDMETHOD.
 
   ENDCLASS.
@@ -4684,8 +4689,14 @@
                                                     io_cdr = lo_head->cdr         " Body ??
                                                     io_env = cont-env ).
 
-
-                    DATA(lo_esc) = lcl_lisp_new=>escape( cont ).   " Test cont-elem = lr_tail->cdr ?? nein
+                    " capture the current execution state
+                    DATA lr_cont TYPE tr_continuation.
+                    IF cont-next IS BOUND.
+                      lr_cont = CAST #( cont-next ).
+                    ELSE.
+                      lr_cont = REF #( cont ).
+                    ENDIF.
+                    DATA(lo_esc) = lcl_lisp_new=>escape( cont ). " lr_cont->* ).
 
                     cont-env = lambda_environment( io_head = lo_proc
                                                    io_args = lcl_lisp_new=>box_quote( lo_esc )
@@ -4750,7 +4761,7 @@
                         _tail_sequence.
 
                       WHEN type_escape_proc.
-                        CAST lcl_lisp_escape( lo_proc )->escape( ).
+                        result = CAST lcl_lisp_escape( lo_proc )->escape( cont ).
 
                       WHEN OTHERS.
                         throw( |attempt to apply { lo_proc->to_string( ) } - not a procedure| ).
@@ -8826,8 +8837,7 @@
       _validate_escape list `call/cc`.
       lo_esc ?= list.
 
-      result = nil.
-      lcx_lisp_escape=>throw( lo_esc->ms_cont ).
+      result = lo_esc->escape( VALUE ts_continuation( ) ).
     ENDMETHOD.
 
     METHOD proc_dynamic_wind.
