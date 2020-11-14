@@ -2537,13 +2537,13 @@
      METHOD math_floor_new.
        "Integer division
        scheme( code =  '(floor/ 5 2)'
-               expected = ' 2 1' ).
+               expected = '2 1' ).
        scheme( code =  '(floor/ -5 2)'
-               expected = ' -3 1' ).
+               expected = '-3 1' ).
        scheme( code =  '(floor/ 5 -2)'
-               expected = ' -3 -1' ).
+               expected = '-3 -1' ).
        scheme( code =  '(floor/ -5 -2)'
-               expected = ' 2 -1' ).
+               expected = '2 -1' ).
      ENDMETHOD.                    "math_floor_new
 
      METHOD math_ceiling.
@@ -2561,15 +2561,15 @@
      METHOD math_truncate_new.
        "Integer division
        scheme( code =  '(truncate/ 5 2)'
-               expected = ' 2 1' ).
+               expected = '2 1' ).
        scheme( code =  '(truncate/ -5 2)'
-               expected = ' -2 -1' ).
+               expected = '-2 -1' ).
        scheme( code =  '(truncate/ 5 -2)'
-               expected = ' -2 1' ).
+               expected = '-2 1' ).
        scheme( code =  '(truncate/ -5 -2)'
-               expected = ' 2 -1' ).
+               expected = '2 -1' ).
        scheme( code =  '(truncate/ -5.0 -2)'
-               expected = ' 2.0 -1.0' ).
+               expected = '2.0 -1.0' ).
      ENDMETHOD.                    "math_truncate
 
      METHOD math_round.

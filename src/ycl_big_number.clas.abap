@@ -28,6 +28,7 @@ CLASS ycl_big_number  IMPLEMENTATION.
   DATA lo_int1 TYPE REF TO lcl_lisp_bigintx.
   DATA lo_int2 TYPE REF TO lcl_lisp_bigintx.
 
+  out->write( |Hello { cl_abap_context_info=>get_user_alias( ) }| ).
   lv1 = iv_first.
   lv2 = iv_second.
   lo_int1 = NEW #( ).  lo_int1->set_str( iv_first ).
