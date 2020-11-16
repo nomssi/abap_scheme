@@ -1406,7 +1406,8 @@
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_values.
 
       CLASS-METHODS escape IMPORTING value TYPE any
-                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_escape.
+                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
+                           RAISING   lcx_lisp_exception.
   ENDCLASS.
 
   CLASS lcl_lisp_values IMPLEMENTATION.
@@ -2066,6 +2067,9 @@
 
       METHODS constructor IMPORTING is_cont TYPE ts_continuation.
       METHODS get_text REDEFINITION.
+      METHODS new_continuation importing cont type ts_continuation
+                               returning value(ro_elem) type ref to lcl_lisp
+                               raising lcx_lisp_escape lcx_lisp_exception.
   ENDCLASS.
 
   CLASS lcx_lisp_escape IMPLEMENTATION.
@@ -2084,12 +2088,28 @@
       result = `Escape continuation triggered`.
     ENDMETHOD.                    "get_text
 
+    METHOD new_continuation.
+      " install the passed continuation as the continuation for the currently
+      " executing procedure overriding the previous implicit continuation.
+      IF cont-next NE ms_cont-next.
+        throw( ms_cont ).
+      ENDIF.
+      ro_elem = ms_cont-elem.
+      IF ro_elem IS BOUND AND ro_elem->cdr IS BOUND
+        AND ro_elem->cdr->type EQ type_pair.
+        ro_elem = ro_elem->cdr->car.
+      ENDIF.
+    ENDMETHOD.
+
   ENDCLASS.
 
   CLASS lcl_lisp_escape DEFINITION INHERITING FROM lcl_lisp
     CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
-      DATA ms_cont TYPE ts_continuation READ-ONLY.
+      DATA cont TYPE ts_continuation READ-ONLY.
+
+      METHODS constructor IMPORTING cont TYPE ts_continuation
+                          RAISING lcx_lisp_escape.
 
       METHODS escape IMPORTING is_cont TYPE ts_continuation
                      RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
@@ -2098,11 +2118,16 @@
 
   CLASS lcl_lisp_escape IMPLEMENTATION.
 
+    METHOD constructor.
+      super->constructor( type_escape_proc ).
+      me->cont = cont.
+    ENDMETHOD.
+
     METHOD escape.
-      IF is_cont NE ms_cont.
-        lcx_lisp_escape=>throw( ms_cont ).
+      IF is_cont NE cont.
+        lcx_lisp_escape=>throw( is_cont = is_cont ).
       ENDIF.
-      ro_elem = ms_cont-elem.
+      ro_elem = cont-elem.
     ENDMETHOD.
 
   ENDCLASS.
@@ -3566,19 +3591,19 @@
 *     This routine is called very, very often!
       DATA lo_arg TYPE REF TO lcl_lisp.
       DATA lo_new TYPE REF TO lcl_lisp.
-      DATA ctx TYPE ts_continuation.
+      DATA cont TYPE ts_continuation.
 *     Before execution of the procedure or lambda, all parameters must be evaluated
       _validate io_list.
 
       ro_head = nil.
       CHECK io_list NE nil. " AND io_list->car NE nil.
 
-      ctx-env = environment.
+      cont-env = environment.
       DATA(elem) = io_list.
 *     TO DO: check if circular list are allowed
       WHILE elem->type EQ type_pair.
-        ctx-elem = elem->car.
-        lo_new = lcl_lisp_new=>cons( io_car = eval_ast( ctx ) ).
+        cont-elem = elem->car.
+        lo_new = lcl_lisp_new=>cons( io_car = eval_ast( cont ) ).
         IF ro_head = nil.
           lo_arg = ro_head = lo_new.
         ELSE.
@@ -4294,6 +4319,7 @@
 **********************************************************************
     METHOD eval.
       DATA(cont) = is_cont.   " partial continuation
+
       DO.
 
         _validate cont-elem.
@@ -4670,39 +4696,23 @@
 
 *                  WHEN 'error'.
 
-                  WHEN 'call/cc' OR 'call-with-current-continuation'.
-                    _validate: lr_tail, lr_tail->car, lr_tail->car->cdr.
-                    DATA lo_proc TYPE REF TO lcl_lisp.
+                  WHEN 'call-with-values'.
+                    _validate: lr_tail,
+                               lr_tail->car.      " producer
+                    " producer
+                    DATA(lo_values) = eval_ast( VALUE #( BASE cont
+                                                         elem = lr_tail->car ) ).
+                    " extract the consumer
+                    _validate: lr_tail->cdr,
+                               lr_tail->cdr->car. " consumer
+                    DATA(lo_consumer) = lr_tail->cdr->car.
 
-                    lo_head = lr_tail->car.
+                    lr_tail = lo_values.
 
-                    IF lo_head->car->type NE type_symbol
-                      OR lo_head->car->value NE 'lambda'.
-                      throw( ` Error in call/cc ` ).
-                    ENDIF.
-
-                    lo_head = lo_head->cdr.
-                    DATA(lo_param) = lo_head->car.
-                    lo_param->assert_last_param( ).       "  (A single parameter)
-
-                    lo_proc = lcl_lisp_new=>lambda( io_car = lo_param
-                                                    io_cdr = lo_head->cdr         " Body ??
-                                                    io_env = cont-env ).
-
-                    " capture the current execution state
-                    DATA lr_cont TYPE tr_continuation.
-                    IF cont-next IS BOUND.
-                      lr_cont = CAST #( cont-next ).
-                    ELSE.
-                      lr_cont = REF #( cont ).
-                    ENDIF.
-                    DATA(lo_esc) = lcl_lisp_new=>escape( cont ). " lr_cont->* ).
-
-                    cont-env = lambda_environment( io_head = lo_proc
-                                                   io_args = lcl_lisp_new=>box_quote( lo_esc )
-                                                   environment = cont-env ).
-                    cont-elem = lo_proc->cdr.
-                    _tail_sequence.
+                    cont-elem = lcl_lisp_new=>cons( io_car = expand_apply( io_list = lo_consumer
+                                                                           environment = cont-env ) ).
+                    throw( `call-with-values not implemented yet` ).
+                    _tail_expression cont-elem.
 
                   WHEN OTHERS.
 
@@ -4710,9 +4720,27 @@
 *                   Take the first item of the evaluated list and call it as function
 *                   using the rest of the evaluated list as its arguments.
 
-*                   The evaluated head must be a native procedure or a lambda or an ABAP function module
-                    lo_proc = eval_ast( VALUE #( BASE cont
-                                                 elem = lr_head ) ).
+                    DATA lo_proc TYPE REF TO lcl_lisp.
+
+                    CASE lr_head->value.
+                      WHEN 'call/cc' OR 'call-with-current-continuation'.
+                        _validate: lr_tail, lr_tail->car, lr_tail->car->cdr.
+
+                        " extract the procedure to be called
+                        lo_head = lr_tail->car->cdr.
+                        lo_head->car->assert_last_param( ).       "  (A single parameter)
+
+                        lo_proc = lcl_lisp_new=>lambda( io_car = lo_head->car         " Params
+                                                        io_cdr = lo_head->cdr         " Body
+                                                        io_env = cont-env ).
+                        " capture the current execution state
+                        lr_tail = lcl_lisp_new=>escape( value = cont ).
+
+                      WHEN OTHERS.
+*                       The evaluated head must be a native procedure or a lambda or an ABAP function module
+                        lo_proc = eval_ast( VALUE #( BASE cont
+                                                          elem = lr_head ) ).
+                    ENDCASE.
 
                     _trace_call lo_proc lr_tail.
 
@@ -4771,10 +4799,8 @@
                 ENDCASE.
 
               WHEN type_values.
-                DATA lo_values TYPE REF TO lcl_lisp_values.
+                cont-elem = CAST lcl_lisp_values( cont-elem->car )->head.
 
-                lo_values ?= cont-elem->car.
-                cont-elem = lo_values->head.
                 _tail_sequence.
 
               WHEN OTHERS.
@@ -4789,6 +4815,7 @@
         RETURN.
 
       ENDDO.
+
     ENDMETHOD.
 
     DEFINE _optional_port.
@@ -4886,11 +4913,17 @@
           ENDIF.
 
           TRY.
-                lo_result = eval( ls_cont ).
+
+          lo_result = eval( ls_cont ).
+
           CATCH lcx_lisp_escape INTO DATA(lx_esc).
-                ls_cont = lx_esc->ms_cont.
-                lo_result = eval( ls_cont ).
+                " install the passed continuation as the continuation for the currently
+                " executing procedure overriding the previous implicit continuation.
+                DATA(lo_elem) = lx_esc->new_continuation( ls_cont ).
+                lo_result = eval( VALUE #( BASE ls_cont
+                                           elem = lo_elem ) ).
           ENDTRY.
+
           gi_log->put( lo_result ).
       ENDDO.
 
@@ -8846,7 +8879,7 @@
 
     METHOD proc_call_with_values.
       _validate: list, list->cdr.
-      _validate list->car.       " procuder
+      _validate list->car.       " producer
       _validate list->cdr->car.  " consumer
       throw( `call-with-values not implemented yet` ).
     ENDMETHOD.
@@ -11540,8 +11573,10 @@
     ENDMETHOD.
 
     METHOD escape.
-      ro_elem = NEW lcl_lisp_escape( type_escape_proc ).
-      ro_elem->ms_cont = value.
+      " capture procedure - converts the implicit continuation passed to call-with-current-continuation
+      " into some kind of Scheme object with unlimited extent (we use a special kind of procedure)
+      DATA(lo_esc) = NEW lcl_lisp_escape( cont = value ).
+      ro_elem = box_quote( lo_esc ).
     ENDMETHOD.
 
     METHOD turtles.

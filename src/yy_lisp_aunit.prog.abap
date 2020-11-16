@@ -373,8 +373,19 @@
        METHODS define_values_1 FOR TESTING.
 
        METHODS call_cc_0 FOR TESTING.
-       METHODS call_cc_1 FOR TESTING.
+       METHODS call_cc_1a FOR TESTING.
+       METHODS call_cc_1b FOR TESTING.
+       METHODS call_cc_2 FOR TESTING.
+       METHODS call_cc_3 FOR TESTING.
+       METHODS call_cc_4 FOR TESTING.
+       METHODS call_cc_5 FOR TESTING.
+       METHODS call_cc_6 FOR TESTING.
+       METHODS call_cc_7 FOR TESTING.
+
        METHODS call_cc_values FOR TESTING.
+
+       METHODS call_with_values_1 FOR TESTING.
+       METHODS call_with_values_2 FOR TESTING.
 
        METHODS is_symbol_true_1 FOR TESTING.
        METHODS is_symbol_true_2 FOR TESTING.
@@ -638,22 +649,22 @@
 
      METHOD call_no_lambda.
        scheme( code = '(1 2)'
-            expected = 'Eval: attempt to apply 1 - not a procedure' ).
+               expected = 'Eval: attempt to apply 1 - not a procedure' ).
      ENDMETHOD.                    "quote_19
 
      METHOD quote_19.
        scheme( code = '(quote 19)'
-            expected = '19' ).
+               expected = '19' ).
      ENDMETHOD.                    "quote_19
 
      METHOD quote_a.
        scheme( code = '(quote a)'
-            expected = 'a' ).
+               expected = 'a' ).
      ENDMETHOD.                    "quote_a
 
      METHOD quote_2_args.
        scheme( code = '(quote a b)'
-            expected = 'Eval: quote can only take a single argument' ).
+               expected = 'Eval: quote can only take a single argument' ).
      ENDMETHOD.                    "quote_2_args
 
      METHOD quote_symbol_19.
@@ -915,7 +926,22 @@
                expected = |8/3 2.289428485106663735616084423879354 36/19| ).
      ENDMETHOD.                    "values_0
 
-     METHOD call_cc_0.
+     METHOD call_cc_0. " continuation is not invoked
+       scheme( code = |(+ 2 (call/cc (lambda (cont) 3))) |
+               expected = '5' ).
+     ENDMETHOD.
+
+     METHOD call_cc_1a.  " invoke the continuation
+       scheme( code = |(+ 2 (call/cc (lambda (cont) (cont 10) 3)))|
+               expected = '12' ).
+     ENDMETHOD.
+
+     METHOD call_cc_1b.  " invoke the continuation
+       scheme( code = |(call/cc (lambda (k) (* 5 (k 4))))|
+               expected = '4' ).
+     ENDMETHOD.
+
+     METHOD call_cc_2.
        scheme( code = |(call-with-current-continuation | &
                          |  (lambda (exit)           | &
                          |    (for-each (lambda (x)  | &
@@ -924,9 +950,9 @@
                          |      '(54 0 37 -3 245 19))| &
                          |  #t))|
                expected = '-3' ).
-     ENDMETHOD.                    "call_cc_0
+     ENDMETHOD.
 
-     METHOD call_cc_1.
+     METHOD call_cc_3.
        scheme( code = |(define list-length                              | &
                          |  (lambda (obj)                                  | &
                          |    (call-with-current-continuation              | &
@@ -944,7 +970,38 @@
                expected = '4' ).
        scheme( code = |(list-length '(a b . c))|
                expected = '#f' ).
-     ENDMETHOD.                    "call_cc_1
+     ENDMETHOD.
+
+     METHOD call_cc_4.
+       scheme( code = |(call/cc (lambda (throw) | &
+                      | (+ 5 (* 10 (call/cc (lambda (escape) (* 100 (escape 3))))))))|
+               expected = '35' ).
+     ENDMETHOD.
+
+     METHOD call_cc_5.
+       scheme( code = |(call/cc (lambda (throw) | &
+                      |  (+ 5 (* 10 (call/cc (lambda (escape) (* 100 (throw 3))))))))|
+               expected = '3' ).
+     ENDMETHOD.
+
+     METHOD call_cc_6.
+       scheme( code = |(+ 4 (call/cc | &
+                      |    (lambda (cont) (cont (+ 1 2))))) |
+               expected = '7' ).
+     ENDMETHOD.
+
+     METHOD call_cc_7.
+       scheme( code = |(define handle #f)|
+               expected = 'handle' ).
+
+       scheme( code = |(+ 2 (call/cc | &
+                      |    (lambda (k) (set! handle k) 2)))|
+               expected = '4' ).
+       scheme( code = |(handle 6)|
+               expected = '8' ).
+       scheme( code = |(handle 20)|
+               expected = '22' ).
+     ENDMETHOD.
 
      METHOD call_cc_values.
        scheme( code = |(define (values . things)                 | &
@@ -965,6 +1022,17 @@
                expected = 'x y' ).    " nicht definiert in r7rs
        scheme( code = |(+ x y)|
                expected = '3' ).
+     ENDMETHOD.
+
+     METHOD call_with_values_1.
+       scheme( code = |(call-with-values (lambda () (values 4 5)) | &
+                         |     (lambda (a b) b))|
+               expected = '5' ).
+     ENDMETHOD.
+
+     METHOD call_with_values_2.
+       scheme( code = |(call-with-values * -)|
+               expected = '-1' ).
      ENDMETHOD.
 
      METHOD is_symbol_true_1.
