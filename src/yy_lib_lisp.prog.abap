@@ -4917,8 +4917,8 @@
           lo_result = eval( ls_cont ).
 
           CATCH lcx_lisp_escape INTO DATA(lx_esc).
-                " install the passed continuation as the continuation for the currently
-                " executing procedure overriding the previous implicit continuation.
+              " install the passed continuation as the continuation for the currently
+              " executing procedure overriding the previous implicit continuation.
                 DATA(lo_elem) = lx_esc->new_continuation( ls_cont ).
                 lo_result = eval( VALUE #( BASE ls_cont
                                            elem = lo_elem ) ).
@@ -11059,6 +11059,7 @@
         WHEN type_lambda
           OR type_native
           OR type_primitive
+          OR type_escape_proc
           OR type_abap_function.  " really?
           result = true.
         WHEN OTHERS.
