@@ -244,6 +244,9 @@
        METHODS lambda_comments FOR TESTING.
        METHODS riff_shuffle FOR TESTING.
        METHODS write_escape FOR TESTING.
+       METHODS detect_errors_0 FOR TESTING.
+       METHODS detect_errors_1 FOR TESTING.
+       METHODS detect_errors_2 FOR TESTING.
    ENDCLASS.                    "ltc_parse DEFINITION
 
 *----------------------------------------------------------------------*
@@ -312,6 +315,21 @@
      METHOD write_escape.
        assert_parse( code = '(write "#\\")'
                      expected = '\' ).
+     ENDMETHOD.
+
+     METHOD detect_errors_0.
+       assert_parse( code = '(define f (lambda (x) (set! 3 x)))'
+                     expected = 'Eval: Parse Error' ).
+     ENDMETHOD.
+
+     METHOD detect_errors_1.
+       assert_parse( code = '(define g (lambda (3) (if (x = 0))))'
+                     expected = 'Eval: Parse Error' ).
+     ENDMETHOD.
+
+     METHOD detect_errors_2.
+       assert_parse( code = '(define h (lambda (x) (if (x = 0) 1 2 3)))'
+                     expected = 'Eval: Parse Error' ).
      ENDMETHOD.
 
    ENDCLASS.                    "ltc_parse IMPLEMENTATION
