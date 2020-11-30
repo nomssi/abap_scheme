@@ -35,15 +35,15 @@ I suggest you check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Lear
 * How to [enable the new editor](/editor)
 
 ## Why Scheme?
-- Conrad Barski's [Land of Lisp](http://landoflisp.com), Martin Ceronio's [LISP interpreter in ABAP](https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/) and [Peter Norvig](http://norvig.com/lispy2.html) inspired me to learn Lisp. [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the main Lisp dialects, alongside *Common Lisp* and *Clojure*. It is common to [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand Lisp's core concepts. 
+- [Scheme](https://en.wikipedia.org/wiki/Scheme_%28programming_language%29) is one of the main Lisp dialects, alongside *Common Lisp* and *Clojure*. Conrad Barski's [Land of Lisp](http://landoflisp.com), Martin Ceronio's [LISP interpreter in ABAP](https://blogs.sap.com/2015/06/24/a-lisp-interpreter-in-abap/) and [Peter Norvig](http://norvig.com/lispy2.html) inspired me to learn Lisp. It is common to [Make your own Lisp](https://github.com/kanaka/mal/blob/master/process/guide.md) to really understand Lisp's core concepts.
 
-- In constrast to ABAP, Scheme is lexically scoped and requires proper tail call optimization. Scheme's uses *symbolic expressions* (S-exps) to represent code *and* data. Expressions are then [evaluated](https://docs.racket-lang.org/reference/eval-model.html). Those  concepts cannot be expressed in ABAP, except by first implementing a Lisp interpreter in ABAP ([Greenspun 10th rule](http://www.paulgraham.com/quotes.html) ).
- 
 [![LISP Inside](https://github.com/nomssi/abap_scheme/blob/master/img/lisplogo_256.png)](http://lisperati.com/logo.html)
 
-Scheme's aptitude at symbolic processing is in display in [symbolic differentiation](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Symbolic-Derivation).
+- My initial plan was to write a Lisp workbench for [Martin's Lisp interpreter](https://github.com/mydoghasworms/abap-lisp). I changed the target language after reading the *Revised <sup>7</sup> Report on the Algorithmic Language Scheme* aka [R7RS](http://www.r7rs.org/). Scheme is a practical language with a very small number of rules for forming expressions that can be composed without restrictions. The R7RS offers a lot of examples and test cases to verify my code, so I can work towards compatibility with open source code.
 
-- Scheme is a practical language with a very small number of rules for forming expressions that can be composed without restrictions. My initial plan was to write a Lisp workbench for [Martin's Lisp interpreter](https://github.com/mydoghasworms/abap-lisp), but I changed the target language after reading the *Revised <sup>7</sup> Report on the Algorithmic Language Scheme* aka [R7RS](http://www.r7rs.org/).
+- In constrast to ABAP, Scheme is lexically scoped and requires proper tail call optimization. Scheme's uses *symbolic expressions* (S-exps) to represent code *and* data. Expressions are then [evaluated](https://docs.racket-lang.org/reference/eval-model.html). Those  concepts cannot be expressed in ABAP, except by first implementing a Lisp interpreter in ABAP ([Greenspun 10th rule](http://www.paulgraham.com/quotes.html) ).
+
+Scheme's aptitude at symbolic processing is in display in [symbolic differentiation](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Symbolic-Derivation).
 
 ### Features
 - Check the current [list of features](https://github.com/nomssi/abap_scheme/wiki/Features)
