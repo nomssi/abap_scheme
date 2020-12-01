@@ -53,7 +53,7 @@ I suggest you check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Lear
 
 S-expression for (* 2 (+ 3 4)) | workbench view
 --- | ---
-![s-exp](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png) |  ![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sexp_new.PNG)
+![s-exp](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Corrected_S-expression_tree_2.png/220px-Corrected_S-expression_tree_2.png) |  ![workbench view](https://github.com/nomssi/abap_scheme/blob/master/img/sexpr_new.PNG)
 
 - R7RS alignment makes it easier to run open source Scheme code. This is however limited, as *first class continuations* (call cc) and *hygienic macros* (define-syntax) are missing
 
