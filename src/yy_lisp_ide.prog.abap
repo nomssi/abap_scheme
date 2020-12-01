@@ -10,7 +10,7 @@ CONSTANTS:
   c_source_type     TYPE string VALUE 'LISP'.
 
 CONSTANTS:
-  c_lisp_ast_view TYPE cl_abap_browser=>title VALUE 'ABAP Lisp S-Expression Viewer'.
+  c_lisp_ast_view TYPE cl_abap_browser=>title VALUE 'ABAP Scheme S-Expression Viewer'.
 
 DATA g_ok_code TYPE syucomm.
 
