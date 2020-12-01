@@ -323,28 +323,49 @@ CLASS lcl_configuration DEFINITION CREATE PRIVATE.
                                                ev_value      TYPE string.
 ENDCLASS.
 
-CLASS lcl_dot_diagram DEFINITION.
+CLASS lcl_graph_diagram DEFINITION ABSTRACT.
   PUBLIC SECTION.
-    CLASS-METHODS new IMPORTING is_config     TYPE ts_diagram_config
-                      RETURNING VALUE(ro_dot) TYPE REF TO lcl_dot_diagram.
-
     METHODS generate IMPORTING it_elem           TYPE lcl_parser=>tt_element
                      RETURNING VALUE(rv_diagram) TYPE string.
-  PRIVATE SECTION.
-    CONSTANTS c_start TYPE flag VALUE abap_true.
-
+  PROTECTED SECTION.
     DATA mv_diagram TYPE string.
-    METHODS header IMPORTING is_cfg TYPE ts_diagram_config.
-    METHODS footer.
-    METHODS node IMPORTING elem TYPE REF TO lcl_lisp.
+    METHODS header ABSTRACT IMPORTING is_cfg TYPE ts_diagram_config.
+    METHODS footer ABSTRACT.
+    METHODS node ABSTRACT IMPORTING elem TYPE REF TO lcl_lisp.
     METHODS add IMPORTING iv_code TYPE string.
     METHODS get RETURNING VALUE(rv_dot) TYPE string.
     METHODS get_object_id IMPORTING io_ref        TYPE REF TO object
                           RETURNING VALUE(rv_oid) TYPE i.
-    METHODS print IMPORTING io_elem        TYPE REF TO lcl_lisp
+    METHODS print ABSTRACT IMPORTING io_elem        TYPE REF TO lcl_lisp
                   RETURNING VALUE(rv_node) TYPE string.
-    METHODS detach.
+ENDCLASS.
 
+CLASS lcl_dot_diagram DEFINITION INHERITING FROM lcl_graph_diagram.
+  PUBLIC SECTION.
+    CLASS-METHODS new IMPORTING is_config     TYPE ts_diagram_config
+                      RETURNING VALUE(ro_dot) TYPE REF TO lcl_dot_diagram.
+
+  PROTECTED SECTION.
+    METHODS header REDEFINITION.
+    METHODS footer REDEFINITION.
+    METHODS node REDEFINITION.
+    METHODS print REDEFINITION.
+  PRIVATE SECTION.
+    CONSTANTS c_start TYPE flag VALUE abap_true.
+
+    METHODS detach.
+ENDCLASS.
+
+CLASS lcl_sexpr_diagram DEFINITION INHERITING FROM lcl_graph_diagram.
+  PUBLIC SECTION.
+    CLASS-METHODS new IMPORTING is_config     TYPE ts_diagram_config
+                      RETURNING VALUE(ro_sexpr) TYPE REF TO lcl_sexpr_diagram.
+
+  PROTECTED SECTION.
+    METHODS header REDEFINITION.
+    METHODS footer REDEFINITION.
+    METHODS node REDEFINITION.
+    METHODS print REDEFINITION.
 ENDCLASS.
 
 *----------------------------------------------------------------------*
@@ -584,9 +605,10 @@ CLASS lcl_ide IMPLEMENTATION.
     DATA lo_uml TYPE REF TO lcl_plant_uml.
 
     ls_cfg = lcl_configuration=>get( ).
+    ls_cfg-scale = '1.1'.
 
     CREATE OBJECT lo_uml EXPORTING
-      iv_diagram = lcl_dot_diagram=>new( is_config = ls_cfg )->generate( it_elem = it_elem ).
+      iv_diagram = lcl_sexpr_diagram=>new( is_config = ls_cfg )->generate( it_elem = it_elem ).
     lo_uml->output( ls_cfg ).
   ENDMETHOD.
 
@@ -1406,11 +1428,10 @@ CLASS lcl_file_name_dummy IMPLEMENTATION.
 
 ENDCLASS.
 
-CLASS lcl_dot_diagram IMPLEMENTATION.
+CLASS lcl_graph_diagram IMPLEMENTATION.
 
   METHOD generate.
-    DATA lo_elem TYPE REF TO lcl_lisp.
-    LOOP AT it_elem INTO lo_elem.
+    LOOP AT it_elem INTO DATA(lo_elem).
       node( elem = lo_elem ).
     ENDLOOP.
     rv_diagram = get( ).
@@ -1419,6 +1440,22 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
   METHOD add.
     mv_diagram = mv_diagram && iv_code.
   ENDMETHOD.
+
+  METHOD get.
+    footer( ).
+    rv_dot = mv_diagram.
+  ENDMETHOD.
+
+  METHOD get_object_id.
+*   Get object ID - internal call
+    CALL 'OBJMGR_GET_INFO' ID 'OPNAME' FIELD 'GET_OBJID'  "#EC CI_CCALL
+                           ID 'OBJID'  FIELD rv_oid
+                           ID 'OBJ'    FIELD io_ref.
+  ENDMETHOD.
+
+ENDCLASS.
+
+CLASS lcl_dot_diagram IMPLEMENTATION.
 
   METHOD header.
     add( |@startuml\n| ).
@@ -1492,17 +1529,64 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
     ro_dot->header( is_config ).
   ENDMETHOD.                    " new
 
-  METHOD get.
-    footer( ).
-    rv_dot = mv_diagram.
+ENDCLASS.
+
+CLASS lcl_sexpr_diagram IMPLEMENTATION.
+
+  METHOD header.
+    add( |@startdot\ndigraph g \{\n graph [\n rankdir = "UD"\n];\n| ).
+    "add( |size="{ is_cfg-scale }";\n| ).
+  ENDMETHOD.                    " header
+
+  METHOD print.
+    CASE io_elem->type.
+      WHEN type_pair.
+        rv_node = get_object_id( io_elem ).
+      WHEN type_null.
+        rv_node = 'nil'.
+      WHEN type_real
+        OR type_integer
+        OR type_rational.
+        rv_node = io_elem->to_text( ).
+      WHEN OTHERS.
+        rv_node = io_elem->value.
+    ENDCASE.
   ENDMETHOD.
 
-  METHOD get_object_id.
-*   Get object ID - internal call
-    CALL 'OBJMGR_GET_INFO' ID 'OPNAME' FIELD 'GET_OBJID'  "#EC CI_CCALL
-                           ID 'OBJID'  FIELD rv_oid
-                           ID 'OBJ'    FIELD io_ref.
-  ENDMETHOD.
+  METHOD node.
+    CASE elem->type.
+      WHEN type_pair.
+
+        DATA(a) = get_object_id( elem ).
+        add( | { a } [label="{ print( elem ) }"][shape=box]; \n| ).
+
+        IF elem->cdr NE lcl_lisp=>nil.
+          add( | { a } -> { get_object_id( elem->car ) } [label="{ elem->car->type }"]\n| ).
+          node( elem->car ).
+
+          add( | { a } -> { get_object_id( elem->cdr ) } [label="{ elem->cdr->type }"]\n| ).
+          node( elem->cdr ).
+
+        ELSE.
+          add( | { a } -> { get_object_id( elem->car ) } [label="{ elem->car->type }"]\n| ).
+          node( elem->car ).
+        ENDIF.
+
+      WHEN OTHERS.
+        a = get_object_id( elem ).
+        add( | { a } [label="{ print( elem ) }"]; \n| ).
+
+    ENDCASE.
+  ENDMETHOD.                    " footer
+
+  METHOD footer.
+    add( |\n\}\n@enddot\n| ).
+  ENDMETHOD.                    " footer
+
+  METHOD new.
+    CREATE OBJECT ro_sexpr.
+    ro_sexpr->header( is_config ).
+  ENDMETHOD.                    " new
 
 ENDCLASS.
 
