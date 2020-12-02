@@ -503,10 +503,11 @@
   CLASS lcx_lisp_escape DEFINITION INHERITING FROM cx_dynamic_check.
     PUBLIC SECTION.
       DATA ms_cont TYPE ts_continuation READ-ONLY.
-      CLASS-METHODS throw IMPORTING is_cont TYPE ts_continuation
-                          RAISING lcx_lisp_escape.
+      DATA mo_param TYPE REF TO lcl_lisp.
+      METHODS throw RAISING lcx_lisp_escape.
 
-      METHODS constructor IMPORTING is_cont TYPE ts_continuation.
+      METHODS constructor IMPORTING is_cont TYPE ts_continuation
+                                    io_param TYPE REF TO lcl_lisp.
       METHODS get_text REDEFINITION.
       METHODS new_continuation importing cont type ts_continuation
                                returning value(rs_cont) type ts_continuation
@@ -1427,6 +1428,7 @@
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_values.
 
       CLASS-METHODS escape IMPORTING value TYPE any
+                                     param TYPE REF TO lcl_lisp
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                            RAISING   lcx_lisp_exception.
   ENDCLASS.
@@ -1693,6 +1695,17 @@
   CLASS lcl_lisp_hash DEFINITION INHERITING FROM lcl_lisp
     CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
+      TYPES: BEGIN OF ts_hash,
+               key     TYPE string,
+               element TYPE REF TO lcl_lisp,
+             END OF ts_hash.
+      TYPES tt_hash TYPE HASHED TABLE OF ts_hash WITH UNIQUE KEY key.
+      DATA hash TYPE tt_hash READ-ONLY.
+
+      CLASS-METHODS new  IMPORTING it_hash TYPE tt_hash
+                         RETURNING VALUE(ro_hash) TYPE REF TO lcl_lisp_hash
+                         RAISING   lcx_lisp_exception.
+
       CLASS-METHODS from_list IMPORTING list           TYPE REF TO lcl_lisp
                                         msg            TYPE string
                               RETURNING VALUE(ro_hash) TYPE REF TO lcl_lisp_hash
@@ -1709,19 +1722,7 @@
                      RAISING   lcx_lisp_exception.
       METHODS get_hash_keys RETURNING VALUE(result) TYPE REF TO lcl_lisp.
 
-      METHODS eval IMPORTING environment   TYPE REF TO lcl_lisp_environment
-                             interpreter   TYPE REF TO lcl_lisp_interpreter
-                   RETURNING VALUE(result) TYPE REF TO lcl_lisp_hash
-                   RAISING   lcx_lisp_exception.
-
     PROTECTED SECTION.
-      TYPES: BEGIN OF ts_hash,
-               key     TYPE string,
-               element TYPE REF TO lcl_lisp,
-             END OF ts_hash.
-      TYPES tt_hash TYPE HASHED TABLE OF ts_hash WITH UNIQUE KEY key.
-      DATA hash TYPE tt_hash.
-
       METHODS fill IMPORTING list TYPE REF TO lcl_lisp
                    RAISING   lcx_lisp_exception.
   ENDCLASS.                    "lcl_lisp_hash DEFINITION
@@ -1729,6 +1730,7 @@
   CLASS lcl_lisp_vector DEFINITION INHERITING FROM lcl_lisp
     CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
+      DATA vector TYPE tt_lisp READ-ONLY.
 
       CLASS-METHODS init IMPORTING size             TYPE tv_index
                                    io_fill          TYPE REF TO lcl_lisp DEFAULT nil
@@ -1770,12 +1772,7 @@
       METHODS is_equal REDEFINITION.
       METHODS set_shared_structure REDEFINITION.
 
-      METHODS eval IMPORTING environment   TYPE REF TO lcl_lisp_environment
-                             interpreter   TYPE REF TO lcl_lisp_interpreter
-                   RETURNING VALUE(result) TYPE REF TO lcl_lisp_vector
-                   RAISING   lcx_lisp_exception lcx_lisp_escape.
     PROTECTED SECTION.
-      DATA vector TYPE tt_lisp.
       DATA mo_length TYPE REF TO lcl_lisp.
   ENDCLASS.
 
@@ -2076,12 +2073,14 @@
 
     METHOD throw.
       RAISE EXCEPTION TYPE lcx_lisp_escape
-        EXPORTING is_cont = is_cont.
+        EXPORTING is_cont = ms_cont
+                  io_param = mo_param.
     ENDMETHOD.
 
     METHOD constructor.
       super->constructor(  ).
       ms_cont = is_cont.
+      mo_param = io_param.
     ENDMETHOD.
 
     METHOD get_text.
@@ -2092,7 +2091,7 @@
       " install the passed continuation as the continuation for the currently
       " executing procedure overriding the previous implicit continuation.
 *      IF cont NE ms_cont.
-*        throw( ms_cont ).
+*        throw( ).
 *      ENDIF.
 
       rs_cont = ms_cont.
@@ -2108,28 +2107,27 @@
   CLASS lcl_lisp_escape DEFINITION INHERITING FROM lcl_lisp
     CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
-      DATA cont TYPE ts_continuation READ-ONLY.
-
       METHODS constructor IMPORTING cont TYPE ts_continuation
+                                    param TYPE REF TO lcl_lisp
                           RAISING lcx_lisp_escape.
 
       METHODS escape IMPORTING is_cont TYPE ts_continuation
                      RETURNING VALUE(ro_cont) TYPE ts_continuation
                      RAISING lcx_lisp_escape.
+    PRIVATE SECTION.
+      DATA error TYPE REF TO lcx_lisp_escape.
   ENDCLASS.
 
   CLASS lcl_lisp_escape IMPLEMENTATION.
 
     METHOD constructor.
       super->constructor( type_escape_proc ).
-      me->cont = cont.
+      me->error = NEW #( is_cont = cont
+                         io_param = param ).
     ENDMETHOD.
 
     METHOD escape.
-      IF is_cont NE cont.
-        lcx_lisp_escape=>throw( is_cont = is_cont ).
-      ENDIF.
-      ro_cont = cont.
+      RAISE EXCEPTION error.
     ENDMETHOD.
 
   ENDCLASS.
@@ -3826,20 +3824,6 @@
       _validate_tail cs_cont-elem->cdr lo_head space.
     ENDMETHOD.
 
-*    METHOD eval_list.
-*      _validate io_head.
-*      result = nil.
-*
-*      DATA(elem) = io_head.
-*      WHILE elem IS BOUND AND elem->type EQ type_pair.
-*        result = eval_ast( element = elem->car
-*                           environment = io_environment ).
-*        elem = elem->cdr.
-*      ENDWHILE.
-*
-*      _validate_tail elem io_head space.
-*    ENDMETHOD.
-
     METHOD lambda_environment.
       DATA lo_args TYPE REF TO lcl_lisp.
 *     The function (LAMBDA) receives its own local environment in which to execute,
@@ -4116,12 +4100,16 @@
           result = eval( cont ).
 
         WHEN type_hash. " TEST
-          result = CAST lcl_lisp_hash( cont-elem )->eval( environment = cont-env
-                                                          interpreter = me ).
+          result = lcl_lisp_hash=>new( it_hash = VALUE #( FOR ls_entry IN CAST lcl_lisp_hash( cont-elem )->hash
+                                                          ( VALUE #( key = ls_entry-key
+                                                                     element = eval( VALUE #( BASE cont
+                                                                                        elem = ls_entry-element ) ) ) ) ) ).
 
         WHEN type_vector. " TEST
-          result = CAST lcl_lisp_vector( cont-elem )->eval( environment = cont-env
-                                                            interpreter = me ).
+          result = lcl_lisp_new=>vector( it_vector = VALUE tt_lisp( FOR lo_elem IN CAST lcl_lisp_vector( cont-elem )->vector
+                                                        ( eval( VALUE #( BASE cont
+                                                                         elem = lo_elem ) ) ) )
+                                         iv_mutable = abap_true ).
 
         WHEN OTHERS.
 *         otherwise just return the original AST value
@@ -4141,8 +4129,6 @@
 
     DEFINE _tail_sequence.
       IF cont-elem NE nil.
-*       result = eval_list( io_head = lo_elem
-*                           io_environment = lo_env ).
         result = eval_list_tco( CHANGING cs_cont = cont ).
         _tail_expression cont-elem.
       ELSEIF cont-env->top_level EQ abap_false.
@@ -4730,7 +4716,8 @@
                                                     io_cdr = lo_head->cdr         " Body
                                                     io_env = cont-env ).
                     " capture the current execution state
-                    DATA(lo_escape_proc) = lcl_lisp_new=>escape( value = cont ).
+                    DATA(lo_escape_proc) = lcl_lisp_new=>escape( value = cont
+                                                                 param = lo_head->car ).
 
                     cont-env = lambda_environment( io_head = lo_proc
                                                    io_args = lo_escape_proc
@@ -4819,18 +4806,18 @@
 
         ENDCASE.
 
+          CATCH lcx_lisp_escape INTO DATA(lx_esc).
+              " rinstall the passed continuation as the continuation for the currently
+              " executing procedure overriding the previous implicit continuation.
+               cont = lx_esc->new_continuation( cont ).
+
+              _tail_sequence.
+        ENDTRY.
+
 *       Circular references
         result->set_shared_structure( ).
         _trace_result result.
         RETURN.
-
-          CATCH lcx_lisp_escape INTO DATA(lx_esc).
-              " install the passed continuation as the continuation for the currently
-              " executing procedure overriding the previous implicit continuation.
-               cont = lx_esc->new_continuation( cont ).
-
-               _tail_sequence.
-        ENDTRY.
 
       ENDDO.
 
@@ -11158,14 +11145,18 @@
     ENDMETHOD.
 
     METHOD atom.
+      CONSTANTS:
+        c_true_alternative TYPE string VALUE '#true',
+        c_false_alternative TYPE string VALUE '#false'.
+
       CASE value.
         WHEN space.
           ro_elem = lcl_lisp=>nil.  " or EOF_OBJECT?
 
-        WHEN lcl_lisp=>true->value.
+        WHEN lcl_lisp=>true->value OR c_true_alternative.
           ro_elem = lcl_lisp=>true.
 
-        WHEN lcl_lisp=>false->value.
+        WHEN lcl_lisp=>false->value OR c_false_alternative.
           ro_elem = lcl_lisp=>false.
 
         WHEN OTHERS.
@@ -11588,7 +11579,8 @@
     METHOD escape.
       " capture procedure - converts the implicit continuation passed to call-with-current-continuation
       " into some kind of Scheme object with unlimited extent (we use a special kind of procedure)
-      DATA(lo_esc) = NEW lcl_lisp_escape( cont = value ).
+      DATA(lo_esc) = NEW lcl_lisp_escape( cont = value
+                                          param = param ).
       ro_elem = box_quote( lo_esc ).
     ENDMETHOD.
 
@@ -11683,15 +11675,9 @@
 *----------------------------------------------------------------------*
   CLASS lcl_lisp_hash IMPLEMENTATION.
 
-    METHOD eval.
-      result = NEW lcl_lisp_hash( type_hash ).
-
-      LOOP AT hash INTO DATA(ls_entry).
-        INSERT VALUE #( key = ls_entry-key
-                        element = interpreter->eval( VALUE #( elem = ls_entry-element
-                                                              env = environment ) ) ) INTO TABLE result->hash.
-      ENDLOOP.
-
+    METHOD new.
+      ro_hash = NEW lcl_lisp_hash( type_hash ).
+      ro_hash->hash = it_hash.
     ENDMETHOD.
 
     METHOD fill.
@@ -11902,13 +11888,6 @@
         RETURN.
       ENDLOOP.
       result = true.
-    ENDMETHOD.
-
-    METHOD eval.
-      result = lcl_lisp_new=>vector( it_vector = VALUE tt_lisp( FOR lo_elem IN vector
-                                                    ( interpreter->eval( VALUE #( elem = lo_elem
-                                                                                  env = environment ) ) ) )
-                                     iv_mutable = abap_true ).
     ENDMETHOD.
 
     METHOD set_shared_structure.

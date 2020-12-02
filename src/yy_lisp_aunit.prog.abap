@@ -3980,6 +3980,7 @@ ENDCLASS.                    "ltc_vector IMPLEMENTATION
 
        METHODS bytevector_0 FOR TESTING.
        METHODS bytevector_1 FOR TESTING.
+       METHODS bytevector_2 FOR TESTING.
 
        METHODS bytevector_length_0 FOR TESTING.
        METHODS bytevector_length_1 FOR TESTING.
@@ -4036,6 +4037,11 @@ ENDCLASS.                    "ltc_vector IMPLEMENTATION
      METHOD bytevector_1.
        scheme( code = |(bytevector)|
                expected = |#u8()| ).
+     ENDMETHOD.
+
+     METHOD bytevector_2.
+       scheme( code = |#u8(0 #e1e2 #xff)|
+               expected = |#u8( 0 100 255)| ).
      ENDMETHOD.
 
      METHOD bytevector_length_0.
