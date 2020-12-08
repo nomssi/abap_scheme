@@ -247,6 +247,7 @@
        METHODS detect_errors_0 FOR TESTING.
        METHODS detect_errors_1 FOR TESTING.
        METHODS detect_errors_2 FOR TESTING.
+       METHODS detect_errors_3 FOR TESTING.
    ENDCLASS.                    "ltc_parse DEFINITION
 
 *----------------------------------------------------------------------*
@@ -330,6 +331,11 @@
      METHOD detect_errors_2.
        assert_parse( code = '(define h (lambda (x) (if (x = 0) 1 2 3)))'
                      expected = 'Eval: Parse Error' ).
+     ENDMETHOD.
+
+     METHOD detect_errors_3.
+       assert_parse( code = '(define 1 x)'
+                     expected = 'Eval: 1 cannot be a variable identifier' ).
      ENDMETHOD.
 
    ENDCLASS.                    "ltc_parse IMPLEMENTATION
@@ -612,6 +618,9 @@
        METHODS quasiquote_9 FOR TESTING.
        METHODS quasiquote_10 FOR TESTING.
        METHODS quasiquote_11 FOR TESTING.
+
+       METHODS quine_1 FOR TESTING.
+       METHODS quine_2 FOR TESTING.
 
    ENDCLASS.                    "ltc_quote DEFINITION
 
@@ -2169,8 +2178,15 @@
      ENDMETHOD.                    "to_exact_1
 
      METHOD to_exact_2.
-       scheme( code = '(exact 3e10)'
-               expected = '30000000000' ).
+       DATA lv_int TYPE tv_int.
+       TRY.
+           lv_int = '3e10'.
+           scheme( code = '(exact 3e10)'
+                   expected = '30000000000' ).
+       CATCH cx_sy_conversion_no_number.
+           scheme( code = '(exact 3e10)'
+                   expected = 'Eval: no exact representation of 30000000000.0' ).
+       ENDTRY.
      ENDMETHOD.
 
      METHOD to_inexact_1.
@@ -2810,7 +2826,7 @@
                                                                       value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
          CATCH cx_root.
            scheme( code =  '(random 100000000000000)'
-                   expected = |Eval: 100000000000000 is not an integer in [random]| ).
+                   expected = |Eval: 100000000000000.0 is not an integer in [random]| ).
        ENDTRY.
      ENDMETHOD.                    "math_modulo
 
@@ -4041,7 +4057,7 @@ ENDCLASS.                    "ltc_vector IMPLEMENTATION
 
      METHOD bytevector_2.
        scheme( code = |#u8(0 #e1e2 #xff)|
-               expected = |#u8( 0 100 255)| ).
+               expected = |#u8( #x00 #x64 #xFF )| ).
      ENDMETHOD.
 
      METHOD bytevector_length_0.
@@ -5378,6 +5394,22 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = |'(quasiquote (list (unquote (+ 1 2)) 4))|
                expected = '` ( list , ( + 1 2 ) 4 )' ).
      ENDMETHOD.                    "quasiquote_11
+
+     METHOD quine_1.
+       scheme( code = |  ((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))) | &
+                      |                   '(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))))) | &
+                      |   (lambda (q) `(,q ',q)) | &
+                      |   '(lambda (q) `(,q ',q)))|
+                 expected = |((lambda ( q qq) ((lambda ( x ) `((lambda (q qq ) ,( q x )) . ,( q qq )))| &
+                            |'(lambda ( x ) `((lambda ( q qq ) ,( q x )) . ,( q qq ))))) | &
+                            |(lambda ( q ) `(,q ',q)) | &
+                            |'(lambda ( q ) `(,q ',q)))| ).
+     ENDMETHOD.
+
+     METHOD quine_2.
+       scheme( code =     |( ( lambda ( x ) `(,( reverse x ) ',x ) ) '(`(,( reverse x ) ',x ) ( x ) lambda) )|
+               expected = |( ( lambda ( x ) `( ,( reverse x ) ',x ) ) '(`( ,( reverse x ) ',x ) ( x ) lambda ) )| ).
+     ENDMETHOD.
 
    ENDCLASS.                    "ltc_quote IMPLEMENTATION
 

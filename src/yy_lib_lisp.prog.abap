@@ -69,11 +69,12 @@
   CONSTANTS:
     c_decimal_digits TYPE char10 VALUE '0123456789',
     c_hex_digits     TYPE c LENGTH 16 VALUE '0123456789ABCDEF',
-    c_abcde          TYPE string VALUE `ABCDEFGHIJKLMNOPQRSTUVWXYZ`. " sy-abcde
+    c_abcde          TYPE string VALUE `ABCDEFGHIJKLMNOPQRSTUVWXYZ`, " sy-abcde
+    c_special TYPE string VALUE '!$%&*/:<=>?@^_~'.
 
   TYPES tv_char TYPE c LENGTH 1.
-  TYPES tv_int TYPE int8.         " integer data type i, use int8 if available
-  CONSTANTS c_max_int TYPE tv_int VALUE cl_abap_math=>max_int8.  "  cl_abap_math=>max_int4.
+  TYPES tv_int TYPE i.                      " integer data type, use int8 and max_int8 if available
+  CONSTANTS c_max_int TYPE tv_int VALUE cl_abap_math=>max_int4.  "  cl_abap_math=>max_int8.
 
   TYPES tv_index TYPE tv_int.
   TYPES tv_real TYPE decfloat34.  " floating point data type
@@ -755,6 +756,7 @@
     METHOD constructor.
       super->constructor( type_boolean ).
       me->value = value.
+      me->mutable = abap_false.
     ENDMETHOD.
 
   ENDCLASS.
@@ -782,9 +784,16 @@
       METHODS is_exact RETURNING VALUE(result) TYPE REF TO lcl_lisp.
       METHODS is_inexact RETURNING VALUE(result) TYPE REF TO lcl_lisp.
       DATA exact TYPE flag READ-ONLY.
+    PROTECTED SECTION.
+      METHODS constructor IMPORTING type TYPE tv_type.
   ENDCLASS.
 
   CLASS lcl_lisp_number IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( type ).
+      mutable = abap_false.
+    ENDMETHOD.
 
     METHOD is_exact.
       result = false.
@@ -851,7 +860,8 @@
       CLASS-METHODS new IMPORTING nummer        TYPE tv_int
                                   denom         TYPE tv_int
                                   iv_exact      TYPE flag
-                        RETURNING VALUE(result) TYPE REF TO lcl_lisp_integer.
+                        RETURNING VALUE(result) TYPE REF TO lcl_lisp_integer
+                        RAISING   lcx_lisp_exception.
 
       DATA denominator TYPE tv_int READ-ONLY.
       METHODS to_string REDEFINITION.
@@ -862,7 +872,8 @@
     PROTECTED SECTION.
       METHODS constructor IMPORTING nummer TYPE tv_int
                                     denom  TYPE tv_int
-                                    iv_exact TYPE flag.
+                                    iv_exact TYPE flag
+                          RAISING lcx_lisp_exception.
       METHODS normalize RAISING lcx_lisp_exception.
   ENDCLASS.
 
@@ -914,6 +925,9 @@
                      d = denominator ).
       int = trunc( int / g ).
       denominator = trunc( denominator / g ).
+      IF int = 0 AND denominator = 0.
+        throw( `invalid rational 0/0 - NaN` ).
+      ENDIF.
       IF denominator LT 0.
         int = - int.
         denominator = - denominator.
@@ -1143,6 +1157,7 @@
       super->constructor( type_symbol ).
       me->index = index.
       me->value = value.
+      me->mutable = abap_false.
     ENDMETHOD.
 
   ENDCLASS.
@@ -1276,12 +1291,17 @@
   CLASS lcl_lisp_new DEFINITION.
     PUBLIC SECTION.
       CLASS-METHODS atom IMPORTING value          TYPE string
-                         RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+                         RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
+                         RAISING   lcx_lisp_exception.
       CLASS-METHODS null RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS undefined RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS symbol IMPORTING value          TYPE any
                                      index          TYPE tv_int OPTIONAL
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_symbol.
+      CLASS-METHODS identifier IMPORTING value          TYPE any
+                                         index          TYPE tv_int OPTIONAL
+                               RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_symbol
+                               RAISING   lcx_lisp_exception.
       CLASS-METHODS boolean IMPORTING value          TYPE any
                             RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS integer IMPORTING value          TYPE any
@@ -2768,6 +2788,7 @@
   CLASS lcl_parser IMPLEMENTATION.
 
     METHOD constructor.
+    " <delimiter> -> <whitespace> | <vertical line> | ( | ) | " | ;
 *     End of line value
       mv_eol = cl_abap_char_utilities=>newline.
 *     Whitespace values
@@ -3016,6 +3037,15 @@
     ENDMETHOD.                    "parse_list
 
     METHOD match_string.
+  "  <string> -> " <string element>* "
+  "  <string element> -> <any character other than " or \> | <mnemonic escape> | \" | \\ | \|
+  "                      | \<intraline whitespace>*<line ending> <intraline whitespace>*
+  "                      | <inline hex escape>
+  "  <mnemonic escape> -> \a | \b | \t | \n | \r
+  "  <inline hex escape> -> \x<hex scalar value>;
+  "  <intraline whitespace> -> <space or tab>
+  "  <line ending> -> <newline> | <return> <newline> | <return>
+
       CONSTANTS:
         c_esc_a          TYPE char1 VALUE 'a',
         c_esc_b          TYPE char1 VALUE 'b',
@@ -3077,8 +3107,8 @@
               pchar = lcl_lisp=>char_return->value+0(1).
               next_char( ).
 
-            WHEN c_lisp_xx+0(1) OR c_lisp_xx+1(1).      " hex scalar value terminated by semi-colon ;
-              DATA lv_xstr TYPE string.
+            WHEN c_lisp_xx+0(1) OR c_lisp_xx+1(1).      " inline hex escape:
+              DATA lv_xstr TYPE string.                 " hex scalar value terminated by semi-colon ;
               DATA lo_char TYPE REF TO lcl_lisp_char.
               next_char( ).
               CLEAR lv_xstr.
@@ -3155,6 +3185,8 @@
     END-OF-DEFINITION.
 
     METHOD parse_token.
+    "<token> -> <identifier> | <boolean> | <number> | <character> |
+    "           <string> | ( | ) | #( | #u8( | ' | ` | , | ,@ | .
       DATA sval TYPE string.
 
       skip_whitespace( ).
@@ -3171,7 +3203,7 @@
           element = lcl_lisp_new=>quote( parse_token( ) ).
           RETURN.
 
-        WHEN c_lisp_backquote.     " Quasiquote, TO DO
+        WHEN c_lisp_backquote.     " Quasiquote
           next_char( ).            " Skip past single quote
           element = lcl_lisp_new=>quasiquote( parse_token( ) ).
           RETURN.
@@ -3200,6 +3232,9 @@
               element = lcl_lisp_vector=>from_list( io_list = parse_list( )
                                                     iv_mutable = abap_false ).
               RETURN.
+
+" <character> -> #\ <any character> | #\ <character name> | #\x<hex scalar value>
+" <character name> -> alarm | backspace | delete | escape | newline | null | return | space | tab
 
             WHEN c_escape_char.  " Character constant  #\a
               next_char( ).      " skip #
@@ -7674,6 +7709,7 @@
       DATA lo_real TYPE REF TO lcl_lisp_real.
       DATA lv_denom TYPE tv_int.
       DATA lv_nummer TYPE tv_int.
+      DATA lv_error TYPE flag VALUE abap_false.
 
       _validate list.
       _validate_number list->car `exact`.
@@ -7692,11 +7728,18 @@
               lv_denom = round( val = lv_nummer / lo_real->real dec = 0 ).
             ENDIF.
 
-            result = lcl_lisp_new=>rational( nummer = lv_nummer
-                                             denom = lv_denom ).
+            TRY.
+                result = lcl_lisp_new=>rational( nummer = lv_nummer
+                                                 denom = lv_denom ).
+            CATCH lcx_lisp_exception.
+               lv_error = abap_true.
+            ENDTRY.
           WHEN OTHERS.
-            throw( |no exact representation of { lo_number->to_string( ) }| ).
+            lv_error = abap_true.
         ENDCASE.
+      ENDIF.
+      IF lv_error = abap_true.
+        throw( |no exact representation of { lo_number->to_string( ) }| ).
       ENDIF.
     ENDMETHOD.
 
@@ -11163,8 +11206,8 @@
           TRY.
               ro_elem = number( value = value ).
             CATCH cx_sy_conversion_no_number.
-*             otherwise treat it as a symbol
-              ro_elem = symbol( value ).
+*             otherwise treat it as an indentifier
+              ro_elem = identifier( value ).
           ENDTRY.
       ENDCASE.
     ENDMETHOD.                    "new_atom
@@ -11195,6 +11238,168 @@
       <xchar> = <xword>.
     ENDMETHOD.
 
+    METHOD identifier.
+      CONSTANTS:
+        c_dot    TYPE char1 VALUE '.',
+        c_at    TYPE char1 VALUE '@',
+        c_vertical_line TYPE char1 VALUE '|',
+        c_explicit_sign TYPE string VALUE '+-'.
+" <identifier> -> <initial> <subsequent>* |  <vertical line> <symbol element>* <vertical line> | <peculiar identifier>
+" <initial> -> <letter> | <special initial>
+" <letter> -> a | b | c | ... | z | A | B | C | ... | Z
+" <special initial> -> ! | $ | % | & | * | / | : | < | = | > | ? | @ | ^ | _ | ~
+" <subsequent> -> <initial> | <digit> | <special subsequent>
+" <digit> -> 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+" <hex digit> -> <digit> | a | b | c | d | e | f
+" <explicit sign> -> + | -
+" <special subsequent> -> <explicit sign> | . | @
+" <inline hex escape> -> \x<hex scalar value>
+
+"<peculiar identifier> -> <explicit sign>
+"  | <explicit sign> <sign subsequent> <subsequent>*
+"  | <explicit sign> . <hdot subsequent> subsequent>*
+"  | . <dot subsequent> <subsequent>*
+"<dot subsequent> -> <sign subsequent> | .
+"<sign subsequent> -> <initial> | <explicit sign> | @
+
+      DATA lv_char TYPE c LENGTH 1.
+      DATA lv_symbol TYPE string.
+      DATA lv_index TYPE sytabix.
+      DATA lv_len_1 TYPE i.
+      DATA lv_escape_mode TYPE flag.
+      DATA lv_escape_hex_mode TYPE flag.
+      DATA lv_escape_char TYPE string.
+
+      lv_len_1 = numofchar( value ) - 1.
+      IF lv_len_1 LT 0.
+        lcl_lisp=>throw( |Missing Identifier| ).
+      ENDIF.
+
+      " initial
+      lv_char = value+lv_index(1).
+      IF to_upper( lv_char ) CO c_abcde.
+        " letter
+      ELSEIF lv_char CO c_special.
+        " special initial
+      ELSEIF lv_char EQ c_vertical_line.
+        " search symbol element
+        DO lv_len_1 TIMES.
+          lv_index = lv_index + 1.
+          lv_char = value+lv_index(1).
+
+          CASE lv_char.
+            WHEN '\'.
+              IF lv_escape_mode = abap_false.
+                lv_escape_mode = abap_true.
+                lv_escape_hex_mode = abap_false.
+                CLEAR lv_escape_char.
+              ELSE.
+                lcl_lisp=>throw( |Identifier { value } not valid.| ).
+              ENDIF.
+            WHEN ';'.
+              IF lv_escape_hex_mode = abap_true.
+                IF strlen( lv_escape_char ) LE 4.
+                  DATA(lo_char) = lcl_lisp_new=>charx( lv_escape_char ).
+                ELSE.
+                  lcl_lisp=>throw( |unknown char #\\x{ lv_escape_char } found| ).
+                ENDIF.
+
+                lv_char = lo_char->value.
+
+                lv_escape_mode = abap_false.
+                lv_escape_hex_mode = abap_false.
+              ENDIF.
+              CONCATENATE lv_symbol lv_char INTO lv_symbol RESPECTING BLANKS.
+
+            WHEN c_vertical_line.
+              IF lv_index NE lv_len_1.      "|2|s  len = 4, len_1 = 3
+                lcl_lisp=>throw( |Identifier { value } not valid.| ).
+              ENDIF.
+            WHEN OTHERS.
+              IF lv_escape_mode EQ abap_true.
+                IF lv_escape_hex_mode EQ abap_true.
+                  lv_char = to_upper( lv_char ).
+                  CONCATENATE lv_escape_char lv_char INTO lv_escape_char RESPECTING BLANKS.
+                ELSE.
+                  CASE lv_char.
+                    WHEN 'x' OR 'X'.
+                      lv_escape_hex_mode = abap_true.
+
+                    WHEN 't'.
+                      lv_char = lcl_lisp=>char_tab->value+0(1).
+                      CONCATENATE lv_symbol lv_char INTO lv_symbol RESPECTING BLANKS.
+                      lv_escape_mode = abap_false.
+                    WHEN 'n'.
+                      lv_char = lcl_lisp=>char_newline->value+0(1).
+                      CONCATENATE lv_symbol lv_char INTO lv_symbol RESPECTING BLANKS.
+                      lv_escape_mode = abap_false.
+                    WHEN 'r'.
+                      lv_char = lcl_lisp=>char_return->value+0(1).
+                      CONCATENATE lv_symbol lv_char INTO lv_symbol RESPECTING BLANKS.
+                      lv_escape_mode = abap_false.
+                    WHEN 'a'.
+                      lv_char = lcl_lisp=>char_alarm->value+0(1).
+                      CONCATENATE lv_symbol lv_char INTO lv_symbol RESPECTING BLANKS.
+                      lv_escape_mode = abap_false.
+                    WHEN 'b'.
+                      lv_char = lcl_lisp=>char_backspace->value+0(1).
+                      CONCATENATE lv_symbol lv_char INTO lv_symbol RESPECTING BLANKS.
+                      lv_escape_mode = abap_false.
+                  ENDCASE.
+                ENDIF.
+              ELSE.
+                CONCATENATE lv_symbol lv_char INTO lv_symbol RESPECTING BLANKS.
+              ENDIF.
+          ENDCASE.
+        ENDDO.
+        IF lv_char = c_vertical_line.
+          " lv_symbol might be empty,  || is valid
+          ro_elem = NEW lcl_lisp_symbol( value = lv_symbol
+                                         index = index ).
+          RETURN.
+        ELSE.
+          lcl_lisp=>throw( |Identifier { value } not valid.| ).
+        ENDIF.
+
+      ELSE.
+        " if peculiar identifier
+        IF lv_char CO c_explicit_sign.
+          " TO DO
+        ELSEIF lv_char EQ c_dot.
+          " TO DO
+        ELSE.
+            " if not peculiar identifier
+            lcl_lisp=>throw( |Identifier { value } not valid.| ).
+        ENDIF.
+        ro_elem = NEW lcl_lisp_symbol( value = value
+                                       index = index ).
+        RETURN.
+      ENDIF.
+      " subsequent
+      DO lv_len_1 TIMES.
+        lv_index = lv_index + 1.
+        lv_char = value+lv_index(1).
+
+        IF to_upper( lv_char ) CO c_abcde.
+          " letter
+        ELSEIF lv_char CO c_special.
+          " special initial
+        ELSEIF lv_char CO c_decimal_digits.
+          " digit
+        ELSEIF lv_char CO c_explicit_sign.
+          " special subsequent
+        ELSEIF lv_char CO c_dot.
+          " special subsequent
+        ELSEIF lv_char CO c_at.
+          " special subsequent
+        ELSE.
+          lcl_lisp=>throw( |Identifier { value } not valid.| ).
+        ENDIF.
+      ENDDO.
+      ro_elem = NEW lcl_lisp_symbol( value = value
+                                     index = index ).
+    ENDMETHOD.
+
     METHOD symbol.
       ro_elem = NEW lcl_lisp_symbol( value = value
                                      index = index ).
@@ -11207,6 +11412,7 @@
     METHOD null.
       ro_elem = NEW lcl_lisp_null( type_null ).
       ro_elem->value = c_lisp_nil.
+      ro_elem->mutable = abap_false.
     ENDMETHOD.
 
     METHOD undefined.
@@ -11244,16 +11450,25 @@
 
           TRY.
               lv_nummer_str = value.
-              IF NOT contains( val = lv_nummer_str sub = '.' ) OR iv_exact EQ abap_true.
+              IF NOT contains_any_of( val = lv_nummer_str sub = '.eE' ) OR iv_exact EQ abap_true.
                 MOVE EXACT value TO lv_int.
                 ro_elem = integer( value = lv_int
                                    iv_exact = abap_true ).
                 RETURN.
               ENDIF.
-            CATCH cx_sy_conversion_error ##NO_HANDLER.
+            CATCH cx_sy_conversion_error.
+              TRY.
+                  IF iv_exact EQ abap_true.
+                    MOVE EXACT lv_real TO lv_int.
+                    ro_elem = integer( value = lv_int
+                                       iv_exact = abap_true ).
+                    RETURN.
+                  ENDIF.
+                CATCH cx_sy_conversion_error ##NO_HANDLER.
+              ENDTRY.
           ENDTRY.
 
-          IF contains( val = lv_nummer_str sub = '.' ) AND iv_exact EQ abap_true.
+          IF contains_any_of( val = lv_nummer_str sub = '.eE' ) AND iv_exact EQ abap_true.
             DATA lv_int_str TYPE string.
             DATA lv_dec_str TYPE string.
             SPLIT lv_nummer_str AT lcl_parser=>c_lisp_dot INTO lv_int_str lv_dec_str.
@@ -11264,7 +11479,7 @@
               ro_elem = rational( nummer = lv_int
                                   denom = lv_denom
                                   iv_exact = iv_exact ).
-            CATCH cx_sy_conversion_overflow.
+            CATCH cx_sy_conversion_overflow cx_sy_conversion_no_number.
               ro_elem = real( value = lv_real
                               exact = abap_false ).
             ENDTRY.
@@ -11275,7 +11490,7 @@
                           exact = iv_exact ).
           RETURN.
 
-        CATCH cx_sy_conversion_error.
+        CATCH cx_sy_conversion_error INTO DATA(lx_conv_error).
 
           SPLIT value AT c_lisp_slash INTO lv_nummer_str lv_denom_str.
           IF sy-subrc EQ 0 AND lv_denom_str IS NOT INITIAL.
@@ -11626,7 +11841,7 @@
     METHOD quote.
       ro_elem = box( io_proc = lcl_lisp=>quote
                      io_elem = io_elem ).
-      ro_elem->cdr->mutable = abap_false.
+      ro_elem->mutable = ro_elem->cdr->mutable = abap_false.
     ENDMETHOD.
 
     METHOD box_quote.
