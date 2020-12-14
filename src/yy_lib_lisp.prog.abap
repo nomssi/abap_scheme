@@ -560,6 +560,7 @@
     type_null        TYPE tv_type VALUE '0',
     type_pair        TYPE tv_type VALUE 'C',
     type_lambda      TYPE tv_type VALUE 'L',
+    type_call_cc     TYPE tv_type VALUE 'k',
     type_case_lambda TYPE tv_type VALUE 'A',
     type_native      TYPE tv_type VALUE 'n',
     type_primitive   TYPE tv_type VALUE 'I',
@@ -2073,7 +2074,7 @@
         skip_whitespace
           RETURNING VALUE(rv_has_next) TYPE flag
           RAISING   lcx_lisp_exception,
-        parse_list IMPORTING delim         TYPE char01 DEFAULT c_open_paren
+        parse_pair IMPORTING delim         TYPE char01 DEFAULT c_open_paren
                    RETURNING VALUE(result) TYPE REF TO lcl_lisp
                    RAISING   lcx_lisp_exception,
         parse_token RETURNING VALUE(element) TYPE REF TO lcl_lisp
@@ -2947,7 +2948,7 @@
       char = code+index(1).           "Kick off things by reading first char
       WHILE skip_whitespace( ).
         IF char = c_open_paren OR char = c_open_bracket OR char = c_open_curly.
-          APPEND parse_list( char ) TO elements.
+          APPEND parse_pair( char ) TO elements.
         ELSEIF index < length.
           APPEND parse_token( ) TO elements.
         ENDIF.
@@ -2966,14 +2967,14 @@
       char = code+index(1).           "Kick off things by reading first char
       skip_whitespace( ).
       IF char = c_open_paren OR char = c_open_bracket OR char = c_open_curly.
-        element = parse_list( char ).
+        element = parse_pair( char ).
       ELSEIF index < length.
         element = parse_token( ).
       ENDIF.
       ii_port->put( substring( val = code off = index ) ).
     ENDMETHOD.
 
-    METHOD parse_list.
+    METHOD parse_pair.
       DATA lo_cell TYPE REF TO lcl_lisp.
       DATA lv_empty_list TYPE boole_d VALUE abap_true.
       DATA lv_proper_list TYPE boole_d VALUE abap_true.
@@ -3193,7 +3194,7 @@
 *     create object cell.
       CASE char.
         WHEN c_open_paren OR c_open_bracket OR c_open_curly.
-          element = parse_list( char ).
+          element = parse_pair( char ).
           RETURN.
 
         WHEN c_lisp_quote.
@@ -3229,7 +3230,7 @@
           CASE peek_char( ).
             WHEN c_open_paren.   " Vector constant
               next_char( ).
-              element = lcl_lisp_vector=>from_list( io_list = parse_list( )
+              element = lcl_lisp_vector=>from_list( io_list = parse_pair( )
                                                     iv_mutable = abap_false ).
               RETURN.
 
@@ -3382,7 +3383,7 @@
                 next_char( ).      " skip #
                 next_char( ).      " skip U
                 next_char( ).      " skip 8
-                element = lcl_lisp_bytevector=>from_list( io_list = parse_list( )
+                element = lcl_lisp_bytevector=>from_list( io_list = parse_pair( )
                                                           iv_mutable = abap_false ).
                 RETURN.
               ENDIF.
@@ -4387,7 +4388,7 @@
                     CONTINUE.  "tail_expression lo_elem.
 
                   WHEN 'and'.
-*                   Derived expression: Conditional (and <expression>* >tail expression>)
+*                   Derived expression: Conditional (and <expression>* <tail expression>)
                     result = true.
                     DATA(lo_ptr) = lr_tail.
                     WHILE result NE false AND lo_ptr IS BOUND AND lo_ptr NE nil AND lo_ptr->cdr NE nil.
@@ -4482,6 +4483,24 @@
 
                     ENDIF.
 
+                  WHEN 'when'.
+                    result = nil.
+                    IF eval( VALUE #( BASE cont
+                                      elem = lr_tail->car ) ) NE false.
+                      "  _validate lr_tail->cdr. "I do not have a test case yet where it fails here
+                      cont-elem = lr_tail->cdr.
+                      _tail_sequence.
+                    ENDIF.
+
+                  WHEN 'unless'.
+                    result = nil.
+                    IF eval( VALUE #( BASE cont
+                                      elem = lr_tail->car ) ) EQ false.
+                      "  _validate lr_tail->cdr. "I do not have a test case yet where it fails here
+                      cont-elem = lr_tail->cdr.
+                      _tail_sequence.
+                    ENDIF.
+
                   WHEN 'begin'.
                     cont-elem = lr_tail.
 *                    _tail_sequence.
@@ -4528,24 +4547,6 @@
                                                          io_head = lr_tail ).
                     cont-elem = lr_tail->cdr.
                     _tail_sequence.
-
-                  WHEN 'unless'.
-                    result = nil.
-                    IF eval( VALUE #( BASE cont
-                                      elem = lr_tail->car ) ) EQ false.
-                      "  _validate lr_tail->cdr. "I do not have a test case yet where it fails here
-                      cont-elem = lr_tail->cdr.
-                      _tail_sequence.
-                    ENDIF.
-
-                  WHEN 'when'.
-                    result = nil.
-                    IF eval( VALUE #( BASE cont
-                                      elem = lr_tail->car ) ) NE false.
-                      "  _validate lr_tail->cdr. "I do not have a test case yet where it fails here
-                      cont-elem = lr_tail->cdr.
-                      _tail_sequence.
-                    ENDIF.
 
                   WHEN 'lambda'.
                     result = lcl_lisp_new=>lambda( io_car = lr_tail->car         " List of parameters
@@ -11222,7 +11223,14 @@
     ENDMETHOD.
 
     METHOD charx.
-      ro_elem = char( hex_to_char( value ) ).
+      DATA lv_str TYPE c LENGTH 4.
+
+      lv_str = value.
+      DATA(lv_times) = 4 - numofchar( lv_str ).
+      DO lv_times TIMES.
+        lv_str = '0' && lv_str.
+      ENDDO.
+      ro_elem = char( hex_to_char( lv_str ) ).
     ENDMETHOD.
 
     METHOD hex_to_char.
