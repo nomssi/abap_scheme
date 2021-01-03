@@ -207,7 +207,7 @@
      METHOD basic_multiple_expr.
 *   Evaluating multiple expressions
        scheme( code = '(define a (list 1 2 3 4)) (define b (cdr a)) a b'
-               expected = 'a b ( 1 2 3 4 ) ( 2 3 4 )' ).
+               expected = 'a b (1 2 3 4) (2 3 4)' ).
      ENDMETHOD.                    "basic_multiple_expr
 
      METHOD riff_shuffle_code.
@@ -242,6 +242,8 @@
        METHODS empty FOR TESTING.
        METHODS lambda FOR TESTING.
        METHODS lambda_comments FOR TESTING.
+       METHODS skip_comments FOR TESTING.
+       METHODS skip_comments_1 FOR TESTING.
        METHODS riff_shuffle FOR TESTING.
 
        METHODS string_controls_0 FOR TESTING.
@@ -299,23 +301,35 @@
 
      METHOD lambda.
        assert_parse( code = '(define a(lambda()20))'
-                     expected = |( define a ( lambda { c_lisp_nil } 20 ) )| ).
+                     expected = |(define a (lambda { c_lisp_nil } 20))| ).
      ENDMETHOD.                    "lambda
+
+     METHOD skip_comments.
+       scheme( code = |#; 234 (+ 3 4)|
+               expected = |7| ).
+     ENDMETHOD.
+
+     METHOD skip_comments_1.
+       scheme( code = |(if #f | &
+                      |#;(= 3 1)| &
+                      |(* 2 4) (- 10 3))|
+               expected = |7| ).
+     ENDMETHOD.
 
      METHOD lambda_comments.
        assert_parse( code = |;; Comments\n| &
                             |(define a(lambda()20)) ; comments|
-                     expected = |( define a ( lambda { c_lisp_nil } 20 ) )| ).
+                     expected = |(define a (lambda { c_lisp_nil } 20))| ).
      ENDMETHOD.                    "lambda
 
      METHOD riff_shuffle.
        assert_parse( code = riff_shuffle_code( )
                    expected =
-   |( define riff-shuffle ( lambda ( deck ) ( begin ( define take ( lambda| &
-   | ( n seq ) ( if ( <= n 0 ) ' { c_lisp_nil } ( cons ( car seq ) ( take ( - n 1 ) ( cdr seq ) ) ) ) ) )| &
-   | ( define drop ( lambda ( n seq ) ( if ( <= n 0 ) seq| &
-   | ( drop ( - n 1 ) ( cdr seq ) ) ) ) ) ( define mid ( lambda ( seq ) ( / ( length seq ) 2 ) ) )| &
-   | ( ( combine append ) ( take ( mid deck ) deck ) ( drop ( mid deck ) deck ) ) ) ) )|
+   |(define riff-shuffle (lambda (deck) (begin (define take (lambda| &
+   | (n seq) (if (<= n 0) '{ c_lisp_nil } (cons (car seq) (take (- n 1) (cdr seq))))))| &
+   | (define drop (lambda (n seq) (if (<= n 0) seq| &
+   | (drop (- n 1) (cdr seq))))) (define mid (lambda (seq) (/ (length seq) 2)))| &
+   | ((combine append) (take (mid deck) deck) (drop (mid deck) deck)))))|
              ).
      ENDMETHOD.                    "riff_shuffle
 
@@ -373,7 +387,7 @@
 
      METHOD write_escape.
        assert_parse( code = '(write "#\\")'
-                     expected = '( write "#\\" )' ).
+                     expected = '(write "#\\")' ).
 
        scheme( code = '(define output (open-output-string))'
                expected = 'output' ).
@@ -772,7 +786,7 @@
 
      METHOD quote_list123.
        scheme( code = '''(list 1 2 3)'
-               expected = '( list 1 2 3 )' ).
+               expected = '(list 1 2 3)' ).
      ENDMETHOD.                    "quote_list123
 
      METHOD begin_1.
@@ -866,7 +880,7 @@
                          |    (i 0 (+ i 1) ) )| &
                          |    ((= i 5) vec)| &
                          |   (vector-set! vec i i))|
-               expected = '#( 0 1 2 3 4 )' ).
+               expected = '#(0 1 2 3 4)' ).
      ENDMETHOD.                    "do_1
 
      METHOD do_2.
@@ -901,7 +915,7 @@
                       |    (i 1 (+ 1 i)) )| &
                       |((= i 9) (display lst output) )| &
                       |(set! lst (cons i lst)) )|
-               expected = '( 8 7 6 5 4 3 2 1 )' ).
+               expected = '(8 7 6 5 4 3 2 1)' ).
      ENDMETHOD.
 
      METHOD named_let_1.
@@ -914,7 +928,7 @@
                          |              (cons (remainder n 10) acc)))))|
                expected = 'number->list' ).
        scheme( code = |(number->list 239056)|
-               expected = '( 2 3 9 0 5 6 )' ).
+               expected = '(2 3 9 0 5 6)' ).
      ENDMETHOD.                    "named_let_1
 
      METHOD named_let_2.
@@ -930,7 +944,7 @@
                          |             (loop (cdr numbers)| &
                          |                    nonneg| &
                          |                    (cons (car numbers) neg)))))|
-               expected = '( ( 6 1 3 ) ( -5 -2 ) )' ).
+               expected = '((6 1 3) (-5 -2))' ).
      ENDMETHOD.                    "named_let_2
 
      METHOD named_let_3. " from Racket Guide
@@ -942,7 +956,7 @@
                           |    [else (cons (car lst) (dup (+ i 1) (cdr lst)))])))|
                expected = 'duplicate' ).
        scheme( code = |(duplicate 1 (list "apple" "cheese burger!" "banana"))|
-               expected = |( "apple" "cheese burger!" "cheese burger!" "banana" )| ).
+               expected = |("apple" "cheese burger!" "cheese burger!" "banana")| ).
      ENDMETHOD.                    "named_let_3
 
      METHOD let_no_body.
@@ -953,7 +967,7 @@
 
      METHOD define_no_body.
        scheme( code = |(define (comp? (a b) (eq? a b)))|
-               expected = 'Eval: ( comp? ( a b ) ( eq? a b ) ) no expression in body' ).
+               expected = 'Eval: (comp? (a b) (eq? a b)) no expression in body' ).
      ENDMETHOD.                    "define_no_body
 
      METHOD letrec_1.
@@ -1117,7 +1131,7 @@
        scheme( code = |(define-values (x y) (exact-integer-sqrt 17))|
                expected = 'x y' ).   " nicht definiert in r7rs
        scheme( code = |(list x y)|
-               expected = '( 4 1 )' ).
+               expected = '(4 1)' ).
      ENDMETHOD.
 
      METHOD define_values_1.
@@ -1284,7 +1298,7 @@
 
      METHOD list_is_boolean_2.
        scheme( code = |(boolean=? '(#t #f))|
-               expected = 'Eval: boolean=? missing boolean argument in ( #t #f )' ).
+               expected = 'Eval: boolean=? missing boolean argument in (#t #f)' ).
      ENDMETHOD.                    "list_is_boolean_2
 
      METHOD list_is_boolean_3.
@@ -1334,7 +1348,7 @@
 
      METHOD char_in_list.
        scheme( code = `'(#\A #\a)`
-               expected = '( "A" "a" )' ).
+               expected = '("A" "a")' ).
      ENDMETHOD.                    "char_in_list
 
      METHOD char_eq.
@@ -1802,7 +1816,7 @@
        scheme( code = | (input-port? p)|
                expected = '#t' ).
        scheme( code = | (read p)|
-               expected = '( a b c )' ).
+               expected = '(a b c)' ).
        scheme( code = | (read p)|
                expected = '34' ).
        scheme( code = | (eof-object? (peek-char p))|
@@ -1815,7 +1829,7 @@
                          |  (write (car x) q)| &
                          |  (write (cdr x) q)| &
                          |  (get-output-string q))|
-               expected = '"a ( b c )"' ).
+               expected = '"a (b c)"' ).
      ENDMETHOD.                    "output_string_1
 
      METHOD write_1.
@@ -1878,7 +1892,7 @@
 
      METHOD and_3.
        scheme( code = |(and 1 2 'c '(f g)) |
-               expected = '( f g )' ).
+               expected = '(f g)' ).
      ENDMETHOD.                    "and_3
 
      METHOD and_4.
@@ -1904,7 +1918,7 @@
      METHOD or_4.
        scheme( code = |(or (memq 'b '(a b c))| &
                          |(/ 3 0))|
-               expected = '( b c )' ).
+               expected = '(b c)' ).
      ENDMETHOD.                    "or_4
 
      METHOD cond_1.
@@ -2077,9 +2091,9 @@
        scheme( code = '(define zip (combine cons))'
                expected = 'zip' ).
        scheme( code = 'zip'
-               expected = '<lambda> ( x y )' ).
+               expected = '<lambda> (x y)' ).
        scheme( code = '(zip (list 1 2 3 4) (list 5 6 7 8))'
-               expected = '( ( 1 5 ) ( 2 6 ) ( 3 7 ) ( 4 8 ) )' ).
+               expected = '((1 5) (2 6) (3 7) (4 8))' ).
      ENDMETHOD.                    "functional_combine_zip
 
      METHOD functional_compose.
@@ -2091,11 +2105,11 @@
        scheme( code = riff_shuffle_code( )
                expected = 'riff-shuffle' ).
        scheme( code = '(riff-shuffle (list 1 2 3 4 5 6 7 8))'
-               expected = '( 1 5 2 6 3 7 4 8 )' ).
+               expected = '(1 5 2 6 3 7 4 8)' ).
        scheme( code = '((repeat riff-shuffle) (list 1 2 3 4 5 6 7 8))'
-               expected = '( 1 3 5 7 2 4 6 8 )' ).
+               expected = '(1 3 5 7 2 4 6 8)' ).
        scheme( code = '(riff-shuffle (riff-shuffle (riff-shuffle (list 1 2 3 4 5 6 7 8))))'
-               expected = '( 1 2 3 4 5 6 7 8 )' ).
+               expected = '(1 2 3 4 5 6 7 8)' ).
      ENDMETHOD.                    "functional_compose
 
      METHOD functional_fact_accum.
@@ -2142,6 +2156,7 @@
        METHODS exact_4 FOR TESTING.
        METHODS exact_5 FOR TESTING.
        METHODS exact_6 FOR TESTING.
+       METHODS exact_7 FOR TESTING.
 
        METHODS compare_eq FOR TESTING.
        METHODS compare_lt FOR TESTING.
@@ -2304,6 +2319,11 @@
 
      METHOD exact_6.
        scheme( code = '(exact? #i#xff)'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD exact_7.
+       scheme( code = '(exact? #xff#i)'
                expected = '#f' ).
      ENDMETHOD.
 
@@ -2717,7 +2737,7 @@
 
      METHOD math_expt_1.
        scheme( code =  '(exp 2 10)'
-               expected = 'Eval: ( 2 10 ) Parameter mismatch' ) ##literal.
+               expected = 'Eval: (2 10) Parameter mismatch' ) ##literal.
      ENDMETHOD.                    "math_expt_1
 
      METHOD math_sqrt.
@@ -2884,7 +2904,7 @@
        scheme( code =  '(begin (define a (random 1)) (or (= a 0) (= a 1)) )'
                expected = '#t' ).
        scheme( code =  '(random -5 4)'
-               expected = 'Eval: ( -5 4 ) Parameter mismatch' ).
+               expected = 'Eval: (-5 4) Parameter mismatch' ).
      ENDMETHOD.                    "math_modulo
 
      METHOD math_random_invalid.
@@ -3200,44 +3220,44 @@
      METHOD list_nil_1.
 *      changed to allow nil without quote
        scheme( code = '(list ())'
-               expected = |( { c_lisp_nil } )| ).
+               expected = |({ c_lisp_nil })| ).
      ENDMETHOD.                    "list_nil_1
 
      METHOD list_nil_2.
        scheme( code = '(list nil)'
-               expected = |( { c_lisp_nil } )| ).
+               expected = |({ c_lisp_nil })| ).
      ENDMETHOD.                    "list_nil_2
 
      METHOD list_test_1.
 *   Test list
        scheme( code = '(list 22 23 24)'
-               expected = '( 22 23 24 )' ).
+               expected = '(22 23 24)' ).
      ENDMETHOD.                    "list_test_1
 
      METHOD list_test_2.
        scheme( code = '(list 22 (list 23 24))'
-               expected = '( 22 ( 23 24 ) )' ).
+               expected = '(22 (23 24))' ).
      ENDMETHOD.                    "list_test_2
 
      METHOD list_append_0.
        scheme( code = |(append '(x) '(y))|
-               expected = '( x y )' ).
+               expected = '(x y)' ).
      ENDMETHOD.                    "list_append_0
 
      METHOD list_append_1.
 *   Test append
        scheme( code = '(append (list 22 (list 23 24)) 23)'
-               expected = '( 22 ( 23 24 ) . 23 )' ).
+               expected = '(22 (23 24) . 23)' ).
      ENDMETHOD.                    "list_append_1
 
      METHOD list_append_2.
        scheme( code = |(append '(1 3) '(4 6) '(9 12) '(56 90 91))|
-               expected = '( 1 3 4 6 9 12 56 90 91 )' ).
+               expected = '(1 3 4 6 9 12 56 90 91)' ).
      ENDMETHOD.                    "list_append_2
 
      METHOD list_append_3.
        scheme( code = '(append (list 1) (list 2))'
-               expected = '( 1 2 )' ).
+               expected = '(1 2)' ).
      ENDMETHOD.                    "list_append_3
 
      METHOD list_append_4.
@@ -3247,12 +3267,12 @@
 
      METHOD list_append_5.
        scheme( code = |(append (cons 5 6) (list 22 23))|
-               expected = 'Eval: append: ( 5 . 6 ) is not a proper list' ).
+               expected = 'Eval: append: (5 . 6) is not a proper list' ).
      ENDMETHOD.                    "list_append_5
 
      METHOD list_append_6.
        scheme( code = '(append (list 22 23) 4)'
-               expected = '( 22 23 . 4 )' ).
+               expected = '(22 23 . 4)' ).
      ENDMETHOD.                    "list_append_6
 
      METHOD list_append_7.
@@ -3262,22 +3282,22 @@
 
      METHOD list_append_8.
        scheme( code = |(append '(a) '(b c d))|
-               expected = '( a b c d )' ).
+               expected = '(a b c d)' ).
      ENDMETHOD.                    "list_append_8
 
      METHOD list_append_9.
        scheme( code = |(append '(a (b)) '((c)))|
-               expected = '( a ( b ) ( c ) )' ).
+               expected = '(a (b) (c))' ).
      ENDMETHOD.                    "list_append_9
 
      METHOD list_append_10.
        scheme( code = |(append '(a b) (cons 'c  'd))|
-               expected = '( a b c . d )' ).
+               expected = '(a b c . d)' ).
      ENDMETHOD.                    "list_append_10
 
      METHOD list_append_error.
        scheme( code = '(append (append (list 22 (list 23 24)) 23) 28)'  "Should give an error
-               expected = 'Eval: append: ( 22 ( 23 24 ) . 23 ) is not a proper list' ).
+               expected = 'Eval: append: (22 (23 24) . 23) is not a proper list' ).
      ENDMETHOD.                    "list_append_error
 
      METHOD list_append_arg_0.
@@ -3292,7 +3312,7 @@
 
      METHOD list_append_arg_2.
        scheme( code = |(append '(3))|
-               expected = '( 3 )' ).
+               expected = '(3)' ).
      ENDMETHOD.                    "list_append_arg_2
 
      METHOD list_length_0.
@@ -3329,12 +3349,12 @@
 
      METHOD list_memq_0.
        scheme( code = |(memq 'a '(a b c))|
-               expected = '( a b c )' ).
+               expected = '(a b c)' ).
      ENDMETHOD.                    "list_memq_0
 
      METHOD list_memq_1.
        scheme( code = |(memq 'b '(a b c))|
-               expected = '( b c )' ).
+               expected = '(b c)' ).
      ENDMETHOD.                    "list_memq_1
 
      METHOD list_memq_2.
@@ -3350,54 +3370,54 @@
      METHOD list_member_1.
        scheme( code = |(member (list 'a)| &
                          |        '(b (a) c))|
-               expected = '( ( a ) c )' ).
+               expected = '((a) c)' ).
      ENDMETHOD.                    "list_member_1
 
      METHOD list_member_2.
        scheme( code = |(define (comp? a b) (eq? a b))|
                expected = 'comp?' ).
        scheme( code = |(member 2 (list 1 2 3 4) comp?)|
-               expected = '( 2 3 4 )' ).
+               expected = '(2 3 4)' ).
      ENDMETHOD.                    "list_member_2
 
      METHOD list_member_3.
 *      This is the normal behavior in other Scheme
        scheme( code = |(member 7 '((1 3) (2 5) (3 7) (4 8)) (lambda (x y) (= x (cadr y))))|
-               expected = '( ( 3 7 ) ( 4 8 ) )' ).
+               expected = '((3 7) (4 8))' ).
      ENDMETHOD.                    "list_member_3
 
      METHOD list_member_4.
        scheme( code = |(member 7 '(1 2 3 4 5 6) (lambda (y z) (> z 3)) )|
-               expected = '( 4 5 6 )' ).
+               expected = '(4 5 6)' ).
      ENDMETHOD.                    "list_member_4
 
      METHOD list_member_5.
        scheme( code = |(member 2 (list 1 2 3 4) (lambda (x y) (= x y)) )|
-               expected = '( 2 3 4 )' ).
+               expected = '(2 3 4)' ).
      ENDMETHOD.                    "list_member_5
 
      METHOD list_memq_4.
        scheme( code = |(memq 101 '(100 101 102))|
-               expected = '( 101 102 )' ).  " unspecified!!
+               expected = '(101 102)' ).  " unspecified!!
      ENDMETHOD.                    "list_memq_4
 
      METHOD list_memv.
        scheme( code = |(memv 101 '(100 101 102))|
-               expected = '( 101 102 )' ).
+               expected = '(101 102)' ).
      ENDMETHOD.                    "list_memv
 
      METHOD list_assq_0.
        scheme( code = |(define e '((a 1) (b 2) (c 3)))|
                expected = 'e' ).
        scheme( code = |(assq 'a e)|
-               expected = '( a 1 )' ).
+               expected = '(a 1)' ).
      ENDMETHOD.                    "list_assq_0
 
      METHOD list_assq_1.
        scheme( code = |(define e '((a 1) (b 2) (c 3)))|
                expected = 'e' ).
        scheme( code = |(assq 'b e)|
-               expected = '( b 2 )' ).
+               expected = '(b 2)' ).
      ENDMETHOD.                    "list_assq_1
 
      METHOD list_assq_2.
@@ -3414,22 +3434,22 @@
 
      METHOD list_assq_4.
        scheme( code = |(assq 5 '((2 3) (5 7) (11 13)))|
-               expected = '( 5 7 )' ).   " unspecified
+               expected = '(5 7)' ).   " unspecified
      ENDMETHOD.                    "list_assq_4
 
      METHOD list_assv_0.
        scheme( code = |(assv 5 '((2 3) (5 7) (11 13)))|
-               expected = '( 5 7 )' ).
+               expected = '(5 7)' ).
      ENDMETHOD.                    "list_assv_0
 
      METHOD list_assoc_0.
        scheme( code = |(assoc 11 '((2 3) (5 7) (11 13)))|
-               expected = '( 11 13 )' ).
+               expected = '(11 13)' ).
      ENDMETHOD.                    "list_assoc_0
 
      METHOD list_assoc_1.
        scheme( code = |(assoc (list 'a) '(((a)) ((b)) ((c))))|
-               expected = '( ( a ) )' ).
+               expected = '((a))' ).
      ENDMETHOD.                    "list_assoc_1
 
      METHOD list_assoc_2.
@@ -3439,7 +3459,7 @@
 
      METHOD list_assoc_3.
        scheme( code = |(assoc 2.0 '((1 1) (2 4) (3 9)) =)|
-               expected = '( 2 4 )' ).
+               expected = '(2 4)' ).
      ENDMETHOD.                    "list_assoc_3
 
 * CAR & CDR test
@@ -3456,7 +3476,7 @@
 
      METHOD list_car_3.
        scheme( code = |(car '((a) b c d))|
-               expected = '( a )' ).
+               expected = '(a)' ).
      ENDMETHOD.                    "list_car_3
 
      METHOD list_car_4.
@@ -3471,12 +3491,12 @@
 
      METHOD list_cdr_1.
        scheme( code = '(cdr (list 22 (list 23 24)))'
-               expected = '( ( 23 24 ) )' ).
+               expected = '((23 24))' ).
      ENDMETHOD.                    "list_cdr_1
 
      METHOD list_cdr_2.
        scheme( code = |(cdr '((a) b c d))|
-               expected = '( b c d )' ).
+               expected = '(b c d)' ).
      ENDMETHOD.                    "list_cdr_1
 
      METHOD list_cdr_3.
@@ -3531,7 +3551,7 @@
 
      METHOD list_cadr_3.
        scheme( code = |(cadr '(1 (2 7)))|
-               expected = '( 2 7 )' ).
+               expected = '(2 7)' ).
      ENDMETHOD.                    "list_cadr_3
 
      METHOD list_cadr_4.
@@ -3551,7 +3571,7 @@
 
      METHOD list_cdar_3.
        scheme( code = |(cdar '((b c)  2))|
-               expected = '( c )' ).
+               expected = '(c)' ).
      ENDMETHOD.                    "list_cdar_3
 
      METHOD list_cdar_4.
@@ -3581,7 +3601,7 @@
 
      METHOD list_cddr_5.
        scheme( code = |(cddr '(1 2 6))|
-               expected = '( 6 )' ).
+               expected = '(6)' ).
      ENDMETHOD.                    "list_cddr_5
 
      METHOD list_caaaar_1.
@@ -3596,7 +3616,7 @@
 
      METHOD list_cdaaar_1.
        scheme( code = |(cdaaar '( ( ( ( 0 6 ) 7 ) 8 ) 1 2 6))|
-               expected = '( 6 )' ).
+               expected = '(6)' ).
      ENDMETHOD.
 
      METHOD list_c4xr.
@@ -3618,28 +3638,28 @@
        scheme( code = |(let ((x (list 'a 'b 'c)))| &
                          |  (set-cdr! (cddr x) x)| &
                          |  x)|
-               expected = '#0 = ( a b c . #0# )' ).
+               expected = '#0 = (a b c . #0#)' ).
      ENDMETHOD.                    "list_shared_1
 
      METHOD list_cons_two_lists.
 *   Test CONS
        scheme( code = '(cons (list 1 2) (list 3 4))'
-               expected = '( ( 1 2 ) 3 4 )' ).
+               expected = '((1 2) 3 4)' ).
      ENDMETHOD.                    "list_cons_two_lists
 
      METHOD list_cons_with_nil.
        scheme( code = '(cons 1 nil)'
-               expected = '( 1 )' ).
+               expected = '(1)' ).
      ENDMETHOD.                    "list_cons_with_nil
 
      METHOD list_cons_with_list.
        scheme( code = '(cons 2 (list 3 4))'
-               expected = '( 2 3 4 )' ).
+               expected = '(2 3 4)' ).
      ENDMETHOD.                    "list_cons_with_list
 
      METHOD list_cons_two_elems.
        scheme( code = '(cons 2 3)'
-               expected = '( 2 . 3 )' ).
+               expected = '(2 . 3)' ).
      ENDMETHOD.                    "list_cons_two_elems
 
      METHOD list_copy_1.
@@ -3650,9 +3670,9 @@
        scheme( code = |(set-car! b 3) ; b is mutable|
                expected = c_lisp_nil ).
        scheme( code = |a|
-               expected = '( 1 8 2 8 )' ).
+               expected = '(1 8 2 8)' ).
        scheme( code = |b|
-               expected = '( 3 8 2 8 )' ).
+               expected = '(3 8 2 8)' ).
      ENDMETHOD.                    "list_copy_1
 
      METHOD code_count.
@@ -3681,12 +3701,12 @@
 
      METHOD list_reverse_1.
        scheme( code = |(reverse '(a b c))|
-               expected = '( c b a )' ).
+               expected = '(c b a)' ).
      ENDMETHOD.                    "list_reverse_1
 
      METHOD list_reverse_2.
        scheme( code = |(reverse '(a (b c) d (e (f))))|
-               expected = '( ( e ( f ) ) d ( b c ) a )' ).
+               expected = '((e (f)) d (b c) a)' ).
      ENDMETHOD.                    "list_reverse_2
 
      METHOD list_pair_1.
@@ -3711,27 +3731,27 @@
 
      METHOD list_cons_1.
        scheme( code = |(cons 'a '())|
-               expected = '( a )' ).
+               expected = '(a)' ).
      ENDMETHOD.                    "list_cons_1
 
      METHOD list_cons_2.
        scheme( code = |(cons '(a) '(b c d))|
-               expected = '( ( a ) b c d )' ).
+               expected = '((a) b c d)' ).
      ENDMETHOD.                    "list_cons_2
 
      METHOD list_cons_3.
        scheme( code = |(cons "a" '(b c))|
-               expected = '( "a" b c )' ).
+               expected = '("a" b c)' ).
      ENDMETHOD.                    "list_cons_3
 
      METHOD list_cons_4.
        scheme( code = |(cons 'a 3)|
-               expected = '( a . 3 )' ).
+               expected = '(a . 3)' ).
      ENDMETHOD.                    "list_cons_4
 
      METHOD list_cons_5.
        scheme( code = |(cons '(a b) 'c)|
-               expected = '( ( a b ) . c )' ).
+               expected = '((a b) . c)' ).
      ENDMETHOD.                    "list_cons_5
 
      METHOD list_cons_error_1.
@@ -3748,17 +3768,17 @@
 
      METHOD list_make_list.
        scheme( code = '(make-list 5)'
-               expected = |( { c_lisp_nil } { c_lisp_nil } { c_lisp_nil } { c_lisp_nil } { c_lisp_nil } )| ).
+               expected = |({ c_lisp_nil } { c_lisp_nil } { c_lisp_nil } { c_lisp_nil } { c_lisp_nil })| ).
      ENDMETHOD.                    "list_make_list
 
      METHOD list_make_list_2.
        scheme( code = '(make-list 3 2)'
-               expected = '( 2 2 2 )' ).
+               expected = '(2 2 2)' ).
      ENDMETHOD.                    "list_make_list_2
 
      METHOD list_tail.
        scheme( code = |(list-tail '(a b c d) 2)|
-               expected = '( c d )' ).
+               expected = '(c d)' ).
      ENDMETHOD.                    "list_tail
 
      METHOD list_tail_nil.
@@ -3768,17 +3788,17 @@
 
      METHOD iota_1.
        scheme( code = |(iota 3)|
-               expected = '( 0 1 2 )' ).
+               expected = '(0 1 2)' ).
      ENDMETHOD.                    "iota_1
 
      METHOD iota_2.
        scheme( code = |(iota 5 2)|
-               expected = '( 2 3 4 5 6 )' ).
+               expected = '(2 3 4 5 6)' ).
      ENDMETHOD.                    "iota_2
 
      METHOD iota_3.
        scheme( code = |(iota 4 2 -1)|
-               expected = '( 2 1 0 -1 )' ).
+               expected = '(2 1 0 -1)' ).
      ENDMETHOD.                    "iota_3
 
      METHOD list_ref.
@@ -3793,7 +3813,7 @@
 
      METHOD list_has.
        scheme( code = |(memq 2 '(4 3 762 2))|
-               expected = '( 2 )' ).
+               expected = '(2)' ).
      ENDMETHOD.                    "list_has
 
      METHOD make_string_error.
@@ -3813,17 +3833,17 @@
 
      METHOD string_to_list_1.
        scheme( code = |(string->list "Aali")|
-               expected = '( "A" "a" "l" "i" )' ).
+               expected = '("A" "a" "l" "i")' ).
      ENDMETHOD.                    "string_to_list_1
 
      METHOD string_to_list_2.
        scheme( code = |(string->list "Aali" 1)|
-               expected = '( "a" "l" "i" )' ).
+               expected = '("a" "l" "i")' ).
      ENDMETHOD.                    "string_to_list_2
 
      METHOD string_to_list_3.
        scheme( code = |(string->list "Aali" 2 3)|
-               expected = '( "l" )' ).
+               expected = '("l")' ).
      ENDMETHOD.                    "string_to_list_3
 
      METHOD list_to_string_1.
@@ -3838,7 +3858,7 @@
 
      METHOD string_to_number_1.
        scheme( code = |(string->number '( 13 ))|
-               expected = 'Eval: ( 13 ) is not a string in string->number' ).
+               expected = 'Eval: (13) is not a string in string->number' ).
      ENDMETHOD.                    "string_to_number_1
 
      METHOD string_to_number_2.
@@ -3955,7 +3975,7 @@ ENDCLASS.                    "ltc_list IMPLEMENTATION
 
      METHOD make_vector_2.
        scheme( code = |(make-vector 5 '#(a))|
-               expected = '#( #( a ) #( a ) #( a ) #( a ) #( a ) )' ).
+               expected = '#(#(a) #(a) #(a) #(a) #(a))' ).
      ENDMETHOD.                    "make_vector_2
 
      METHOD vector_0.
@@ -3965,7 +3985,7 @@ ENDCLASS.                    "ltc_list IMPLEMENTATION
 
      METHOD vector_1.
        scheme( code = |(vector 0 '(2 3 4) "Anna")|
-               expected = |#( 0 ( 2 3 4 ) "Anna" )| ).
+               expected = |#(0 (2 3 4) "Anna")| ).
      ENDMETHOD.                    "vector_1
 
      METHOD vector_length_0.
@@ -4011,7 +4031,7 @@ ENDCLASS.                    "ltc_list IMPLEMENTATION
        scheme( code = |(let ((vec (vector 0 '(2 2 2 2) "Anna"))) | &
                          |  (vector-set! vec 1 '("Sue" "Sue"))| &
                          | vec)|
-               expected = '#( 0 ( "Sue" "Sue" ) "Anna" )' ).
+               expected = '#(0 ("Sue" "Sue") "Anna")' ).
      ENDMETHOD.                    "vector_set_1
 
      METHOD vector_set_2.
@@ -4021,12 +4041,12 @@ ENDCLASS.                    "ltc_list IMPLEMENTATION
 
      METHOD vector_to_list_1.
        scheme( code = |(vector->list '#(dah dah didah))|
-               expected = '( dah dah didah )' ).
+               expected = '(dah dah didah)' ).
      ENDMETHOD.                    "vector_to_list_1
 
      METHOD vector_to_list_2.
        scheme( code = |(vector->list '#(dah dah didah) 1 2)|
-               expected = '( dah )' ).
+               expected = '(dah)' ).
      ENDMETHOD.                    "vector_to_list_2
 
      METHOD vector_to_list_3.
@@ -4036,7 +4056,7 @@ ENDCLASS.                    "ltc_list IMPLEMENTATION
 
      METHOD vector_to_list_4.
        scheme( code = |(vector->list '#(a b c))|
-               expected = '( a b c )' ).
+               expected = '(a b c)' ).
      ENDMETHOD.                    "vector_to_list_4
 
      METHOD vector_to_list_5.
@@ -4047,21 +4067,21 @@ ENDCLASS.                    "ltc_list IMPLEMENTATION
 
      METHOD list_to_vector_1.
        scheme( code = |(list->vector '(dididit dah))|
-               expected = '#( dididit dah )' ).
+               expected = '#(dididit dah)' ).
      ENDMETHOD.                    "list_to_vector_1
 
      METHOD list_to_vector_2.
        scheme( code = |(let ([v '#(1 2 3 4 5)])| &
                          |  (let ([ls (vector->list v)])| &
                          |    (list->vector (map * ls ls))))|
-               expected = '#( 1 4 9 16 25 )' ).
+               expected = '#(1 4 9 16 25)' ).
      ENDMETHOD.                    "list_to_vector_2
 
      METHOD vector_fill_1.
        scheme( code = |(define a (vector 1 2 3 4 5))|
                expected = 'a' ).
        scheme( code = |(vector-fill! a 'smash 2 4)|
-               expected = '#( 1 2 smash smash 5 )' ).
+               expected = '#(1 2 smash smash 5)' ).
      ENDMETHOD.
 
 ENDCLASS.                    "ltc_vector IMPLEMENTATION
@@ -4351,12 +4371,12 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
 
      METHOD lambda_dotted.
        scheme( code = |((lambda (x y . z) z) 3 4 5 6)|
-               expected = |( 5 6 )| ).
+               expected = |(5 6)| ).
      ENDMETHOD.                    "lambda_dotted
 
      METHOD lambda_variadic.
        scheme( code = |((lambda x x) 3 4 5 6)|
-               expected = |( 3 4 5 6 )| ).
+               expected = |(3 4 5 6)| ).
      ENDMETHOD.                    "lambda_variadic
 
      METHOD fold_right.
@@ -4389,7 +4409,7 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
                          |              lst))|
                expected = 'delete-adjacent-duplicates' ).
        scheme( code = |(delete-adjacent-duplicates '(1 2 3 3 4 4 4 5))|
-               expected = |( 1 2 3 4 5 )| ).
+               expected = |(1 2 3 4 5)| ).
      ENDMETHOD.                    "foldr
 
      METHOD foldl.
@@ -4410,7 +4430,7 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
                          |               l))|
                expected = |reverse| ).
        scheme( code = |(reverse (list 1 2 3))|
-               expected = '( 3 2 1 )' ).
+               expected = '(3 2 1)' ).
 
      ENDMETHOD.                    "foldl
 
@@ -4422,7 +4442,7 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
                expected = |map| ).
        scheme( code = |(map (lambda (n) (+ n 3))| &
                          |     '(1 2 3 4 5) )|
-               expected = |( 4 5 6 7 8 )| ).
+               expected = |(4 5 6 7 8)| ).
      ENDMETHOD.                    "map
 
      METHOD filter.
@@ -4436,7 +4456,7 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
                expected = |filter| ).
        scheme( code = |(filter (lambda (n) (> n 4))| &
                          |     '(1 2 3 4 5 7) )|
-               expected = |( 5 7 )| ).
+               expected = |(5 7)| ).
      ENDMETHOD.                    "filter
 
      METHOD apply_1.
@@ -4468,17 +4488,17 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
 
      METHOD apply_5.
        scheme( code = |(apply apply (list list (list 'apply 'list)))|
-               expected = '( apply list )' ).
+               expected = '(apply list)' ).
      ENDMETHOD.                    "apply_5
 
      METHOD apply_6.
        scheme( code = |(apply (lambda (x y . z) (vector x y z)) '(1 2))|
-               expected = |#( 1 2 { c_lisp_nil } )| ).
+               expected = |#(1 2 { c_lisp_nil })| ).
      ENDMETHOD.                    "apply_6
 
      METHOD apply_7.
        scheme( code = |(apply vector 'a 'b '(c d e))|
-               expected = |#( a b c d e )| ).
+               expected = |#(a b c d e)| ).
      ENDMETHOD.                    "apply_7
 
      METHOD apply_8.
@@ -4496,35 +4516,35 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
                          |(apply (lambda (x . y) y) ls)))|
                expected = |rest| ).
        scheme( code = |(rest '(a b c d))|
-               expected = |( b c d )| ).
+               expected = |(b c d)| ).
      ENDMETHOD.                    "apply_9
 
      METHOD apply_10.
        scheme( code = |(apply append| &
                          |  '(1 2 3)| &
                          |  '((a b) (c d e) (f)))|
-               expected = |( 1 2 3 a b c d e f )| ).
+               expected = |(1 2 3 a b c d e f)| ).
      ENDMETHOD.                    "apply_10
 
      METHOD map_1.
        scheme( code = |(map cadr '((a b) (d e) (g h)))|
-               expected = '( b e h )' ).
+               expected = '(b e h)' ).
      ENDMETHOD.                    "map_1
 
      METHOD map_2.
        scheme( code = |(map + (list 3 4))|
-               expected = '( 3 4 )' ).
+               expected = '(3 4)' ).
      ENDMETHOD.                    "map_2
 
      METHOD map_3.
        scheme( code = |(map (lambda (n) (expt n n))| &
                          |'(1 2 3 4 5))|
-               expected = '( 1 4 27 256 3125 )' ).
+               expected = '(1 4 27 256 3125)' ).
      ENDMETHOD.                    "map_3
 
      METHOD map_4.
        scheme( code = |(map + '(1 2 3) '(4 5 6 7))|
-               expected = '( 5 7 9 )' ).
+               expected = '(5 7 9)' ).
      ENDMETHOD.                    "map_4
 
      METHOD map_5.
@@ -4533,13 +4553,13 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
                          |         (set! count [+ count 1])| &
                          |          count]| &
                          |       '(a b) ))|
-               expected = |( 1 2 )| ).  " or ( 2 1 )
+               expected = |(1 2)| ).  " or ( 2 1 )
      ENDMETHOD.                    "map_5
 
      METHOD map_6.
        scheme( code = |(map (lambda (n) (+ n 3))| &
                          |     '(1 2 3 4 5) )|
-               expected = |( 4 5 6 7 8 )| ).
+               expected = |(4 5 6 7 8)| ).
      ENDMETHOD.                    "map_6
 
      METHOD map_7.
@@ -5044,7 +5064,7 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
        scheme( code = '(define (b n) (* 11 n))'
                expected = 'b' ).
        scheme( code = 'b'
-               expected = '<lambda> ( n )' ).
+               expected = '<lambda> (n)' ).
        scheme( code = '(b 20)'
                expected = '220' ).
      ENDMETHOD.                    "funct_lambda_0
@@ -5054,7 +5074,7 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
        scheme( code = '(define b (lambda (b) (* 10 b)))'
                expected = 'b' ).
        scheme( code = 'b'
-               expected = '<lambda> ( b )' ).
+               expected = '<lambda> (b)' ).
        scheme( code = '(b 20)'
                expected = '200' ).
      ENDMETHOD.                    "funct_lambda_1
@@ -5076,14 +5096,14 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
        scheme( code = '(define (f x y) (+ x y))'
                expected = 'f' ).
        scheme( code = '(f 1 2 3)'
-               expected = 'Eval: Expected 2 parameter(s), found ( 1 2 3 )' ).
+               expected = 'Eval: Expected 2 parameter(s), found (1 2 3)' ).
      ENDMETHOD.                    "funct_arg_count
 
      METHOD funct_arg_missing.
        scheme( code = '(define (add x y) (+ x y))'
                expected = 'add' ).
        scheme( code = '(add 1)'
-               expected = 'Eval: Missing parameter(s) ( y )' ).
+               expected = 'Eval: Missing parameter(s) (y)' ).
      ENDMETHOD.                    "funct_arg_count
 
      METHOD case_lambda_empty.
@@ -5104,9 +5124,9 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
                       |           ((< e b) r)))))|
                expected = |range| ).
        scheme( code = |(range 3)|
-               expected = |( 0 1 2 )| ).
+               expected = |(0 1 2)| ).
        scheme( code = |(range 3 5)|
-               expected = |( 3 4 )| ).
+               expected = |(3 4)| ).
      ENDMETHOD.
 
      METHOD case_lambda_1.
@@ -5119,7 +5139,7 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
                       |        (f 1)| &
                       |        (f 1 2)| &
                       |        (f 1 2 3)))|
-               expected = |( 10 1 ( 2 1 ) ( 1 2 3 ) )| ).
+               expected = |(10 1 (2 1) (1 2 3))| ).
      ENDMETHOD.
 
      METHOD case_lambda_2.
@@ -5201,9 +5221,9 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = 'h1'
                expected = '<hash>' ).
        scheme( code = '(hash-keys h1)'
-               expected = '( dog cat kennel )' ).
+               expected = '(dog cat kennel)' ).
        scheme( code = '(hash-get h1 ''kennel)'
-               expected = '( dog cat hedgehog )' ).
+               expected = '(dog cat hedgehog)' ).
        scheme( code = '(hash-remove h1 ''kennel)'
                expected = c_lisp_nil ).
        scheme( code = '(hash-get h1 ''sparrow)'
@@ -5213,7 +5233,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = '(hash-get h1 ''sparrow)'
                expected = '"whoosh"' ).
        scheme( code = '(hash-keys h1)'
-               expected = '( dog cat sparrow )' ).
+               expected = '(dog cat sparrow)' ).
      ENDMETHOD.                    "hash
 
    ENDCLASS.                    "ltc_hash_element IMPLEMENTATION
@@ -5274,7 +5294,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = '(ab-set-value t005g ''("000" "ZA" "ABC" "JHB"))'
                expected = c_lisp_nil ).
        scheme( code = '(ab-get-value t005g)'
-               expected = '( "000" "ZA" "ABC" "JHB" )' ).
+               expected = '("000" "ZA" "ABC" "JHB")' ).
        scheme( code = '(ab-get t005g "LAND1")'
                expected = '"ZA"' ).
      ENDMETHOD.                    "empty_structure
@@ -5417,12 +5437,12 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
 
      METHOD quasiquote_1.
        scheme( code = '`(list ,(+ 1 2) 4)'
-               expected = '( list 3 4 )' ).
+               expected = '(list 3 4)' ).
      ENDMETHOD.                    "quasiquote_1
 
      METHOD quasiquote_2.
        scheme( code = |(let ((name 'a)) `(list ,name ',name))|
-               expected = |( list a ' a )| ).
+               expected = |(list a 'a)| ).
      ENDMETHOD.                    "quasiquote_2
 
      METHOD quasiquote_2_args.
@@ -5432,40 +5452,40 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
 
      METHOD quasiquote_splicing_3.
        scheme( code = |`(a ,(+ 1 2) ,@(map abs '(4 -5 6)) b)|
-               expected = '( a 3 4 5 6 b )' ).
+               expected = '(a 3 4 5 6 b)' ).
      ENDMETHOD.                    "quasiquote_splicing_3
 
      METHOD quasiquote_splicing_4.
        scheme( code = |`(( foo ,(- 10 3)) ,@(cdr '(c)) . ,(car '(cons)))|
-               expected = '( ( foo 7 ) . cons )' ).
+               expected = '((foo 7) . cons)' ).
      ENDMETHOD.                    "quasiquote_splicing_4
 
      METHOD quasiquote_splicing_5.
        scheme( code = |`#(10 5 ,(sqrt 4) ,@(map sqrt '(16 9)) 8)|
-               expected = '#( 10 5 2 4 3 8 )' ).
+               expected = '#(10 5 2 4 3 8)' ).
      ENDMETHOD.                    "quasiquote_splicing_5
 
      METHOD quasiquote_splicing_6.
        scheme( code = |(let ((foo '(foo bar)) (@baz 'baz))| &
                          |`(list ,@foo , @baz))|
-               expected = '( list foo bar baz )' ).
+               expected = '(list foo bar baz)' ).
      ENDMETHOD.                    "quasiquote_splicing_6
 
      METHOD quasiquote_7.
        scheme( code = '`(a `(b ,(+ 1 2) ,(foo ,(+ 1 3) d) e) f)'
-               expected = '( a ` ( b , ( + 1 2 ) , ( foo 4 d ) e ) f )' ).
+               expected = '(a `(b ,(+ 1 2) ,(foo 4 d) e) f)' ).
      ENDMETHOD.                    "quasiquote_7
 
      METHOD quasiquote_8.
        scheme( code = |(let ((name1 'x)| &
                          |      (name2 'y))| &
                          |  `(a `(b ,,name1 ,',name2 d) e))|
-               expected = |( a ` ( b , x , ' y d ) e )|  ).
+               expected = |(a `(b ,x ,'y d) e)|  ).
      ENDMETHOD.                    "quasiquote_8
 
      METHOD quasiquote_9.
        scheme( code = '(quasiquote (list (unquote (+ 1 2)) 4))'
-               expected = '( list 3 4 )' ).
+               expected = '(list 3 4)' ).
      ENDMETHOD.                    "quasiquote_9
 
      METHOD quasiquote_10.
@@ -5475,7 +5495,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
 
      METHOD quasiquote_11.
        scheme( code = |'(quasiquote (list (unquote (+ 1 2)) 4))|
-               expected = '` ( list , ( + 1 2 ) 4 )' ).
+               expected = '`(list ,(+ 1 2) 4)' ).
      ENDMETHOD.                    "quasiquote_11
 
      METHOD quine_1.
@@ -5483,15 +5503,15 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
                       |                   '(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))))) | &
                       |   (lambda (q) `(,q ',q)) | &
                       |   '(lambda (q) `(,q ',q)))|
-                 expected = |((lambda ( q qq) ((lambda ( x ) `((lambda (q qq ) ,( q x )) . ,( q qq )))| &
-                            |'(lambda ( x ) `((lambda ( q qq ) ,( q x )) . ,( q qq ))))) | &
-                            |(lambda ( q ) `(,q ',q)) | &
-                            |'(lambda ( q ) `(,q ',q)))| ).
+                 expected = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))) | &
+                            |'(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))))) | &
+                            |(lambda (q) `(,q ',q)) | &
+                            |'(lambda (q) `(,q ',q)))| ).
      ENDMETHOD.
 
      METHOD quine_2.
        scheme( code =     |( ( lambda ( x ) `(,( reverse x ) ',x ) ) '(`(,( reverse x ) ',x ) ( x ) lambda) )|
-               expected = |( ( lambda ( x ) ` ( , ( reverse x ) ' , x ) ) ' ( ` ( , ( reverse x ) ' , x ) ( x ) lambda ) )| ).
+               expected = |((lambda (x) `(,(reverse x) ',x)) '(`(,(reverse x) ',x) (x) lambda))| ).
      ENDMETHOD.
 
    ENDCLASS.                    "ltc_quote IMPLEMENTATION
@@ -5547,7 +5567,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
                          '`(let ((,var ,val)) ,@body ) )'
                expected = 'let1' ).
        scheme( code = '(macroexpand (let1 foo (+ 2 3) (* foo foo)) )'
-               expected = '( let ( ( foo ( + 2 3 ) ) ) ( * foo foo ) )' ).
+               expected = '(let ((foo (+ 2 3))) (* foo foo))' ).
      ENDMETHOD.                    "macro_2
 
      METHOD macro_one.
@@ -5581,7 +5601,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = '(my-unless #t 7 8)'
                expected = '8' ).
        scheme( code = '(macroexpand (my-unless 2 3 4))'
-               expected = '( if ( not 2 ) 3 4 )' ).
+               expected = '(if (not 2) 3 4)' ).
      ENDMETHOD.                    "macro_unless_2
 
      METHOD macro_eval_1.
@@ -5655,7 +5675,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = |(turtles-height t)|
                expected = '400' ).
        scheme( code = |(turtle-state t)|
-               expected = '( #( 300 200 90.0 ) )' ).
+               expected = '(#(300 200 90.0))' ).
      ENDMETHOD.
 
      METHOD turtle_move.
@@ -5663,7 +5683,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = |(move 100 t) |
                expected = '<ABAP turtle>' ).
        scheme( code = |(turtle-state t)|
-               expected = '( #( 300 300 90.0 ) )' ).
+               expected = '(#(300 300 90.0))' ).
      ENDMETHOD.
 
      METHOD turtle_move_offset.
@@ -5671,7 +5691,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = |(move-offset 50 50 t) |
                expected = '<ABAP turtle>' ).
        scheme( code = |(turtle-state t)|
-               expected = '( #( 350 250 90.0 ) )' ).
+               expected = '(#(350 250 90.0))' ).
      ENDMETHOD.
 
      METHOD turtle_turn.
@@ -5679,7 +5699,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = |(turn 90 t) |
                expected = '<ABAP turtle>' ).
        scheme( code = |(turtle-state t)|
-               expected = '( #( 300 200 180.0 ) )' ).
+               expected = '(#(300 200 180.0))' ).
      ENDMETHOD.
 
      METHOD turtle_turn_radian.
@@ -5687,7 +5707,7 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = |(turn/radians 3.1415926535897932384626433832795 t) |
                expected = '<ABAP turtle>' ).
        scheme( code = |(turtle-state t)|
-               expected = '( #( 300 200 270.0 ) )' ).
+               expected = '(#(300 200 270.0))' ).
      ENDMETHOD.
 
      METHOD turtle_set_pen_width.
