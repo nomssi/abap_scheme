@@ -3,8 +3,7 @@
     "files": "/src/**/*.*",
     "skipGeneratedGatewayClasses": true,
     "skipGeneratedPersistentClasses": true,
-    "skipGeneratedFunctionGroups": true,
-    "applyUnspecifiedRules": false
+    "skipGeneratedFunctionGroups": true
   },
   "dependencies": [
     {
@@ -20,56 +19,22 @@
     "globalMacros": []
   },
   "rules": {
-    "keywords_upper": {
-      "enabled": true,
-      "ignoreExceptions": true
-    },
-    "line_length": {
-      "enabled": true,
-      "length": 120
-    },
-    "contains_tab":{  
-      "enabled": true
-    },
-    "functional_writing":{  
-      "enabled": true
-    },
-    "max_one_statement":{  
-      "enabled": true
-    },
-    "parser_error":{  
-      "enabled": true
-    },
-    "space_before_colon":{  
-      "enabled": true
-    },
-    "colon_missing_space":{  
-      "enabled": true
-    },
-    "exit_or_check":{  
-      "enabled": false
-    },
-    "obsolete_statement":{  
-      "enabled": true
-    },
-    "start_at_tab":{  
-      "enabled": false
-    },
-    "whitespace_end":{  
-      "enabled": true
-    },
-    "exporting":{  
-      "enabled": true
-    },
-    "empty_statement":{  
-      "enabled": true
-    },
-    "sequential_blank":{  
-      "enabled": true,
+    "line_length": false,
+    "contains_tab": false,
+    "functional_writing": false,
+    "max_one_statement": true,
+    "parser_error": false,
+    "space_before_colon": true,
+    "colon_missing_space": true,
+    "exit_or_check": false,
+    "obsolete_statement": false,
+    "start_at_tab": false,
+    "whitespace_end": true,
+    "exporting": true,
+    "empty_statement": true,
+    "sequential_blank": {
       "lines":4
     },
-    "definitions_top":{  
-      "enabled": false
-    }
+    "definitions_top": false
    }
 }
