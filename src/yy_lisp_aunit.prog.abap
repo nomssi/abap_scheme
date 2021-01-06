@@ -240,6 +240,7 @@
                                       level    TYPE aunit_level DEFAULT if_aunit_constants=>critical.
        METHODS delimiter FOR TESTING.
        METHODS empty FOR TESTING.
+       METHODS char_x FOR TESTING.
        METHODS lambda FOR TESTING.
        METHODS lambda_comments FOR TESTING.
        METHODS skip_comments FOR TESTING.
@@ -298,6 +299,11 @@
        assert_parse( code = ''
                      expected = '<eof>' ).
      ENDMETHOD.                    "lambda
+
+     METHOD char_x.
+       assert_parse( code = '#\x'
+                     expected = '"x"' ).
+     ENDMETHOD.
 
      METHOD lambda.
        assert_parse( code = '(define a(lambda()20))'
@@ -2323,7 +2329,7 @@
      ENDMETHOD.
 
      METHOD exact_7.
-       scheme( code = '(exact? #xff#i)'
+       scheme( code = '(exact? #x#iff)'
                expected = '#f' ).
      ENDMETHOD.
 
@@ -2766,6 +2772,8 @@
      METHOD math_complex.
        scheme( code =  '(sqrt -1)'
                expected = '+i' ).
+       scheme( code =  '(+ 1 +i)'
+               expected = '1+i' ).
      ENDMETHOD.
 
      METHOD math_log.
@@ -5499,15 +5507,17 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
      ENDMETHOD.                    "quasiquote_11
 
      METHOD quine_1.
-       scheme( code = |  ((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))) | &
-                      |                   '(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))))) | &
-                      |   (lambda (q) `(,q ',q)) | &
-                      |   '(lambda (q) `(,q ',q)))|
+       scheme( code = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))| &
+                      |                  '(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))))| &
+                      |  (lambda (q) `(,q ',q))| &
+                      |  '(lambda (q) `(,q ',q)))|
                  expected = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))) | &
                             |'(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))))) | &
-                            |(lambda (q) `(,q ',q)) | &
+                            |(lambda (q) `(,q ',q))| &
                             |'(lambda (q) `(,q ',q)))| ).
      ENDMETHOD.
+
+
 
      METHOD quine_2.
        scheme( code =     |( ( lambda ( x ) `(,( reverse x ) ',x ) ) '(`(,( reverse x ) ',x ) ( x ) lambda) )|
