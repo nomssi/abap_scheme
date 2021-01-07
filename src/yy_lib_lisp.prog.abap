@@ -6644,6 +6644,7 @@
                      subtype = type_integer
                      denom = 1
                      exact = abap_true
+                     imag_part-exact = abap_true
                      operation = '+' ).
       WHILE iter->has_next( ).
         cell = iter->next( ).
@@ -6666,6 +6667,7 @@
                      int = 1
                      denom = 1
                      exact = abap_true
+                     imag_part-exact = abap_true
                      operation = '*' ).
 
       WHILE iter->has_next( ).
@@ -6694,6 +6696,7 @@
                      "subtype = type_integer
                      denom = 1
                      exact = abap_true
+                     imag_part-exact = abap_true
                      operation = '-' ).
 
       _cell_arith - `[-]`.
@@ -6734,6 +6737,7 @@
       cell = iter->next( ).
       res = VALUE #( denom = 1
                      exact = abap_true
+                     imag_part-exact = abap_true
                      operation = '/' ).
       _cell_arith / `[/]`.
 
@@ -7563,9 +7567,7 @@
               result = lcl_lisp_new=>rational( nummer = abs( lo_rat->int )
                                                denom = lo_rat->denominator ).
             WHEN type_complex.
-              DATA z TYPE REF TO lcl_lisp_complex.
-              z ?= list->car.
-              result = z->absolute( ).
+              result = CAST lcl_lisp_complex( list->car )->absolute( ).
 
             WHEN OTHERS.
               list->car->raise_nan( |[abs]| ).
@@ -8190,7 +8192,10 @@
         WHEN type_rational.
           lo_rat ?= cell.
           result = lcl_lisp_new=>integer( lo_rat->int ).
-*        WHEN type_complex.
+
+        WHEN type_complex.
+          cell->no_complex( 'numerator' ).
+
         WHEN OTHERS.
           throw( |{ cell->to_string( ) } is not a number in [numerator]| ).
       ENDCASE.
@@ -8225,7 +8230,9 @@
         WHEN type_rational.
           lo_rat ?= cell.
           result = lcl_lisp_new=>integer( lo_rat->denominator ).
-*        WHEN type_complex.
+
+        WHEN type_complex.
+          cell->no_complex( 'denominator' ).
         WHEN OTHERS.
           throw( |{ cell->to_string( ) } is not a number in [denominator]| ).
       ENDCASE.
