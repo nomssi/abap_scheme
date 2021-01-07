@@ -6529,58 +6529,42 @@
     DEFINE _cell_arith.
       _values_get_next cell.
       CASE cell->type.
-        WHEN type_integer.
-          lo_int ?= cell.
-          cell_exact = lo_int->exact.
+        WHEN type_real
+          OR type_rational
+          OR type_integer.
 
           CASE res-type.
             WHEN type_real
               OR type_rational
               OR type_integer
               OR type_complex.
+              " only real part is affected
               _cell_arith_real &1 real_part &2.
 
             WHEN OTHERS.
-              res-type = res-real_part-subtype = type_integer.
-              res-real_part-int = lo_int->int.
-          ENDCASE.
+              res-type = res-real_part-subtype = cell->type.
+              cell_exact = CAST lcl_lisp_number( cell )->exact.
 
-        WHEN type_rational.
-          lo_rat ?= cell.
-          cell_exact = lo_rat->exact.
+              CASE cell->type.
+                WHEN type_integer.
+                  lo_int ?= cell.
+                  res-real_part-int = lo_int->int.
 
-          CASE res-type.
-            WHEN type_real
-              OR type_rational
-              OR type_integer
-              OR type_complex.
-              _cell_arith_real &1 real_part &2.
+                WHEN type_rational.
+                  lo_rat ?= cell.
+                  res-real_part-nummer = lo_rat->int.
+                  res-real_part-denom = lo_rat->denominator.
 
-            WHEN OTHERS.
-              res-type = res-real_part-subtype = type_rational.
-              res-real_part-nummer = lo_rat->int.
-              res-real_part-denom = lo_rat->denominator.
-          ENDCASE.
+                WHEN type_real.
+                  lo_real ?= cell.
+                  IF lo_real->finite EQ abap_true.
+                    res-real_part-real = lo_real->real.
+                  ELSE.
+                    res-real_part-ref = lo_real.
+                    res-real_part-infnan = abap_true.
+                  ENDIF.
 
-        WHEN type_real.
-          lo_real ?= cell.
-          cell_exact = lo_real->exact.
-
-          CASE res-type.
-            WHEN type_real
-              OR type_rational
-              OR type_integer
-              OR type_complex.
-              _cell_arith_real &1 real_part &2.
-
-            WHEN OTHERS.
-              res-type = res-real_part-subtype = type_real.
-              IF lo_real->finite EQ abap_true.
-                res-real_part-real = lo_real->real.
-              ELSE.
-                res-real_part-ref = lo_real.
-                res-real_part-infnan = abap_true.
-              ENDIF.
+              ENDCASE.
           ENDCASE.
 
         WHEN type_complex.
@@ -6592,11 +6576,13 @@
               OR type_rational
               OR type_integer
               OR type_complex.
+
               cell = lo_z->zreal.
               _cell_arith_real &1 real_part &2.
 
               cell = lo_z->zimag.
               _cell_arith_real &1 imag_part &2.
+              res-type = type_complex.
 
             WHEN OTHERS.
               res-type = type_complex.
@@ -6704,8 +6690,8 @@
       ENDIF.
 
       cell = iter->next( ).
-      res = VALUE #( type = type_integer
-                     subtype = type_integer
+      res = VALUE #( type = cell->type
+                     "subtype = type_integer
                      denom = 1
                      exact = abap_true
                      operation = '-' ).
