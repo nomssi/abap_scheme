@@ -79,6 +79,8 @@
   CONSTANTS:
     c_escape_char    TYPE tv_char VALUE '\',
     c_text_quote     TYPE tv_char VALUE '"',
+
+    c_lisp_dot       TYPE tv_char VALUE '.',
     c_lisp_quote     TYPE tv_char VALUE '''', "LISP single quote = QUOTE
     c_lisp_backquote TYPE tv_char VALUE '`',  " backquote = quasiquote
     c_lisp_unquote   TYPE tv_char VALUE ',',
@@ -87,10 +89,10 @@
 
   CONSTANTS:
     c_lisp_slash TYPE tv_char VALUE '/',
-    c_lisp_pos_inf TYPE string VALUE '+Inf.0',
-    c_lisp_neg_inf TYPE string VALUE '-Inf.0',
-    c_lisp_pos_nan TYPE string VALUE '+NaN.0',
-    c_lisp_neg_nan TYPE string VALUE '-NaN.0'.
+    c_lisp_pos_inf TYPE string VALUE '+INF.0',
+    c_lisp_neg_inf TYPE string VALUE '-INF.0',
+    c_lisp_pos_nan TYPE string VALUE '+NAN.0',
+    c_lisp_neg_nan TYPE string VALUE '-NAN.0'.
   CONSTANTS:
     c_lisp_pos_img TYPE string VALUE '+I',
     c_lisp_neg_img TYPE string VALUE '-I'.
@@ -1063,8 +1065,6 @@
       DATA zreal TYPE REF TO lcl_lisp_number READ-ONLY.
       DATA zimag TYPE REF TO lcl_lisp_number READ-ONLY.
 
-      METHODS absolute REDEFINITION.
-
       METHODS add IMPORTING n TYPE REF TO lcl_lisp_number
                   RETURNING VALUE(sum) TYPE REF TO lcl_lisp_complex.
       METHODS subtract IMPORTING n TYPE REF TO lcl_lisp_number
@@ -1355,12 +1355,6 @@
 
   CLASS lcl_lisp_new DEFINITION.
     PUBLIC SECTION.
-      CONSTANTS:
-        c_dot           TYPE tv_char VALUE '.',
-        c_at            TYPE tv_char VALUE '@',
-        c_vertical_line TYPE tv_char VALUE '|',
-        c_explicit_sign TYPE string VALUE '+-'.
-
       CLASS-METHODS null RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS undefined RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS symbol IMPORTING value          TYPE any
@@ -1544,6 +1538,27 @@
                                      param          TYPE REF TO lcl_lisp
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                            RAISING   lcx_lisp_exception.
+    PRIVATE SECTION.
+      CONSTANTS:
+        c_dot           TYPE tv_char VALUE c_lisp_dot,
+        c_at            TYPE tv_char VALUE c_lisp_splicing,
+        c_vertical_line TYPE tv_char VALUE '|',
+        c_explicit_sign TYPE string VALUE '+-'.
+
+      CLASS-METHODS match_initial IMPORTING initial TYPE tv_char
+                                  RETURNING VALUE(match) TYPE flag.
+
+      CLASS-METHODS match_subsequent_list IMPORTING value TYPE string
+                                          RETURNING VALUE(match) TYPE flag.
+
+      CLASS-METHODS match_sign_subsequent IMPORTING initial TYPE tv_char
+                                          RETURNING VALUE(match) TYPE flag.
+
+      CLASS-METHODS match_dot_subsequent IMPORTING initial TYPE tv_char
+                                         RETURNING VALUE(match) TYPE flag.
+
+      CLASS-METHODS match_peculiar_identifier IMPORTING value TYPE string
+                                              RETURNING VALUE(match) TYPE flag.
   ENDCLASS.
 
   CLASS lcl_lisp_values IMPLEMENTATION.
@@ -2102,7 +2117,6 @@
       TYPES tt_element TYPE STANDARD TABLE OF REF TO lcl_lisp WITH DEFAULT KEY.
       TYPES tv_char2 TYPE c LENGTH 2.
       CONSTANTS:
-        c_lisp_dot    TYPE tv_char VALUE '.',
         c_open_paren  TYPE tv_char VALUE '(',
         c_close_paren TYPE tv_char VALUE ')',
         c_lisp_equal  TYPE tv_char VALUE '=',
@@ -3581,10 +3595,9 @@
           ENDCASE.
 
       ENDCASE.
-*     Others
+*     Others <identifier> | <boolean> | <number>
       match_token_atom( CHANGING cv_val = sval ).
 
-      " <atom> -> <identifier> | <boolean> | <number>
       CONSTANTS:
         c_true_alternative  TYPE string VALUE '#true',
         c_false_alternative TYPE string VALUE '#false'.
@@ -3598,6 +3611,13 @@
 
         WHEN lcl_lisp=>false->value OR c_false_alternative.
           element = lcl_lisp=>false.
+
+        WHEN c_lisp_dot
+          OR c_lisp_quote
+          OR c_lisp_backquote
+          OR c_lisp_unquote
+          OR ',@'.
+          element = lcl_lisp_new=>identifier( sval ).
 
         WHEN OTHERS.
           element = lcl_lisp_new=>atom( sval ).
@@ -7547,8 +7567,6 @@
     ENDMETHOD.
 
     METHOD proc_abs.
-      _data_local_numeric.
-
       result = nil.
       _validate list.
       _assert_last_param list.
@@ -7556,18 +7574,11 @@
       TRY.
           _validate list->car.
           CASE list->car->type.
-            WHEN type_integer.
-              lo_int ?= list->car.
-              result = lcl_lisp_new=>integer( abs( lo_int->int ) ).
-            WHEN type_real.
-              lo_real ?= list->car.
-              result = lcl_lisp_new=>integer( abs( lo_real->real ) ).
-            WHEN type_rational.
-              lo_rat ?= list->car.
-              result = lcl_lisp_new=>rational( nummer = abs( lo_rat->int )
-                                               denom = lo_rat->denominator ).
-            WHEN type_complex.
-              result = CAST lcl_lisp_complex( list->car )->absolute( ).
+            WHEN type_integer
+              OR type_real
+              OR type_rational
+              OR type_complex.
+              result = CAST lcl_lisp_number( list->car )->absolute( ).
 
             WHEN OTHERS.
               list->car->raise_nan( |[abs]| ).
@@ -7672,7 +7683,7 @@
               DATA(z) = CAST lcl_lisp_complex( cell ).
               DATA(lo_zreal) = z->zreal.
               IF lo_zreal->finite EQ abap_false.
-                lo_zreal->raise_nan( 'sin' ).
+                lo_zreal->raise_nan( 'cos' ).
               ENDIF.
               carry = lo_zreal->to_real( ).
 
@@ -11738,7 +11749,7 @@
               str = str && `.0`.
             ENDIF.
           ELSE.
-            str = lo_real->value.
+            str = to_lower( lo_real->value ).
           ENDIF.
 
 *        WHEN type_rational.
@@ -12002,28 +12013,173 @@
       <xchar> = <xword>.
     ENDMETHOD.
 
+    METHOD match_initial.
+      " <initial> -> <letter> | <special initial>
+      match = xsdbool( initial CO c_abcde  " letter
+                    OR initial CO c_special_initial ).
+    ENDMETHOD.
+
+    METHOD match_subsequent_list.
+      DATA idx TYPE i.
+      DATA char TYPE tv_char.
+
+      DATA(len) = strlen( value ).
+      match = abap_false.
+
+      WHILE idx < len.
+        char = value+idx(1).
+        idx = idx + 1.
+        " <subsequent> -> <initial> | <digit> | <special subsequent>
+        " <special subsequent> -> <explicit sign> | . | @
+        IF NOT ( match_initial( char )
+              OR char CO c_decimal_digits
+              OR char CO c_explicit_sign
+              OR char EQ c_dot
+              OR char EQ c_at ).
+          RETURN.
+        ENDIF.
+      ENDWHILE.
+      match = abap_true.
+    ENDMETHOD.
+
+    METHOD match_sign_subsequent.
+      " <sign subsequent> -> <initial> | <explicit sign> | @
+      match = xsdbool( match_initial( initial )
+                    OR initial CO c_explicit_sign
+                    OR initial EQ c_at ).
+    ENDMETHOD.
+
+    METHOD match_dot_subsequent.
+       " <dot subsequent -> <sign subsequent> | .
+      match = xsdbool( match_sign_subsequent( initial )  OR initial EQ c_dot ).
+    ENDMETHOD.
+
+    METHOD match_peculiar_identifier.
+       " <peculiar identifier> -> <explicit sign>
+       "    | <explicit sign> <sign subsequent> <subsequent>*
+       "    | <explicit sign> . <dot subsequent> <subsequent>*
+       "    | . <dot subsequent> <subsequent>*
+      DATA char TYPE tv_char.
+      DATA idx TYPE i.
+      DATA len TYPE i.
+      DATA rest TYPE string.
+
+      match = abap_false.
+      len = strlen( value ).
+      CHECK len GT 0.
+
+      char = value+idx(1).
+      idx = idx + 1.
+
+      IF char CO c_explicit_sign.
+        " <peculiar identifier> -> <explicit sign>
+        IF idx = len.
+          match = abap_true.
+          RETURN.
+        ENDIF.
+
+        " <peculiar identifier> -> <explicit sign> <sign subsequent> <subsequent>*
+        char = value+idx(1).
+        idx = idx + 1.
+        IF match_sign_subsequent( char ).
+
+          rest = value+idx.
+          match = match_subsequent_list( rest ).
+
+        " <peculiar identifier> -> <explicit sign> . <dot subsequent> <subsequent>*
+        ELSEIF char EQ c_dot.
+
+          IF idx = len.
+            RETURN.
+          ELSE.
+            char = value+idx(1).
+            idx = idx + 1.
+          ENDIF.
+
+          IF match_dot_subsequent( char ).
+
+            IF idx = len.
+              match = abap_true.
+              RETURN.
+            ENDIF.
+
+            rest = value+idx.
+            match = match_subsequent_list( rest ).
+          ENDIF.
+
+        ENDIF.
+
+      " <peculiar identifier> -> . <dot subsequent> <subsequent>*
+      ELSEIF char EQ c_dot.
+
+        IF idx = len.
+          RETURN.
+        ELSE.
+          char = value+idx(1).
+          idx = idx + 1.
+        ENDIF.
+
+        IF match_dot_subsequent( char ).
+
+          IF idx = len.
+            match = abap_true.
+            RETURN.
+          ENDIF.
+
+          rest = value+idx.
+          match = match_subsequent_list( rest ).
+
+        ENDIF.
+
+      ENDIF.
+
+    ENDMETHOD.
+
     METHOD atom.
+      " <atom> -> <identifier> | <number>
+      DATA lv_upcase TYPE string.
       DATA initial TYPE tv_char.
 
       IF strlen( value ) LE 0.
         lcl_lisp=>throw( |Missing Identifier| ).
       ENDIF.
-      initial = value+0(1).
 
-      IF to_upper( initial ) CO c_abcde  " letter
-        OR initial CO c_special_initial
-        OR initial EQ c_vertical_line.
-        " <identifier> -> <initial> <subsequent>* |  <vertical line> <symbol element>* <vertical line> | <peculiar identifier>
-        " <initial> -> <letter> | <special initial>
-        ro_elem = identifier( value ).
-      ELSE.
-        TRY.
-              ro_elem = number( value = value ).  " iv_exact ?
-          CATCH cx_sy_conversion_no_number.
-*           if not a number, try peculiar identifier
+      lv_upcase = to_upper( value ).
+      " +i, -i and <infnan> are parsed as number, not as peculiar identifier
+      CASE lv_upcase.
+        WHEN lcl_lisp_number=>inf->value.
+          ro_elem = lcl_lisp_number=>inf.
+
+        WHEN lcl_lisp_number=>neg_inf->value.
+          ro_elem = lcl_lisp_number=>neg_inf.
+
+        WHEN lcl_lisp_number=>nan->value.
+          ro_elem = lcl_lisp_number=>nan.
+
+        WHEN lcl_lisp_number=>neg_nan->value.
+          ro_elem = lcl_lisp_number=>neg_nan.
+
+        WHEN c_lisp_pos_img.
+          ro_elem = lcl_lisp_number=>imaginary.
+
+        WHEN c_lisp_neg_img.
+          ro_elem = lcl_lisp_number=>imaginary_neg.
+
+        WHEN OTHERS.
+          initial = lv_upcase+0(1).
+          " <identifier> -> <initial> <subsequent>* |  <vertical line> <symbol element>* <vertical line> | <peculiar identifier>
+          IF match_initial( initial ) OR initial EQ c_vertical_line OR match_peculiar_identifier( value ).
             ro_elem = identifier( value ).
-        ENDTRY.
-      ENDIF.
+          ELSE.
+            TRY.
+                  ro_elem = number( value = value ).  " iv_exact ?
+              CATCH cx_sy_conversion_no_number.
+                lcl_lisp=>throw( `Not a valid number ` && value ).
+            ENDTRY.
+
+          ENDIF.
+      ENDCASE.
+
     ENDMETHOD.
 
     METHOD identifier.
@@ -12291,7 +12447,7 @@
               IF contains_any_of( val = lv_nummer_str sub = '.eE' ) AND iv_exact EQ abap_true.
                 DATA lv_int_str TYPE string.
                 DATA lv_dec_str TYPE string.
-                SPLIT lv_nummer_str AT lcl_parser=>c_lisp_dot INTO lv_int_str lv_dec_str.
+                SPLIT lv_nummer_str AT c_lisp_dot INTO lv_int_str lv_dec_str.
                 lv_int_str = lv_int_str && lv_dec_str.
                 TRY.
                     lv_int = lv_int_str.
@@ -12444,7 +12600,7 @@
       DATA lv_real TYPE tv_real.
 
       lv_text = value.
-      SPLIT lv_text AT lcl_parser=>c_lisp_dot INTO lv_trunc_str lv_decimal_str.
+      SPLIT lv_text AT c_lisp_dot INTO lv_trunc_str lv_decimal_str.
 
       lv_int = hex_integer( lv_trunc_str ).
       IF lv_decimal_str IS INITIAL.
@@ -12498,7 +12654,7 @@
       DATA lv_dec TYPE tv_int.
 
       lv_text = value.
-      SPLIT lv_text AT lcl_parser=>c_lisp_dot INTO lv_trunc_str lv_decimal_str.
+      SPLIT lv_text AT c_lisp_dot INTO lv_trunc_str lv_decimal_str.
 
       lv_int = octal_integer( lv_trunc_str ).
       IF lv_decimal_str IS INITIAL.
@@ -12551,7 +12707,7 @@
       DATA lv_frac_real TYPE tv_real.
 
       lv_text = value.
-      SPLIT lv_text AT lcl_parser=>c_lisp_dot INTO lv_trunc_str lv_decimal_str.
+      SPLIT lv_text AT c_lisp_dot INTO lv_trunc_str lv_decimal_str.
 
       lv_int = binary_integer( lv_trunc_str ).
       IF lv_decimal_str IS INITIAL.
@@ -12846,11 +13002,11 @@
       pos_zero = lcl_lisp_new=>real( value = '+0.0' iv_exact = abap_false ).
       neg_zero = lcl_lisp_new=>real( value = '-0.0' iv_exact = abap_false ).
 
-      nan = lcl_lisp_new=>real( value = to_upper( c_lisp_pos_nan ) iv_exact = abap_false finite = abap_false ).
-      neg_nan = lcl_lisp_new=>real( value = to_upper( c_lisp_neg_nan ) iv_exact = abap_false finite = abap_false ).
+      nan = lcl_lisp_new=>real( value = c_lisp_pos_nan iv_exact = abap_false finite = abap_false ).
+      neg_nan = lcl_lisp_new=>real( value = c_lisp_neg_nan iv_exact = abap_false finite = abap_false ).
 
-      inf = lcl_lisp_new=>real( value = to_upper( c_lisp_pos_inf ) iv_exact = abap_false finite = abap_false ).
-      neg_inf = lcl_lisp_new=>real( value = to_upper( c_lisp_neg_inf ) iv_exact = abap_false finite = abap_false ).
+      inf = lcl_lisp_new=>real( value = c_lisp_pos_inf iv_exact = abap_false finite = abap_false ).
+      neg_inf = lcl_lisp_new=>real( value = c_lisp_neg_inf iv_exact = abap_false finite = abap_false ).
 
       imaginary = lcl_lisp_new=>rectangular( imag = one ).
       imaginary_neg = lcl_lisp_new=>rectangular( imag = minus_one ).
@@ -13010,11 +13166,6 @@
       real_part = magnitude * lv_cos.
       lv_sin = sin( lv_angle ).
       imaginary_part = magnitude * lv_sin.
-    ENDMETHOD.
-
-    METHOD absolute.
-      num = new_rectangular( x = zreal->absolute( )
-                             y = zimag->absolute( ) ).
     ENDMETHOD.
 
     METHOD add.

@@ -5511,10 +5511,10 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
                       |                  '(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))))| &
                       |  (lambda (q) `(,q ',q))| &
                       |  '(lambda (q) `(,q ',q)))|
-                 expected = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))) | &
-                            |'(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))))) | &
-                            |(lambda (q) `(,q ',q))| &
-                            |'(lambda (q) `(,q ',q)))| ).
+           expected = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))) | &
+                                        |'(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))))) | &
+                        |(lambda (q) `(,q ',q))| &
+                        |'(lambda (q) `(,q ',q)))| ).
      ENDMETHOD.
 
 
