@@ -73,8 +73,8 @@
     c_special_initial     TYPE string VALUE '!$%&*/:<=>?@^_~'.
 
   TYPES tv_char TYPE c LENGTH 1.
-  TYPES tv_int TYPE i.                      " integer data type, use int8 and max_int8 if available
-  CONSTANTS c_max_int TYPE tv_int VALUE cl_abap_math=>max_int4.  "  cl_abap_math=>max_int8.
+  TYPES tv_int TYPE int8.                      " integer data type, use int8 and max_int8 if available
+  CONSTANTS c_max_int TYPE tv_int VALUE cl_abap_math=>max_int8.  "  cl_abap_math=>max_int8.
 
   CONSTANTS:
     c_escape_char    TYPE tv_char VALUE '\',
@@ -2078,6 +2078,15 @@
       METHODS unbound_symbol IMPORTING symbol TYPE any
                              RAISING   lcx_lisp_exception.
       METHODS prepare.
+
+    PRIVATE SECTION.
+      METHODS load_syntax.
+      METHODS load_list.
+      METHODS load_math.
+      METHODS load_numbers.
+      METHODS load_turtles.
+      METHODS load_chars.
+      METHODS load_strings.
   ENDCLASS.                    "lcl_lisp_environment DEFINITION
 
   CLASS lcl_lisp_env_factory DEFINITION ABSTRACT.
@@ -10870,12 +10879,7 @@
 
     ENDMETHOD.                    "parameters_to_symbols
 
-    METHOD prepare.
-      " Create symbols for nil, true and false values
-      set( symbol = 'nil' element = lcl_lisp=>nil ).
-      set( symbol = '#f' element = lcl_lisp=>true ).
-      set( symbol = '#t' element = lcl_lisp=>false ).
-
+    METHOD load_syntax.
       " Add primitive functions to environment
       define_value( symbol = 'define'          type = type_syntax value   = 'define' ).
       define_value( symbol = 'lambda'          type = type_syntax value   = 'lambda' ).
@@ -10910,32 +10914,13 @@
 
       define_value( symbol = c_eval_unquote          type = type_syntax value   = ',' ).
       define_value( symbol = c_eval_unquote_splicing type = type_syntax value   = ',@' ).
+    ENDMETHOD.
 
-*     Procedures
-      define_value( symbol = 'apply'        type = type_primitive value   = 'apply' ).
-      define_value( symbol = 'for-each'     type = type_primitive value   = 'for-each' ).
-      define_value( symbol = 'map'          type = type_primitive value   = 'map' ).
-
-*     Add native functions to environment
-      define_value( symbol = '+'        type = type_native value   = 'PROC_ADD' ).
-      define_value( symbol = '-'        type = type_native value   = 'PROC_SUBTRACT' ).
-      define_value( symbol = '*'        type = type_native value   = 'PROC_MULTIPLY' ).
-      define_value( symbol = '/'        type = type_native value   = 'PROC_DIVIDE' ).
-      define_value( symbol = c_eval_append type = type_native value   = 'PROC_APPEND' ).
-      define_value( symbol = 'append!'     type = type_native value   = 'PROC_APPEND_UNSAFE' ).
-      define_value( symbol = 'list'     type = type_native value   = 'PROC_LIST' ).
-      define_value( symbol = 'length'   type = type_native value   = 'PROC_LENGTH' ).
-      define_value( symbol = 'reverse'  type = type_native value   = 'PROC_REVERSE' ).
-      define_value( symbol = 'not'      type = type_native value   = 'PROC_NOT' ).
-
-      define_value( symbol = 'values'   type = type_native value   = 'PROC_VALUES' ).
-
-      define_value( symbol = 'make-list'    type = type_native value   = 'PROC_MAKE_LIST' ).
-      define_value( symbol = 'list-tail'    type = type_native value   = 'PROC_LIST_TAIL' ).
-      define_value( symbol = 'list-ref'     type = type_native value   = 'PROC_LIST_REF' ).
-      define_value( symbol = 'list-copy'    type = type_native value   = 'PROC_LIST_COPY' ).
-      define_value( symbol = 'list->vector' type = type_native value   = 'PROC_LIST_TO_VECTOR' ).
-      define_value( symbol = 'iota'         type = type_native value   = 'PROC_IOTA' ).
+    METHOD load_list.
+*     Compatibility
+      define_value( symbol = 'empty?'  type = type_native value   = 'PROC_NILP' ).
+      define_value( symbol = 'first'   type = type_native value   = 'PROC_CAR' ).
+      define_value( symbol = 'rest'    type = type_native value   = 'PROC_CDR' ).
 
       define_value( symbol = 'memq'    type = type_native value   = 'PROC_MEMQ' ).
       define_value( symbol = 'memv'    type = type_native value   = 'PROC_MEMV' ).
@@ -10950,15 +10935,6 @@
       define_value( symbol = c_eval_cons    type = type_native value   = 'PROC_CONS' ).
       define_value( symbol = 'nil?'    type = type_native value   = 'PROC_NILP' ).
       define_value( symbol = 'null?'   type = type_native value   = 'PROC_NILP' ).
-
-      define_value( symbol = '>'       type = type_native value   = 'PROC_GT' ).
-      define_value( symbol = '>='      type = type_native value   = 'PROC_GTE' ).
-      define_value( symbol = '<'       type = type_native value   = 'PROC_LT' ).
-      define_value( symbol = '<='      type = type_native value   = 'PROC_LTE' ).
-      define_value( symbol = '='       type = type_native value   = 'PROC_EQL' ). "Math equal
-      define_value( symbol = 'eq?'     type = type_native value   = 'PROC_EQ' ).
-      define_value( symbol = 'eqv?'    type = type_native value   = 'PROC_EQV' ).
-      define_value( symbol = 'equal?'  type = type_native value   = 'PROC_EQUAL' ).
 
       define_value( symbol = 'set-car!' type = type_native value   = 'PROC_SET_CAR' ).
       define_value( symbol = 'set-cdr!' type = type_native value   = 'PROC_SET_CDR' ).
@@ -10993,16 +10969,198 @@
       define_value( symbol = 'cadddr'    type = type_native value   = 'PROC_CADDDR' ).
       define_value( symbol = 'cddddr'    type = type_native value   = 'PROC_CDDDDR' ).
 
+      define_value( symbol = 'append!'  type = type_native value   = 'PROC_APPEND_UNSAFE' ).
+      define_value( symbol = 'list'     type = type_native value   = 'PROC_LIST' ).
+      define_value( symbol = 'length'   type = type_native value   = 'PROC_LENGTH' ).
+      define_value( symbol = 'reverse'  type = type_native value   = 'PROC_REVERSE' ).
+
+      define_value( symbol = c_eval_append  type = type_native value   = 'PROC_APPEND' ).
+      define_value( symbol = 'make-list'    type = type_native value   = 'PROC_MAKE_LIST' ).
+      define_value( symbol = 'list-tail'    type = type_native value   = 'PROC_LIST_TAIL' ).
+      define_value( symbol = 'list-ref'     type = type_native value   = 'PROC_LIST_REF' ).
+      define_value( symbol = 'list-copy'    type = type_native value   = 'PROC_LIST_COPY' ).
+      define_value( symbol = 'list->vector' type = type_native value   = 'PROC_LIST_TO_VECTOR' ).
+      define_value( symbol = 'iota'         type = type_native value   = 'PROC_IOTA' ).
+    ENDMETHOD.
+
+    METHOD load_numbers.
+      define_value( symbol = 'number?'     type = type_native value = 'PROC_IS_NUMBER' ).
+      define_value( symbol = 'nan?'        type = type_native value = 'PROC_IS_NAN' ).
+      define_value( symbol = 'finite?'     type = type_native value = 'PROC_IS_FINITE' ).
+      define_value( symbol = 'infinite?'   type = type_native value = 'PROC_IS_INFINITE' ).
+
+      define_value( symbol = 'exact'      type = type_native value = 'PROC_TO_EXACT' ).
+      define_value( symbol = 'inexact'    type = type_native value = 'PROC_TO_INEXACT' ).
+
+      define_value( symbol = 'floor'     type = type_native value = 'PROC_FLOOR' ).
+      define_value( symbol = 'floor/'    type = type_native value = 'PROC_FLOOR_NEW' ).
+      define_value( symbol = 'ceiling'   type = type_native value = 'PROC_CEILING' ).
+      define_value( symbol = 'truncate'  type = type_native value = 'PROC_TRUNCATE' ).
+      define_value( symbol = 'truncate/' type = type_native value = 'PROC_TRUNCATE_NEW' ).
+      define_value( symbol = 'round'     type = type_native value = 'PROC_ROUND' ).
+
+      define_value( symbol = 'numerator'   type = type_native value = 'PROC_NUMERATOR' ).
+      define_value( symbol = 'denominator' type = type_native value = 'PROC_DENOMINATOR' ).
+      define_value( symbol = 'remainder' type = type_native value = 'PROC_REMAINDER' ).
+      define_value( symbol = 'modulo'    type = type_native value = 'PROC_MODULO' ).
+      define_value( symbol = 'quotient'  type = type_native value = 'PROC_QUOTIENT' ).
+      define_value( symbol = 'random'    type = type_native value = 'PROC_RANDOM' ).
+      define_value( symbol = 'max'       type = type_native value = 'PROC_MAX' ).
+      define_value( symbol = 'min'       type = type_native value = 'PROC_MIN' ).
+      define_value( symbol = 'gcd'       type = type_native value = 'PROC_GCD' ).
+      define_value( symbol = 'lcm'       type = type_native value = 'PROC_LCM' ).
+
+      define_value( symbol = 'make-rectangular' type = type_native value = 'PROC_MAKE_RECTANGULAR' ).
+      define_value( symbol = 'make-polar'       type = type_native value = 'PROC_MAKE_POLAR' ).
+      define_value( symbol = 'real-part'        type = type_native value = 'PROC_REAL_PART' ).
+      define_value( symbol = 'imag-part'        type = type_native value = 'PROC_IMAG_PART' ).
+      define_value( symbol = 'magnitude'        type = type_native value = 'PROC_MAGNITUDE' ).
+      define_value( symbol = 'angle'            type = type_native value = 'PROC_ANGLE' ).
+    ENDMETHOD.
+
+    METHOD load_math.
+*     Math
+      define_value( symbol = 'abs'   type = type_native value = 'PROC_ABS' ).
+      define_value( symbol = 'sin'   type = type_native value = 'PROC_SIN' ).
+      define_value( symbol = 'cos'   type = type_native value = 'PROC_COS' ).
+      define_value( symbol = 'tan'   type = type_native value = 'PROC_TAN' ).
+      define_value( symbol = 'asin'  type = type_native value = 'PROC_ASIN' ).
+      define_value( symbol = 'acos'  type = type_native value = 'PROC_ACOS' ).
+      define_value( symbol = 'atan'  type = type_native value = 'PROC_ATAN' ).
+      define_value( symbol = 'sinh'  type = type_native value = 'PROC_SINH' ).
+      define_value( symbol = 'cosh'  type = type_native value = 'PROC_COSH' ).
+      define_value( symbol = 'tanh'  type = type_native value = 'PROC_TANH' ).
+      define_value( symbol = 'asinh' type = type_native value = 'PROC_ASINH' ).
+      define_value( symbol = 'acosh' type = type_native value = 'PROC_ACOSH' ).
+      define_value( symbol = 'atanh' type = type_native value = 'PROC_ATANH' ).
+      define_value( symbol = 'expt'  type = type_native value = 'PROC_EXPT' ).
+      define_value( symbol = 'exp'   type = type_native value = 'PROC_EXP' ).
+      define_value( symbol = 'log'   type = type_native value = 'PROC_LOG' ).
+      define_value( symbol = 'sqrt'  type = type_native value = 'PROC_SQRT' ).
+
+      define_value( symbol = 'square'             type = type_native value = 'PROC_SQUARE' ).
+      define_value( symbol = 'exact-integer-sqrt' type = type_native value = 'PROC_INT_SQRT' ).
+      define_value( symbol = 'floor-quotient'     type = type_native value = 'PROC_FLOOR_QUOTIENT' ).
+      define_value( symbol = 'floor-remainder'    type = type_native value = 'PROC_FLOOR_REMAINDER' ).
+      define_value( symbol = 'truncate-remainder' type = type_native value = 'PROC_TRUNC_REMAINDER' ).
+      define_value( symbol = 'truncate-quotient'  type = type_native value = 'PROC_TRUNC_QUOTIENT' ).
+    ENDMETHOD.
+
+    METHOD load_chars.
+      define_value( symbol = 'char-alphabetic?'  type = type_native value   = 'PROC_IS_CHAR_ALPHABETIC' ).
+      define_value( symbol = 'char-numeric?'     type = type_native value   = 'PROC_IS_CHAR_NUMERIC' ).
+      define_value( symbol = 'char-whitespace?'  type = type_native value   = 'PROC_IS_CHAR_WHITESPACE' ).
+      define_value( symbol = 'char-upper-case?'  type = type_native value   = 'PROC_IS_CHAR_UPPER_CASE' ).
+      define_value( symbol = 'char-lower-case?'  type = type_native value   = 'PROC_IS_CHAR_LOWER_CASE' ).
+
+      define_value( symbol = 'digit-value'       type = type_native value   = 'PROC_DIGIT_VALUE' ).
+      define_value( symbol = 'char->integer'     type = type_native value   = 'PROC_CHAR_TO_INTEGER' ).
+      define_value( symbol = 'integer->char'     type = type_native value   = 'PROC_INTEGER_TO_CHAR' ).
+      define_value( symbol = 'char-upcase'       type = type_native value   = 'PROC_CHAR_UPCASE' ).
+      define_value( symbol = 'char-downcase'     type = type_native value   = 'PROC_CHAR_DOWNCASE' ).
+
+      define_value( symbol = 'char=?'     type = type_native value   = 'PROC_CHAR_LIST_IS_EQ' ).
+      define_value( symbol = 'char<?'     type = type_native value   = 'PROC_CHAR_LIST_IS_LT' ).
+      define_value( symbol = 'char>?'     type = type_native value   = 'PROC_CHAR_LIST_IS_GT' ).
+      define_value( symbol = 'char<=?'    type = type_native value   = 'PROC_CHAR_LIST_IS_LE' ).
+      define_value( symbol = 'char>=?'    type = type_native value   = 'PROC_CHAR_LIST_IS_GE' ).
+
+      define_value( symbol = 'char-ci=?'     type = type_native value   = 'PROC_CHAR_CI_LIST_IS_EQ' ).
+      define_value( symbol = 'char-ci<?'     type = type_native value   = 'PROC_CHAR_CI_LIST_IS_LT' ).
+      define_value( symbol = 'char-ci>?'     type = type_native value   = 'PROC_CHAR_CI_LIST_IS_GT' ).
+      define_value( symbol = 'char-ci<=?'    type = type_native value   = 'PROC_CHAR_CI_LIST_IS_LE' ).
+      define_value( symbol = 'char-ci>=?'    type = type_native value   = 'PROC_CHAR_CI_LIST_IS_GE' ).
+    ENDMETHOD.
+
+    METHOD load_strings.
+      define_value( symbol = 'number->string' type = type_native value = 'PROC_NUM_TO_STRING' ).
+      define_value( symbol = 'string->number' type = type_native value = 'PROC_STRING_TO_NUM' ).
+      define_value( symbol = 'make-string'    type = type_native value = 'PROC_MAKE_STRING' ).
+      define_value( symbol = 'string'         type = type_native value = 'PROC_STRING' ).
+      define_value( symbol = 'string->list'   type = type_native value = 'PROC_STRING_TO_LIST' ).
+      define_value( symbol = 'list->string'   type = type_native value = 'PROC_LIST_TO_STRING' ).
+      define_value( symbol = 'symbol->string' type = type_native value = 'PROC_SYMBOL_TO_STRING' ).
+      define_value( symbol = 'string->symbol' type = type_native value = 'PROC_STRING_TO_SYMBOL' ).
+      define_value( symbol = 'string-append'  type = type_native value = 'PROC_STRING_APPEND' ).
+      define_value( symbol = 'string-length'  type = type_native value = 'PROC_STRING_LENGTH' ).
+      define_value( symbol = 'string-copy'    type = type_native value = 'PROC_STRING_COPY' ).
+      define_value( symbol = 'substring'      type = type_native value = 'PROC_STRING_COPY' ).
+      define_value( symbol = 'string-ref'     type = type_native value = 'PROC_STRING_REF' ).
+      define_value( symbol = 'string-set!'    type = type_native value = 'PROC_STRING_SET' ).
+
+      define_value( symbol = 'string=?'     type = type_native value   = 'PROC_STRING_LIST_IS_EQ' ).
+      define_value( symbol = 'string<?'     type = type_native value   = 'PROC_STRING_LIST_IS_LT' ).
+      define_value( symbol = 'string>?'     type = type_native value   = 'PROC_STRING_LIST_IS_GT' ).
+      define_value( symbol = 'string<=?'    type = type_native value   = 'PROC_STRING_LIST_IS_LE' ).
+      define_value( symbol = 'string>=?'    type = type_native value   = 'PROC_STRING_LIST_IS_GE' ).
+
+      define_value( symbol = 'string-ci=?'   type = type_native value  = 'PROC_STRING_CI_LIST_IS_EQ' ).
+      define_value( symbol = 'string-ci<?'   type = type_native value  = 'PROC_STRING_CI_LIST_IS_LT' ).
+      define_value( symbol = 'string-ci>?'   type = type_native value  = 'PROC_STRING_CI_LIST_IS_GT' ).
+      define_value( symbol = 'string-ci<=?'  type = type_native value  = 'PROC_STRING_CI_LIST_IS_LE' ).
+      define_value( symbol = 'string-ci>=?'  type = type_native value  = 'PROC_STRING_CI_LIST_IS_GE' ).
+    ENDMETHOD.
+
+    METHOD load_turtles.
+      define_value( symbol = 'turtles'       type = type_native value   = 'PROC_TURTLE_NEW' ).
+      define_value( symbol = 'turtles?'      type = type_native value   = 'PROC_TURTLE_EXIST' ).
+      define_value( symbol = 'move'          type = type_native value   = 'PROC_TURTLE_MOVE' ).
+      define_value( symbol = 'draw'          type = type_native value   = 'PROC_TURTLE_DRAW' ).
+      define_value( symbol = 'erase'         type = type_native value   = 'PROC_TURTLE_ERASE' ).
+      define_value( symbol = 'move-offset'   type = type_native value   = 'PROC_TURTLE_MOVE_OFFSET' ).
+      define_value( symbol = 'draw-offset'   type = type_native value   = 'PROC_TURTLE_DRAW_OFFSET' ).
+      define_value( symbol = 'erase-offset'  type = type_native value   = 'PROC_TURTLE_ERASE_OFFSET' ).
+      define_value( symbol = 'turn'          type = type_native value   = 'PROC_TURTLE_TURN_DEGREES' ).
+      define_value( symbol = 'turn/radians'  type = type_native value   = 'PROC_TURTLE_TURN_RADIANS' ).
+      define_value( symbol = 'set-pen-width' type = type_native value   = 'PROC_TURTLE_SET_PEN_WIDTH' ).
+      define_value( symbol = 'set-pen-color' type = type_native value   = 'PROC_TURTLE_SET_PEN_COLOR' ).
+
+      define_value( symbol = 'merge'             type = type_native value = 'PROC_TURTLE_MERGE' ).
+      define_value( symbol = 'clean'             type = type_native value = 'PROC_TURTLE_CLEAN' ).
+      define_value( symbol = 'turtle-state'      type = type_native value = 'PROC_TURTLE_STATE' ).
+      define_value( symbol = 'turtles-height'    type = type_native value = 'PROC_TURTLE_HEIGHT' ).
+      define_value( symbol = 'turtles-width'     type = type_native value = 'PROC_TURTLE_WIDTH' ).
+      define_value( symbol = 'turtles-pen-color' type = type_native value = 'PROC_TURTLE_PEN_COLOR' ).
+      define_value( symbol = 'turtles-pen-width' type = type_native value = 'PROC_TURTLE_PEN_WIDTH' ).
+      define_value( symbol = 'regular-poly'      type = type_native value = 'PROC_TURTLE_REGULAR_POLY' ).
+      define_value( symbol = 'regular-polys'     type = type_native value = 'PROC_TURTLE_REGULAR_POLYS' ).
+    ENDMETHOD.
+
+    METHOD prepare.
+      " Create symbols for nil, true and false values
+      set( symbol = 'nil' element = lcl_lisp=>nil ).
+      set( symbol = '#f' element = lcl_lisp=>true ).
+      set( symbol = '#t' element = lcl_lisp=>false ).
+
+      load_syntax( ).
+
+*     Procedures
+      define_value( symbol = 'apply'        type = type_primitive value   = 'apply' ).
+      define_value( symbol = 'for-each'     type = type_primitive value   = 'for-each' ).
+      define_value( symbol = 'map'          type = type_primitive value   = 'map' ).
+
+*     Add native functions to environment
+      define_value( symbol = '+'        type = type_native value   = 'PROC_ADD' ).
+      define_value( symbol = '-'        type = type_native value   = 'PROC_SUBTRACT' ).
+      define_value( symbol = '*'        type = type_native value   = 'PROC_MULTIPLY' ).
+      define_value( symbol = '/'        type = type_native value   = 'PROC_DIVIDE' ).
+
+      define_value( symbol = 'values'   type = type_native value   = 'PROC_VALUES' ).
+
+      define_value( symbol = '>'       type = type_native value   = 'PROC_GT' ).
+      define_value( symbol = '>='      type = type_native value   = 'PROC_GTE' ).
+      define_value( symbol = '<'       type = type_native value   = 'PROC_LT' ).
+      define_value( symbol = '<='      type = type_native value   = 'PROC_LTE' ).
+      define_value( symbol = '='       type = type_native value   = 'PROC_EQL' ). "Math equal
+      define_value( symbol = 'eq?'     type = type_native value   = 'PROC_EQ' ).
+      define_value( symbol = 'eqv?'    type = type_native value   = 'PROC_EQV' ).
+      define_value( symbol = 'equal?'  type = type_native value   = 'PROC_EQUAL' ).
+
+      define_value( symbol = 'not'      type = type_native value   = 'PROC_NOT' ).
+
+      load_list( ).
 
       define_value( symbol = 'make-parameter'    type = type_native value = 'PROC_MAKE_PARAMETER' ).
-
-      define_value( symbol = 'current-input-port'  type = type_native value = 'PROC_CURRENT_INPUT_PORT' ).
-      define_value( symbol = 'current-output-port' type = type_native value = 'PROC_CURRENT_OUTPUT_PORT' ).
-      define_value( symbol = 'current-error-port'  type = type_native value = 'PROC_CURRENT_ERROR_PORT' ).
-
-      define_value( symbol = 'close-input-port'  type = type_native value = 'PROC_CLOSE_INPUT_PORT' ).
-      define_value( symbol = 'close-output-port' type = type_native value = 'PROC_CLOSE_OUTPUT_PORT' ).
-      define_value( symbol = 'close-port'        type = type_native value = 'PROC_CLOSE_PORT' ).
 
 *     vector-related functions
       define_value( symbol = 'vector'        type = type_native value   = 'PROC_VECTOR' ).
@@ -11036,10 +11194,7 @@
       define_value( symbol = 'char?'       type = type_native value = 'PROC_IS_CHAR' ).
       define_value( symbol = 'hash?'       type = type_native value = 'PROC_IS_HASH' ).
 
-      define_value( symbol = 'number?'     type = type_native value = 'PROC_IS_NUMBER' ).
-      define_value( symbol = 'nan?'        type = type_native value = 'PROC_IS_NAN' ).
-      define_value( symbol = 'finite?'     type = type_native value = 'PROC_IS_FINITE' ).
-      define_value( symbol = 'infinite?'   type = type_native value = 'PROC_IS_INFINITE' ).
+
 
       define_value( symbol = 'exact-integer?'    type = type_native value = 'PROC_IS_EXACT_INTEGER' ).
       define_value( symbol = 'integer?'    type = type_native value = 'PROC_IS_INTEGER' ).
@@ -11072,89 +11227,12 @@
       define_value( symbol = 'char-ready?'  type = type_native value = 'PROC_IS_CHAR_READY' ).
       define_value( symbol = 'peek-char'    type = type_native value = 'PROC_PEEK_CHAR' ).
 
-      define_value( symbol = 'exact'          type = type_native value = 'PROC_TO_EXACT' ).
-      define_value( symbol = 'inexact'        type = type_native value = 'PROC_TO_INEXACT' ).
-
-      define_value( symbol = 'number->string' type = type_native value = 'PROC_NUM_TO_STRING' ).
-      define_value( symbol = 'string->number' type = type_native value = 'PROC_STRING_TO_NUM' ).
-      define_value( symbol = 'make-string'    type = type_native value = 'PROC_MAKE_STRING' ).
-      define_value( symbol = 'string'         type = type_native value = 'PROC_STRING' ).
-      define_value( symbol = 'string->list'   type = type_native value = 'PROC_STRING_TO_LIST' ).
-      define_value( symbol = 'list->string'   type = type_native value = 'PROC_LIST_TO_STRING' ).
-      define_value( symbol = 'symbol->string' type = type_native value = 'PROC_SYMBOL_TO_STRING' ).
-      define_value( symbol = 'string->symbol' type = type_native value = 'PROC_STRING_TO_SYMBOL' ).
-      define_value( symbol = 'string-append'  type = type_native value = 'PROC_STRING_APPEND' ).
-      define_value( symbol = 'string-length'  type = type_native value = 'PROC_STRING_LENGTH' ).
-      define_value( symbol = 'string-copy'    type = type_native value = 'PROC_STRING_COPY' ).
-      define_value( symbol = 'substring'      type = type_native value = 'PROC_STRING_COPY' ).
-      define_value( symbol = 'string-ref'     type = type_native value = 'PROC_STRING_REF' ).
-      define_value( symbol = 'string-set!'    type = type_native value = 'PROC_STRING_SET' ).
-
-      define_value( symbol = 'string=?'     type = type_native value   = 'PROC_STRING_LIST_IS_EQ' ).
-      define_value( symbol = 'string<?'     type = type_native value   = 'PROC_STRING_LIST_IS_LT' ).
-      define_value( symbol = 'string>?'     type = type_native value   = 'PROC_STRING_LIST_IS_GT' ).
-      define_value( symbol = 'string<=?'    type = type_native value   = 'PROC_STRING_LIST_IS_LE' ).
-      define_value( symbol = 'string>=?'    type = type_native value   = 'PROC_STRING_LIST_IS_GE' ).
-
-      define_value( symbol = 'string-ci=?'     type = type_native value   = 'PROC_STRING_CI_LIST_IS_EQ' ).
-      define_value( symbol = 'string-ci<?'     type = type_native value   = 'PROC_STRING_CI_LIST_IS_LT' ).
-      define_value( symbol = 'string-ci>?'     type = type_native value   = 'PROC_STRING_CI_LIST_IS_GT' ).
-      define_value( symbol = 'string-ci<=?'    type = type_native value   = 'PROC_STRING_CI_LIST_IS_LE' ).
-      define_value( symbol = 'string-ci>=?'    type = type_native value   = 'PROC_STRING_CI_LIST_IS_GE' ).
-
-*     Math
-      define_value( symbol = 'abs'   type = type_native value = 'PROC_ABS' ).
-      define_value( symbol = 'sin'   type = type_native value = 'PROC_SIN' ).
-      define_value( symbol = 'cos'   type = type_native value = 'PROC_COS' ).
-      define_value( symbol = 'tan'   type = type_native value = 'PROC_TAN' ).
-      define_value( symbol = 'asin'  type = type_native value = 'PROC_ASIN' ).
-      define_value( symbol = 'acos'  type = type_native value = 'PROC_ACOS' ).
-      define_value( symbol = 'atan'  type = type_native value = 'PROC_ATAN' ).
-      define_value( symbol = 'sinh'  type = type_native value = 'PROC_SINH' ).
-      define_value( symbol = 'cosh'  type = type_native value = 'PROC_COSH' ).
-      define_value( symbol = 'tanh'  type = type_native value = 'PROC_TANH' ).
-      define_value( symbol = 'asinh' type = type_native value = 'PROC_ASINH' ).
-      define_value( symbol = 'acosh' type = type_native value = 'PROC_ACOSH' ).
-      define_value( symbol = 'atanh' type = type_native value = 'PROC_ATANH' ).
-      define_value( symbol = 'expt'  type = type_native value = 'PROC_EXPT' ).
-      define_value( symbol = 'exp'   type = type_native value = 'PROC_EXP' ).
-      define_value( symbol = 'log'   type = type_native value = 'PROC_LOG' ).
-      define_value( symbol = 'sqrt'  type = type_native value = 'PROC_SQRT' ).
-
-      define_value( symbol = 'square'             type = type_native value = 'PROC_SQUARE' ).
-      define_value( symbol = 'exact-integer-sqrt' type = type_native value = 'PROC_INT_SQRT' ).
-      define_value( symbol = 'floor-quotient'     type = type_native value = 'PROC_FLOOR_QUOTIENT' ).
-      define_value( symbol = 'floor-remainder'    type = type_native value = 'PROC_FLOOR_REMAINDER' ).
-      define_value( symbol = 'truncate-remainder' type = type_native value = 'PROC_TRUNC_REMAINDER' ).
-      define_value( symbol = 'truncate-quotient'  type = type_native value = 'PROC_TRUNC_QUOTIENT' ).
-
-      define_value( symbol = 'make-rectangular' type = type_native value = 'PROC_MAKE_RECTANGULAR' ).
-      define_value( symbol = 'make-polar'       type = type_native value = 'PROC_MAKE_POLAR' ).
-      define_value( symbol = 'real-part'        type = type_native value = 'PROC_REAL_PART' ).
-      define_value( symbol = 'imag-part'        type = type_native value = 'PROC_IMAG_PART' ).
-      define_value( symbol = 'magnitude'        type = type_native value = 'PROC_MAGNITUDE' ).
-      define_value( symbol = 'angle'            type = type_native value = 'PROC_ANGLE' ).
+      load_strings( ).
+      load_numbers( ).
+      load_math( ).
 
       " not implemented yet
       define_value( symbol = 'rationalize'        type = type_native value = 'PROC_RATIONALIZE' ).
-
-      define_value( symbol = 'floor'     type = type_native value = 'PROC_FLOOR' ).
-      define_value( symbol = 'floor/'    type = type_native value = 'PROC_FLOOR_NEW' ).
-      define_value( symbol = 'ceiling'   type = type_native value = 'PROC_CEILING' ).
-      define_value( symbol = 'truncate'  type = type_native value = 'PROC_TRUNCATE' ).
-      define_value( symbol = 'truncate/' type = type_native value = 'PROC_TRUNCATE_NEW' ).
-      define_value( symbol = 'round'     type = type_native value = 'PROC_ROUND' ).
-
-      define_value( symbol = 'numerator'   type = type_native value = 'PROC_NUMERATOR' ).
-      define_value( symbol = 'denominator' type = type_native value = 'PROC_DENOMINATOR' ).
-      define_value( symbol = 'remainder' type = type_native value = 'PROC_REMAINDER' ).
-      define_value( symbol = 'modulo'    type = type_native value = 'PROC_MODULO' ).
-      define_value( symbol = 'quotient'  type = type_native value = 'PROC_QUOTIENT' ).
-      define_value( symbol = 'random'    type = type_native value = 'PROC_RANDOM' ).
-      define_value( symbol = 'max'       type = type_native value = 'PROC_MAX' ).
-      define_value( symbol = 'min'       type = type_native value = 'PROC_MIN' ).
-      define_value( symbol = 'gcd'       type = type_native value = 'PROC_GCD' ).
-      define_value( symbol = 'lcm'       type = type_native value = 'PROC_LCM' ).
 
       define_value( symbol = 'zero?'     type = type_native value = 'PROC_IS_ZERO' ).
       define_value( symbol = 'positive?' type = type_native value = 'PROC_IS_POSITIVE' ).
@@ -11182,16 +11260,19 @@
       define_value( symbol = 'ab-get' type = type_native value = 'PROC_ABAP_GET' ).
       define_value( symbol = 'ab-set' type = type_native value = 'PROC_ABAP_SET' ).
 
-*     Compatibility
-      define_value( symbol = 'empty?'  type = type_native value   = 'PROC_NILP' ).
-      define_value( symbol = 'first'   type = type_native value   = 'PROC_CAR' ).
-      define_value( symbol = 'rest'    type = type_native value   = 'PROC_CDR' ).
-
 *     Errors
       define_value( symbol = 'raise'   type = type_native value   = 'PROC_RAISE' ).
       define_value( symbol = 'error'   type = type_native value   = 'PROC_ERROR' ).
 
 *     Ports
+      define_value( symbol = 'current-input-port'  type = type_native value = 'PROC_CURRENT_INPUT_PORT' ).
+      define_value( symbol = 'current-output-port' type = type_native value = 'PROC_CURRENT_OUTPUT_PORT' ).
+      define_value( symbol = 'current-error-port'  type = type_native value = 'PROC_CURRENT_ERROR_PORT' ).
+
+      define_value( symbol = 'close-input-port'    type = type_native value = 'PROC_CLOSE_INPUT_PORT' ).
+      define_value( symbol = 'close-output-port'   type = type_native value = 'PROC_CLOSE_OUTPUT_PORT' ).
+      define_value( symbol = 'close-port'          type = type_native value = 'PROC_CLOSE_PORT' ).
+
       define_value( symbol = 'input-port?'         type = type_native value   = 'PROC_IS_INPUT_PORT' ).
       define_value( symbol = 'output-port?'        type = type_native value   = 'PROC_IS_OUTPUT_PORT' ).
       define_value( symbol = 'textual-port?'       type = type_native value   = 'PROC_IS_TEXTUAL_PORT' ).
@@ -11204,55 +11285,12 @@
       define_value( symbol = 'get-output-string'   type = type_native value   = 'PROC_GET_OUTPUT_STRING' ).
       define_value( symbol = 'eof-object'          type = type_native value   = 'PROC_EOF_OBJECT' ).
 
-      define_value( symbol = 'char-alphabetic?'  type = type_native value   = 'PROC_IS_CHAR_ALPHABETIC' ).
-      define_value( symbol = 'char-numeric?'     type = type_native value   = 'PROC_IS_CHAR_NUMERIC' ).
-      define_value( symbol = 'char-whitespace?'  type = type_native value   = 'PROC_IS_CHAR_WHITESPACE' ).
-      define_value( symbol = 'char-upper-case?'  type = type_native value   = 'PROC_IS_CHAR_UPPER_CASE' ).
-      define_value( symbol = 'char-lower-case?'  type = type_native value   = 'PROC_IS_CHAR_LOWER_CASE' ).
-
-      define_value( symbol = 'digit-value'       type = type_native value   = 'PROC_DIGIT_VALUE' ).
-      define_value( symbol = 'char->integer'     type = type_native value   = 'PROC_CHAR_TO_INTEGER' ).
-      define_value( symbol = 'integer->char'     type = type_native value   = 'PROC_INTEGER_TO_CHAR' ).
-      define_value( symbol = 'char-upcase'       type = type_native value   = 'PROC_CHAR_UPCASE' ).
-      define_value( symbol = 'char-downcase'     type = type_native value   = 'PROC_CHAR_DOWNCASE' ).
-
-      define_value( symbol = 'char=?'     type = type_native value   = 'PROC_CHAR_LIST_IS_EQ' ).
-      define_value( symbol = 'char<?'     type = type_native value   = 'PROC_CHAR_LIST_IS_LT' ).
-      define_value( symbol = 'char>?'     type = type_native value   = 'PROC_CHAR_LIST_IS_GT' ).
-      define_value( symbol = 'char<=?'    type = type_native value   = 'PROC_CHAR_LIST_IS_LE' ).
-      define_value( symbol = 'char>=?'    type = type_native value   = 'PROC_CHAR_LIST_IS_GE' ).
-
-      define_value( symbol = 'char-ci=?'     type = type_native value   = 'PROC_CHAR_CI_LIST_IS_EQ' ).
-      define_value( symbol = 'char-ci<?'     type = type_native value   = 'PROC_CHAR_CI_LIST_IS_LT' ).
-      define_value( symbol = 'char-ci>?'     type = type_native value   = 'PROC_CHAR_CI_LIST_IS_GT' ).
-      define_value( symbol = 'char-ci<=?'    type = type_native value   = 'PROC_CHAR_CI_LIST_IS_LE' ).
-      define_value( symbol = 'char-ci>=?'    type = type_native value   = 'PROC_CHAR_CI_LIST_IS_GE' ).
+      load_chars( ).
 
       define_value( symbol = 'sql-query'         type = type_native value   = 'PROC_SQL_QUERY' ).
       define_value( symbol = 'define-query'      type = type_native value   = 'PROC_SQL_PREPARE' ).
 
-      define_value( symbol = 'turtles'       type = type_native value   = 'PROC_TURTLE_NEW' ).
-      define_value( symbol = 'turtles?'      type = type_native value   = 'PROC_TURTLE_EXIST' ).
-      define_value( symbol = 'move'          type = type_native value   = 'PROC_TURTLE_MOVE' ).
-      define_value( symbol = 'draw'          type = type_native value   = 'PROC_TURTLE_DRAW' ).
-      define_value( symbol = 'erase'         type = type_native value   = 'PROC_TURTLE_ERASE' ).
-      define_value( symbol = 'move-offset'   type = type_native value   = 'PROC_TURTLE_MOVE_OFFSET' ).
-      define_value( symbol = 'draw-offset'   type = type_native value   = 'PROC_TURTLE_DRAW_OFFSET' ).
-      define_value( symbol = 'erase-offset'  type = type_native value   = 'PROC_TURTLE_ERASE_OFFSET' ).
-      define_value( symbol = 'turn'          type = type_native value   = 'PROC_TURTLE_TURN_DEGREES' ).
-      define_value( symbol = 'turn/radians'  type = type_native value   = 'PROC_TURTLE_TURN_RADIANS' ).
-      define_value( symbol = 'set-pen-width' type = type_native value   = 'PROC_TURTLE_SET_PEN_WIDTH' ).
-      define_value( symbol = 'set-pen-color' type = type_native value   = 'PROC_TURTLE_SET_PEN_COLOR' ).
-
-      define_value( symbol = 'merge'             type = type_native value = 'PROC_TURTLE_MERGE' ).
-      define_value( symbol = 'clean'             type = type_native value = 'PROC_TURTLE_CLEAN' ).
-      define_value( symbol = 'turtle-state'      type = type_native value = 'PROC_TURTLE_STATE' ).
-      define_value( symbol = 'turtles-height'    type = type_native value = 'PROC_TURTLE_HEIGHT' ).
-      define_value( symbol = 'turtles-width'     type = type_native value = 'PROC_TURTLE_WIDTH' ).
-      define_value( symbol = 'turtles-pen-color' type = type_native value = 'PROC_TURTLE_PEN_COLOR' ).
-      define_value( symbol = 'turtles-pen-width' type = type_native value = 'PROC_TURTLE_PEN_WIDTH' ).
-      define_value( symbol = 'regular-poly'      type = type_native value = 'PROC_TURTLE_REGULAR_POLY' ).
-      define_value( symbol = 'regular-polys'     type = type_native value = 'PROC_TURTLE_REGULAR_POLYS' ).
+      load_turtles( ).
 
       DATA lr_ref TYPE REF TO data.
 *     Define a value in the environment for SYST

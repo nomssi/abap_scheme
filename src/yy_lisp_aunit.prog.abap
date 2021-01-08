@@ -911,7 +911,7 @@
                       |      (i 1 (+ 1 i))| &
                       |      ((= i 9) (display lst )| &
                       |       (append num lst)) ))|
-               expected = 'Eval: Identifier ) not valid.' ).                  " should not dump!
+               expected = 'Eval: Not a valid number )' ).                  " should not dump!
      ENDMETHOD.                    "do_4
 
      METHOD do_5.
@@ -1649,7 +1649,7 @@
        scheme( code = '(char->integer #\x9E9)'
                expected = '2537' ).
        scheme( code = '\x9E9'
-               expected = 'Eval: Identifier \x9E9 not valid.' ).
+               expected = 'Eval: Not a valid number \x9E9' ).
      ENDMETHOD.                    "char_unicode_1
 
      METHOD char_whitespace_1.
@@ -2282,15 +2282,8 @@
      ENDMETHOD.                    "to_exact_1
 
      METHOD to_exact_2.
-       DATA lv_int TYPE tv_int.
-       TRY.
-           lv_int = '3e10'.
-           scheme( code = '(exact 3e10)'
-                   expected = '30000000000' ).
-       CATCH cx_sy_conversion_no_number.
-           scheme( code = '(exact 3e10)'
-                   expected = 'Eval: no exact representation of 30000000000.0' ).
-       ENDTRY.
+       scheme( code = '(exact 3e10)'
+               expected = '30000000000' ).
      ENDMETHOD.
 
      METHOD to_inexact_1.
