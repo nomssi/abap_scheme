@@ -237,6 +237,12 @@
     ENDCASE.
   END-OF-DEFINITION.
 
+  DEFINE _get_arg0_as_number.
+    _validate list.
+    _validate_number list->car &2.
+    &1 ?= list->car.
+  END-OF-DEFINITION.
+
   DEFINE _validate_escape.
     _validate &1.
     IF &1->type NE type_escape_proc.
@@ -869,6 +875,15 @@
       METHODS to_real RETURNING VALUE(rv_real) TYPE tv_real
                       RAISING lcx_lisp_exception.
       METHODS absolute RETURNING VALUE(num) TYPE REF TO lcl_lisp_number.
+      METHODS real_is_equal IMPORTING res TYPE ts_number
+                            RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                            RAISING lcx_lisp_exception.
+      METHODS number_is_equal IMPORTING other TYPE REF TO lcl_lisp_number
+                              RETURNING VALUE(result) TYPE REF TO lcl_lisp.
+      METHODS number_is_zero IMPORTING is_number TYPE ts_number
+                             RETURNING VALUE(null) TYPE flag.
+      METHODS get_number_info RETURNING VALUE(rs_info) TYPE ts_number
+                              RAISING lcx_lisp_exception.
 
       DATA exact TYPE flag READ-ONLY.
       DATA finite TYPE flag READ-ONLY.
@@ -1078,6 +1093,7 @@
       METHODS is_nan REDEFINITION.
       METHODS is_finite REDEFINITION.
       METHODS is_infinite REDEFINITION.
+      METHODS is_real RETURNING VALUE(flag) TYPE flag.
 
     PROTECTED SECTION.
       CLASS-METHODS new_rectangular IMPORTING x TYPE REF TO lcl_lisp_number DEFAULT zero
@@ -6234,11 +6250,11 @@
       result = lo_u8_to.
     ENDMETHOD.
 
-* (memq obj list)  return the first sublist of
-* list whose car is obj,  where  the  sublists  of list are the non-empty lists
-* returned by (list-tail list  k) for k less than the length of list.
+* (memq obj list) return the first sublist of list whose car is obj
+* where  the  sublists  of list are the non-empty lists returned by (list-tail list  k)
+* for k less than the length of list.
 * If obj does not occur in list, then #f (not the empty list) is returned.
-* Memq uses eq? to compare obj with the elements  of list
+* Memq uses eq? to compare obj with the elements of list
     METHOD proc_memq.
       _validate: list, list->car, list->cdr.
 
@@ -6251,14 +6267,11 @@
       WHILE lo_sublist NE nil AND lo_sublist->car->type EQ lo_item->type.
 
         CASE lo_item->type.
-          WHEN type_integer.
-            IF CAST lcl_lisp_integer( lo_item )->int = CAST lcl_lisp_integer( lo_sublist->car )->int.
-              result = lo_sublist.
-              RETURN.
-            ENDIF.
-
-          WHEN type_real.
-            IF CAST lcl_lisp_real( lo_item )->float_eq( CAST lcl_lisp_real( lo_sublist->car )->real ).
+          WHEN type_integer  " number
+            OR type_rational
+            OR type_real
+            OR type_complex.
+            IF CAST lcl_lisp_number( lo_item )->number_is_equal( CAST lcl_lisp_number( lo_sublist->car ) ) EQ true.
               result = lo_sublist.
               RETURN.
             ENDIF.
@@ -6369,22 +6382,15 @@
         IF lo_pair->car->type EQ lo_key->type.
 
           CASE lo_key->type.
-            WHEN type_integer.
-              IF CAST lcl_lisp_integer( lo_key )->int = CAST lcl_lisp_integer( lo_pair->car )->int.
-                result = lo_pair.
-                RETURN.
-              ENDIF.
+            WHEN type_integer   " number
+              OR type_rational
+              OR type_real
+              OR type_complex.
 
-            WHEN type_rational.
-              DATA(lo_key_rat) = CAST lcl_lisp_rational( lo_key ).
-              DATA(lo_target_rat) = CAST lcl_lisp_rational( lo_pair->car ).
-              IF lo_key_rat->int = lo_target_rat->int AND lo_key_rat->denominator = lo_target_rat->denominator.
-                result = lo_pair.
-                RETURN.
-              ENDIF.
+              DATA(lo_number) = CAST lcl_lisp_number( lo_key ).
+              DATA(lo_other) = CAST lcl_lisp_number( lo_pair->car ).
 
-            WHEN type_real.
-              IF CAST lcl_lisp_real( lo_key )->float_eq( CAST lcl_lisp_real( lo_pair->car )->real ).
+              IF lo_number->number_is_equal( lo_other ) EQ true.
                 result = lo_pair.
                 RETURN.
               ENDIF.
@@ -7005,129 +7011,82 @@
 
     METHOD proc_eql.
       _data_local_numeric.
-      DATA lo_rat_2 TYPE REF TO lcl_lisp_rational.
-      DATA lv_int TYPE tv_int.
-      DATA lv_real TYPE tv_real.
+      DATA lo_number TYPE REF TO lcl_lisp_number.
 
       _validate: list, list->car, list->cdr.
 
       result = false.
       DATA(lo_ptr) = list.
-      IF lo_ptr->cdr->type NE type_pair.
+
+      _validate_number lo_ptr->car '='.
+      lo_number ?= lo_ptr->car.
+      IF lo_number->is_nan( ) EQ true.
+        RETURN.
+      ENDIF.
+
+      DATA(res) = VALUE ts_result( type = lo_number->type
+                                   real_part-exact = lo_number->exact
+                                   imag_part-subtype = type_integer
+                                   exact = lo_number->exact
+                                   operation = '-' ).
+      CASE lo_number->type.
+        WHEN type_complex.
+          lo_z = CAST lcl_lisp_complex( lo_number ).
+
+          res-real_part = lo_z->zreal->get_number_info( ).
+          res-imag_part = lo_z->zimag->get_number_info( ).
+
+        WHEN OTHERS.
+          res-real_part = lo_number->get_number_info( ).
+      ENDCASE.
+      lo_ptr = lo_ptr->cdr.
+
+      IF lo_ptr->type NE type_pair.
         throw( c_error_incorrect_input ).
       ENDIF.
 
-      WHILE lo_ptr->cdr NE nil.
-        _validate_number: lo_ptr->car '=',
-                          lo_ptr->cdr->car '='.
-        CASE lo_ptr->car->type.
-          WHEN type_integer.
-            _to_integer lo_ptr->car lv_int.
-            CASE lo_ptr->cdr->car->type.
-              WHEN type_integer.
-                IF lv_int = CAST lcl_lisp_integer( lo_ptr->cdr->car )->int.
-                  result = true.
-                ELSE.
-                  result = false.
-                  EXIT.
-                ENDIF.
+      WHILE lo_ptr NE nil.
+        _validate_number lo_ptr->car '='.
+        lo_number ?= lo_ptr->car.
+        IF lo_number->is_nan( ) EQ true.
+          result = false.
+          RETURN.
+        ENDIF.
 
-              WHEN type_real.
-                _to_real lo_ptr->cdr->car lv_real.
-                IF lv_int = trunc( lv_real ) AND frac( lv_real ) EQ 0.
-                  result = true.
-                ELSE.
-                  result = false.
-                  EXIT.
-                ENDIF.
+        CASE lo_number->type.
+          WHEN type_integer
+            OR type_rational
+            OR type_real.
 
-              WHEN type_rational.
-                lo_rat ?= lo_ptr->cdr->car.
-                IF lv_int = lo_rat->int AND lo_rat->denominator EQ 1.
-                  result = true.
-                ELSE.
-                  result = false.
-                  EXIT.
-                ENDIF.
+            IF res-type EQ type_complex.
+              " returns false if imaginary part is not 0
+              IF lo_number->number_is_zero( res-imag_part ) EQ abap_false.
+                result = false.
+                EXIT.
+              ENDIF.
+            ENDIF.
 
-              WHEN type_complex.
-                lo_ptr->cdr->car->raise( `[eql] not implemented yet for complex numbers` ).
-            ENDCASE.
+            " check if real part matches
+            result = lo_number->real_is_equal( res-real_part ).
 
-          WHEN type_real.
-            lv_real = CAST lcl_lisp_real( lo_ptr->car )->real.
-            CASE lo_ptr->cdr->car->type.
-              WHEN type_integer.
-                IF trunc( lv_real ) = CAST lcl_lisp_integer( lo_ptr->cdr->car )->int AND frac( lv_real ) EQ 0.
-                  result = true.
-                ELSE.
-                  result = false.
-                  EXIT.
-                ENDIF.
+          WHEN type_complex.
+            lo_z = CAST lcl_lisp_complex( lo_number ).
 
-              WHEN type_real.
-                IF CAST lcl_lisp_real( lo_ptr->cdr->car )->float_eq( lv_real ).
-                  result = true.
-                ELSE.
-                  result = false.
-                  EXIT.
-                ENDIF.
+            result = lo_z->zreal->real_is_equal( res-real_part ).    " check if real part matches
 
-              WHEN type_rational.
-                lo_rat ?= lo_ptr->cdr->car.
-                lv_real = lv_real * lo_rat->denominator.
-
-                IF trunc( lv_real ) = lo_rat->int AND frac( lv_real ) EQ 0.
-                  result = true.
-                ELSE.
-                  result = false.
-                  EXIT.
-                ENDIF.
-
-               WHEN type_complex.
-                 lo_ptr->cdr->car->raise( `[eql] not implemented yet for complex numbers` ).
-            ENDCASE.
-
-          WHEN type_rational.
-            lo_rat = CAST lcl_lisp_rational( lo_ptr->car ).
-            CASE lo_ptr->cdr->car->type.
-              WHEN type_integer.
-                IF lo_rat->int = CAST lcl_lisp_integer( lo_ptr->cdr->car )->int
-                  AND lo_rat->denominator EQ 1.
-                  result = true.
-                ELSE.
-                  result = false.
-                  EXIT.
-                ENDIF.
-
-              WHEN type_real.
-                lv_real = CAST lcl_lisp_real( lo_ptr->cdr->car )->real * lo_rat->denominator.
-
-                IF lo_rat->int = trunc( lv_real ) AND frac( lv_real ) EQ 0.
-                  result = true.
-                ELSE.
-                  result = false.
-                  EXIT.
-                ENDIF.
-
-              WHEN type_rational.
-                lo_rat_2 ?= lo_ptr->cdr->car.
-                IF lo_rat->int = lo_rat_2->int
-                  AND lo_rat->denominator EQ lo_rat_2->denominator.
-                  result = true.
-                ELSE.
-                  result = false.
-                  EXIT.
-                ENDIF.
-
-              WHEN type_complex.
-                lo_ptr->cdr->car->raise( `[*] not implemented yet for complex numbers` ).
-            ENDCASE.
+            IF result = true.
+              result = lo_z->zimag->real_is_equal( res-imag_part ).  " check if imaginary part matches
+            ENDIF.
 
         ENDCASE.
 
+        IF result = false.
+          EXIT.
+        ENDIF.
+
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
+
     ENDMETHOD.                    "proc_eql
 
     METHOD proc_eq.
@@ -7341,6 +7300,10 @@
           OR type_rational
           OR type_integer.
           result = true.
+        WHEN type_complex.
+          IF CAST lcl_lisp_complex( list->car )->is_real( ).
+            result = true.
+          ENDIF.
       ENDCASE.
     ENDMETHOD.
 
@@ -8346,17 +8309,13 @@
 
     METHOD proc_is_exact.
       DATA lo_number TYPE REF TO lcl_lisp_number.
-      _validate list.
-      _validate_number list->car `exact?`.
-      lo_number ?= list->car.
+      _get_arg0_as_number lo_number `exact?`.
       result = lo_number->is_exact( ).
     ENDMETHOD.
 
     METHOD proc_is_inexact.
       DATA lo_number TYPE REF TO lcl_lisp_number.
-      _validate list.
-      _validate_number list->car `inexact?`.
-      lo_number ?= list->car.
+      _get_arg0_as_number lo_number `inexact?`.
       result = lo_number->is_inexact( ).
     ENDMETHOD.
 
@@ -8433,9 +8392,7 @@
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
       DATA lv_real TYPE tv_real.
 
-      _validate list.
-      _validate_number list->car `inexact`.
-      lo_number ?= list->car.
+      _get_arg0_as_number lo_number `inexact`.
       IF lo_number->exact EQ abap_true.
         CASE lo_number->type.
           WHEN type_rational.
@@ -10939,6 +10896,7 @@
       define_value( symbol = 'set-car!' type = type_native value   = 'PROC_SET_CAR' ).
       define_value( symbol = 'set-cdr!' type = type_native value   = 'PROC_SET_CDR' ).
 
+      " CxR library
       define_value( symbol = 'caar'     type = type_native value   = 'PROC_CAAR' ).
       define_value( symbol = 'cadr'     type = type_native value   = 'PROC_CADR' ).
       define_value( symbol = 'cdar'     type = type_native value   = 'PROC_CDAR' ).
@@ -10985,9 +10943,6 @@
 
     METHOD load_numbers.
       define_value( symbol = 'number?'     type = type_native value = 'PROC_IS_NUMBER' ).
-      define_value( symbol = 'nan?'        type = type_native value = 'PROC_IS_NAN' ).
-      define_value( symbol = 'finite?'     type = type_native value = 'PROC_IS_FINITE' ).
-      define_value( symbol = 'infinite?'   type = type_native value = 'PROC_IS_INFINITE' ).
 
       define_value( symbol = 'exact'      type = type_native value = 'PROC_TO_EXACT' ).
       define_value( symbol = 'inexact'    type = type_native value = 'PROC_TO_INEXACT' ).
@@ -11021,22 +10976,6 @@
     METHOD load_math.
 *     Math
       define_value( symbol = 'abs'   type = type_native value = 'PROC_ABS' ).
-      define_value( symbol = 'sin'   type = type_native value = 'PROC_SIN' ).
-      define_value( symbol = 'cos'   type = type_native value = 'PROC_COS' ).
-      define_value( symbol = 'tan'   type = type_native value = 'PROC_TAN' ).
-      define_value( symbol = 'asin'  type = type_native value = 'PROC_ASIN' ).
-      define_value( symbol = 'acos'  type = type_native value = 'PROC_ACOS' ).
-      define_value( symbol = 'atan'  type = type_native value = 'PROC_ATAN' ).
-      define_value( symbol = 'sinh'  type = type_native value = 'PROC_SINH' ).
-      define_value( symbol = 'cosh'  type = type_native value = 'PROC_COSH' ).
-      define_value( symbol = 'tanh'  type = type_native value = 'PROC_TANH' ).
-      define_value( symbol = 'asinh' type = type_native value = 'PROC_ASINH' ).
-      define_value( symbol = 'acosh' type = type_native value = 'PROC_ACOSH' ).
-      define_value( symbol = 'atanh' type = type_native value = 'PROC_ATANH' ).
-      define_value( symbol = 'expt'  type = type_native value = 'PROC_EXPT' ).
-      define_value( symbol = 'exp'   type = type_native value = 'PROC_EXP' ).
-      define_value( symbol = 'log'   type = type_native value = 'PROC_LOG' ).
-      define_value( symbol = 'sqrt'  type = type_native value = 'PROC_SQRT' ).
 
       define_value( symbol = 'square'             type = type_native value = 'PROC_SQUARE' ).
       define_value( symbol = 'exact-integer-sqrt' type = type_native value = 'PROC_INT_SQRT' ).
@@ -11044,9 +10983,32 @@
       define_value( symbol = 'floor-remainder'    type = type_native value = 'PROC_FLOOR_REMAINDER' ).
       define_value( symbol = 'truncate-remainder' type = type_native value = 'PROC_TRUNC_REMAINDER' ).
       define_value( symbol = 'truncate-quotient'  type = type_native value = 'PROC_TRUNC_QUOTIENT' ).
+
+      " Inexact Library
+      define_value( symbol = 'sin'   type = type_native value = 'PROC_SIN' ).
+      define_value( symbol = 'cos'   type = type_native value = 'PROC_COS' ).
+      define_value( symbol = 'tan'   type = type_native value = 'PROC_TAN' ).
+      define_value( symbol = 'asin'  type = type_native value = 'PROC_ASIN' ).
+      define_value( symbol = 'acos'  type = type_native value = 'PROC_ACOS' ).
+      define_value( symbol = 'atan'  type = type_native value = 'PROC_ATAN' ).
+      define_value( symbol = 'exp'   type = type_native value = 'PROC_EXP' ).
+      define_value( symbol = 'log'   type = type_native value = 'PROC_LOG' ).
+      define_value( symbol = 'sqrt'  type = type_native value = 'PROC_SQRT' ).
+      define_value( symbol = 'nan?'        type = type_native value = 'PROC_IS_NAN' ).
+      define_value( symbol = 'finite?'     type = type_native value = 'PROC_IS_FINITE' ).
+      define_value( symbol = 'infinite?'   type = type_native value = 'PROC_IS_INFINITE' ).
+
+      define_value( symbol = 'expt'  type = type_native value = 'PROC_EXPT' ).
+      define_value( symbol = 'sinh'  type = type_native value = 'PROC_SINH' ).
+      define_value( symbol = 'cosh'  type = type_native value = 'PROC_COSH' ).
+      define_value( symbol = 'tanh'  type = type_native value = 'PROC_TANH' ).
+      define_value( symbol = 'asinh' type = type_native value = 'PROC_ASINH' ).
+      define_value( symbol = 'acosh' type = type_native value = 'PROC_ACOSH' ).
+      define_value( symbol = 'atanh' type = type_native value = 'PROC_ATANH' ).
     ENDMETHOD.
 
     METHOD load_chars.
+      " Char Library
       define_value( symbol = 'char-alphabetic?'  type = type_native value   = 'PROC_IS_CHAR_ALPHABETIC' ).
       define_value( symbol = 'char-numeric?'     type = type_native value   = 'PROC_IS_CHAR_NUMERIC' ).
       define_value( symbol = 'char-whitespace?'  type = type_native value   = 'PROC_IS_CHAR_WHITESPACE' ).
@@ -11370,6 +11332,7 @@
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
       DATA lo_real TYPE REF TO lcl_lisp_real.
+      DATA lo_z TYPE REF TO lcl_lisp_complex.
 
       result = false.
 
@@ -11385,36 +11348,28 @@
       CHECK type EQ b->type.
 
       CASE type.
-        WHEN type_integer.
+        WHEN type_integer
+          OR type_rational
+          OR type_real
+          OR type_complex.
 * obj1 and obj2 are both exact numbers and are numerically equal (in the sense of =).
-          lo_int ?= b.
-          DATA(lo_me_int) = CAST lcl_lisp_integer( me ).
-          CHECK lo_me_int->int = lo_int->int
-            AND lo_me_int->exact = lo_int->exact.
 
-        WHEN type_rational.
-          lo_rat ?= b.
-          DATA(lo_me_rat) = CAST lcl_lisp_rational( me ).
-          CHECK lo_me_rat->int = lo_rat->int
-            AND lo_me_rat->denominator = lo_rat->denominator
-            AND lo_me_rat->exact = lo_rat->exact.
-
-        WHEN type_real.
 *obj1 and obj2 are both inexact numbers such that they are numerically equal (in the sense of =)
 *and they yield the same results (in the sense of eqv?) when passed as arguments to any other
 *procedure that can be defined as a finite composition of Scheme’s standard arithmetic procedures,
 *provided it does not result in a NaN value.
-          lo_real ?= b.
-          DATA(lo_me_real) = CAST lcl_lisp_real( me ).
-          CHECK lo_me_real->float_eq( lo_real->real )
-            AND lo_me_real->exact = lo_real->exact.
+          DATA(lo_number) = CAST lcl_lisp_number( me ).
+          DATA(lo_other) = CAST lcl_lisp_number( b ).
+
+          CHECK lo_number->exact = lo_other->exact
+            AND lo_number->number_is_equal( lo_other ) EQ true.
 
         WHEN type_symbol.
 * obj1 and obj2 are both symbols and are the same symbol according to the symbol=? procedure (section 6.5).
           DATA(lo_symbol) = CAST lcl_lisp_symbol( me ).
           DATA(lo_s_b) = CAST lcl_lisp_symbol( b ).
           CHECK lo_symbol->value = lo_s_b->value
-              AND lo_symbol->index = lo_s_b->index.  " for uninterned symbols
+            AND lo_symbol->index = lo_s_b->index.  " for uninterned symbols
 
         WHEN type_string.
 * obj1 and obj2 are both characters and are the same character according to the char=? procedure (section 6.6).
@@ -11918,13 +11873,12 @@
     ENDMETHOD.
 
     METHOD is_nan.
-      result = false.
-      CASE type.
-        WHEN type_real.
-          IF me = lcl_lisp_number=>nan OR me = lcl_lisp_number=>neg_nan.
+      if type EQ type_real
+        AND ( me = lcl_lisp_number=>nan OR me = lcl_lisp_number=>neg_nan ).
             result = true.
-          ENDIF.
-      ENDCASE.
+      ELSE.
+        result = false.
+      ENDIF.
     ENDMETHOD.
 
     METHOD is_finite.
@@ -12979,6 +12933,7 @@
       DATA abs_b TYPE tv_real.
 
       result = abap_false.
+      CHECK finite EQ abap_true.
       IF real EQ iv_real.
         result = abap_true.
       ELSEIF exact EQ abap_false.
@@ -13102,10 +13057,240 @@
 
     ENDMETHOD.
 
+    METHOD get_number_info.
+      rs_info = VALUE #( subtype = me->type
+                         exact = me->exact ).
+      CASE type.
+        WHEN type_integer.
+          rs_info-int = CAST lcl_lisp_integer( me )->int.
+
+        WHEN type_rational.
+          DATA(lo_rat) = CAST lcl_lisp_rational( me ).
+          rs_info-nummer = lo_rat->int.
+          rs_info-denom = lo_rat->denominator.
+
+        WHEN type_real.
+          DATA(lo_real) = CAST lcl_lisp_real( me ).
+          rs_info-ref = lo_real.
+          IF lo_real->finite EQ abap_true.
+            rs_info-real = lo_real->real.
+            rs_info-infnan = abap_false.
+          ELSE.
+            rs_info-infnan = abap_true.
+          ENDIF.
+
+        WHEN type_complex.
+          throw( `complex number not supported in [get_number_info]` ).
+
+        WHEN OTHERS.
+          raise( `not a number in [get_number_info]` ).
+      ENDCASE.
+    ENDMETHOD.
+
+    METHOD number_is_zero.
+      CASE is_number-subtype.
+        WHEN type_integer.
+          null = xsdbool( is_number-int EQ 0 ).
+
+        WHEN type_rational.
+          null = xsdbool( is_number-nummer EQ 0 ).
+
+        WHEN type_real.
+          " should logic check exactness?
+          null = xsdbool( is_number-infnan EQ abap_false AND is_number-real EQ 0 ).
+
+        WHEN OTHERS.
+          throw( `Only real number type supported (check equality)` ).
+      ENDCASE.
+    ENDMETHOD.
+
+    METHOD number_is_equal.
+      DATA lo_z TYPE REF TO lcl_lisp_complex.
+      DATA real_part TYPE ts_number.
+      DATA imag_part TYPE ts_number.
+
+      result = false.
+
+      CASE type.
+        WHEN type_integer
+          OR type_rational
+          OR type_real.
+
+          IF other->type EQ type_complex.
+             lo_z ?= other.
+             " returns false if imaginary part of "other" is not 0
+             imag_part = lo_z->zimag->get_number_info( ).   " Fill imag part of other
+             IF NOT number_is_zero( imag_part ).
+               result = false.
+               RETURN.
+             ENDIF.
+
+             real_part = lo_z->zreal->get_number_info( ).
+          ELSE.
+            real_part = other->get_number_info( ).
+          ENDIF.
+
+          result = real_is_equal( real_part ).  " check if real part matches
+
+        WHEN type_complex.
+          lo_z ?= me.
+
+          CASE other->type.
+            WHEN type_integer
+              OR type_rational
+              OR type_real.
+
+             " returns false if imaginary part of "me" is not 0
+             imag_part = lo_z->zimag->get_number_info( ).   " Fill imag part of other
+             IF NOT number_is_zero( imag_part ).
+               result = false.
+               RETURN.
+             ENDIF.
+
+              real_part = other->get_number_info( ).              " Fill real part
+              result = lo_z->zreal->real_is_equal( real_part ).    " check if real part matches
+
+            WHEN type_complex.
+              DATA(lo_other_z) = CAST lcl_lisp_complex( other ).
+
+              real_part = lo_other_z->zreal->get_number_info( ).   " Fill real part of other
+              result = lo_z->zreal->real_is_equal( real_part ).    " check if real part matches
+
+              IF result = true.
+                imag_part = lo_other_z->zimag->get_number_info( ).   " Fill imag part of other
+                result = lo_z->zimag->real_is_equal( imag_part ).    " check if imag part matches
+              ENDIF.
+
+          ENDCASE.
+
+        ENDCASE.
+
+    ENDMETHOD.
+
+    METHOD real_is_equal.
+      result = false.
+
+      CASE type.
+          WHEN type_integer.
+            DATA(lv_int) = CAST lcl_lisp_integer( me )->int.
+
+            CASE res-subtype.
+              WHEN type_integer.
+                IF lv_int = res-int.
+                  result = true.
+                ELSE.
+                  result = false.
+                ENDIF.
+
+              WHEN type_rational.
+                IF lv_int * res-denom = res-nummer.
+                  result = true.
+                ELSE.
+                  result = false.
+                ENDIF.
+
+              WHEN type_real.
+                IF res-infnan EQ abap_false
+                  AND lv_int = trunc( res-real )
+                  AND frac( res-real ) EQ 0.
+                    result = true.
+                ELSE. " either NaN of Infinity
+                  result = false.
+                ENDIF.
+
+              WHEN OTHERS.
+                throw( `Only real number type supported (check equality)` ).
+
+            ENDCASE.
+
+          WHEN type_rational.
+            DATA(lo_rat) = CAST lcl_lisp_rational( me ).
+
+            CASE res-subtype.
+              WHEN type_integer.
+                IF lo_rat->int = res-int * lo_rat->denominator.
+                  result = true.
+                ELSE.
+                  result = false.
+                ENDIF.
+
+              WHEN type_rational.
+                IF lo_rat->int = res-nummer AND lo_rat->denominator EQ res-denom.
+                  result = true.
+                ELSE.
+                  result = false.
+                ENDIF.
+
+              WHEN type_real.
+                IF res-infnan EQ abap_false AND lo_rat->int = res-real * lo_rat->denominator.
+                  result = true.
+                ELSE. " either NaN of Infinity
+                  result = false.
+                ENDIF.
+
+              WHEN OTHERS.
+                throw( `Only real number type supported (check equality)` ).
+
+            ENDCASE.
+
+          WHEN type_real.
+            DATA(lo_real) = CAST lcl_lisp_real( me ).
+
+            IF is_nan( ) EQ true. " NaN is not equal to NaN
+              result = false.
+              RETURN.
+            ENDIF.
+
+            CASE res-subtype.
+              WHEN type_integer.
+                IF lo_real->finite EQ abap_true
+                  AND frac( lo_real->real ) EQ 0
+                  AND trunc( lo_real->real ) = res-int.
+                  result = true.
+                ELSE.
+                  result = false.
+                ENDIF.
+
+              WHEN type_rational.
+                IF lo_real->finite EQ abap_true
+                  AND res-nummer = lo_real->real * res-denom.
+                  result = true.
+                ELSE.
+                  result = false.
+                ENDIF.
+
+              WHEN type_real.
+                IF lo_real->finite EQ abap_true AND res-infnan EQ abap_false.
+
+                  IF lo_real->exact EQ abap_true AND lo_real->real EQ res-real.
+                    result = true.
+                  ELSEIF lo_real->exact EQ abap_false AND lo_real->float_eq( res-real ).
+                    result = true.
+                  ELSE.
+                    result = false.
+                  ENDIF.
+
+                ELSEIF lo_real EQ res-ref
+                  AND lo_real->is_nan( ) EQ false.
+                  result = true.
+                ELSE.
+                  result = false.
+                ENDIF.
+
+              WHEN OTHERS.
+                throw( `Only real number type supported (check equality)` ).
+
+            ENDCASE.
+
+        ENDCASE.
+
+    ENDMETHOD.
+
     METHOD to_real.
       CASE type.
         WHEN type_integer.
           rv_real = CAST lcl_lisp_integer( me )->int.
+
         WHEN type_rational.
           DATA(rat) = CAST lcl_lisp_rational( me ).
           rv_real = rat->int / rat->denominator.
@@ -13115,13 +13300,13 @@
           IF lo_real->finite EQ abap_true.
             rv_real = lo_real->real.
           ELSE.
-            rv_real = 0.
+            rv_real = c_max_int.
           ENDIF.
 
         WHEN type_complex.
           DATA(z) = CAST lcl_lisp_complex( me ).
           IF z->zimag EQ zero.
-            rv_real = CAST lcl_lisp_real( z->zreal )->real.
+            rv_real = z->zreal->to_real( ). " recursive call
           ELSE.
             throw( `complex number not supported` ).
           ENDIF.
@@ -13327,6 +13512,23 @@
     IF result = false.  " real OR imaginary parts must be NaN
       result = zimag->is_nan( ).
     ENDIF.
+  ENDMETHOD.
+
+  METHOD is_real.
+    flag = abap_false.
+
+    CASE zimag->type.
+      WHEN type_integer.
+        flag = xsdbool( CAST lcl_lisp_integer( zimag )->int EQ 0 ).
+
+      WHEN type_rational.
+        flag = xsdbool( CAST lcl_lisp_rational( zimag )->int EQ 0 ).
+
+      WHEN type_real.
+        flag = xsdbool( CAST lcl_lisp_real( zimag )->real EQ 0 ).
+
+    ENDCASE.
+
   ENDMETHOD.
 
 ENDCLASS.

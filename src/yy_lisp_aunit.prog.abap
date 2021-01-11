@@ -4813,10 +4813,18 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
 *      Test =
        scheme( code = '(= 2 3)'
                expected = '#f' ).
+       scheme( code = '(= 3 3)'
+               expected = '#t' ).
      ENDMETHOD.                    "compa_eq_1
 
      METHOD compa_eq_2.
-       scheme( code = '(= 3 3)'
+       scheme( code = '(= 2.0 2)'
+               expected = '#t' ).
+       scheme( code = '(= 2.0 2 +nan.0)'
+               expected = '#f' ).
+       scheme( code = '(= +nan.0 +nan.0)'
+               expected = '#f' ).
+       scheme( code = '(= +inf.0 +inf.0)'
                expected = '#t' ).
      ENDMETHOD.                    "compa_eq_2
 
@@ -4957,8 +4965,8 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
      ENDMETHOD.                    "comp_eqv_6
 
      METHOD comp_eqv_7.
-*       scheme( code = |(eqv? 0.0 +nan.0)|
-*               expected = '#f' ).
+       scheme( code = |(eqv? 0.0 +nan.0)|
+               expected = '#f' ).
      ENDMETHOD.                    "comp_eqv_7
 
      METHOD comp_eqv_8.
