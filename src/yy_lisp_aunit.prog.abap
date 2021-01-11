@@ -2639,12 +2639,12 @@
 
      METHOD math_division_6.
        scheme( code = '(/ 1 0)'
-               expected = 'Eval: 0 is invalid in [/]' ).
+               expected = '+inf.0' ).
      ENDMETHOD.
 
      METHOD math_division_7.
        scheme( code = '(/ 0)'
-               expected = 'Eval: 0 division error [1/0]' ).
+               expected = '+inf.0' ).
      ENDMETHOD.
 
      METHOD math_sin.

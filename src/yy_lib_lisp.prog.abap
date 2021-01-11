@@ -882,6 +882,9 @@
                               RETURNING VALUE(result) TYPE REF TO lcl_lisp.
       METHODS number_is_zero IMPORTING is_number TYPE ts_number
                              RETURNING VALUE(null) TYPE flag.
+      METHODS number_is_positive IMPORTING is_number TYPE ts_number
+                                 RETURNING VALUE(plus) TYPE flag.
+
       METHODS get_number_info RETURNING VALUE(rs_info) TYPE ts_number
                               RAISING lcx_lisp_exception.
 
@@ -6781,41 +6784,60 @@
             CASE res-type.
               WHEN type_integer.
                 IF res-int EQ 0.
-                  cell->raise( ' division error [1/0]' ).
+                  res-ref = lcl_lisp_number=>inf.
+                  res-infnan = abap_true.
+                  res-type = type_real.
+                  res-subtype = type_real.
+                  " cell->raise( ' division error [1/0]' ).
+                ELSE.
+                  res-denom = res-int.
+                  res-nummer = 1.
+                  res-type = type_rational.
+                  res-subtype = type_rational.
                 ENDIF.
-                res-denom = res-int.
-                res-nummer = 1.
-                res-type = type_rational.
-                res-subtype = type_rational.
 
               WHEN type_rational.
                 IF res-nummer EQ 0.
-                  cell->raise( ' division error [1/0]' ).
+                  res-ref = lcl_lisp_number=>inf.
+                  res-infnan = abap_true.
+                  res-type = type_real.
+                  " cell->raise( ' division error [1/0]' ).
+                ELSE.
+                  DATA(lv_saved_nummer) = res-nummer.
+                  res-nummer = res-denom.
+                  res-denom = lv_saved_nummer.
                 ENDIF.
-
-                DATA(lv_saved_nummer) = res-nummer.
-                res-nummer = res-denom.
-                res-denom = lv_saved_nummer.
 
               WHEN type_real.
                 IF res-real EQ 0.
-                  cell->raise( ' division error [1/0]' ).
+                  res-ref = lcl_lisp_number=>inf.
+                  res-infnan = abap_true.
+                  res-type = type_real.
+                  " cell->raise( ' division error [1/0]' ).
+                ELSE.
+                  res-real = 1 / res-real.
                 ENDIF.
-
-                res-real = 1 / res-real.
 
               WHEN type_complex.
                 res-real_part-real = lo_z->zreal->to_real( ).
                 res-imag_part-real = lo_z->zimag->to_real( ).
                 DATA(lv_denom) = res-real_part-real ** 2 + res-imag_part-real ** 2.
                 IF lv_denom EQ 0.
-                  cell->raise( ' division error [1/0]' ).
+                  res-real_part-ref = lcl_lisp_number=>inf.
+                  res-real_part-infnan = abap_true.
+                  res-real_part-subtype = type_real.
+
+                  res-imag_part-ref = lcl_lisp_number=>inf.
+                  res-imag_part-infnan = abap_true.
+                  res-imag_part-subtype = type_real.
+                  " cell->raise( ' division error [1/0]' ).
+                ELSE.
+                  res-real_part-subtype = type_real.
+                  res-real_part-real = res-real_part-real / lv_denom.
+                  res-imag_part-subtype = type_real.
+                  res-imag_part-real = - res-imag_part-real / lv_denom.
                 ENDIF.
 
-                res-real_part-subtype = type_real.
-                res-real_part-real = res-real_part-real / lv_denom.
-                res-imag_part-subtype = type_real.
-                res-imag_part-real = - res-imag_part-real / lv_denom.
             ENDCASE.
           ELSE.
             IF res-type EQ type_integer.
@@ -6835,7 +6857,15 @@
                   cell_exact = lo_int->exact.
 
                   IF lo_int->int EQ 0.
-                    cell->raise( ' is invalid in [/]' ).
+                    IF lo_int->number_is_positive( res-real_part ).
+                      res-ref = lcl_lisp_number=>inf.
+                    ELSE.
+                      res-ref = lcl_lisp_number=>neg_inf.
+                    ENDIF.
+                    res-infnan = abap_true.
+                    res-type = type_real.
+                    res-subtype = type_real.
+                    " cell->raise( ' is invalid in [/]' ).
                   ENDIF.
 
                   CASE res-type.
@@ -6869,7 +6899,15 @@
                   cell_exact = lo_real->exact.
 
                   IF lo_real->real EQ 0.
-                    cell->raise( ' is invalid in [/]' ).
+                    IF lo_real->number_is_positive( res-real_part ).
+                      res-ref = lcl_lisp_number=>inf.
+                    ELSE.
+                      res-ref = lcl_lisp_number=>neg_inf.
+                    ENDIF.
+                    res-infnan = abap_true.
+                    res-type = type_real.
+                    res-subtype = type_real.
+                    " cell->raise( ' is invalid in [/]' ).
                   ENDIF.
 
                   CASE res-type.
@@ -6897,7 +6935,15 @@
                   cell_exact = lo_rat->exact.
 
                   IF lo_rat->int = 0.
-                    cell->raise( ' is invalid in [/]' ).
+                    IF lo_rat->number_is_positive( res-real_part ).
+                      res-ref = lcl_lisp_number=>inf.
+                    ELSE.
+                      res-ref = lcl_lisp_number=>neg_inf.
+                    ENDIF.
+                    res-infnan = abap_true.
+                    res-type = type_real.
+                    res-subtype = type_real.
+                    " cell->raise( ' is invalid in [/]' ).
                   ENDIF.
 
                   CASE res-type.
@@ -12543,8 +12589,12 @@
           ENDIF.
 
         WHEN type_real.
-          ro_elem = real( value = record-real
-                          iv_exact = record-exact ).
+          IF record-infnan EQ abap_false.
+            ro_elem = real( value = record-real
+                            iv_exact = record-exact ).
+          ELSE.
+            ro_elem = record-ref.
+          ENDIF.
 
         WHEN OTHERS.
           lcl_lisp=>throw( |Invalid number type| ).
@@ -13101,6 +13151,24 @@
 
         WHEN OTHERS.
           throw( `Only real number type supported (check equality)` ).
+      ENDCASE.
+    ENDMETHOD.
+
+    METHOD number_is_positive.
+      CASE is_number-subtype.
+        WHEN type_integer.
+          plus = xsdbool( is_number-int GE 0 ).
+
+        WHEN type_rational.
+          plus = xsdbool( is_number-nummer GE 0 ).
+
+        WHEN type_real.
+          " should logic check exactness?
+          plus = xsdbool( ( is_number-infnan EQ abap_false AND is_number-real GE 0 )
+                          OR is_number-ref EQ inf
+                          OR is_number-ref EQ nan ).
+        WHEN OTHERS.
+          throw( `Only real number type supported (check positive)` ).
       ENDCASE.
     ENDMETHOD.
 
