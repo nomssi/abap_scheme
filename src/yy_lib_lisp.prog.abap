@@ -77,8 +77,10 @@
   CONSTANTS c_max_int TYPE tv_int VALUE cl_abap_math=>max_int8.  "  cl_abap_math=>max_int8.
 
   CONSTANTS:
-    c_escape_char    TYPE tv_char VALUE '\',
-    c_text_quote     TYPE tv_char VALUE '"',
+    c_escape_char   TYPE tv_char VALUE '\',
+    c_text_quote    TYPE tv_char VALUE '"',
+    c_semi_colon    TYPE tv_char VALUE ';',
+    c_vertical_line TYPE tv_char VALUE '|',
 
     c_lisp_dot       TYPE tv_char VALUE '.',
     c_lisp_quote     TYPE tv_char VALUE '''', "LISP single quote = QUOTE
@@ -89,11 +91,13 @@
 
   CONSTANTS:
     c_lisp_slash TYPE tv_char VALUE '/',
+    c_lisp_directive TYPE tv_char VALUE '!'.
+
+  CONSTANTS:
     c_lisp_pos_inf TYPE string VALUE '+INF.0',
     c_lisp_neg_inf TYPE string VALUE '-INF.0',
     c_lisp_pos_nan TYPE string VALUE '+NAN.0',
-    c_lisp_neg_nan TYPE string VALUE '-NAN.0'.
-  CONSTANTS:
+    c_lisp_neg_nan TYPE string VALUE '-NAN.0',
     c_lisp_pos_img TYPE string VALUE '+I',
     c_lisp_neg_img TYPE string VALUE '-I'.
 
@@ -746,9 +750,12 @@
       METHODS is_procedure RETURNING VALUE(result) TYPE REF TO lcl_lisp.
 
       METHODS is_number RETURNING VALUE(result) TYPE REF TO lcl_lisp.
-      METHODS is_nan RETURNING VALUE(result) TYPE REF TO lcl_lisp.
-      METHODS is_finite RETURNING VALUE(result) TYPE REF TO lcl_lisp.
-      METHODS is_infinite RETURNING VALUE(result) TYPE REF TO lcl_lisp.
+      METHODS is_nan RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                     RAISING   lcx_lisp_exception.
+      METHODS is_finite RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                        RAISING   lcx_lisp_exception.
+      METHODS is_infinite RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                          RAISING   lcx_lisp_exception.
 
       METHODS error_not_a_pair IMPORTING context TYPE string DEFAULT space
                                RAISING   lcx_lisp_exception.
@@ -1561,7 +1568,6 @@
       CONSTANTS:
         c_dot           TYPE tv_char VALUE c_lisp_dot,
         c_at            TYPE tv_char VALUE c_lisp_splicing,
-        c_vertical_line TYPE tv_char VALUE '|',
         c_explicit_sign TYPE string VALUE '+-'.
 
       CLASS-METHODS match_initial IMPORTING initial TYPE tv_char
@@ -2151,8 +2157,7 @@
         c_lisp_xx     TYPE tv_char2 VALUE 'xX'.
       CONSTANTS:
         c_lisp_hash      TYPE tv_char VALUE '#',
-        c_lisp_comment   TYPE tv_char VALUE ';',
-        c_block_comment  TYPE tv_char VALUE '|', " start #|, end |#
+        c_lisp_comment   TYPE tv_char VALUE c_semi_colon,
         c_open_curly     TYPE tv_char VALUE '{',
         c_close_curly    TYPE tv_char VALUE '}',
         c_open_bracket   TYPE tv_char VALUE '[',
@@ -2181,15 +2186,18 @@
                   RAISING   lcx_lisp_exception.
 
     PRIVATE SECTION.
-      TYPES tv_text13 TYPE c LENGTH 13.
+      TYPES tv_text16 TYPE c LENGTH 16.
       DATA code TYPE string.
       DATA length TYPE i.
       DATA index TYPE i.
       DATA char TYPE tv_char.
 
-      DATA mv_eol TYPE tv_char.
+      DATA mv_newline TYPE tv_char.
       DATA mv_whitespace TYPE char07. " Case sensitive
-      DATA mv_delimiters TYPE tv_text13. " Case sensitive
+      DATA mv_space_or_tab TYPE char03.
+      DATA mv_line_ending TYPE char04.
+      DATA mv_delimiters TYPE tv_text16. " Case sensitive
+      DATA mv_fold_case TYPE flag.
 
       METHODS:
         next_char RAISING lcx_lisp_exception,
@@ -2199,7 +2207,7 @@
                     EXPORTING ev_label        TYPE string
                     RETURNING VALUE(rv_found) TYPE flag,
         skip_label,
-        skip_intertoken
+        intertoken_space
           RETURNING VALUE(rv_has_next) TYPE flag
           RAISING   lcx_lisp_exception,
         parse_pair IMPORTING delim         TYPE char01 DEFAULT c_open_paren
@@ -2207,6 +2215,22 @@
                    RAISING   lcx_lisp_exception,
         parse_token RETURNING VALUE(element) TYPE REF TO lcl_lisp
                     RAISING   lcx_lisp_exception.
+      METHODS:
+        skip_while IMPORTING pattern TYPE csequence
+                   RETURNING VALUE(found) TYPE flag
+                   RAISING lcx_lisp_exception,
+        skip_until IMPORTING pattern TYPE csequence
+                   RETURNING VALUE(found) TYPE flag
+                   RAISING lcx_lisp_exception,
+
+        skip_comment RETURNING VALUE(found) TYPE flag
+                     RAISING lcx_lisp_exception,
+
+        line_ending RETURNING VALUE(rv_has_next) TYPE flag
+                    RAISING   lcx_lisp_exception.
+
+      METHODS to_delimiter RETURNING VALUE(token) TYPE string
+                           RAISING  lcx_lisp_exception.
       METHODS match_string CHANGING cv_val TYPE string
                            RAISING  lcx_lisp_exception.
       METHODS match_escape RETURNING VALUE(pchar) TYPE tv_char
@@ -2217,8 +2241,10 @@
       METHODS throw IMPORTING message TYPE string
                     RAISING   lcx_lisp_exception.
       METHODS skip_one_datum RAISING lcx_lisp_exception.
-      METHODS skip_block_comment RAISING lcx_lisp_exception.
 
+      METHODS skip_block_comment RAISING lcx_lisp_exception.
+      METHODS match_directive RETURNING VALUE(found) TYPE flag
+                              RAISING lcx_lisp_exception.
   ENDCLASS.                    "lcl_parser DEFINITION
 
   CLASS lcx_lisp_escape IMPLEMENTATION.
@@ -2897,7 +2923,8 @@
                                 right         TYPE REF TO lcl_lisp
                                 exp           TYPE REF TO lcl_lisp
                                 environment   TYPE REF TO lcl_lisp_environment
-                      RETURNING VALUE(result) TYPE REF TO lcl_lisp.
+                      RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                      RAISING   lcx_lisp_exception.
 
       METHODS quasiquote IMPORTING exp           TYPE REF TO lcl_lisp
                                    nesting       TYPE tv_index
@@ -2933,18 +2960,28 @@
 
     METHOD constructor.
 *     End of line value
-      mv_eol = cl_abap_char_utilities=>newline.  " \n
-*     Whitespace values
+      mv_newline = |\n|.  " cl_abap_char_utilities=>newline.
+
+      CLEAR mv_space_or_tab.
+      mv_space_or_tab+0(1) = ' '.
+      mv_space_or_tab+1(1) = |\t|.  " cl_abap_char_utilities=>horizontal_tab.
+      mv_space_or_tab+2(1) = cl_abap_char_utilities=>vertical_tab.
+      " line ending
+      CLEAR mv_line_ending.
+      mv_line_ending+0(1) = mv_newline.     " \n
+      mv_line_ending+1(2) = |\r\n|.         " return newline   cl_abap_char_utilities=>cr_lf.
+      mv_line_ending+3(1) = |\r|.           " return           cl_abap_char_utilities=>cr_lf(1).
+      " Whitespace values
       CLEAR mv_whitespace.
-      mv_whitespace+0(1) = ' '.
-      mv_whitespace+1(1) = mv_eol.
-      mv_whitespace+2(1) = cl_abap_char_utilities=>cr_lf(1).       " \r
-      mv_whitespace+3(1) = cl_abap_char_utilities=>cr_lf(2).       " \n
-      mv_whitespace+4(1) = cl_abap_char_utilities=>horizontal_tab. " \t
-      mv_whitespace+5(1) = cl_abap_char_utilities=>vertical_tab.
+      mv_whitespace+0(3) = mv_space_or_tab.
+      mv_whitespace+3(1) = mv_newline.
+      mv_whitespace+4(1) = cl_abap_char_utilities=>cr_lf(1).       " \r
+      mv_whitespace+5(1) = cl_abap_char_utilities=>cr_lf(2).       " \n
       mv_whitespace+6(1) = cl_abap_char_utilities=>form_feed.
 
       " <delimiter> -> <whitespace> | <vertical line> | ( | ) | " | ;
+      " we add racket like syntax: { | [ | ] | }
+
       mv_delimiters = mv_whitespace.
       mv_delimiters+7(1) = c_close_paren.
       mv_delimiters+8(1) = c_open_paren.
@@ -2952,55 +2989,109 @@
       mv_delimiters+10(1) = c_open_bracket.
       mv_delimiters+11(1) = c_close_curly.
       mv_delimiters+12(1) = c_open_curly.
+      mv_delimiters+13(1) = c_text_quote.
+      mv_delimiters+14(1) = c_semi_colon.
+      mv_delimiters+15(1) = c_vertical_line.
+
     ENDMETHOD.                    "constructor
 
-    METHOD skip_intertoken.
+    METHOD line_ending.
+    " throw
+    ENDMETHOD.
+
+    METHOD to_delimiter.
+      CLEAR token.
+      WHILE char CN mv_delimiters AND index LT length.
+        next_char( ).
+        CONCATENATE token char INTO token RESPECTING BLANKS.
+      ENDWHILE.
+    ENDMETHOD.
+
+    METHOD skip_while.
+      WHILE char CA pattern AND index LT length.
+        next_char( ).
+        found = abap_true.
+      ENDWHILE.
+    ENDMETHOD.
+
+    METHOD skip_until.
+      WHILE char NA pattern AND index LT length.
+        next_char( ).
+        found = abap_true.
+      ENDWHILE.
+    ENDMETHOD.
+
+    METHOD skip_comment.
+      found = abap_false.
+
+      CASE char.
+        WHEN c_lisp_comment.
+          skip_until( mv_newline ).  " line comment until end of line
+          found = abap_true.
+
+        WHEN c_lisp_hash.
+          CASE peek_char( ).
+            WHEN c_lisp_comment.
+              skip_one_datum( ).
+              found = abap_true.
+
+            WHEN c_vertical_line.
+              skip_block_comment( ).
+              found = abap_true.
+         ENDCASE.
+      ENDCASE.
+    ENDMETHOD.
+
+    METHOD intertoken_space.
       " <intertoken space> -> <atmosphere>*
       " <atmosphere> -> <whitespace> | <comment> | <directive>
 
-      " <delimiter> -> <whitespace> | <vertical line> | ( | ) | " | ;
-      " whitespace
-      WHILE char CA mv_whitespace AND index LT length.
-        next_char( ).
+      WHILE skip_while( mv_whitespace )
+        OR skip_comment( )
+        OR match_directive( ).
       ENDWHILE.
       rv_has_next = xsdbool( index LT length ).
+    ENDMETHOD.
 
-      " comment
-      IF char EQ c_lisp_comment AND rv_has_next EQ abap_true.
-*       skip until end of line
-        WHILE char CN mv_eol AND index LT length.
-          next_char( ).
-        ENDWHILE.
-        rv_has_next = skip_intertoken( ).
-      ENDIF.
+    METHOD match_directive.
+      CONSTANTS: " #!fold-case or #!no-fold-case
+        c_fold_case TYPE string VALUE `fold-case`,
+        c_no_fold_case TYPE string VALUE `no-fold-case`.
+      DATA fold_directive TYPE string.
 
-      IF char EQ c_lisp_hash AND rv_has_next EQ abap_true.
+      found = abap_false.
 
-          CASE peek_char( ).
-            WHEN  c_lisp_comment.
-              skip_one_datum( ).
-              rv_has_next = skip_intertoken( ).
+      CHECK char EQ c_lisp_hash
+        AND peek_char( ) EQ c_lisp_directive.
 
-            WHEN c_block_comment.
-              skip_block_comment( ).
-              rv_has_next = skip_intertoken( ).
+      next_char( ).   " skip #!
+      next_char( ).
 
-            WHEN '!'. " match directive  #!fold-case or #!no-fold-case
+      fold_directive = to_delimiter( ).
 
-          ENDCASE.
+      CASE fold_directive.
+        WHEN c_fold_case.
+          mv_fold_case = abap_true.
 
-      ENDIF.
+        WHEN c_no_fold_case.
+          mv_fold_case = abap_false.
+
+        WHEN OTHERS.
+          throw( `Invalid directive #!` && fold_directive ).
+      ENDCASE.
+
+      found = abap_true.
     ENDMETHOD.
 
     METHOD skip_block_comment.
-*     skip block comment, from #| to |#
+      " block comment starts with #| and ends with |#
       next_char( ).   " skip |#
       next_char( ).
-      WHILE index LT length AND NOT ( char EQ c_block_comment AND peek_char( ) EQ c_lisp_hash ).
+      WHILE index LT length AND NOT ( char EQ c_vertical_line AND peek_char( ) EQ c_lisp_hash ).
         next_char( ).
       ENDWHILE.
 
-      IF char EQ c_block_comment AND peek_char( ) EQ c_lisp_hash.
+      IF char EQ c_vertical_line AND peek_char( ) EQ c_lisp_hash.
         next_char( ).  " skip #|
         next_char( ).
       ENDIF.
@@ -3011,7 +3102,7 @@
       next_char( ).       " skip #;
       next_char( ).
 *     skip optional blanks, max. until end of line
-      WHILE char CN mv_eol AND index LT length AND peek_char( ) EQ ` `.
+      WHILE char CN mv_newline AND index LT length AND peek_char( ) EQ ` `.
         next_char( ).
       ENDWHILE.
 *     skip one datum
@@ -3099,7 +3190,7 @@
 
       index = 0.
       char = code+index(1).           "Kick off things by reading first char
-      WHILE skip_intertoken( ).
+      WHILE intertoken_space( ).
         IF char = c_open_paren OR char = c_open_bracket OR char = c_open_curly.
           APPEND parse_pair( char ) TO elements.
         ELSEIF index < length.
@@ -3118,7 +3209,7 @@
 
       index = 0.
       char = code+index(1).           "Kick off things by reading first char
-      skip_intertoken( ).
+      intertoken_space( ).
       IF char = c_open_paren OR char = c_open_bracket OR char = c_open_curly.
         element = parse_pair( char ).
       ELSEIF index < length.
@@ -3139,7 +3230,7 @@
                                              ELSE c_close_paren ).
 
       next_char( ).                 " Skip past opening paren
-      WHILE skip_intertoken( ).
+      WHILE intertoken_space( ).
         CASE char.
           WHEN lv_close_delim.
             IF lv_empty_list = abap_true.
@@ -3202,8 +3293,8 @@
         c_esc_t          TYPE tv_char VALUE 't',
         c_esc_n          TYPE tv_char VALUE 'n',
         c_esc_r          TYPE tv_char VALUE 'r',
-        c_esc_semi_colon TYPE tv_char VALUE ';',
-        c_esc_vline      TYPE tv_char VALUE '|'.
+        c_esc_semi_colon TYPE tv_char VALUE c_semi_colon,
+        c_esc_vline      TYPE tv_char VALUE c_vertical_line.
 
       CASE char.
         WHEN c_text_quote    " \" : double quote, U+0022
@@ -3285,10 +3376,7 @@
               OR lcl_lisp=>char_linefeed->value+0(1)
               OR lcl_lisp=>char_return->value+0(1).
               escape_mode = abap_false.
-              " skip intraline whitespace
-              WHILE char CA mv_whitespace AND index LT length.
-                next_char( ).
-              ENDWHILE.
+              skip_while( mv_space_or_tab ).  " intraline whitespace
 
               CONTINUE.
 
@@ -3340,25 +3428,22 @@
         CONCATENATE cv_val char INTO cv_val RESPECTING BLANKS.
         next_char( ).
         CHECK char CA mv_delimiters.
-        IF char = space AND cv_val+0(1) = c_block_comment.
-        ELSE.
-          EXIT.
-        ENDIF.
+        EXIT.
       ENDWHILE.
       CONDENSE cv_val.              " 29.04.2018 to be reviewed, remove?
-      IF cv_val = cl_abap_char_utilities=>newline.
+      IF cv_val = mv_newline.
         cv_val = space.
       ENDIF.
     ENDMETHOD.
 
     METHOD match_token_atom.
       CASE char.
-        WHEN c_block_comment.
+        WHEN c_vertical_line.
           WHILE index < length.
             CONCATENATE cv_val char INTO cv_val RESPECTING BLANKS.
             next_char( ).
             CASE char.
-              WHEN c_block_comment.
+              WHEN c_vertical_line.
                 CONCATENATE cv_val char INTO cv_val RESPECTING BLANKS.
                 next_char( ).
                 EXIT.
@@ -3410,7 +3495,7 @@
       "<token> -> <identifier> | <boolean> | <number> | <character> | <string> | ( | ) | #( | #u8( | ' | ` | , | ,@ | .
       DATA sval TYPE string.
 
-      skip_intertoken( ).
+      intertoken_space( ).
 *     create object cell.
       CASE char.
         WHEN c_open_paren OR c_open_bracket OR c_open_curly.
@@ -4522,8 +4607,8 @@
             ( lo_first->car = lcl_lisp=>unquote_splicing OR lo_first->car->value EQ c_eval_unquote_splicing )
             AND list_length( lo_first ) EQ 2.
 *           ((and (pair? (car exp))
-*          	     (eq? (caar exp) 'unquote-splicing)
-*          	     (= (length (car exp)) 2))
+*                (eq? (caar exp) 'unquote-splicing)
+*                (= (length (car exp)) 2))
             _validate_quote lo_first c_eval_unquote_splicing.
 
             IF nesting = 0.
@@ -7877,7 +7962,8 @@
         _get_number carry list->car '[log]'.
 
         IF carry EQ 0.
-          throw( `Eval: log(0) is not defined` ).
+          result = lcl_lisp_number=>neg_inf.
+          RETURN.
         ENDIF.
 
         IF list->cdr IS BOUND AND list->cdr->car IS BOUND.
@@ -11919,12 +12005,19 @@
     ENDMETHOD.
 
     METHOD is_nan.
-      if type EQ type_real
-        AND ( me = lcl_lisp_number=>nan OR me = lcl_lisp_number=>neg_nan ).
+      CASE type.
+        WHEN type_integer
+          OR type_rational
+          OR type_real
+          OR type_complex.
+          IF ( me = lcl_lisp_number=>nan OR me = lcl_lisp_number=>neg_nan ).
             result = true.
-      ELSE.
-        result = false.
-      ENDIF.
+          ELSE.
+            result = false.
+          ENDIF.
+        WHEN OTHERS.
+          raise_nan( `nan?` ).
+      ENDCASE.
     ENDMETHOD.
 
     METHOD is_finite.
@@ -11938,16 +12031,43 @@
           IF CAST lcl_lisp_real( me )->finite EQ abap_true.
             result = true.
           ENDIF.
+
+        WHEN type_complex.
+          DATA(lo_z) = CAST lcl_lisp_complex( me ).
+          IF lo_z->zreal->finite EQ abap_true
+            AND lo_z->zimag->finite EQ abap_true.
+            result = true.
+          ELSE.
+            result = false.
+          ENDIF.
+
+        WHEN OTHERS.
+          raise_nan( `finite?` ).
       ENDCASE.
     ENDMETHOD.
 
     METHOD is_infinite.
-      result = false.
       CASE type.
+        WHEN type_integer
+          OR type_rational.
+          result = false.
+
         WHEN type_real.
           IF CAST lcl_lisp_real( me )->finite EQ abap_false.
             result = true.
           ENDIF.
+
+        WHEN type_complex.
+          DATA(lo_z) = CAST lcl_lisp_complex( me ).
+          IF lo_z->zreal->finite EQ abap_false
+            AND lo_z->zimag->finite EQ abap_false.
+            result = true.
+          ELSE.
+            result = false.
+          ENDIF.
+
+        WHEN OTHERS.
+          raise_nan( `infinite?` ).
       ENDCASE.
     ENDMETHOD.
 
@@ -12260,7 +12380,7 @@
           lv_char = value+lv_index(1).
 
           CASE lv_char.
-            WHEN '\'.
+            WHEN c_escape_char.
               IF lv_escape_mode = abap_false.
                 lv_escape_mode = abap_true.
                 lv_escape_hex_mode = abap_false.
@@ -12268,7 +12388,7 @@
               ELSE.
                 lcl_lisp=>throw( |Identifier { value } not valid.| ).
               ENDIF.
-            WHEN ';'.
+            WHEN c_semi_colon.
               IF lv_escape_hex_mode = abap_true.
                 IF strlen( lv_escape_char ) LE 4.
                   DATA(lo_char) = lcl_lisp_new=>charx( lv_escape_char ).

@@ -704,6 +704,7 @@
        METHODS quasiquote_9 FOR TESTING.
        METHODS quasiquote_10 FOR TESTING.
        METHODS quasiquote_11 FOR TESTING.
+       METHODS quasiquote_12 FOR TESTING.
 
        METHODS quine_1 FOR TESTING.
        METHODS quine_2 FOR TESTING.
@@ -2156,6 +2157,20 @@
        METHODS to_exact_2 FOR TESTING.
        METHODS to_inexact_1 FOR TESTING.
 
+       METHODS finite_1 FOR TESTING.
+       METHODS finite_2 FOR TESTING.
+       METHODS finite_3 FOR TESTING.
+
+       METHODS infinite_1 FOR TESTING.
+       METHODS infinite_2 FOR TESTING.
+       METHODS infinite_3 FOR TESTING.
+       METHODS infinite_4 FOR TESTING.
+
+       METHODS nan_1 FOR TESTING.
+       METHODS nan_2 FOR TESTING.
+       METHODS nan_3 FOR TESTING.
+       METHODS nan_4 FOR TESTING.
+
        METHODS exact_1 FOR TESTING.
        METHODS exact_2 FOR TESTING.
        METHODS exact_3 FOR TESTING.
@@ -2290,6 +2305,61 @@
        scheme( code = '(inexact 1/2)'
                expected = '0.5' ).
      ENDMETHOD.                    "to_inexact_1
+
+     METHOD finite_1.
+       scheme( code = '(finite? 3)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD finite_2.
+       scheme( code = '(finite? +inf.0)'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD finite_3.
+       scheme( code = '(finite? 3.0+inf.0i)'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD infinite_1.
+       scheme( code = '(infinite? 3)'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD infinite_2.
+       scheme( code = '(infinite? +inf.0)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD infinite_3.
+       scheme( code = '(infinite? +nan.0)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD infinite_4.
+       scheme( code = '(infinite? 3.0+inf.0i)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD nan_1.
+       scheme( code = '(nan? +nan.0)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD nan_2.
+       scheme( code = '(nan? 32)'
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD nan_3.
+       scheme( code = '(nan? +nan.0+5.0i)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD nan_4.
+       scheme( code = '(nan? 1+2i)'
+               expected = '#f' ).
+     ENDMETHOD.
 
      METHOD exact_1.
        scheme( code = '(exact? 22)'
@@ -2767,6 +2837,9 @@
                expected = '+i' ).
        scheme( code =  '(+ 1 +i)'
                expected = '1+i' ).
+       scheme( code =  '(integer? 3+0i)'
+               expected = '#t' ).
+
      ENDMETHOD.
 
      METHOD math_log.
@@ -5506,6 +5579,11 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
        scheme( code = |'(quasiquote (list (unquote (+ 1 2)) 4))|
                expected = '`(list ,(+ 1 2) 4)' ).
      ENDMETHOD.                    "quasiquote_11
+
+     METHOD quasiquote_12.
+       scheme( code = |`(,'five 5)|
+               expected = '(five 5)' ).
+     ENDMETHOD.                    "quasiquote_12
 
      METHOD quine_1.
        scheme( code = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))| &
