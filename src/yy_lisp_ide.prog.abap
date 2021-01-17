@@ -325,7 +325,7 @@ ENDCLASS.
 
 CLASS lcl_graph_diagram DEFINITION ABSTRACT.
   PUBLIC SECTION.
-    METHODS generate IMPORTING it_elem           TYPE lcl_parser=>tt_element
+    METHODS generate IMPORTING it_elem           TYPE lcl_lisp=>tt_element
                      RETURNING VALUE(rv_diagram) TYPE string.
   PROTECTED SECTION.
     DATA mv_diagram TYPE string.
@@ -386,7 +386,7 @@ CLASS lcl_ide DEFINITION INHERITING FROM lcl_lisp_buffered_port CREATE PRIVATE.
     METHODS read REDEFINITION.
     METHODS display REDEFINITION.
 
-    CLASS-METHODS sexpr_viewer IMPORTING it_elem TYPE lcl_parser=>tt_element
+    CLASS-METHODS sexpr_viewer IMPORTING it_elem TYPE tt_element
                                RAISING cx_dynamic_check.
 
   PRIVATE SECTION.
