@@ -267,10 +267,9 @@
    CLASS ltc_parse IMPLEMENTATION.
 
      METHOD parse.
-       DATA elements TYPE lcl_lisp_interpreter=>tt_element.
        DATA element TYPE REF TO lcl_lisp.
 
-       elements = mo_int->parse( code ).
+       DATA(elements) = mo_int->parse( code ).
        cl_abap_unit_assert=>assert_not_initial(
          act = lines( elements )
          msg = |No evaluated element from first expression| ).
@@ -291,7 +290,7 @@
      ENDMETHOD.                    "assert_parse
 
      METHOD delimiter.
-       assert_parse( code = 'list' && cl_abap_char_utilities=>horizontal_tab && |; return|
+       assert_parse( code = |list\t; return|
                      expected = |list| ).
      ENDMETHOD.                    "lambda
 
