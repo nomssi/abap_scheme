@@ -13852,6 +13852,9 @@
     ENDMETHOD.
 
     METHOD is_finite.
+      "The finite? procedure returns #t on all real numbers except +inf.0, -inf.0, and +nan.0,
+      " and on complex numbers if their real and imaginary parts are both finite.
+      " Otherwise it returns #f.
       IF finite EQ abap_true.
         result = true.
       ELSE.
@@ -13860,11 +13863,22 @@
     ENDMETHOD.
 
     METHOD is_infinite.
-      IF finite EQ abap_true.
-        result = false.
-      ELSE.
-        result = true.
-      ENDIF.
+     " The infinite? procedure returns #t on the real numbers +inf.0 and -inf.0, and on complex
+     " numbers if their real or imaginary parts or both are infinite. Otherwise it returns #f.
+      result = false.
+      CASE type.
+        WHEN type_complex.
+          DATA(lo_z) = CAST lcl_lisp_complex( me ).
+          IF lo_z->zreal EQ inf OR lo_z->zreal EQ neg_inf
+            OR lo_z->zimag EQ inf OR lo_z->zimag EQ neg_inf.
+            result = true.
+          ENDIF.
+
+        WHEN OTHERS.
+          IF me EQ inf OR me EQ neg_inf.
+            result = true.
+          ENDIF.
+      ENDCASE.
     ENDMETHOD.
 
   ENDCLASS.

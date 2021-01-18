@@ -2332,7 +2332,7 @@
 
      METHOD infinite_3.
        scheme( code = '(infinite? +nan.0)'
-               expected = '#t' ).
+               expected = '#f' ).
      ENDMETHOD.
 
      METHOD infinite_4.
