@@ -77,20 +77,20 @@
   CONSTANTS c_max_int TYPE tv_int VALUE cl_abap_math=>max_int8.  "  cl_abap_math=>max_int8.
 
   CONSTANTS:
-    c_escape_char   TYPE tv_char VALUE '\',
-    c_text_quote    TYPE tv_char VALUE '"',
-    c_semi_colon    TYPE tv_char VALUE ';',
-    c_vertical_line TYPE tv_char VALUE '|',
+    c_escape_char           TYPE tv_char VALUE '\',
+    c_text_quote            TYPE tv_char VALUE '"',
+    c_semi_colon            TYPE tv_char VALUE ';',
+    c_vertical_line         TYPE tv_char VALUE '|',
 
-    c_lisp_dot       TYPE tv_char VALUE '.',
-    c_lisp_quote     TYPE tv_char VALUE '''', "LISP single quote = QUOTE
-    c_lisp_backquote TYPE tv_char VALUE '`',  " backquote = quasiquote
-    c_lisp_unquote   TYPE tv_char VALUE ',',
-    c_lisp_splicing  TYPE tv_char VALUE '@',
+    c_lisp_dot              TYPE tv_char VALUE '.',
+    c_lisp_quote            TYPE tv_char VALUE '''', "LISP single quote = QUOTE
+    c_lisp_backquote        TYPE tv_char VALUE '`',  " backquote = quasiquote
+    c_lisp_unquote          TYPE tv_char VALUE ',',
+    c_lisp_splicing         TYPE tv_char VALUE '@',
     c_lisp_unquote_splicing TYPE c LENGTH 2 VALUE '@'.
 
   CONSTANTS:
-    c_lisp_slash TYPE tv_char VALUE '/',
+    c_lisp_slash     TYPE tv_char VALUE '/',
     c_lisp_directive TYPE tv_char VALUE '!'.
 
   CONSTANTS:
@@ -100,6 +100,9 @@
     c_lisp_neg_nan TYPE string VALUE '-NAN.0',
     c_lisp_pos_img TYPE string VALUE '+I',
     c_lisp_neg_img TYPE string VALUE '-I'.
+
+  CONSTANTS:
+    c_pattern_inexact TYPE string VALUE '.eE'.
 
   TYPES tv_index TYPE tv_int.
   TYPES tv_real TYPE decfloat34.  " floating point data type
@@ -288,26 +291,6 @@
     ENDIF.
   END-OF-DEFINITION.
 
-  DEFINE _get_real.
-    _validate &2.
-    cell = &2.
-    _values_get_next cell.
-    CASE cell->type.
-      WHEN type_integer.
-        _to_integer cell &1.
-      WHEN type_real.
-        _to_real cell &1.
-      WHEN type_rational.
-        lo_rat ?= cell.
-        &1 = lo_rat->int / lo_rat->denominator.
-      WHEN type_complex.
-        cell->no_complex( &3 ).
-      WHEN OTHERS.
-        cell->raise_nan( &3 ).
-    ENDCASE.
-    cell_exact = CAST lcl_lisp_number( cell )->exact.
-  END-OF-DEFINITION.
-
   DEFINE _get_number.
     _validate &2.
     cell = &2.
@@ -321,7 +304,7 @@
         lo_rat ?= cell.
         &1 = lo_rat->int / lo_rat->denominator.
       WHEN type_complex.
-        cell->raise( &3 && ` not implemented (yet) for complex numbers` ).
+        cell->no_complex( &3 ).
       WHEN OTHERS.
         cell->raise_nan( &3 ).
     ENDCASE.
@@ -391,7 +374,7 @@
     result = false.
     _validate: list, list->car, list->cdr.
     IF list->cdr->type NE type_pair.
-    throw( c_error_incorrect_input ).
+      throw( c_error_incorrect_input ).
     ENDIF.
 
     cell = list->car.
@@ -449,7 +432,7 @@
           carry_is_int = abap_false.
           lo_rat ?= cell->car.
           IF carry * lo_rat->denominator &1 lo_rat->int.
-           RETURN.
+            RETURN.
           ENDIF.
           carry = lo_rat->int / lo_rat->denominator.
 
@@ -470,7 +453,7 @@
 
     result = false.
     _validate list.
-    _get_real carry list->car &2.
+    _get_number carry list->car &2.
 
     IF sign( carry ) NE &1.
       RETURN.
@@ -506,12 +489,33 @@
     result = nil.
     _validate list.
     TRY.
-        _get_real carry list->car &2.
+        _get_number carry list->car &2.
         list->assert_last_param( ).
 
         result = lcl_lisp_new=>real_number( value = &1( carry )
                                             iv_exact = cell_exact ).
-    _catch_arithmetic_error.
+      _catch_arithmetic_error.
+    ENDTRY.
+  END-OF-DEFINITION.
+
+  DEFINE _math_to_int.
+    DATA carry TYPE tv_real.
+    _data_local_numeric_cell.
+
+    result = nil.
+    _validate list.
+    _validate_number list->car &2.
+    IF CAST lcl_lisp_number( list->car )->finite EQ abap_false.
+      result = list->car.
+      RETURN.
+    ENDIF.
+    TRY.
+        _get_number carry list->car &2.
+        list->assert_last_param( ).
+
+        result = lcl_lisp_new=>integer( value = &1( carry )
+                                        iv_exact = cell_exact ).
+      _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
 
@@ -528,7 +532,7 @@
 
         lo_number ?= list->car.
         result = lcl_lisp_new=>real( value = &1( carry )
-                                     iv_exact = lo_number->exact ).
+        iv_exact = lo_number->exact ).
       _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -657,20 +661,20 @@
   CLASS lcl_lisp_interpreter DEFINITION DEFERRED.
 
   TYPES: BEGIN OF ts_number,
-           subtype   TYPE tv_type,
-           int       TYPE tv_int,
-           real      TYPE tv_real,
-           nummer    TYPE tv_int,
-           denom     TYPE tv_int,
-           infnan    TYPE flag,
-           exact     TYPE flag,
-           ref       TYPE REF TO lcl_lisp_number,
+           subtype TYPE tv_type,
+           int     TYPE tv_int,
+           real    TYPE tv_real,
+           nummer  TYPE tv_int,
+           denom   TYPE tv_int,
+           infnan  TYPE flag,
+           exact   TYPE flag,
+           ref     TYPE REF TO lcl_lisp_number,
          END OF ts_number.
 
   TYPES: BEGIN OF ts_result,
            type      TYPE tv_type.
-  INCLUDE TYPE ts_number AS real_part.
-  TYPES:   imag_part TYPE ts_number,
+           INCLUDE TYPE ts_number AS real_part.
+           TYPES:   imag_part TYPE ts_number,
            operation TYPE string,
          END OF ts_result.
 
@@ -753,10 +757,6 @@
       METHODS is_number RETURNING VALUE(result) TYPE REF TO lcl_lisp.
       METHODS is_nan RETURNING VALUE(result) TYPE REF TO lcl_lisp
                      RAISING   lcx_lisp_exception.
-      METHODS is_finite RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                        RAISING   lcx_lisp_exception.
-      METHODS is_infinite RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                          RAISING   lcx_lisp_exception.
 
       METHODS error_not_a_pair IMPORTING context TYPE string DEFAULT space
                                RAISING   lcx_lisp_exception.
@@ -772,11 +772,11 @@
                          RAISING   lcx_lisp_exception.
 
       CLASS-METHODS error_no_number IMPORTING value TYPE any
-                                    RAISING cx_sy_conversion_no_number
-                                            lcx_lisp_no_number.
+                                    RAISING   cx_sy_conversion_no_number
+                                              lcx_lisp_no_number.
 
       CLASS-METHODS throw IMPORTING message TYPE string
-                          RAISING lcx_lisp_exception.
+                          RAISING   lcx_lisp_exception.
 
       METHODS assert_last_param  RAISING lcx_lisp_exception.
 
@@ -881,22 +881,42 @@
 
       METHODS is_exact RETURNING VALUE(result) TYPE REF TO lcl_lisp.
       METHODS is_inexact RETURNING VALUE(result) TYPE REF TO lcl_lisp.
+
       METHODS to_real RETURNING VALUE(rv_real) TYPE tv_real
-                      RAISING lcx_lisp_exception.
+                      RAISING   lcx_lisp_exception.
+      METHODS to_exact RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
+                       RAISING   lcx_lisp_exception.
+      METHODS to_inexact RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
+                         RAISING   lcx_lisp_exception.
+
+      METHODS get_numerator RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
+                            RAISING   lcx_lisp_exception.
+      METHODS get_denominator RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
+                              RAISING   lcx_lisp_exception.
+
       METHODS absolute RETURNING VALUE(num) TYPE REF TO lcl_lisp_number.
-      METHODS real_is_equal IMPORTING res TYPE ts_number
+      METHODS real_is_equal IMPORTING res           TYPE ts_number
                             RETURNING VALUE(result) TYPE REF TO lcl_lisp
-                            RAISING lcx_lisp_exception.
-      METHODS number_is_equal IMPORTING other TYPE REF TO lcl_lisp_number
+                            RAISING   lcx_lisp_exception.
+      METHODS number_is_equal IMPORTING other         TYPE REF TO lcl_lisp_number
                               RETURNING VALUE(result) TYPE REF TO lcl_lisp.
-      METHODS number_is_zero IMPORTING is_number TYPE ts_number
+      METHODS is_integer RETURNING VALUE(flag) TYPE flag
+                         RAISING lcx_lisp_exception.
+      METHODS is_finite RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                        RAISING   lcx_lisp_exception.
+      METHODS is_infinite RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                          RAISING   lcx_lisp_exception.
+
+      METHODS number_is_zero IMPORTING is_number   TYPE ts_number
                              RETURNING VALUE(null) TYPE flag.
-      METHODS number_is_positive IMPORTING is_number TYPE ts_number
+      METHODS number_is_positive IMPORTING is_number   TYPE ts_number
                                  RETURNING VALUE(plus) TYPE flag.
 
       METHODS get_number_info RETURNING VALUE(rs_info) TYPE ts_number
-                              RAISING lcx_lisp_exception.
+                              RAISING   lcx_lisp_exception.
 
+      CLASS-METHODS scheme_round IMPORTING float TYPE tv_real
+                                 RETURNING VALUE(rdprec) TYPE tv_real.
       DATA exact TYPE flag READ-ONLY.
       DATA finite TYPE flag READ-ONLY.
 
@@ -972,7 +992,6 @@
                         RAISING   lcx_lisp_exception.
 
       DATA denominator TYPE tv_int READ-ONLY.
-      METHODS to_string REDEFINITION.
       CLASS-METHODS gcd IMPORTING n             TYPE numeric
                                   d             TYPE numeric
                         RETURNING VALUE(result) TYPE tv_int
@@ -1022,13 +1041,6 @@
       normalize( ).
     ENDMETHOD.
 
-    METHOD to_string.
-      IF exact EQ abap_false.
-        str = `#i`.
-      ENDIF.
-      str = str && |{ int }/{ denominator }|.
-    ENDMETHOD.
-
     METHOD normalize.
       DATA(g) = gcd( n = int
                      d = denominator ).
@@ -1076,8 +1088,8 @@
                         RETURNING VALUE(result) TYPE tv_real
                         RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
-      METHODS constructor IMPORTING value TYPE any
-                                    exact TYPE flag
+      METHODS constructor IMPORTING value  TYPE any
+                                    exact  TYPE flag
                                     finite TYPE flag.
   ENDCLASS.
 
@@ -1092,45 +1104,47 @@
       DATA zreal TYPE REF TO lcl_lisp_number READ-ONLY.
       DATA zimag TYPE REF TO lcl_lisp_number READ-ONLY.
 
-      METHODS add IMPORTING n TYPE REF TO lcl_lisp_number
+      METHODS add IMPORTING n          TYPE REF TO lcl_lisp_number
                   RETURNING VALUE(sum) TYPE REF TO lcl_lisp_complex.
-      METHODS subtract IMPORTING n TYPE REF TO lcl_lisp_number
+      METHODS subtract IMPORTING n           TYPE REF TO lcl_lisp_number
                        RETURNING VALUE(diff) TYPE REF TO lcl_lisp_complex.
-      METHODS multiply IMPORTING n TYPE REF TO lcl_lisp_number
+      METHODS multiply IMPORTING n              TYPE REF TO lcl_lisp_number
                        RETURNING VALUE(product) TYPE REF TO lcl_lisp_complex.
-      METHODS divide IMPORTING n TYPE REF TO lcl_lisp_number
+      METHODS divide IMPORTING n               TYPE REF TO lcl_lisp_number
                      RETURNING VALUE(quotient) TYPE REF TO lcl_lisp_complex.
       METHODS to_string REDEFINITION.
 
       METHODS is_nan REDEFINITION.
-      METHODS is_finite REDEFINITION.
-      METHODS is_infinite REDEFINITION.
       METHODS is_real RETURNING VALUE(flag) TYPE flag.
 
     PROTECTED SECTION.
-      CLASS-METHODS new_rectangular IMPORTING x TYPE REF TO lcl_lisp_number DEFAULT zero
-                                              y TYPE REF TO lcl_lisp_number DEFAULT zero
+      CLASS-METHODS new_rectangular IMPORTING x              TYPE REF TO lcl_lisp_number DEFAULT zero
+                                              y              TYPE REF TO lcl_lisp_number DEFAULT zero
                                     RETURNING VALUE(complex) TYPE REF TO lcl_lisp_complex
                                     RAISING   lcx_lisp_exception.
 
-      CLASS-METHODS new_polar IMPORTING r TYPE REF TO lcl_lisp_number
-                                        angle TYPE REF TO lcl_lisp_number
+      CLASS-METHODS new_polar IMPORTING r              TYPE REF TO lcl_lisp_number
+                                        angle          TYPE REF TO lcl_lisp_number
                               RETURNING VALUE(complex) TYPE REF TO lcl_lisp_complex
                               RAISING   lcx_lisp_exception.
 
       METHODS set_rectangular IMPORTING x TYPE REF TO lcl_lisp_number
                                         y TYPE REF TO lcl_lisp_number
                               RAISING   lcx_lisp_exception.
-      METHODS set_polar IMPORTING r TYPE tv_real
+      METHODS set_polar IMPORTING r     TYPE tv_real
                                   alpha TYPE tv_real
                         RAISING   lcx_lisp_exception.
 
       METHODS to_polar.
       METHODS to_rectangular.
-      METHODS to_complex IMPORTING n TYPE REF TO lcl_lisp_number
+      METHODS to_complex IMPORTING n        TYPE REF TO lcl_lisp_number
                          RETURNING VALUE(z) TYPE REF TO lcl_lisp_complex.
 
       METHODS constructor.
+
+      METHODS set IMPORTING x TYPE REF TO lcl_lisp_number
+                            y TYPE REF TO lcl_lisp_number
+                  RAISING   lcx_lisp_exception.
   ENDCLASS.
 
   CLASS lcl_lisp_pair DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
@@ -1391,7 +1405,7 @@
 
       CLASS-METHODS atom IMPORTING value          TYPE string
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
-                         RAISING lcx_lisp_exception.
+                         RAISING   lcx_lisp_exception.
 
       CLASS-METHODS identifier IMPORTING value          TYPE any
                                          index          TYPE tv_int OPTIONAL
@@ -1413,15 +1427,15 @@
                                    finite         TYPE flag DEFAULT abap_true
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_real.
 
-      CLASS-METHODS rectangular IMPORTING real TYPE REF TO lcl_lisp_number DEFAULT lcl_lisp_complex=>zero
-                                          imag TYPE REF TO lcl_lisp_number DEFAULT lcl_lisp_complex=>zero
+      CLASS-METHODS rectangular IMPORTING real           TYPE REF TO lcl_lisp_number DEFAULT lcl_lisp_complex=>zero
+                                          imag           TYPE REF TO lcl_lisp_number DEFAULT lcl_lisp_complex=>zero
                                 RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_complex
                                 RAISING   lcx_lisp_exception.
 
-      CLASS-METHODS polar IMPORTING r TYPE REF TO lcl_lisp_number
-                                    angle TYPE REF TO lcl_lisp_number
-                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_complex
-                            RAISING   lcx_lisp_exception.
+      CLASS-METHODS polar IMPORTING r              TYPE REF TO lcl_lisp_number
+                                    angle          TYPE REF TO lcl_lisp_number
+                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_complex
+                          RAISING   lcx_lisp_exception.
 
       CLASS-METHODS complex_number IMPORTING value          TYPE any
                                              iv_exact       TYPE flag OPTIONAL
@@ -1443,11 +1457,11 @@
 
       CLASS-METHODS binary_integer IMPORTING value         TYPE csequence
                                    RETURNING VALUE(rv_int) TYPE tv_int
-                                   RAISING lcx_lisp_exception cx_sy_conversion_no_number.
+                                   RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
       CLASS-METHODS binary IMPORTING value          TYPE any
                                      iv_exact       TYPE flag
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
-                           RAISING lcx_lisp_exception cx_sy_conversion_no_number.
+                           RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
       CLASS-METHODS octal IMPORTING value          TYPE any
                                     iv_exact       TYPE flag
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
@@ -1577,19 +1591,19 @@
         c_at            TYPE tv_char VALUE c_lisp_splicing,
         c_explicit_sign TYPE string VALUE '+-'.
 
-      CLASS-METHODS match_initial IMPORTING initial TYPE tv_char
+      CLASS-METHODS match_initial IMPORTING initial      TYPE tv_char
                                   RETURNING VALUE(match) TYPE flag.
 
-      CLASS-METHODS match_subsequent_list IMPORTING value TYPE string
+      CLASS-METHODS match_subsequent_list IMPORTING value        TYPE string
                                           RETURNING VALUE(match) TYPE flag.
 
-      CLASS-METHODS match_sign_subsequent IMPORTING initial TYPE tv_char
+      CLASS-METHODS match_sign_subsequent IMPORTING initial      TYPE tv_char
                                           RETURNING VALUE(match) TYPE flag.
 
-      CLASS-METHODS match_dot_subsequent IMPORTING initial TYPE tv_char
+      CLASS-METHODS match_dot_subsequent IMPORTING initial      TYPE tv_char
                                          RETURNING VALUE(match) TYPE flag.
 
-      CLASS-METHODS match_peculiar_identifier IMPORTING value TYPE string
+      CLASS-METHODS match_peculiar_identifier IMPORTING value        TYPE string
                                               RETURNING VALUE(match) TYPE flag.
   ENDCLASS.
 
@@ -2153,7 +2167,7 @@
   CLASS lcl_stream DEFINITION.
     PUBLIC SECTION.
       METHODS:
-        init IMPORTING iv_code TYPE string
+        init IMPORTING iv_code      TYPE string
              RETURNING VALUE(ready) TYPE flag,
         next_char RAISING lcx_lisp_exception,
         peek_char RETURNING VALUE(rv_char) TYPE tv_char.
@@ -2165,8 +2179,8 @@
       DATA char TYPE tv_char.
 
       METHODS throw IMPORTING message TYPE string
-                              area TYPE string DEFAULT c_area_parse
-                    RAISING lcx_lisp_exception.
+                              area    TYPE string DEFAULT c_area_parse
+                    RAISING   lcx_lisp_exception.
   ENDCLASS.
 
   CLASS lcl_stream IMPLEMENTATION.
@@ -2221,12 +2235,12 @@
         c_lisp_equal  TYPE tv_char VALUE '=',
         c_lisp_xx     TYPE tv_char2 VALUE 'xX'.
       CONSTANTS:
-        c_lisp_hash      TYPE tv_char VALUE '#',
-        c_lisp_comment   TYPE tv_char VALUE c_semi_colon,
-        c_open_curly     TYPE tv_char VALUE '{',
-        c_close_curly    TYPE tv_char VALUE '}',
-        c_open_bracket   TYPE tv_char VALUE '[',
-        c_close_bracket  TYPE tv_char VALUE ']'.
+        c_lisp_hash     TYPE tv_char VALUE '#',
+        c_lisp_comment  TYPE tv_char VALUE c_semi_colon,
+        c_open_curly    TYPE tv_char VALUE '{',
+        c_close_curly   TYPE tv_char VALUE '}',
+        c_open_bracket  TYPE tv_char VALUE '[',
+        c_close_bracket TYPE tv_char VALUE ']'.
       CONSTANTS:
         c_number_exact   TYPE tv_char2 VALUE 'eE',
         c_number_inexact TYPE tv_char2 VALUE 'iI',
@@ -2274,35 +2288,35 @@
         parse_datum RETURNING VALUE(element) TYPE REF TO lcl_lisp
                     RAISING   lcx_lisp_exception.
       METHODS:
-        skip_while IMPORTING pattern TYPE csequence
+        skip_while IMPORTING pattern      TYPE csequence
                    RETURNING VALUE(found) TYPE flag
-                   RAISING lcx_lisp_exception,
-        skip_until IMPORTING pattern TYPE csequence
+                   RAISING   lcx_lisp_exception,
+        skip_until IMPORTING pattern      TYPE csequence
                    RETURNING VALUE(found) TYPE flag
-                   RAISING lcx_lisp_exception,
+                   RAISING   lcx_lisp_exception,
 
         skip_comment RETURNING VALUE(found) TYPE flag
-                     RAISING lcx_lisp_exception,
+                     RAISING   lcx_lisp_exception,
 
         line_ending RETURNING VALUE(rv_has_next) TYPE flag
                     RAISING   lcx_lisp_exception.
 
       METHODS to_delimiter RETURNING VALUE(token) TYPE string
-                           RAISING  lcx_lisp_exception.
+                           RAISING   lcx_lisp_exception.
       METHODS match_string CHANGING cv_val TYPE string
                            RAISING  lcx_lisp_exception.
       METHODS match_escape RETURNING VALUE(pchar) TYPE tv_char
-                           RAISING  lcx_lisp_exception.
+                           RAISING   lcx_lisp_exception.
       METHODS match_atom CHANGING cv_val TYPE string.
 
       METHODS skip_one_datum RAISING lcx_lisp_exception.
 
       METHODS skip_block_comment RAISING lcx_lisp_exception.
       METHODS match_directive RETURNING VALUE(found) TYPE flag
-                              RAISING lcx_lisp_exception.
+                              RAISING   lcx_lisp_exception.
 
       METHODS match_token RETURNING VALUE(element) TYPE REF TO lcl_lisp
-                          RAISING  lcx_lisp_exception.
+                          RAISING   lcx_lisp_exception.
   ENDCLASS.
 *----------------------------------------------------------------------*
 *       CLASS lcl_parser DEFINITION
@@ -2310,9 +2324,9 @@
   CLASS lcl_parser DEFINITION.
     PUBLIC SECTION.
       METHODS
-        parse IMPORTING iv_code TYPE clike
+        parse IMPORTING iv_code         TYPE clike
               RETURNING VALUE(elements) TYPE lcl_lisp=>tt_element
-              RAISING lcx_lisp_exception.
+              RAISING   lcx_lisp_exception.
 
       METHODS
         read_from IMPORTING ii_port        TYPE REF TO lif_input_port
@@ -2320,8 +2334,8 @@
                   RAISING   lcx_lisp_exception.
 
       METHODS
-        create_ast IMPORTING iv_code TYPE clike
-                             io_env TYPE REF TO lcl_lisp_environment
+        create_ast IMPORTING iv_code        TYPE clike
+                             io_env         TYPE REF TO lcl_lisp_environment
                    RETURNING VALUE(rs_cont) TYPE ts_continuation
                    RAISING   lcx_lisp_exception.
       METHODS
@@ -2413,7 +2427,7 @@
                                     ii_log  TYPE REF TO lif_log.
 
       METHODS throw IMPORTING message TYPE string
-                    RAISING lcx_lisp_exception.
+                    RAISING   lcx_lisp_exception.
 
 *     Methods for evaluation
       METHODS:
@@ -3080,7 +3094,7 @@
     ENDMETHOD.                    "constructor
 
     METHOD line_ending.
-    " throw
+      " throw
     ENDMETHOD.
 
     METHOD to_delimiter.
@@ -3122,7 +3136,7 @@
             WHEN c_vertical_line.
               skip_block_comment( ).
               found = abap_true.
-         ENDCASE.
+          ENDCASE.
       ENDCASE.
     ENDMETHOD.
 
@@ -3139,7 +3153,7 @@
 
     METHOD match_directive.
       CONSTANTS: " #!fold-case or #!no-fold-case
-        c_fold_case TYPE string VALUE `fold-case`,
+        c_fold_case    TYPE string VALUE `fold-case`,
         c_no_fold_case TYPE string VALUE `no-fold-case`.
       DATA fold_directive TYPE string.
 
@@ -7481,15 +7495,19 @@
     ENDMETHOD.
 
     METHOD proc_is_finite. " argument in list->car
-      result = false.
-      CHECK list IS BOUND AND list->car IS BOUND.
-      result = list->car->is_finite( ).
+      DATA lo_number TYPE REF TO lcl_lisp_number.
+
+      _get_arg0_as_number lo_number `finite?`.
+      _assert_last_param list.
+      result = lo_number->is_finite( ).
     ENDMETHOD.
 
     METHOD proc_is_infinite. " argument in list->car
-      result = false.
-      CHECK list IS BOUND AND list->car IS BOUND.
-      result = list->car->is_infinite( ).
+      DATA lo_number TYPE REF TO lcl_lisp_number.
+
+      _get_arg0_as_number lo_number `infinite?`.
+      _assert_last_param list.
+      result = lo_number->is_infinite( ).
     ENDMETHOD.
 
     METHOD proc_is_number. " argument in list->car
@@ -7559,23 +7577,17 @@
     METHOD proc_is_integer.
       _validate list.
 *     If x is an inexact real number, then (integer? x) is true if and only if (= x (round x)).
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
-      DATA lv_real TYPE tv_real.
 
       result = false.
       CHECK list->car IS BOUND.
       CASE list->car->type.
-        WHEN type_integer.
-          result = true.
-        WHEN type_rational.
-          lo_rat ?= list->car.
-          CHECK lo_rat->denominator EQ 1.
-          result = true.
-        WHEN type_real.
-          _to_real list->car lv_real.
-          CHECK trunc( lv_real ) EQ lv_real.
-          result = true.
+        WHEN type_integer
+          OR type_rational
+          OR type_real
+          OR type_complex.
+          IF CAST lcl_lisp_number( list->car )->is_integer( ).
+            result = true.
+          ENDIF.
       ENDCASE.
     ENDMETHOD.                    "proc_is_integer
 
@@ -7826,7 +7838,7 @@
 
           list->assert_last_param( ).
 
-         IF complex_logic EQ abap_false.
+          IF complex_logic EQ abap_false.
             result = lcl_lisp_new=>real( value = sin( carry )
                                          iv_exact = cell_exact ).
           ELSE.
@@ -7835,7 +7847,7 @@
                                                 imag = lcl_lisp_new=>real( value = cos( carry ) * sinh( y )
                                                                            iv_exact = cell_exact ) ) .
           ENDIF.
-        _catch_arithmetic_error.
+          _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_sin
 
@@ -7891,7 +7903,7 @@
 
           list->assert_last_param( ).
 
-         IF complex_logic EQ abap_false.
+          IF complex_logic EQ abap_false.
             result = lcl_lisp_new=>real( value = cos( carry )
                                          iv_exact = cell_exact ).
           ELSE.
@@ -7900,7 +7912,7 @@
                                                 imag = lcl_lisp_new=>real( value = - sin( carry ) * sinh( y )
                                                                            iv_exact = cell_exact ) ) .
           ENDIF.
-        _catch_arithmetic_error.
+          _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_cos
 
@@ -8042,37 +8054,37 @@
       _validate list.
       TRY.
 
-        _get_number carry list->car '[log]'.
+          _get_number carry list->car '[log]'.
 
-        IF carry EQ 0.
-          result = lcl_lisp_number=>neg_inf.
-          RETURN.
-        ENDIF.
+          IF carry EQ 0.
+            result = lcl_lisp_number=>neg_inf.
+            RETURN.
+          ENDIF.
 
-        IF list->cdr IS BOUND AND list->cdr->car IS BOUND.
-          cell = list->cdr->car.
-          _values_get_next cell.
-          CASE cell->type.
-            WHEN type_integer.
-              z2 = CAST lcl_lisp_integer( cell )->int.
-            WHEN type_real.
-              z2 = CAST lcl_lisp_real( cell )->real.
-            WHEN type_rational.
-              lo_rat ?= cell.
-              z2 = lo_rat->int / lo_rat->denominator.
-            WHEN type_complex.
-              cell->raise( '[log] not implemented yet for complex numbers' ).
-            WHEN OTHERS.
-              cell->raise_nan( '[log]' ).
-          ENDCASE.
-          base = log( z2 ).
-        ELSE.
-          list->assert_last_param( ).
-        ENDIF.
+          IF list->cdr IS BOUND AND list->cdr->car IS BOUND.
+            cell = list->cdr->car.
+            _values_get_next cell.
+            CASE cell->type.
+              WHEN type_integer.
+                z2 = CAST lcl_lisp_integer( cell )->int.
+              WHEN type_real.
+                z2 = CAST lcl_lisp_real( cell )->real.
+              WHEN type_rational.
+                lo_rat ?= cell.
+                z2 = lo_rat->int / lo_rat->denominator.
+              WHEN type_complex.
+                cell->raise( '[log] not implemented yet for complex numbers' ).
+              WHEN OTHERS.
+                cell->raise_nan( '[log]' ).
+            ENDCASE.
+            base = log( z2 ).
+          ELSE.
+            list->assert_last_param( ).
+          ENDIF.
 
-        result = lcl_lisp_new=>real_number( value = log( carry ) / base
-                                       iv_exact = abap_false ).
-        _catch_arithmetic_error.
+          result = lcl_lisp_new=>real_number( value = log( carry ) / base
+                                         iv_exact = abap_false ).
+          _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_log
 
@@ -8116,39 +8128,6 @@
       ENDTRY.
     ENDMETHOD.                    "proc_square
 
-    METHOD proc_floor.
-      DATA carry TYPE tv_real.
-      _data_local_numeric_cell.
-
-      result = nil.
-      _validate list.
-      TRY.
-          _validate list->car.
-          cell = list->car.
-          _values_get_next cell.
-          CASE cell->type.
-              WHEN type_integer.
-                _to_integer cell carry.
-              WHEN type_real.
-                _to_real cell carry.
-              WHEN type_rational.
-                lo_rat ?= cell.
-                carry = lo_rat->int / lo_rat->denominator.
-              WHEN type_complex.
-                cell->no_complex( 'floor' ).
-              WHEN OTHERS.
-                cell->raise_nan( '[floor]' ).
-            ENDCASE.
-            cell_exact = CAST lcl_lisp_number( cell )->exact.
-
-          list->assert_last_param( ).
-
-          result = lcl_lisp_new=>real_number( value = floor( carry )
-                                         iv_exact = cell_exact ).
-        _catch_arithmetic_error.
-      ENDTRY.
-    ENDMETHOD.                    "proc_floor
-
     METHOD proc_int_sqrt.
       " procedure (exact-integer-sqrt k) returns two non-negative exact integers s and r where k = s^2 + r and k < (s + 1)^2.
       " (exact-integer-sqrt 4) =) 2 0
@@ -8171,7 +8150,7 @@
               IF lv_int LT 0.
                 throw( list->car->to_string( ) && | is a negative integer in [exact-integer-sqrt]| ).
               ELSEIF lv_int GT 1.
-                lv_int = trunc( sqrt( lo_int->int ) ).
+                lv_int = lo_int->scheme_round( sqrt( lo_int->int ) ).
               ENDIF.
               lv_rest = lo_int->int - lv_int * lv_int.
             WHEN OTHERS.
@@ -8344,12 +8323,16 @@
       throw( `rationalize not implemented yet` ).
     ENDMETHOD.
 
+    METHOD proc_floor.
+      _math_to_int floor '[floor]'.
+    ENDMETHOD.                    "proc_floor
+
     METHOD proc_ceiling.
-      _math ceil '[ceil]'.
+      _math_to_int ceil '[ceil]'.
     ENDMETHOD.                    "proc_ceiling
 
     METHOD proc_truncate.
-      _math trunc '[truncate]'.
+      _math_to_int trunc '[truncate]'.
     ENDMETHOD.                    "proc_truncate
 
     METHOD proc_round.
@@ -8357,82 +8340,85 @@
       _data_local_numeric_cell.
 
       result = nil.
-      _validate list.
+      _validate_number list->car '[round]'.
+      IF CAST lcl_lisp_number( list->car )->finite EQ abap_false.
+        result = list->car.
+        RETURN.
+      ENDIF.
       _get_number carry list->car '[round]'.
       list->assert_last_param(  ).
       TRY.
-          result = lcl_lisp_new=>real_number( value = round( val = carry dec = 0 )
-                                                             iv_exact = cell_exact ).
+          result = lcl_lisp_new=>real_number( value = lcl_lisp_number=>scheme_round( carry )
+                                              iv_exact = cell_exact ).
           _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_round
 
     METHOD proc_numerator.
-      DATA lv_num TYPE tv_real.
-      _data_local_numeric_cell.
+      DATA lo_number TYPE REF TO lcl_lisp_number.
 
-      _validate: list, list->car.
+      _get_arg0_as_number lo_number `numerator`.
       _assert_last_param list.
 
-      cell = list->car.
-      CASE cell->type.
-        WHEN type_integer.
-          result = cell.
-
-        WHEN type_real.
-          TRY.
-              _to_real cell lv_num.
-              result = lcl_lisp_new=>real_number( lcl_lisp_real=>gcd( n = lv_num
-                                                                 d = 1 ) * lv_num ).
-              _catch_arithmetic_error.
-          ENDTRY.
-
-        WHEN type_rational.
-          lo_rat ?= cell.
-          result = lcl_lisp_new=>integer( lo_rat->int ).
-
-        WHEN type_complex.
-          cell->no_complex( 'numerator' ).
-
-        WHEN OTHERS.
-          throw( |{ cell->to_string( ) } is not a number in [numerator]| ).
-      ENDCASE.
+      result = lo_number->get_numerator( ).
     ENDMETHOD.
 
     METHOD proc_denominator.
-      DATA lo_frac TYPE REF TO lcl_lisp_real.
+      DATA lo_frac TYPE REF TO lcl_lisp_number.
+      DATA lv_nummer TYPE tv_int.
+      DATA lv_denom TYPE tv_int.
       _data_local_numeric_cell.
 
-      _validate: list, list->car.
+      _get_arg0_as_number cell `denominator`.
       _assert_last_param list.
 
-      cell = list->car.
       CASE cell->type.
         WHEN type_integer.
-          result = lcl_lisp_new=>integer( 1 ).
-
+          lo_int ?= cell.
+          result = lcl_lisp_new=>integer( value = 1
+                                          iv_exact = lo_int->exact ).
+        WHEN type_rational.
+          lo_rat ?= cell.
+          result = lcl_lisp_new=>integer( value = lo_rat->denominator
+                                          iv_exact = lo_rat->exact ).
         WHEN type_real.
           TRY.
               lo_real ?= cell.
-              lo_frac = lcl_lisp_new=>real( value = frac( lo_real->real )
-                                            iv_exact = abap_true ).
-              IF lo_frac->float_eq( 0 ).
-                result = lcl_lisp_new=>integer( 1 ).
-              ELSE.
-                result = lcl_lisp_new=>real( value = 1 / lo_frac->real
-                                             iv_exact = abap_false ).
-              ENDIF.
-              _catch_arithmetic_error.
-          ENDTRY.
 
-        WHEN type_rational.
-          lo_rat ?= cell.
-          result = lcl_lisp_new=>integer( lo_rat->denominator ).
+              IF abs( lo_real->real ) GT 1.
+                lv_denom = trunc( c_max_int / lo_real->real ).
+                lv_nummer = trunc( lo_real->real * lv_denom ).
+              ELSE.
+                lv_nummer = trunc( c_max_int * lo_real->real ).
+                lv_denom = trunc( lv_nummer / lo_real->real ).
+              ENDIF.
+              lo_frac = lcl_lisp_new=>rational( nummer = lv_nummer
+                                                denom = lv_denom
+                                                iv_exact = lo_real->exact ).
+              CASE lo_frac->type.
+                WHEN type_integer.
+                  result = lcl_lisp_new=>integer( value = 1
+                                                  iv_exact = lo_int->exact ).
+                WHEN type_rational.
+                  lo_rat ?= lo_frac.
+                  IF lo_real->float_eq( lo_rat->to_real( ) ).
+                    result = lcl_lisp_new=>integer( value = lo_rat->denominator
+                                                    iv_exact = lo_real->exact ).
+                  ELSE.
+                    lo_real->raise( `denominator not defined for real number ` ).
+                  ENDIF.
+              ENDCASE.
+
+              _catch_arithmetic_error.
+            ENDTRY.
 
         WHEN type_complex.
-          cell->no_complex( 'denominator' ).
-        WHEN OTHERS.
-          throw( |{ cell->to_string( ) } is not a number in [denominator]| ).
+          lo_z ?= cell.
+          IF lo_z->is_real( ).
+            result = lo_z->zreal->get_denominator( ).
+          ELSE.
+            cell->no_complex( 'denominator' ).
+          ENDIF.
       ENDCASE.
     ENDMETHOD.
 
@@ -8452,7 +8438,7 @@
       _assert_last_param list->cdr.
       TRY.
           result = lcl_lisp_new=>real_number( value = numerator - denominator * trunc( numerator / denominator )
-                                         iv_exact = lv_exact ).
+                                              iv_exact = lv_exact ).
           _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_remainder
@@ -8473,7 +8459,7 @@
       _assert_last_param list->cdr.
       TRY.
           result = lcl_lisp_new=>real_number( value = trunc( numerator / denominator )
-                                         iv_exact = lv_exact ).
+                                              iv_exact = lv_exact ).
           _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_quotient
@@ -8500,7 +8486,7 @@
           ENDIF.
           result = lcl_lisp_new=>real_number( value = mod
                                               iv_exact = lv_exact ).
-        _catch_arithmetic_error.
+          _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_modulo
 
@@ -8535,96 +8521,14 @@
 
     METHOD proc_to_exact.
       DATA lo_number TYPE REF TO lcl_lisp_number.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lv_denom TYPE tv_int.
-      DATA lv_nummer TYPE tv_int.
-      DATA lv_error TYPE flag VALUE abap_false.
-
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>throw( c_error_incorrect_input ).
-      ENDIF.
-      "_validate_number list->car `exact`..
-      CASE list->car->type.
-        WHEN type_integer
-          OR type_real
-          OR type_rational
-          OR type_complex.
-        WHEN OTHERS.
-          list->car->raise_nan( |exact| ) ##NO_TEXT.
-      ENDCASE.
-
-      lo_number ?= list->car.
-      IF lo_number->exact EQ abap_true.
-        result = lo_number.
-      ELSE.
-        CASE lo_number->type.
-          WHEN type_real.
-            lo_real ?= lo_number.
-            IF abs( lo_real->real ) GT 1.
-              lv_denom = trunc( c_max_int / lo_real->real ).
-              lv_nummer = round( val = lo_real->real * lv_denom dec = 0 ).
-            ELSE.
-              lv_nummer = trunc( c_max_int * lo_real->real ).
-              lv_denom = round( val = lv_nummer / lo_real->real dec = 0 ).
-            ENDIF.
-
-          WHEN type_integer.
-            lv_nummer = CAST lcl_lisp_integer( lo_number )->int.
-            lv_denom = 1.
-
-          WHEN type_rational.
-            lo_rat = CAST lcl_lisp_rational( lo_number ).
-            lv_nummer = lo_rat->int.
-            lv_denom = lo_rat->denominator.
-
-          WHEN type_complex.
-            throw( `exact not implemented for complex numbers yet` ).
-
-          WHEN OTHERS.
-            lv_error = abap_true.
-        ENDCASE.
-
-        TRY.
-            DATA(lo_num) = lcl_lisp_new=>rational( nummer = lv_nummer
-                                                   denom = lv_denom
-                                                   iv_exact = abap_true ).
-            result ?= lo_num.
-            lv_error = xsdbool( lo_num->exact NE abap_true ).
-          CATCH lcx_lisp_exception cx_sy_conversion_no_number.
-            lv_error = abap_true.
-        ENDTRY.
-      ENDIF.
-      IF lv_error = abap_true.
-        throw( |no exact representation of { lo_number->to_string( ) }| ).
-      ENDIF.
+      _get_arg0_as_number lo_number `exact`.
+      result = CAST lcl_lisp_number( list->car )->to_exact( ).
     ENDMETHOD.
 
     METHOD proc_to_inexact.
       DATA lo_number TYPE REF TO lcl_lisp_number.
-      DATA lo_int TYPE REF TO lcl_lisp_integer.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lv_real TYPE tv_real.
-
       _get_arg0_as_number lo_number `inexact`.
-      IF lo_number->exact EQ abap_true.
-        CASE lo_number->type.
-          WHEN type_rational.
-            lo_rat ?= lo_number.
-            lv_real = lo_rat->int / lo_rat->denominator.
-            result = lcl_lisp_new=>real( value = lv_real
-                                         iv_exact = abap_false ).
-          WHEN type_integer.
-            lo_int ?= lo_number.
-            lv_real = lo_int->int.
-            result = lcl_lisp_new=>real( value = lv_real
-                                         iv_exact = abap_false ).
-          WHEN OTHERS.
-            throw( |no inexact representation of { lo_number->to_string( ) }| ).
-        ENDCASE.
-      ELSE.
-        result = lo_number.
-      ENDIF.
+      result = CAST lcl_lisp_number( list->car )->to_inexact( ).
     ENDMETHOD.
 
     METHOD proc_num_to_string.
@@ -8694,7 +8598,7 @@
 
       result = false.
       CHECK iv_text NE space.
-      lv_exact = xsdbool( iv_text CN '.eE' ).
+      lv_exact = xsdbool( iv_text CN c_pattern_inexact ).
       lv_text = iv_text.
       lv_radix = iv_radix.
       IF numofchar( lv_text ) GT 2.
@@ -9047,7 +8951,7 @@
 
       lo_ptr = list->cdr.
       WHILE lo_ptr->type EQ type_pair.
-        _get_real carry lo_ptr->car '[max]'.
+        _get_number carry lo_ptr->car '[max]'.
         IF lv_exact EQ abap_true.
           lv_exact = cell_exact.
         ENDIF.
@@ -11951,17 +11855,30 @@
 
           IF lo_real->finite EQ abap_true.
             DATA(lv_float) = lo_real->real.
-            str = condense( CAST lcl_lisp_real( me )->real ).
-            "str = condense( CONV #( lo_real->real ) ).
+            str = condense( CAST lcl_lisp_real( me )->real ). " condense( CONV #( lo_real->real ) ).
 
-            IF lo_real->exact EQ abap_false AND frac( lv_float ) EQ 0 AND str CN `.e`.
+            IF lo_real->exact EQ abap_false AND frac( lv_float ) EQ 0 AND str CN c_pattern_inexact.
               str = str && `.0`.
             ENDIF.
           ELSE.
             str = to_lower( lo_real->value ).
           ENDIF.
 
-*        WHEN type_rational.
+        WHEN type_rational.
+          DATA(lo_rat) = CAST lcl_lisp_rational( me ).
+          IF lo_rat->exact EQ abap_false.
+            lv_float = lo_rat->to_real( ).
+            str = lv_float.
+            str = condense( str ).
+            IF strlen( str ) GT 5.
+              str = |#i{ lo_rat->int }/{ lo_rat->denominator }|.
+            ELSEIF frac( lv_float ) EQ 0 AND str CN c_pattern_inexact.
+              str = str && `.0`.
+            ENDIF.
+          ELSE.
+            str = str && |{ lo_rat->int }/{ lo_rat->denominator }|.
+          ENDIF.
+
 
 *        WHEN type_complex.
 *          str = ?.
@@ -12104,57 +12021,6 @@
       ENDCASE.
     ENDMETHOD.
 
-    METHOD is_finite.
-      result = false.
-      CASE type.
-        WHEN type_integer
-          OR type_rational.
-          result = true.
-
-        WHEN type_real.
-          IF CAST lcl_lisp_real( me )->finite EQ abap_true.
-            result = true.
-          ENDIF.
-
-        WHEN type_complex.
-          DATA(lo_z) = CAST lcl_lisp_complex( me ).
-          IF lo_z->zreal->finite EQ abap_true
-            AND lo_z->zimag->finite EQ abap_true.
-            result = true.
-          ELSE.
-            result = false.
-          ENDIF.
-
-        WHEN OTHERS.
-          raise_nan( `finite?` ).
-      ENDCASE.
-    ENDMETHOD.
-
-    METHOD is_infinite.
-      CASE type.
-        WHEN type_integer
-          OR type_rational.
-          result = false.
-
-        WHEN type_real.
-          IF CAST lcl_lisp_real( me )->finite EQ abap_false.
-            result = true.
-          ENDIF.
-
-        WHEN type_complex.
-          DATA(lo_z) = CAST lcl_lisp_complex( me ).
-          IF lo_z->zreal->finite EQ abap_false
-            AND lo_z->zimag->finite EQ abap_false.
-            result = true.
-          ELSE.
-            result = false.
-          ENDIF.
-
-        WHEN OTHERS.
-          raise_nan( `infinite?` ).
-      ENDCASE.
-    ENDMETHOD.
-
   ENDCLASS.                    "lcl_lisp IMPLEMENTATION
 
 *----------------------------------------------------------------------*
@@ -12292,15 +12158,15 @@
     ENDMETHOD.
 
     METHOD match_dot_subsequent.
-       " <dot subsequent -> <sign subsequent> | .
+      " <dot subsequent -> <sign subsequent> | .
       match = xsdbool( match_sign_subsequent( initial )  OR initial EQ c_dot ).
     ENDMETHOD.
 
     METHOD match_peculiar_identifier.
-       " <peculiar identifier> -> <explicit sign>
-       "    | <explicit sign> <sign subsequent> <subsequent>*
-       "    | <explicit sign> . <dot subsequent> <subsequent>*
-       "    | . <dot subsequent> <subsequent>*
+      " <peculiar identifier> -> <explicit sign>
+      "    | <explicit sign> <sign subsequent> <subsequent>*
+      "    | <explicit sign> . <dot subsequent> <subsequent>*
+      "    | . <dot subsequent> <subsequent>*
       DATA char TYPE tv_char.
       DATA idx TYPE i.
       DATA len TYPE i.
@@ -12328,7 +12194,7 @@
           rest = value+idx.
           match = match_subsequent_list( rest ).
 
-        " <peculiar identifier> -> <explicit sign> . <dot subsequent> <subsequent>*
+          " <peculiar identifier> -> <explicit sign> . <dot subsequent> <subsequent>*
         ELSEIF char EQ c_dot.
 
           IF idx = len.
@@ -12351,7 +12217,7 @@
 
         ENDIF.
 
-      " <peculiar identifier> -> . <dot subsequent> <subsequent>*
+        " <peculiar identifier> -> . <dot subsequent> <subsequent>*
       ELSEIF char EQ c_dot.
 
         IF idx = len.
@@ -12414,7 +12280,7 @@
             ro_elem = identifier( value ).
           ELSE.
             TRY.
-                  ro_elem = real_number( value = value ).  " iv_exact ?
+                ro_elem = complex_number( value = value ).  " iv_exact ?
               CATCH cx_sy_conversion_no_number.
                 lcl_lisp=>throw( `Not a valid number ` && value ).
             ENDTRY.
@@ -12624,8 +12490,18 @@
     ENDMETHOD.
 
     METHOD complex_number.
-      CONSTANTS c_imaginary_marker TYPE tv_char VALUE 'I'.
+      CONSTANTS:
+        c_imaginary_marker TYPE tv_char VALUE 'I',
+        c_imaginary_pos_inf TYPE string VALUE '+INF.0I',
+        c_imaginary_neg_inf TYPE string VALUE '-INF.0I',
+        c_imaginary_pos_nan TYPE string VALUE '+NAN.0I',
+        c_imaginary_neg_nan TYPE string VALUE '-NAN.0I'.
+
       DATA upcase TYPE string.
+      DATA real_part TYPE REF TO lcl_lisp_number.
+      DATA imag_part TYPE REF TO lcl_lisp_number.
+      DATA real_str TYPE string.
+      DATA imag_str TYPE string.
 
 *      ComplexR : RealR | RealR '@' RealR
 *                | RealR Plus UrealR Imaginary_marker
@@ -12647,23 +12523,178 @@
                                       ) " iv_exact = iv_exact
                          angle = real_number( value = substring_after( val = upcase sub = c_at )
                                           ) ). " iv_exact = iv_exact
-      ELSEIF upcase+len_1(1) = c_imaginary_marker.
-        " parse complex number in 'x + y i' format
+      ELSEIF contains( val = upcase sub = c_imaginary_marker ).
+        IF upcase+len_1(1) = c_imaginary_marker.
+          " parse complex number in 'x + y i' or 'x - y i'format
 
-        IF contains( val = upcase sub = c_lisp_pos_img ).
-          " positive imaginary part -                 " recursive call
-          ro_elem = rectangular( real = real_number( value = substring_before( val = upcase sub = c_lisp_pos_img case = abap_false )
-                                                 ) " iv_exact = iv_exact
-                                 imag = lcl_lisp_number=>one ).
-        ELSEIF contains( val = upcase sub = c_lisp_neg_img ).
-          " negative imaginary part -                 " recursive call
-          ro_elem = rectangular( real = real_number( value = substring_before( val = upcase sub = c_lisp_neg_img case = abap_false )
-                                                 )  " iv_exact = iv_exact
-                                 imag = lcl_lisp_number=>minus_one ).
-                                 "imag = number( value = substring_after( val = value sub = c_lisp_neg_img case = abap_false )
-                                 "                ) ). " iv_exact = iv_exact
-        ELSE.
+          "TO DO: special cases InfNan
+          DATA(number_of_plus) = count( val = upcase sub = '+' ).
+          " parse complex number in 'x + y i' format
+
+          CASE number_of_plus.
+            WHEN 2.
+*                | InfNan Plus UrealR Imaginary_marker
+*                | InfNan Plus Imaginary_marker
+*                | InfNan InfNaN Imaginary_marker
+
+              real_str = segment( val = upcase index = 1 sep = '+' ).
+              CASE real_str.
+                WHEN 'INF.0'.  " (inf) InfNaN
+                  real_part = lcl_lisp_number=>inf.
+                WHEN 'NAN.0'.  " (nan) InfNaN
+                  real_part = lcl_lisp_number=>nan.
+                WHEN OTHERS.
+                  real_part = real_number( value = real_str ).  " iv_exact = iv_exact
+              ENDCASE.
+
+              imag_str = segment( val = upcase index = 2 sep = '+' ).
+              CASE imag_str.
+                  WHEN 'INF.0'.  " (inf) InfNaN
+                    imag_part = lcl_lisp_number=>inf.
+                  WHEN 'NAN.0'.  " (nan) InfNaN
+                    imag_part = lcl_lisp_number=>nan.
+                  WHEN OTHERS.
+                    len_1 = numofchar( imag_str ) - 1.
+                    imag_str = imag_str+0(len_1).
+                    imag_part = real_number( value = imag_str ).  " iv_exact = iv_exact
+              ENDCASE.
+
+              ro_elem = rectangular( real = real_part
+                                     imag = imag_part ).
+              RETURN.
+
+            WHEN 1.
+              CASE upcase.
+                  WHEN c_lisp_pos_img.
+                    " Plus Imaginary_marker
+                    ro_elem = rectangular( real = lcl_lisp_number=>zero
+                                           imag = lcl_lisp_number=>one ).
+                    RETURN.
+                  WHEN c_imaginary_pos_inf.
+                    " (inf) InfNaN Imaginary_marker
+                    ro_elem = rectangular( real = lcl_lisp_number=>zero
+                                           imag = lcl_lisp_number=>inf ).
+                    RETURN.
+                  WHEN c_imaginary_pos_nan.
+                    " (nan) InfNaN Imaginary_marker
+                    ro_elem = rectangular( real = lcl_lisp_number=>zero
+                                           imag = lcl_lisp_number=>nan ).
+                    RETURN.
+                  WHEN OTHERS.
+                    " RealR Plus UrealR Imaginary_marker
+                    " RealR Plus        Imaginary_marker
+                    " RealR InfNaN      Imaginary_marker
+                    "       Plus UrealR Imaginary_marker
+
+                    " positive imaginary part -  recursive call
+                    real_str = substring_before( val = upcase sub = '+' case = abap_false ) .
+                    IF real_str IS INITIAL.
+                      real_part = lcl_lisp_number=>zero.
+                    ELSE.
+
+                      real_part = real_number( value = real_str ).  " iv_exact = iv_exact
+                    ENDIF.
+
+                    imag_str = substring_after( val = upcase+0(len_1) sub = '+' case = abap_false ).
+                    CASE imag_str.
+                      WHEN space.
+                        imag_part = lcl_lisp_number=>one.
+                      WHEN 'INF.0'.
+                        imag_part = lcl_lisp_number=>inf.
+                      WHEN 'NAN.0'.
+                        imag_part = lcl_lisp_number=>nan.
+                      WHEN OTHERS.
+                        imag_part = real_number( value = imag_str ).  " iv_exact = iv_exact
+                    ENDCASE.
+
+                    ro_elem = rectangular( real = real_part
+                                           imag = imag_part ).
+                    RETURN.
+              ENDCASE.
+
+            WHEN OTHERS.
+              " Error
+          ENDCASE.
+
+          DATA(number_of_minus) = count( val = upcase sub = '-' ).
+
+          CASE number_of_minus.
+          " parse complex number in 'x - y i' format
+            WHEN 2.
+*                | InfNan Minus UrealR Imaginary_marker
+*                | InfNan Minus Imaginary_marker
+*                | InfNan InfNaN Imaginary_marker
+
+              real_str = segment( val = upcase index = 1 sep = '-' ).
+              CASE real_str.
+                WHEN 'INF.0'.  " (inf) InfNaN
+                  real_part = lcl_lisp_number=>neg_inf.
+                WHEN 'NAN.0'.  " (nan) InfNaN
+                  real_part = lcl_lisp_number=>neg_nan.
+                WHEN OTHERS.
+                  real_part = real_number( value = real_str ).  " iv_exact = iv_exact
+              ENDCASE.
+
+              imag_str = segment( val = upcase index = 2 sep = '-' ).
+              CASE imag_str.
+                  WHEN 'INF.0'.  " (inf) InfNaN
+                    imag_part = lcl_lisp_number=>neg_inf.
+                  WHEN 'NAN.0'.  " (nan) InfNaN
+                    imag_part = lcl_lisp_number=>neg_nan.
+                  WHEN OTHERS.
+                    len_1 = numofchar( imag_str ) - 1.
+                    imag_str = '-' && imag_str+0(len_1).
+                    imag_part = real_number( value = imag_str ).  " iv_exact = iv_exact
+              ENDCASE.
+
+              ro_elem = rectangular( real = real_part
+                                     imag = imag_part ).
+              RETURN.
+
+            WHEN 1.
+            IF upcase EQ c_lisp_neg_img.
+              ro_elem = rectangular( real = lcl_lisp_number=>zero
+                                     imag = lcl_lisp_number=>minus_one ).
+              RETURN.
+            ENDIF.
+            CASE upcase.
+              WHEN c_lisp_neg_img.
+                ro_elem = rectangular( real = lcl_lisp_number=>zero
+                                       imag = lcl_lisp_number=>minus_one ).
+                RETURN.
+              WHEN c_imaginary_neg_inf.
+                ro_elem = rectangular( real = lcl_lisp_number=>zero
+                                       imag = lcl_lisp_number=>neg_inf ).
+                RETURN.
+              WHEN c_imaginary_neg_nan.
+                ro_elem = rectangular( real = lcl_lisp_number=>zero
+                                       imag = lcl_lisp_number=>neg_nan ).
+                RETURN.
+            ENDCASE.
+
+            " negative imaginary part -                 " recursive call
+            real_str = substring_before( val = upcase sub = '-' case = abap_false ) .
+            IF real_str IS INITIAL.
+              real_part = lcl_lisp_number=>zero.
+            ELSE.
+
+              real_part = real_number( value = real_str ).  " iv_exact = iv_exact
+            ENDIF.
+
+            imag_str = substring_after( val = upcase+0(len_1) sub = '-' case = abap_false ).
+            IF imag_str IS INITIAL.
+              imag_part = lcl_lisp_number=>one.
+            ELSE.
+              imag_part = real_number( value = imag_str ).  " iv_exact = iv_exact
+            ENDIF.
+
+            ro_elem = rectangular( real = real_part
+                                   imag = imag_part ).
+            RETURN.
+          ENDCASE.
+
           lcl_lisp=>error_no_number( upcase ).
+
         ENDIF.
 
       ELSEIF iv_exact IS SUPPLIED.
@@ -12708,21 +12739,21 @@
           TRY.
 
               IF contains( val = value sub = c_lisp_slash ). " Rational
-                  SPLIT value AT c_lisp_slash INTO lv_nummer_str lv_denom_str.
-                  IF sy-subrc EQ 0 AND lv_denom_str IS NOT INITIAL.
-                    MOVE EXACT lv_nummer_str TO lv_int.
-                    MOVE EXACT lv_denom_str TO lv_denom.
-                    DATA(lv_exact) = iv_exact.
-                    IF iv_exact IS SUPPLIED.
-                      lv_exact = iv_exact.
-                    ELSE.
-                      lv_exact = abap_true.
-                    ENDIF.
-                    ro_elem = rational( nummer = lv_int
-                                        denom = lv_denom
-                                        iv_exact = lv_exact ).
-                    RETURN.
+                SPLIT value AT c_lisp_slash INTO lv_nummer_str lv_denom_str.
+                IF sy-subrc EQ 0 AND lv_denom_str IS NOT INITIAL.
+                  MOVE EXACT lv_nummer_str TO lv_int.
+                  MOVE EXACT lv_denom_str TO lv_denom.
+                  DATA(lv_exact) = iv_exact.
+                  IF iv_exact IS SUPPLIED.
+                    lv_exact = iv_exact.
+                  ELSE.
+                    lv_exact = abap_true.
                   ENDIF.
+                  ro_elem = rational( nummer = lv_int
+                                      denom = lv_denom
+                                      iv_exact = lv_exact ).
+                  RETURN.
+                ENDIF.
               ENDIF.
 
 *             Check whether the token can be converted to a float
@@ -12737,7 +12768,7 @@
 
               TRY.
                   lv_nummer_str = value.
-                  IF NOT contains_any_of( val = lv_nummer_str sub = '.eE' ) OR iv_exact EQ abap_true.
+                  IF NOT contains_any_of( val = lv_nummer_str sub = c_pattern_inexact ) OR iv_exact EQ abap_true.
                     MOVE EXACT value TO lv_int.
                     ro_elem = integer( value = lv_int
                                        iv_exact = abap_true ).
@@ -12755,7 +12786,7 @@
                   ENDTRY.
               ENDTRY.
 
-              IF contains_any_of( val = lv_nummer_str sub = '.eE' ) AND iv_exact EQ abap_true.
+              IF contains_any_of( val = lv_nummer_str sub = c_pattern_inexact ) AND iv_exact EQ abap_true.
                 DATA lv_int_str TYPE string.
                 DATA lv_dec_str TYPE string.
                 SPLIT lv_nummer_str AT c_lisp_dot INTO lv_int_str lv_dec_str.
@@ -13270,6 +13301,12 @@
       finite = abap_true.
     ENDMETHOD.
 
+    METHOD scheme_round.
+      rdprec = round( val = float
+                      dec = 0
+                      mode = cl_abap_math=>round_half_even ).
+    ENDMETHOD.
+
     METHOD class_constructor.
       zero = lcl_lisp_new=>integer( value = 0 ).         " exact 0
       one = lcl_lisp_new=>integer( value = 1 ).          " exact 1
@@ -13370,6 +13407,96 @@
       ENDCASE.
     ENDMETHOD.
 
+    METHOD get_numerator.
+      CASE type.
+        WHEN type_integer.
+          result = me.
+
+        WHEN type_rational.
+          DATA(lo_rat) = CAST lcl_lisp_rational( me ).
+          result = lcl_lisp_new=>integer( value = lo_rat->int
+                                          iv_exact = lo_rat->exact ).
+        WHEN type_real.
+          TRY.
+              DATA(lo_real) = CAST lcl_lisp_real( me ).
+              DATA(lv_num) = lo_real->real.
+              result = lcl_lisp_new=>real_number( lcl_lisp_real=>gcd( n = lv_num
+                                                                      d = 1 ) * lv_num ).
+              _catch_arithmetic_error.
+          ENDTRY.
+
+        WHEN type_complex.
+          DATA(lo_z) = CAST lcl_lisp_complex( me ).
+          IF lo_z->is_real( ).
+            result = lo_z->zreal->get_numerator( ).
+          ELSE.
+            no_complex( 'numerator' ).
+          ENDIF.
+
+        WHEN OTHERS.
+          raise_nan( `numerator` ).
+      ENDCASE.
+    ENDMETHOD.
+
+    METHOD get_denominator.
+      DATA lo_frac TYPE REF TO lcl_lisp_number.
+      DATA lv_nummer TYPE tv_int.
+      DATA lv_denom TYPE tv_int.
+
+      CASE type.
+        WHEN type_integer.
+          DATA(lo_int) = CAST lcl_lisp_integer( me ).
+          result = lcl_lisp_new=>integer( value = 1
+                                          iv_exact = lo_int->exact ).
+        WHEN type_rational.
+          DATA(lo_rat) = CAST lcl_lisp_rational( me ).
+          result = lcl_lisp_new=>integer( value = lo_rat->denominator
+                                          iv_exact = lo_rat->exact ).
+        WHEN type_real.
+          TRY.
+              DATA(lo_real) = CAST lcl_lisp_real( me ).
+
+              IF abs( lo_real->real ) GT 1.
+                lv_denom = trunc( c_max_int / lo_real->real ).
+                lv_nummer = trunc( lo_real->real * lv_denom ).
+              ELSE.
+                lv_nummer = trunc( c_max_int * lo_real->real ).
+                lv_denom = trunc( lv_nummer / lo_real->real ).
+              ENDIF.
+
+              lo_frac = lcl_lisp_new=>rational( nummer = lv_nummer
+                                                denom = lv_denom
+                                                iv_exact = lo_real->exact ).
+              CASE lo_frac->type.
+                WHEN type_integer.
+                  result = lcl_lisp_new=>integer( value = 1
+                                                  iv_exact = lo_int->exact ).
+                WHEN type_rational.
+                  lo_rat ?= lo_frac.
+                  IF lo_real->float_eq( lo_rat->to_real( ) ).
+                    result = lcl_lisp_new=>integer( value = lo_rat->denominator
+                                                    iv_exact = lo_real->exact ).
+                  ELSE.
+                    lo_real->raise( `denominator not defined for this real number ` ).
+                  ENDIF.
+              ENDCASE.
+
+            _catch_arithmetic_error.
+          ENDTRY.
+
+        WHEN type_complex.
+          DATA(lo_z) = CAST lcl_lisp_complex( me ).
+          IF lo_z->is_real( ).
+            result = lo_z->zreal->get_denominator( ).
+          ELSE.
+            no_complex( 'denominator' ).
+          ENDIF.
+
+        WHEN OTHERS.
+          raise_nan( `denominator` ).
+      ENDCASE.
+    ENDMETHOD.
+
     METHOD number_is_zero.
       CASE is_number-subtype.
         WHEN type_integer.
@@ -13418,15 +13545,15 @@
           OR type_real.
 
           IF other->type EQ type_complex.
-             lo_z ?= other.
-             " returns false if imaginary part of "other" is not 0
-             imag_part = lo_z->zimag->get_number_info( ).   " Fill imag part of other
-             IF NOT number_is_zero( imag_part ).
-               result = false.
-               RETURN.
-             ENDIF.
+            lo_z ?= other.
+            " returns false if imaginary part of "other" is not 0
+            imag_part = lo_z->zimag->get_number_info( ).   " Fill imag part of other
+            IF NOT number_is_zero( imag_part ).
+              result = false.
+              RETURN.
+            ENDIF.
 
-             real_part = lo_z->zreal->get_number_info( ).
+            real_part = lo_z->zreal->get_number_info( ).
           ELSE.
             real_part = other->get_number_info( ).
           ENDIF.
@@ -13441,12 +13568,12 @@
               OR type_rational
               OR type_real.
 
-             " returns false if imaginary part of "me" is not 0
-             imag_part = lo_z->zimag->get_number_info( ).   " Fill imag part of other
-             IF NOT number_is_zero( imag_part ).
-               result = false.
-               RETURN.
-             ENDIF.
+              " returns false if imaginary part of "me" is not 0
+              imag_part = lo_z->zimag->get_number_info( ).   " Fill imag part of other
+              IF NOT number_is_zero( imag_part ).
+                result = false.
+                RETURN.
+              ENDIF.
 
               real_part = other->get_number_info( ).              " Fill real part
               result = lo_z->zreal->real_is_equal( real_part ).    " check if real part matches
@@ -13464,7 +13591,7 @@
 
           ENDCASE.
 
-        ENDCASE.
+      ENDCASE.
 
     ENDMETHOD.
 
@@ -13472,118 +13599,118 @@
       result = false.
 
       CASE type.
-          WHEN type_integer.
-            DATA(lv_int) = CAST lcl_lisp_integer( me )->int.
+        WHEN type_integer.
+          DATA(lv_int) = CAST lcl_lisp_integer( me )->int.
 
-            CASE res-subtype.
-              WHEN type_integer.
-                IF lv_int = res-int.
+          CASE res-subtype.
+            WHEN type_integer.
+              IF lv_int = res-int.
+                result = true.
+              ELSE.
+                result = false.
+              ENDIF.
+
+            WHEN type_rational.
+              IF lv_int * res-denom = res-nummer.
+                result = true.
+              ELSE.
+                result = false.
+              ENDIF.
+
+            WHEN type_real.
+              IF res-infnan EQ abap_false
+                AND lv_int = scheme_round( res-real )
+                AND frac( res-real ) EQ 0.
+                result = true.
+              ELSE. " either NaN of Infinity
+                result = false.
+              ENDIF.
+
+            WHEN OTHERS.
+              throw( `Only real number type supported (check equality)` ).
+
+          ENDCASE.
+
+        WHEN type_rational.
+          DATA(lo_rat) = CAST lcl_lisp_rational( me ).
+
+          CASE res-subtype.
+            WHEN type_integer.
+              IF lo_rat->int = res-int * lo_rat->denominator.
+                result = true.
+              ELSE.
+                result = false.
+              ENDIF.
+
+            WHEN type_rational.
+              IF lo_rat->int = res-nummer AND lo_rat->denominator EQ res-denom.
+                result = true.
+              ELSE.
+                result = false.
+              ENDIF.
+
+            WHEN type_real.
+              IF res-infnan EQ abap_false AND lo_rat->int = res-real * lo_rat->denominator.
+                result = true.
+              ELSE. " either NaN of Infinity
+                result = false.
+              ENDIF.
+
+            WHEN OTHERS.
+              throw( `Only real number type supported (check equality)` ).
+
+          ENDCASE.
+
+        WHEN type_real.
+          DATA(lo_real) = CAST lcl_lisp_real( me ).
+
+          IF is_nan( ) EQ true. " NaN is not equal to NaN
+            result = false.
+            RETURN.
+          ENDIF.
+
+          CASE res-subtype.
+            WHEN type_integer.
+              IF lo_real->finite EQ abap_true
+                AND frac( lo_real->real ) EQ 0
+                AND scheme_round( lo_real->real ) = res-int.
+                result = true.
+              ELSE.
+                result = false.
+              ENDIF.
+
+            WHEN type_rational.
+              IF lo_real->finite EQ abap_true
+                AND res-nummer = lo_real->real * res-denom.
+                result = true.
+              ELSE.
+                result = false.
+              ENDIF.
+
+            WHEN type_real.
+              IF lo_real->finite EQ abap_true AND res-infnan EQ abap_false.
+
+                IF lo_real->exact EQ abap_true AND lo_real->real EQ res-real.
+                  result = true.
+                ELSEIF lo_real->exact EQ abap_false AND lo_real->float_eq( res-real ).
                   result = true.
                 ELSE.
                   result = false.
                 ENDIF.
 
-              WHEN type_rational.
-                IF lv_int * res-denom = res-nummer.
-                  result = true.
-                ELSE.
-                  result = false.
-                ENDIF.
+              ELSEIF lo_real EQ res-ref
+                AND lo_real->is_nan( ) EQ false.
+                result = true.
+              ELSE.
+                result = false.
+              ENDIF.
 
-              WHEN type_real.
-                IF res-infnan EQ abap_false
-                  AND lv_int = trunc( res-real )
-                  AND frac( res-real ) EQ 0.
-                    result = true.
-                ELSE. " either NaN of Infinity
-                  result = false.
-                ENDIF.
+            WHEN OTHERS.
+              throw( `Only real number type supported (check equality)` ).
 
-              WHEN OTHERS.
-                throw( `Only real number type supported (check equality)` ).
+          ENDCASE.
 
-            ENDCASE.
-
-          WHEN type_rational.
-            DATA(lo_rat) = CAST lcl_lisp_rational( me ).
-
-            CASE res-subtype.
-              WHEN type_integer.
-                IF lo_rat->int = res-int * lo_rat->denominator.
-                  result = true.
-                ELSE.
-                  result = false.
-                ENDIF.
-
-              WHEN type_rational.
-                IF lo_rat->int = res-nummer AND lo_rat->denominator EQ res-denom.
-                  result = true.
-                ELSE.
-                  result = false.
-                ENDIF.
-
-              WHEN type_real.
-                IF res-infnan EQ abap_false AND lo_rat->int = res-real * lo_rat->denominator.
-                  result = true.
-                ELSE. " either NaN of Infinity
-                  result = false.
-                ENDIF.
-
-              WHEN OTHERS.
-                throw( `Only real number type supported (check equality)` ).
-
-            ENDCASE.
-
-          WHEN type_real.
-            DATA(lo_real) = CAST lcl_lisp_real( me ).
-
-            IF is_nan( ) EQ true. " NaN is not equal to NaN
-              result = false.
-              RETURN.
-            ENDIF.
-
-            CASE res-subtype.
-              WHEN type_integer.
-                IF lo_real->finite EQ abap_true
-                  AND frac( lo_real->real ) EQ 0
-                  AND trunc( lo_real->real ) = res-int.
-                  result = true.
-                ELSE.
-                  result = false.
-                ENDIF.
-
-              WHEN type_rational.
-                IF lo_real->finite EQ abap_true
-                  AND res-nummer = lo_real->real * res-denom.
-                  result = true.
-                ELSE.
-                  result = false.
-                ENDIF.
-
-              WHEN type_real.
-                IF lo_real->finite EQ abap_true AND res-infnan EQ abap_false.
-
-                  IF lo_real->exact EQ abap_true AND lo_real->real EQ res-real.
-                    result = true.
-                  ELSEIF lo_real->exact EQ abap_false AND lo_real->float_eq( res-real ).
-                    result = true.
-                  ELSE.
-                    result = false.
-                  ENDIF.
-
-                ELSEIF lo_real EQ res-ref
-                  AND lo_real->is_nan( ) EQ false.
-                  result = true.
-                ELSE.
-                  result = false.
-                ENDIF.
-
-              WHEN OTHERS.
-                throw( `Only real number type supported (check equality)` ).
-
-            ENDCASE.
-
-        ENDCASE.
+      ENDCASE.
 
     ENDMETHOD.
 
@@ -13616,6 +13743,130 @@
       ENDCASE.
     ENDMETHOD.
 
+    METHOD to_inexact.
+      IF exact EQ abap_true.
+        CASE type.
+          WHEN type_rational.
+            DATA(lo_rat) = CAST lcl_lisp_rational( me ).
+            result = lcl_lisp_new=>rational( nummer = lo_rat->int
+                                             denom = lo_rat->denominator
+                                             iv_exact = abap_false ).
+          WHEN type_integer.
+            DATA(lo_int) = CAST lcl_lisp_integer( me ).
+            result = lcl_lisp_new=>integer( value = lo_int->int
+                                            iv_exact = abap_false ).
+          WHEN type_real.
+            DATA(lo_real) = CAST lcl_lisp_real( me ).
+            result = lcl_lisp_new=>real( value = lo_real->real
+                                         iv_exact = abap_false ).
+
+          WHEN type_complex.
+            DATA(lo_z) = CAST lcl_lisp_complex( me ).
+            result = lcl_lisp_new=>rectangular( real = lo_z->zreal->to_inexact( )
+                                                imag = lo_z->zimag->to_inexact( ) ).
+        ENDCASE.
+      ELSE.
+        result = me.
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD to_exact.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+      DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lv_denom TYPE tv_int.
+      DATA lv_nummer TYPE tv_int.
+      DATA lv_error TYPE flag VALUE abap_false.
+
+      IF exact EQ abap_true.
+        result = me.
+      ELSE.
+        CASE type.
+          WHEN type_real.
+            lo_real ?= me.
+            IF lo_real->finite EQ abap_true.
+              IF abs( lo_real->real ) GT 1.
+                lv_denom = trunc( c_max_int / lo_real->real ).
+                lv_nummer = trunc( lo_real->real * lv_denom ).
+              ELSE.
+                lv_nummer = trunc( c_max_int * lo_real->real ).
+                lv_denom = trunc( lv_nummer / lo_real->real ).
+              ENDIF.
+            ELSE.
+              lv_error = abap_true.
+            ENDIF.
+
+          WHEN type_integer.
+            lv_nummer = CAST lcl_lisp_integer( me )->int.
+            lv_denom = 1.
+
+          WHEN type_rational.
+            lo_rat = CAST lcl_lisp_rational( me ).
+            lv_nummer = lo_rat->int.
+            lv_denom = lo_rat->denominator.
+
+          WHEN type_complex.
+            DATA(lo_z) = CAST lcl_lisp_complex( me ).
+            result ?= lcl_lisp_new=>rectangular( real = lo_z->zreal->to_exact( )
+                                                 imag = lo_z->zimag->to_exact( ) ).
+            RETURN.
+
+          WHEN OTHERS.
+            lv_error = abap_true.
+        ENDCASE.
+
+        TRY.
+            DATA(lo_num) = lcl_lisp_new=>rational( nummer = lv_nummer
+                                                   denom = lv_denom
+                                                   iv_exact = abap_true ).
+            result ?= lo_num.
+            lv_error = xsdbool( lo_num->exact NE abap_true ).
+          CATCH lcx_lisp_exception cx_sy_conversion_no_number.
+            lv_error = abap_true.
+        ENDTRY.
+      ENDIF.
+      IF lv_error = abap_true.
+        throw( |no exact representation of { to_string( ) }| ).
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD is_integer.
+      CASE type.
+        WHEN type_integer.
+          flag = abap_true.
+        WHEN type_rational.
+          flag = xsdbool( CAST lcl_lisp_rational( me )->denominator NE 0 ).
+
+        WHEN type_real.
+          DATA(lo_real) = CAST lcl_lisp_real( me ).
+          " If x is an inexact real number, then (integer? x) is true if and only if (= x (round x)).
+          flag = xsdbool( lo_real->finite EQ abap_true
+                      AND scheme_round( lo_real->real ) = lo_real->real ).
+
+        WHEN type_complex.
+          DATA(z) = CAST lcl_lisp_complex( me ).
+          flag = xsdbool( z->zimag->number_is_equal( zero ) AND z->zreal->is_integer( ) ).
+
+        WHEN OTHERS.
+          raise_nan( `integer?` ).
+      ENDCASE.
+    ENDMETHOD.
+
+    METHOD is_finite.
+      IF finite EQ abap_true.
+        result = true.
+      ELSE.
+        result = false.
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD is_infinite.
+      IF finite EQ abap_true.
+        result = false.
+      ELSE.
+        result = true.
+      ENDIF.
+    ENDMETHOD.
+
   ENDCLASS.
 
   CLASS lcl_lisp_complex IMPLEMENTATION.
@@ -13626,8 +13877,8 @@
 
     METHOD to_string.
       CONSTANTS:
-        c_minus TYPE tv_char VALUE `-`,
-        c_plus TYPE tv_char VALUE `+`,
+        c_minus     TYPE tv_char VALUE `-`,
+        c_plus      TYPE tv_char VALUE `+`,
         c_imaginary TYPE tv_char VALUE `i`.
       DATA lv_sep TYPE tv_char.
       DATA lv_img TYPE string.
@@ -13644,8 +13895,10 @@
           ELSE.
             lv_img = lv_img && c_imaginary.
           ENDIF.
-          IF lv_img+0(1) NE c_minus.
-            lv_sep = c_plus.
+          IF zimag->finite EQ abap_true.
+            IF lv_img+0(1) NE c_minus.
+              lv_sep = c_plus.
+            ENDIF.
           ENDIF.
         ENDIF.
         str = str && lv_sep && lv_img.
@@ -13653,30 +13906,34 @@
     ENDMETHOD.
 
     METHOD set_rectangular.
-      zreal = x.
+      set( x = x
+           y = y ).
       real_part = zreal->to_real( ).
-
-      zimag = y.
       imaginary_part = zimag->to_real( ).
-
       to_polar( ).
+    ENDMETHOD.
+
+    METHOD set.
+      zreal = x.
+      zimag = y.
       exact = xsdbool( zreal->exact EQ abap_true AND zimag->exact EQ abap_true ).
+      finite = xsdbool( zreal->finite EQ abap_true AND zimag->finite EQ abap_true ).
     ENDMETHOD.
 
     METHOD set_polar.
       magnitude = r.
       angle = alpha.
       to_rectangular( ).
-      zreal = lcl_lisp_new=>real_number( value = real_part ).
-      zimag = lcl_lisp_new=>real_number( value = imaginary_part ).
-      exact = xsdbool( zreal->exact EQ abap_true AND zimag->exact EQ abap_true ).
+
+      set( x = lcl_lisp_new=>real_number( value = real_part )
+           y = lcl_lisp_new=>real_number( value = imaginary_part ) ).
     ENDMETHOD.
 
     METHOD to_polar.
       DATA lv_tan TYPE f.
       DATA lv_angle TYPE f.
       lv_tan = imaginary_part.
-      magnitude = sqrt( real_part ** 2 + ( imaginary_part ** 2 ) ).
+      magnitude = sqrt( real_part ** 2 + imaginary_part ** 2 ).
       lv_angle = atan( lv_tan ). " x
       angle = lv_angle.
     ENDMETHOD.
@@ -13794,45 +14051,31 @@
       ENDIF.
     ENDMETHOD.
 
-  METHOD is_finite.
-    result = zreal->is_finite(  ).
-    IF result = true. " real AND imaginary parts must be finite
-      result = zimag->is_finite(  ).
-    ENDIF.
-  ENDMETHOD.
+    METHOD is_nan.
+      result = zreal->is_nan( ).
+      IF result = false.  " real OR imaginary parts must be NaN
+        result = zimag->is_nan( ).
+      ENDIF.
+    ENDMETHOD.
 
-  METHOD is_infinite.
-    result = zreal->is_infinite(  ).
-    IF result = false.  " real OR imaginary parts must be infinite
-      result = zimag->is_infinite(  ).
-    ENDIF.
-  ENDMETHOD.
+    METHOD is_real.
+      flag = abap_false.
 
-  METHOD is_nan.
-    result = zreal->is_nan( ).
-    IF result = false.  " real OR imaginary parts must be NaN
-      result = zimag->is_nan( ).
-    ENDIF.
-  ENDMETHOD.
+      CASE zimag->type.
+        WHEN type_integer.
+          flag = xsdbool( CAST lcl_lisp_integer( zimag )->int EQ 0 ).
 
-  METHOD is_real.
-    flag = abap_false.
+        WHEN type_rational.
+          flag = xsdbool( CAST lcl_lisp_rational( zimag )->int EQ 0 ).
 
-    CASE zimag->type.
-      WHEN type_integer.
-        flag = xsdbool( CAST lcl_lisp_integer( zimag )->int EQ 0 ).
+        WHEN type_real.
+          flag = xsdbool( CAST lcl_lisp_real( zimag )->real EQ 0 ).
 
-      WHEN type_rational.
-        flag = xsdbool( CAST lcl_lisp_rational( zimag )->int EQ 0 ).
+      ENDCASE.
 
-      WHEN type_real.
-        flag = xsdbool( CAST lcl_lisp_real( zimag )->real EQ 0 ).
+    ENDMETHOD.
 
-    ENDCASE.
-
-  ENDMETHOD.
-
-ENDCLASS.
+  ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp_hash IMPLEMENTATION
