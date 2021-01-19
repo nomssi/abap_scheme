@@ -73,8 +73,11 @@
     c_special_initial     TYPE string VALUE '!$%&*/:<=>?@^_~'.
 
   TYPES tv_char TYPE c LENGTH 1.
-  TYPES tv_int TYPE int8.                      " integer data type, use int8 and max_int8 if available
-  CONSTANTS c_max_int TYPE tv_int VALUE cl_abap_math=>max_int8.  "  cl_abap_math=>max_int8.
+  TYPES tv_real TYPE decfloat34.  " floating point data type
+  TYPES tv_int TYPE int8.         " integer data type, use int8 and max_int8 if available
+  CONSTANTS:
+    c_max_int TYPE tv_int VALUE cl_abap_math=>max_int8,  "  cl_abap_math=>max_int8.
+    c_max_float TYPE tv_real VALUE cl_abap_math=>max_decfloat34.
 
   CONSTANTS:
     c_escape_char           TYPE tv_char VALUE '\',
@@ -105,7 +108,6 @@
     c_pattern_inexact TYPE string VALUE '.eE'.
 
   TYPES tv_index TYPE tv_int.
-  TYPES tv_real TYPE decfloat34.  " floating point data type
   TYPES tv_xword TYPE x LENGTH 2.
 
   CLASS lcl_demo_output DEFINITION.
@@ -505,7 +507,7 @@
     result = nil.
     _validate list.
     _validate_number list->car &2.
-    IF CAST lcl_lisp_number( list->car )->finite EQ abap_false.
+    IF CAST lcl_lisp_number( list->car )->infnan EQ abap_true.
       result = list->car.
       RETURN.
     ENDIF.
@@ -882,7 +884,10 @@
       METHODS is_exact RETURNING VALUE(result) TYPE REF TO lcl_lisp.
       METHODS is_inexact RETURNING VALUE(result) TYPE REF TO lcl_lisp.
 
-      METHODS to_real RETURNING VALUE(rv_real) TYPE tv_real
+      METHODS to_real IMPORTING operation TYPE string OPTIONAL
+                                infnan_value TYPE tv_real OPTIONAL
+                                PREFERRED PARAMETER operation
+                      RETURNING VALUE(rv_real) TYPE tv_real
                       RAISING   lcx_lisp_exception.
       METHODS to_exact RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
                        RAISING   lcx_lisp_exception.
@@ -918,7 +923,7 @@
       CLASS-METHODS scheme_round IMPORTING float TYPE tv_real
                                  RETURNING VALUE(rdprec) TYPE tv_real.
       DATA exact TYPE flag READ-ONLY.
-      DATA finite TYPE flag READ-ONLY.
+      DATA infnan TYPE flag READ-ONLY.
 
       " Numbers
       CLASS-DATA zero TYPE REF TO lcl_lisp_number READ-ONLY.
@@ -6698,7 +6703,7 @@
           CASE res-&2-subtype.
             WHEN type_integer.
               res-&2-subtype = type_real.
-              IF lo_real->finite EQ abap_true.
+              IF lo_real->infnan EQ abap_false.
                 res-&2-real = res-&2-int &1 lo_real->real.
               ELSE.
                 res-&2-ref = lo_real.
@@ -6707,7 +6712,7 @@
 
             WHEN type_rational.
               res-&2-subtype = type_real.
-              IF lo_real->finite EQ abap_true.
+              IF lo_real->infnan EQ abap_false.
                 res-&2-real = res-nummer / res-denom &1 lo_real->real.
               ELSE.
                 res-&2-ref = lo_real.
@@ -6716,7 +6721,7 @@
 
             WHEN type_real.
               "res-&2-subtype = type_real.
-              IF lo_real->finite EQ abap_true.
+              IF lo_real->infnan EQ abap_false.
                 IF res-&2-infnan EQ abap_false.
                   res-&2-real = res-&2-real &1 lo_real->real.
                 ELSE.
@@ -6733,7 +6738,7 @@
 
             WHEN OTHERS.
               res-&2-subtype = type_real.
-              IF lo_real->finite EQ abap_true.
+              IF lo_real->infnan EQ abap_false.
                 res-&2-real = lo_real->real.
               ELSE.
                 res-&2-ref = lo_real.
@@ -6777,7 +6782,7 @@
 
                 WHEN type_real.
                   lo_real ?= cell.
-                  IF lo_real->finite EQ abap_true.
+                  IF lo_real->infnan EQ abap_false.
                     res-real_part-real = lo_real->real.
                   ELSE.
                     res-real_part-ref = lo_real.
@@ -6817,7 +6822,7 @@
                   res-real_part-denom = lo_rat->denominator.
                 WHEN type_real.
                   lo_real = CAST lcl_lisp_real( lo_z->zreal ).
-                  IF lo_real->finite EQ abap_true.
+                  IF lo_real->infnan EQ abap_false.
                     res-real_part-real = lo_real->real.
                   ELSE.
                     res-real_part-ref = lo_real.
@@ -6838,7 +6843,7 @@
                   res-imag_part-denom = lo_rat->denominator.
                 WHEN type_real.
                   lo_real = CAST lcl_lisp_real( lo_z->zimag ).
-                  IF lo_real->finite EQ abap_true.
+                  IF lo_real->infnan EQ abap_false.
                     res-imag_part-real = lo_real->real.
                   ELSE.
                     res-imag_part-ref = lo_real.
@@ -7551,7 +7556,7 @@
           " All finite reals are rational in this implementation
           " The numbers +inf.0, -inf.0 and +nan.0 are real but not rational
           lo_real ?= list->car.
-          IF lo_real->finite = abap_true.
+          IF lo_real->infnan = abap_false.
             result = true.
           ENDIF.
       ENDCASE.
@@ -7718,26 +7723,27 @@
     ENDMETHOD.
 
     METHOD proc_real_part.
-      _validate list.
-      IF list->cdr NE nil.
-        throw( |real-part takes only one argument| ).
-      ENDIF.
-      _validate list->car.
-      IF list->car->type NE type_complex.
-        list->car->raise( ` is not a complex in real-part` ) ##NO_TEXT.
+      DATA lo_number TYPE REF TO lcl_lisp_number.
+
+      _get_arg0_as_number lo_number `real-part`.
+      _assert_last_param list.
+      IF lo_number->type NE type_complex.
+        lo_number->raise( ` is not a complex number in [real-part]` ) ##NO_TEXT.
       ENDIF.
 
-      result = CAST lcl_lisp_complex( list->car )->zreal.
+      result = CAST lcl_lisp_complex( lo_number )->zreal.
     ENDMETHOD.
 
     METHOD proc_imag_part.
-      _validate list.
-      IF list->cdr NE nil.
-        throw( |imag-part takes only one argument| ).
-      ENDIF.
-      _validate_complex list->car `[imag-part]`.
+      DATA lo_number TYPE REF TO lcl_lisp_number.
 
-      result = CAST lcl_lisp_complex( list->car )->zimag.
+      _get_arg0_as_number lo_number `imag-part`.
+      _assert_last_param list.
+      IF lo_number->type NE type_complex.
+        lo_number->raise( ` is not a complex number in [imag-part]` ) ##NO_TEXT.
+      ENDIF.
+
+      result = CAST lcl_lisp_complex( lo_number )->zimag.
     ENDMETHOD.
 
     METHOD proc_magnitude.
@@ -7765,24 +7771,14 @@
     ENDMETHOD.
 
     METHOD proc_abs.
-      result = nil.
-      _validate list.
+      DATA lo_number TYPE REF TO lcl_lisp_number.
+
+      _get_arg0_as_number lo_number `abs`.
       _assert_last_param list.
 
       TRY.
-          _validate list->car.
-          CASE list->car->type.
-            WHEN type_integer
-              OR type_real
-              OR type_rational
-              OR type_complex.
-              result = CAST lcl_lisp_number( list->car )->absolute( ).
-
-            WHEN OTHERS.
-              list->car->raise_nan( |[abs]| ).
-          ENDCASE.
-
-          _catch_arithmetic_error.
+           result = lo_number->absolute( ).
+        _catch_arithmetic_error.
       ENDTRY.
     ENDMETHOD.                    "proc_abs
 
@@ -7801,32 +7797,19 @@
           _values_get_next cell.
           CASE cell->type.
             WHEN type_integer
-              OR type_rational.
-              carry = CAST lcl_lisp_number( cell )->to_real( ).
+              OR type_rational
+              OR type_real.
+              carry = CAST lcl_lisp_number( cell )->to_real( 'sin' ).
 
-            WHEN type_real.
-              lo_real = CAST lcl_lisp_real( cell ).
-              IF lo_real->finite EQ abap_true.
-                carry = lo_real->to_real( ).
-              ELSE.
-                lo_real->raise_nan( 'sin' ).
-              ENDIF.
 
             WHEN type_complex.
               DATA(z) = CAST lcl_lisp_complex( cell ).
-              DATA(lo_zreal) = z->zreal.
-              IF lo_zreal->finite EQ abap_false.
-                lo_zreal->raise_nan( 'sin' ).
-              ENDIF.
-              carry = lo_zreal->to_real( ).
+              carry = z->zreal->to_real( 'sin' ).
 
               DATA(lo_zimag) = z->zimag.
               IF lo_zimag NE z->zero.
                 complex_logic = abap_true.
-                IF lo_zimag->finite EQ abap_false.
-                  lo_zimag->raise_nan( 'sin' ).
-                ENDIF.
-                y = lo_zimag->to_real( ).
+                y = lo_zimag->to_real( 'sin' ).
               ELSE.
                 y = 0.
               ENDIF.
@@ -7866,32 +7849,18 @@
           _values_get_next cell.
           CASE cell->type.
             WHEN type_integer
-              OR type_rational.
-              carry = CAST lcl_lisp_number( cell )->to_real( ).
-
-            WHEN type_real.
-              lo_real = CAST lcl_lisp_real( cell ).
-              IF lo_real->finite EQ abap_true.
-                carry = lo_real->to_real( ).
-              ELSE.
-                lo_real->raise_nan( 'cos' ).
-              ENDIF.
+              OR type_rational
+              OR type_real.
+              carry = CAST lcl_lisp_number( cell )->to_real( 'cos' ).
 
             WHEN type_complex.
               DATA(z) = CAST lcl_lisp_complex( cell ).
-              DATA(lo_zreal) = z->zreal.
-              IF lo_zreal->finite EQ abap_false.
-                lo_zreal->raise_nan( 'cos' ).
-              ENDIF.
-              carry = lo_zreal->to_real( ).
+              carry = z->zreal->to_real( 'cos' ).
 
               DATA(lo_zimag) = z->zimag.
               IF lo_zimag NE z->zero.
                 complex_logic = abap_true.
-                IF lo_zimag->finite EQ abap_false.
-                  lo_zimag->raise_nan( 'cos' ).
-                ENDIF.
-                y = lo_zimag->to_real( ).
+                y = lo_zimag->to_real( 'cos' ).
               ELSE.
                 y = 0.
               ENDIF.
@@ -8013,13 +7982,13 @@
             WHEN type_integer.
               _to_integer cell exp1.
               result = lcl_lisp_new=>real_number( value = ipow( base = base1  exp = exp1 )
-                                             iv_exact = lv_exact ).
+                                                  iv_exact = lv_exact ).
             WHEN type_real.
               lo_real = CAST lcl_lisp_real( cell ).
-              IF lo_real->finite EQ abap_true.
+              IF lo_real->infnan EQ abap_false.
                 exp1 = lo_real->real.
                 result = lcl_lisp_new=>real_number( value = base1 ** exp1
-                                               iv_exact = lv_exact ).
+                                                    iv_exact = lv_exact ).
               ELSE.
                 result = lo_real.
               ENDIF.
@@ -8341,7 +8310,7 @@
 
       result = nil.
       _validate_number list->car '[round]'.
-      IF CAST lcl_lisp_number( list->car )->finite EQ abap_false.
+      IF CAST lcl_lisp_number( list->car )->infnan EQ abap_true.
         result = list->car.
         RETURN.
       ENDIF.
@@ -11853,7 +11822,7 @@
           DATA lo_real TYPE REF TO lcl_lisp_real.
           lo_real ?= me.
 
-          IF lo_real->finite EQ abap_true.
+          IF lo_real->infnan EQ abap_false.
             DATA(lv_float) = lo_real->real.
             str = condense( CAST lcl_lisp_real( me )->real ). " condense( CONV #( lo_real->real ) ).
 
@@ -13224,8 +13193,8 @@
 
     METHOD constructor.
       super->constructor( type_real ).
-      me->finite = finite.
       IF finite EQ abap_true.
+        me->infnan = abap_false.
         real = value.
         IF exact EQ abap_true AND trunc( real ) = real.
           me->exact = abap_true.
@@ -13233,6 +13202,7 @@
           me->exact = abap_false.
         ENDIF.
       ELSE.
+        me->infnan = abap_true.
         me->value = value.
       ENDIF.
     ENDMETHOD.
@@ -13247,7 +13217,7 @@
       DATA abs_b TYPE tv_real.
 
       result = abap_false.
-      CHECK finite EQ abap_true.
+      CHECK infnan EQ abap_false.
       IF real EQ iv_real.
         result = abap_true.
       ELSEIF exact EQ abap_false.
@@ -13298,7 +13268,7 @@
     METHOD constructor.
       super->constructor( type ).
       mutable = abap_false.
-      finite = abap_true.
+      infnan = abap_false.
     ENDMETHOD.
 
     METHOD scheme_round.
@@ -13353,7 +13323,7 @@
 
         WHEN type_real.
           DATA(lo_real) = CAST lcl_lisp_real( me ).
-          IF lo_real->finite EQ abap_true.
+          IF lo_real->infnan EQ abap_false.
             num = lcl_lisp_new=>real( value = abs( lo_real->value )
                                       iv_exact = lo_real->exact ).
           ELSE.
@@ -13392,7 +13362,7 @@
         WHEN type_real.
           DATA(lo_real) = CAST lcl_lisp_real( me ).
           rs_info-ref = lo_real.
-          IF lo_real->finite EQ abap_true.
+          IF lo_real->infnan EQ abap_false.
             rs_info-real = lo_real->real.
             rs_info-infnan = abap_false.
           ELSE.
@@ -13671,7 +13641,7 @@
 
           CASE res-subtype.
             WHEN type_integer.
-              IF lo_real->finite EQ abap_true
+              IF lo_real->infnan EQ abap_false
                 AND frac( lo_real->real ) EQ 0
                 AND scheme_round( lo_real->real ) = res-int.
                 result = true.
@@ -13680,7 +13650,7 @@
               ENDIF.
 
             WHEN type_rational.
-              IF lo_real->finite EQ abap_true
+              IF lo_real->infnan EQ abap_false
                 AND res-nummer = lo_real->real * res-denom.
                 result = true.
               ELSE.
@@ -13688,7 +13658,7 @@
               ENDIF.
 
             WHEN type_real.
-              IF lo_real->finite EQ abap_true AND res-infnan EQ abap_false.
+              IF lo_real->infnan EQ abap_false AND res-infnan EQ abap_false.
 
                 IF lo_real->exact EQ abap_true AND lo_real->real EQ res-real.
                   result = true.
@@ -13725,10 +13695,12 @@
 
         WHEN type_real.
           DATA(lo_real) = CAST lcl_lisp_real( me ).
-          IF lo_real->finite EQ abap_true.
+          IF lo_real->infnan EQ abap_false.
             rv_real = lo_real->real.
+          ELSEIF infnan_value IS SUPPLIED.
+            rv_real = infnan_value.
           ELSE.
-            rv_real = c_max_int.
+            raise( `not a rational ` && operation ).
           ENDIF.
 
         WHEN type_complex.
@@ -13783,7 +13755,7 @@
         CASE type.
           WHEN type_real.
             lo_real ?= me.
-            IF lo_real->finite EQ abap_true.
+            IF lo_real->infnan EQ abap_false.
               IF abs( lo_real->real ) GT 1.
                 lv_denom = trunc( c_max_int / lo_real->real ).
                 lv_nummer = trunc( lo_real->real * lv_denom ).
@@ -13839,7 +13811,7 @@
         WHEN type_real.
           DATA(lo_real) = CAST lcl_lisp_real( me ).
           " If x is an inexact real number, then (integer? x) is true if and only if (= x (round x)).
-          flag = xsdbool( lo_real->finite EQ abap_true
+          flag = xsdbool( lo_real->infnan EQ abap_false
                       AND scheme_round( lo_real->real ) = lo_real->real ).
 
         WHEN type_complex.
@@ -13855,7 +13827,7 @@
       "The finite? procedure returns #t on all real numbers except +inf.0, -inf.0, and +nan.0,
       " and on complex numbers if their real and imaginary parts are both finite.
       " Otherwise it returns #f.
-      IF finite EQ abap_true.
+      IF infnan EQ abap_false.
         result = true.
       ELSE.
         result = false.
@@ -13909,7 +13881,7 @@
           ELSE.
             lv_img = lv_img && c_imaginary.
           ENDIF.
-          IF zimag->finite EQ abap_true.
+          IF zimag->infnan EQ abap_false.
             IF lv_img+0(1) NE c_minus.
               lv_sep = c_plus.
             ENDIF.
@@ -13922,8 +13894,8 @@
     METHOD set_rectangular.
       set( x = x
            y = y ).
-      real_part = zreal->to_real( ).
-      imaginary_part = zimag->to_real( ).
+      real_part = zreal->to_real( infnan_value = c_max_float ).
+      imaginary_part = zimag->to_real( infnan_value = c_max_float ).
       to_polar( ).
     ENDMETHOD.
 
@@ -13931,7 +13903,7 @@
       zreal = x.
       zimag = y.
       exact = xsdbool( zreal->exact EQ abap_true AND zimag->exact EQ abap_true ).
-      finite = xsdbool( zreal->finite EQ abap_true AND zimag->finite EQ abap_true ).
+      infnan = xsdbool( zreal->infnan EQ abap_true OR zimag->infnan EQ abap_true ).
     ENDMETHOD.
 
     METHOD set_polar.
@@ -13946,8 +13918,13 @@
     METHOD to_polar.
       DATA lv_tan TYPE f.
       DATA lv_angle TYPE f.
-      lv_tan = imaginary_part.
-      magnitude = sqrt( real_part ** 2 + imaginary_part ** 2 ).
+      IF real_part EQ c_max_float OR imaginary_part EQ c_max_float.
+        magnitude = c_max_float.
+        lv_tan = nmin( val1 = imaginary_part val2 = c_max_int ).
+      ELSE.
+        magnitude = sqrt( real_part ** 2 + imaginary_part ** 2 ).
+        lv_tan = imaginary_part.
+      ENDIF.
       lv_angle = atan( lv_tan ). " x
       angle = lv_angle.
     ENDMETHOD.
