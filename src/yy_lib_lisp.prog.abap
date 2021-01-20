@@ -33,7 +33,13 @@
 *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 *  THE SOFTWARE.
 
-  DATA gv_lisp_trace TYPE flag VALUE abap_false ##NEEDED.
+  TYPES tv_char TYPE c LENGTH 1.
+  TYPES tv_real TYPE decfloat34.  " floating point data type
+  TYPES tv_int TYPE int8.         " integer data type, use int8 and max_int8 if available
+  TYPES tv_flag TYPE flag.
+  TYPES tv_hex04 TYPE c LENGTH 4. " should only contain hex digits
+
+  DATA gv_lisp_trace TYPE tv_flag VALUE abap_false ##NEEDED.
 
   CONSTANTS:
     c_lisp_input     TYPE string VALUE 'ABAP Lisp Input' ##NO_TEXT,
@@ -72,12 +78,10 @@
     c_abcde               TYPE string VALUE `ABCDEFGHIJKLMNOPQRSTUVWXYZ`, " sy-abcde
     c_special_initial     TYPE string VALUE '!$%&*/:<=>?@^_~'.
 
-  TYPES tv_char TYPE c LENGTH 1.
-  TYPES tv_real TYPE decfloat34.  " floating point data type
-  TYPES tv_int TYPE int8.         " integer data type, use int8 and max_int8 if available
   CONSTANTS:
-    c_max_int TYPE tv_int VALUE cl_abap_math=>max_int8,  "  cl_abap_math=>max_int8.
-    c_max_float TYPE tv_real VALUE cl_abap_math=>max_decfloat34.
+    c_max_int TYPE tv_int VALUE cl_abap_math=>max_int8,          "  cl_abap_math=>max_int8.
+    c_max_float TYPE tv_real VALUE cl_abap_math=>max_decfloat34,
+    c_min_float TYPE tv_real VALUE cl_abap_math=>min_decfloat34.
 
   CONSTANTS:
     c_escape_char           TYPE tv_char VALUE '\',
@@ -301,6 +305,7 @@
       WHEN type_integer.
         _to_integer cell &1.
       WHEN type_real.
+
         _to_real cell &1.
       WHEN type_rational.
         lo_rat ?= cell.
@@ -360,17 +365,18 @@
   DEFINE _data_local_numeric_cell.
     DATA cell TYPE REF TO lcl_lisp.
     DATA lo_head TYPE REF TO lcl_lisp.
-    DATA cell_exact TYPE flag.
-    DATA lv_exact TYPE flag.
+    DATA cell_exact TYPE tv_flag.
+    DATA lv_exact TYPE tv_flag.
     _data_local_numeric.
   END-OF-DEFINITION.
 
 * Macro that implements the logic for the comparison native
 * procedures, where only the comparison operator differs
   DEFINE _comparison.
+    " currently not transitive !! --------------------------------
     DATA carry TYPE tv_real.
     DATA carry_int TYPE tv_int.
-    DATA carry_is_int TYPE flag.
+    DATA carry_is_int TYPE tv_flag.
     _data_local_numeric_cell.
 
     result = false.
@@ -389,14 +395,19 @@
         carry = carry_int.
 
       WHEN type_real.
-        _to_real cell carry.
+        lo_real ?= cell.
+        IF lo_real->infnan EQ abap_true AND ( lo_real = lcl_lisp_number=>nan OR lo_real = lcl_lisp_number=>neg_nan ).
+          RETURN.
+        ELSE.
+          carry = lo_real->real.
+        ENDIF.
 
       WHEN type_rational.
         lo_rat ?= cell.
         carry = lo_rat->int / lo_rat->denominator.
 
       WHEN type_complex.
-        cell->raise( 'comparison not implemented yet for complex numbers' ).
+        cell->raise( 'comparison not defined for complex numbers' ).
 
       WHEN OTHERS.
         cell->raise_nan( &2 ).
@@ -425,7 +436,8 @@
         WHEN type_real.
           carry_is_int = abap_false.
           lo_real ?= cell->car.
-          IF carry &1 lo_real->real.
+          IF ( lo_real->infnan EQ abap_true AND ( lo_real = lcl_lisp_number=>nan OR lo_real = lcl_lisp_number=>neg_nan ) )
+            OR carry &1 lo_real->real.
             RETURN.
           ENDIF.
           carry = lo_real->real.
@@ -439,7 +451,7 @@
           carry = lo_rat->int / lo_rat->denominator.
 
         WHEN type_complex.
-          cell->car->raise( 'comparison not implemented yet for complex numbers' ).
+          cell->car->raise( 'comparison not defined for complex numbers' ).
 
         WHEN OTHERS.
           cell->car->raise_nan( &2 ).
@@ -534,7 +546,7 @@
 
         lo_number ?= list->car.
         result = lcl_lisp_new=>real( value = &1( carry )
-        iv_exact = lo_number->exact ).
+                                     iv_exact = lo_number->exact ).
       _catch_arithmetic_error.
     ENDTRY.
   END-OF-DEFINITION.
@@ -668,8 +680,8 @@
            real    TYPE tv_real,
            nummer  TYPE tv_int,
            denom   TYPE tv_int,
-           infnan  TYPE flag,
-           exact   TYPE flag,
+           infnan  TYPE tv_flag,
+           exact   TYPE tv_flag,
            ref     TYPE REF TO lcl_lisp_number,
          END OF ts_number.
 
@@ -692,7 +704,7 @@
       DATA type TYPE tv_type.
 
 *     Can this be replaced by a mesh? cf. DEMO_RND_PARSER_AST
-      DATA mutable TYPE flag VALUE abap_true READ-ONLY.
+      DATA mutable TYPE tv_flag VALUE abap_true READ-ONLY.
 
       DATA category TYPE tv_category.
       DATA value TYPE string.
@@ -790,7 +802,7 @@
                                RAISING   lcx_lisp_exception.
 
       METHODS format_quasiquote IMPORTING io_elem TYPE REF TO lcl_lisp
-                                EXPORTING ev_skip TYPE flag
+                                EXPORTING ev_skip TYPE tv_flag
                                           ev_str  TYPE string.
 
       METHODS format_string IMPORTING value      TYPE string
@@ -822,7 +834,7 @@
   CLASS lcl_lisp_char IMPLEMENTATION.
 
     METHOD new.
-      DATA lv_char TYPE char01.
+      DATA lv_char TYPE tv_char.
       lv_char = value.
       ro_elem = VALUE #( char_table[ char = lv_char ]-elem DEFAULT NEW lcl_lisp_char( lv_char ) ).
     ENDMETHOD.
@@ -864,7 +876,7 @@
     PUBLIC SECTION.
     PROTECTED SECTION.
       METHODS constructor IMPORTING value      TYPE any
-                                    iv_mutable TYPE flag.
+                                    iv_mutable TYPE tv_flag.
   ENDCLASS.
 
   CLASS lcl_lisp_string IMPLEMENTATION.
@@ -905,7 +917,7 @@
                             RAISING   lcx_lisp_exception.
       METHODS number_is_equal IMPORTING other         TYPE REF TO lcl_lisp_number
                               RETURNING VALUE(result) TYPE REF TO lcl_lisp.
-      METHODS is_integer RETURNING VALUE(flag) TYPE flag
+      METHODS is_integer RETURNING VALUE(flag) TYPE tv_flag
                          RAISING lcx_lisp_exception.
       METHODS is_finite RETURNING VALUE(result) TYPE REF TO lcl_lisp
                         RAISING   lcx_lisp_exception.
@@ -913,17 +925,17 @@
                           RAISING   lcx_lisp_exception.
 
       METHODS number_is_zero IMPORTING is_number   TYPE ts_number
-                             RETURNING VALUE(null) TYPE flag.
+                             RETURNING VALUE(null) TYPE tv_flag.
       METHODS number_is_positive IMPORTING is_number   TYPE ts_number
-                                 RETURNING VALUE(plus) TYPE flag.
+                                 RETURNING VALUE(plus) TYPE tv_flag.
 
       METHODS get_number_info RETURNING VALUE(rs_info) TYPE ts_number
                               RAISING   lcx_lisp_exception.
 
       CLASS-METHODS scheme_round IMPORTING float TYPE tv_real
                                  RETURNING VALUE(rdprec) TYPE tv_real.
-      DATA exact TYPE flag READ-ONLY.
-      DATA infnan TYPE flag READ-ONLY.
+      DATA exact TYPE tv_flag READ-ONLY.
+      DATA infnan TYPE tv_flag READ-ONLY.
 
       " Numbers
       CLASS-DATA zero TYPE REF TO lcl_lisp_number READ-ONLY.
@@ -952,7 +964,7 @@
       DATA int TYPE tv_int READ-ONLY.
     PROTECTED SECTION.
       METHODS constructor IMPORTING value    TYPE any
-                                    iv_exact TYPE flag.
+                                    iv_exact TYPE tv_flag.
   ENDCLASS.
 
   CLASS lcl_lisp_bigint DEFINITION INHERITING FROM lcl_lisp_integer CREATE PROTECTED FRIENDS lcl_lisp_new.
@@ -992,7 +1004,7 @@
     PUBLIC SECTION.
       CLASS-METHODS new IMPORTING nummer        TYPE tv_int
                                   denom         TYPE tv_int
-                                  iv_exact      TYPE flag
+                                  iv_exact      TYPE tv_flag
                         RETURNING VALUE(result) TYPE REF TO lcl_lisp_integer
                         RAISING   lcx_lisp_exception.
 
@@ -1004,7 +1016,7 @@
     PROTECTED SECTION.
       METHODS constructor IMPORTING nummer   TYPE tv_int
                                     denom    TYPE tv_int
-                                    iv_exact TYPE flag
+                                    iv_exact TYPE tv_flag
                           RAISING   lcx_lisp_exception.
       METHODS normalize RAISING lcx_lisp_exception.
   ENDCLASS.
@@ -1087,15 +1099,15 @@
     PUBLIC SECTION.
       DATA real TYPE tv_real READ-ONLY.
       METHODS float_eq IMPORTING iv_real       TYPE tv_real
-                       RETURNING VALUE(result) TYPE flag.
+                       RETURNING VALUE(result) TYPE tv_flag.
       CLASS-METHODS gcd IMPORTING n             TYPE numeric
                                   d             TYPE numeric
                         RETURNING VALUE(result) TYPE tv_real
                         RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
       METHODS constructor IMPORTING value  TYPE any
-                                    exact  TYPE flag
-                                    finite TYPE flag.
+                                    exact  TYPE tv_flag
+                                    finite TYPE tv_flag.
   ENDCLASS.
 
   CLASS lcl_lisp_complex DEFINITION INHERITING FROM lcl_lisp_number
@@ -1120,7 +1132,7 @@
       METHODS to_string REDEFINITION.
 
       METHODS is_nan REDEFINITION.
-      METHODS is_real RETURNING VALUE(flag) TYPE flag.
+      METHODS is_real RETURNING VALUE(flag) TYPE tv_flag.
 
     PROTECTED SECTION.
       CLASS-METHODS new_rectangular IMPORTING x              TYPE REF TO lcl_lisp_number DEFAULT zero
@@ -1170,11 +1182,11 @@
 
   CLASS lcl_lisp_lambda DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
-      DATA parameter_object TYPE flag.
+      DATA parameter_object TYPE tv_flag.
       METHODS constructor IMPORTING io_car              TYPE REF TO lcl_lisp
                                     io_cdr              TYPE REF TO lcl_lisp
                                     iv_category         TYPE tv_category DEFAULT tv_category_standard
-                                    iv_parameter_object TYPE flag DEFAULT abap_false.
+                                    iv_parameter_object TYPE tv_flag DEFAULT abap_false.
     PROTECTED SECTION.
   ENDCLASS.
 
@@ -1305,9 +1317,9 @@
   INTERFACE lif_input_port.
     METHODS read IMPORTING iv_title        TYPE string OPTIONAL
                  RETURNING VALUE(rv_input) TYPE string.
-    METHODS peek_char RETURNING VALUE(rv_char) TYPE char01.
-    METHODS is_char_ready RETURNING VALUE(rv_flag) TYPE flag.
-    METHODS read_char RETURNING VALUE(rv_char) TYPE char01.
+    METHODS peek_char RETURNING VALUE(rv_char) TYPE tv_char.
+    METHODS is_char_ready RETURNING VALUE(rv_flag) TYPE tv_flag.
+    METHODS read_char RETURNING VALUE(rv_char) TYPE tv_char.
     METHODS put IMPORTING iv_text TYPE string.
   ENDINTERFACE.
 
@@ -1332,9 +1344,9 @@
                display FOR lif_output_port~display,
                set_input_string FOR lif_input_port~put.
       METHODS constructor IMPORTING iv_port_type TYPE lcl_lisp_port=>tv_port_type DEFAULT c_port_textual
-                                    iv_input     TYPE flag
-                                    iv_output    TYPE flag
-                                    iv_error     TYPE flag DEFAULT abap_false.
+                                    iv_input     TYPE tv_flag
+                                    iv_output    TYPE tv_flag
+                                    iv_error     TYPE tv_flag DEFAULT abap_false.
       METHODS close.
       METHODS close_input.
       METHODS close_output.
@@ -1343,15 +1355,15 @@
                           RETURNING VALUE(rv_input) TYPE string.
 
       DATA port_type TYPE tv_port_type READ-ONLY.
-      DATA input TYPE flag READ-ONLY.
-      DATA output TYPE flag READ-ONLY.
-      DATA error TYPE flag READ-ONLY.
+      DATA input TYPE tv_flag READ-ONLY.
+      DATA output TYPE tv_flag READ-ONLY.
+      DATA error TYPE tv_flag READ-ONLY.
     PROTECTED SECTION.
 *     input is always buffered
       DATA last_input TYPE string.
       DATA last_index TYPE tv_index.
       DATA last_len TYPE tv_index.
-      DATA finite_size TYPE flag.
+      DATA finite_size TYPE tv_flag.
 
       METHODS block_read RETURNING VALUE(rv_char) TYPE tv_char.
   ENDCLASS.
@@ -1365,13 +1377,13 @@
       METHODS display REDEFINITION.
       METHODS flush RETURNING VALUE(rv_text) TYPE string.
       METHODS constructor IMPORTING iv_port_type TYPE tv_port_type DEFAULT c_port_textual
-                                    iv_input     TYPE flag
-                                    iv_output    TYPE flag
-                                    iv_error     TYPE flag DEFAULT abap_false
+                                    iv_input     TYPE tv_flag
+                                    iv_output    TYPE tv_flag
+                                    iv_error     TYPE tv_flag DEFAULT abap_false
                                     iv_separator TYPE string DEFAULT c_expr_separator
-                                    iv_string    TYPE flag.
+                                    iv_string    TYPE tv_flag.
     PROTECTED SECTION.
-      DATA string_mode TYPE flag.
+      DATA string_mode TYPE tv_flag.
       DATA buffer TYPE string.
       DATA separator TYPE string.
 
@@ -1419,17 +1431,17 @@
       CLASS-METHODS boolean IMPORTING value          TYPE any
                             RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS integer IMPORTING value          TYPE any
-                                      iv_exact       TYPE flag DEFAULT abap_true
+                                      iv_exact       TYPE tv_flag DEFAULT abap_true
                             RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_integer.
       CLASS-METHODS rational IMPORTING nummer         TYPE tv_int
                                        denom          TYPE tv_int
-                                       iv_exact       TYPE flag DEFAULT abap_true
+                                       iv_exact       TYPE tv_flag DEFAULT abap_true
                              RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_integer
                              RAISING   lcx_lisp_exception.
 
       CLASS-METHODS real IMPORTING value          TYPE any
-                                   iv_exact       TYPE flag
-                                   finite         TYPE flag DEFAULT abap_true
+                                   iv_exact       TYPE tv_flag
+                                   finite         TYPE tv_flag DEFAULT abap_true
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_real.
 
       CLASS-METHODS rectangular IMPORTING real           TYPE REF TO lcl_lisp_number DEFAULT lcl_lisp_complex=>zero
@@ -1443,12 +1455,12 @@
                           RAISING   lcx_lisp_exception.
 
       CLASS-METHODS complex_number IMPORTING value          TYPE any
-                                             iv_exact       TYPE flag OPTIONAL
+                                             iv_exact       TYPE tv_flag OPTIONAL
                                    RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_number
                                    RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
 
       CLASS-METHODS real_number IMPORTING value          TYPE any
-                                          iv_exact       TYPE flag OPTIONAL
+                                          iv_exact       TYPE tv_flag OPTIONAL
                                 RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_number
                                 RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
 
@@ -1464,11 +1476,11 @@
                                    RETURNING VALUE(rv_int) TYPE tv_int
                                    RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
       CLASS-METHODS binary IMPORTING value          TYPE any
-                                     iv_exact       TYPE flag
+                                     iv_exact       TYPE tv_flag
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                            RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
       CLASS-METHODS octal IMPORTING value          TYPE any
-                                    iv_exact       TYPE flag
+                                    iv_exact       TYPE tv_flag
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                           RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
       CLASS-METHODS octal_integer IMPORTING value         TYPE csequence
@@ -1476,7 +1488,7 @@
                                   RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
 
       CLASS-METHODS hex IMPORTING value          TYPE any
-                                  iv_exact       TYPE flag
+                                  iv_exact       TYPE tv_flag
                         RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                         RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
       CLASS-METHODS hex_integer IMPORTING value         TYPE csequence
@@ -1484,26 +1496,27 @@
                                 RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
 
       CLASS-METHODS string IMPORTING value          TYPE any
-                                     iv_mutable     TYPE flag DEFAULT abap_true
+                                     iv_mutable     TYPE tv_flag DEFAULT abap_true
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_string.
       CLASS-METHODS char IMPORTING value          TYPE any
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_char.
-      CLASS-METHODS charx IMPORTING value          TYPE any
+      CLASS-METHODS esc_charx IMPORTING value          TYPE any
+                              RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_char
+                              RAISING   lcx_lisp_exception.
+      CLASS-METHODS xchar IMPORTING value          TYPE tv_hex04
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_char.
-      CLASS-METHODS hex_to_char IMPORTING value          TYPE any
-                                RETURNING VALUE(rv_char) TYPE tv_char.
       CLASS-METHODS port IMPORTING iv_port_type   TYPE lcl_lisp_port=>tv_port_type
-                                   iv_input       TYPE flag
-                                   iv_output      TYPE flag
-                                   iv_error       TYPE flag
-                                   iv_buffered    TYPE flag
+                                   iv_input       TYPE tv_flag
+                                   iv_output      TYPE tv_flag
+                                   iv_error       TYPE tv_flag
+                                   iv_buffered    TYPE tv_flag
                                    iv_separator   TYPE string OPTIONAL
-                                   iv_string      TYPE flag DEFAULT abap_false
+                                   iv_string      TYPE tv_flag DEFAULT abap_false
                          RETURNING VALUE(ro_port) TYPE REF TO lcl_lisp_port.
 
       CLASS-METHODS elem IMPORTING type           TYPE tv_type
                                    value          TYPE any OPTIONAL
-                                   parameter      TYPE flag DEFAULT abap_false
+                                   parameter      TYPE tv_flag DEFAULT abap_false
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
       CLASS-METHODS data IMPORTING ref            TYPE REF TO data OPTIONAL
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_data.
@@ -1518,7 +1531,7 @@
                                    io_cdr         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                          RETURNING VALUE(ro_cons) TYPE REF TO lcl_lisp.
 
-      CLASS-METHODS promise IMPORTING done           TYPE flag
+      CLASS-METHODS promise IMPORTING done           TYPE tv_flag
                                       proc           TYPE REF TO lcl_lisp_lambda
                                       io_env         TYPE REF TO lcl_lisp_environment
                             RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
@@ -1529,18 +1542,18 @@
                           RETURNING VALUE(ro_cons) TYPE REF TO lcl_lisp.
 
       CLASS-METHODS vector IMPORTING it_vector     TYPE tt_lisp
-                                     iv_mutable    TYPE flag
+                                     iv_mutable    TYPE tv_flag
                            RETURNING VALUE(ro_vec) TYPE REF TO lcl_lisp_vector.
 
       CLASS-METHODS bytevector IMPORTING it_byte      TYPE tt_byte
-                                         iv_mutable   TYPE flag
+                                         iv_mutable   TYPE tv_flag
                                RETURNING VALUE(ro_u8) TYPE REF TO lcl_lisp_bytevector.
 
       CLASS-METHODS lambda IMPORTING io_car              TYPE REF TO lcl_lisp
                                      io_cdr              TYPE REF TO lcl_lisp
                                      io_env              TYPE REF TO lcl_lisp_environment
                                      iv_category         TYPE tv_category DEFAULT tv_category_standard
-                                     iv_parameter_object TYPE flag DEFAULT abap_false
+                                     iv_parameter_object TYPE tv_flag DEFAULT abap_false
                            RETURNING VALUE(ro_lambda)    TYPE REF TO lcl_lisp.
 
       CLASS-METHODS case_lambda IMPORTING it_clauses       TYPE tt_lisp
@@ -1597,19 +1610,19 @@
         c_explicit_sign TYPE string VALUE '+-'.
 
       CLASS-METHODS match_initial IMPORTING initial      TYPE tv_char
-                                  RETURNING VALUE(match) TYPE flag.
+                                  RETURNING VALUE(match) TYPE tv_flag.
 
       CLASS-METHODS match_subsequent_list IMPORTING value        TYPE string
-                                          RETURNING VALUE(match) TYPE flag.
+                                          RETURNING VALUE(match) TYPE tv_flag.
 
       CLASS-METHODS match_sign_subsequent IMPORTING initial      TYPE tv_char
-                                          RETURNING VALUE(match) TYPE flag.
+                                          RETURNING VALUE(match) TYPE tv_flag.
 
       CLASS-METHODS match_dot_subsequent IMPORTING initial      TYPE tv_char
-                                         RETURNING VALUE(match) TYPE flag.
+                                         RETURNING VALUE(match) TYPE tv_flag.
 
       CLASS-METHODS match_peculiar_identifier IMPORTING value        TYPE string
-                                              RETURNING VALUE(match) TYPE flag.
+                                              RETURNING VALUE(match) TYPE tv_flag.
   ENDCLASS.
 
   CLASS lcl_lisp_values IMPLEMENTATION.
@@ -1685,7 +1698,7 @@
 
     METHOD read_stream.
       DATA lt_fields TYPE STANDARD TABLE OF sval.
-      DATA lv_user_response TYPE flag.
+      DATA lv_user_response TYPE tv_flag.
 
       CLEAR rv_input.
       lt_fields = VALUE #( ( tabname = 'ABDBG'     " Text: Input Line
@@ -1854,8 +1867,8 @@
 *----------------------------------------------------------------------*
   CLASS lcl_lisp_iterator DEFINITION CREATE PRIVATE FRIENDS lcl_lisp.
     PUBLIC SECTION.
-      DATA first TYPE flag VALUE abap_true READ-ONLY.
-      METHODS has_next RETURNING VALUE(rv_flag) TYPE flag.
+      DATA first TYPE tv_flag VALUE abap_true READ-ONLY.
+      METHODS has_next RETURNING VALUE(rv_flag) TYPE tv_flag.
       METHODS next RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                    RAISING   cx_dynamic_check.
     PRIVATE SECTION.
@@ -1913,12 +1926,12 @@
 
       CLASS-METHODS init IMPORTING size             TYPE tv_index
                                    io_fill          TYPE REF TO lcl_lisp DEFAULT nil
-                                   iv_mutable       TYPE flag DEFAULT abap_true
+                                   iv_mutable       TYPE tv_flag DEFAULT abap_true
                          RETURNING VALUE(ro_vector) TYPE REF TO lcl_lisp_vector
                          RAISING   lcx_lisp_exception.
 
       CLASS-METHODS from_list IMPORTING io_list          TYPE REF TO lcl_lisp
-                                        iv_mutable       TYPE flag DEFAULT abap_true
+                                        iv_mutable       TYPE tv_flag DEFAULT abap_true
                               RETURNING VALUE(ro_vector) TYPE REF TO lcl_lisp_vector
                               RAISING   lcx_lisp_exception.
 
@@ -1962,17 +1975,17 @@
 
       CLASS-METHODS init IMPORTING size         TYPE tv_index
                                    iv_fill      TYPE tv_byte
-                                   iv_mutable   TYPE flag DEFAULT abap_true
+                                   iv_mutable   TYPE tv_flag DEFAULT abap_true
                          RETURNING VALUE(ro_u8) TYPE REF TO lcl_lisp_bytevector
                          RAISING   lcx_lisp_exception.
 
       CLASS-METHODS utf8_from_string IMPORTING iv_text      TYPE string
-                                               iv_mutable   TYPE flag DEFAULT abap_true
+                                               iv_mutable   TYPE tv_flag DEFAULT abap_true
                                      RETURNING VALUE(ro_u8) TYPE REF TO lcl_lisp_bytevector
                                      RAISING   lcx_lisp_exception.
 
       CLASS-METHODS from_list IMPORTING io_list      TYPE REF TO lcl_lisp
-                                        iv_mutable   TYPE flag DEFAULT abap_true
+                                        iv_mutable   TYPE tv_flag DEFAULT abap_true
                               RETURNING VALUE(ro_u8) TYPE REF TO lcl_lisp_bytevector
                               RAISING   lcx_lisp_exception.
 
@@ -2063,7 +2076,7 @@
     PRIVATE SECTION.
       CONSTANTS c_error_message TYPE i VALUE 99.
 
-      DATA parameters_generated TYPE flag.
+      DATA parameters_generated TYPE tv_flag.
 
       METHODS create_table_params IMPORTING it_table TYPE tt_rstbl.
       METHODS create_params IMPORTING it_table TYPE STANDARD TABLE
@@ -2079,7 +2092,7 @@
                       RETURNING VALUE(result) TYPE REF TO lcl_lisp_sql_result
                       RAISING   cx_sql_exception.
     PROTECTED SECTION.
-      DATA mv_hold_cursor TYPE flag.
+      DATA mv_hold_cursor TYPE tv_flag.
       DATA sql_query TYPE string.
       DATA connection TYPE REF TO cl_sql_connection.
       DATA statement TYPE REF TO cl_sql_statement.
@@ -2092,7 +2105,7 @@
 *----------------------------------------------------------------------*
   CLASS lcl_lisp_environment DEFINITION CREATE PRIVATE FRIENDS lcl_lisp_env_factory.
     PUBLIC SECTION.
-      DATA top_level TYPE flag VALUE abap_false READ-ONLY.
+      DATA top_level TYPE tv_flag VALUE abap_false READ-ONLY.
 
       METHODS:
         scope_of IMPORTING symbol     TYPE any
@@ -2103,7 +2116,7 @@
             RAISING   lcx_lisp_exception,
         set IMPORTING symbol  TYPE string
                       element TYPE REF TO lcl_lisp
-                      once    TYPE flag DEFAULT abap_false
+                      once    TYPE tv_flag DEFAULT abap_false
             RAISING   lcx_lisp_exception,
 *       Convenience method to add a value and create the cell
         define_value IMPORTING symbol         TYPE string
@@ -2132,6 +2145,7 @@
 
     PRIVATE SECTION.
       METHODS load_syntax.
+      METHODS load_libraries.
       METHODS load_list.
       METHODS load_math.
       METHODS load_numbers.
@@ -2173,7 +2187,7 @@
     PUBLIC SECTION.
       METHODS:
         init IMPORTING iv_code      TYPE string
-             RETURNING VALUE(ready) TYPE flag,
+             RETURNING VALUE(ready) TYPE tv_flag,
         next_char RAISING lcx_lisp_exception,
         peek_char RETURNING VALUE(rv_char) TYPE tv_char.
 
@@ -2263,29 +2277,38 @@
                   RAISING   lcx_lisp_exception.
 
     PROTECTED SECTION.
+      CONSTANTS:
+        c_esc_a          TYPE tv_char VALUE 'a',
+        c_esc_b          TYPE tv_char VALUE 'b',
+        c_esc_t          TYPE tv_char VALUE 't',
+        c_esc_n          TYPE tv_char VALUE 'n',
+        c_esc_r          TYPE tv_char VALUE 'r',
+        c_esc_semi_colon TYPE tv_char VALUE c_semi_colon,
+        c_esc_vline      TYPE tv_char VALUE c_vertical_line.
+
       TYPES tv_text16 TYPE c LENGTH 16.
 
-      DATA mv_valid_paren TYPE string.
+      DATA mv_valid_paren TYPE char03.
 
       DATA mv_newline TYPE tv_char.
       DATA mv_whitespace TYPE char07. " Case sensitive
       DATA mv_space_or_tab TYPE char03.
       DATA mv_line_ending TYPE char04.
       DATA mv_delimiters TYPE tv_text16. " Case sensitive
-      DATA mv_fold_case TYPE flag.
+      DATA mv_fold_case TYPE tv_flag.
 
       METHODS:
-        peek_bytevector RETURNING VALUE(rv_flag) TYPE flag,
+        peek_bytevector RETURNING VALUE(rv_flag) TYPE tv_flag,
         match_label IMPORTING iv_limit        TYPE tv_char
                     EXPORTING ev_label        TYPE string
-                    RETURNING VALUE(rv_found) TYPE flag,
+                    RETURNING VALUE(rv_found) TYPE tv_flag,
         skip_label,
         intertoken_space
-          RETURNING VALUE(rv_has_next) TYPE flag
+          RETURNING VALUE(rv_has_next) TYPE tv_flag
           RAISING   lcx_lisp_exception.
 
       METHODS:
-        parse_pair IMPORTING delim         TYPE char01 DEFAULT c_open_paren
+        parse_pair IMPORTING delim         TYPE tv_char DEFAULT c_open_paren
                    RETURNING VALUE(result) TYPE REF TO lcl_lisp
                    RAISING   lcx_lisp_exception,
         parse_token RETURNING VALUE(element) TYPE REF TO lcl_lisp
@@ -2294,30 +2317,32 @@
                     RAISING   lcx_lisp_exception.
       METHODS:
         skip_while IMPORTING pattern      TYPE csequence
-                   RETURNING VALUE(found) TYPE flag
+                   RETURNING VALUE(found) TYPE tv_flag
                    RAISING   lcx_lisp_exception,
         skip_until IMPORTING pattern      TYPE csequence
-                   RETURNING VALUE(found) TYPE flag
+                   RETURNING VALUE(found) TYPE tv_flag
                    RAISING   lcx_lisp_exception,
 
-        skip_comment RETURNING VALUE(found) TYPE flag
+        skip_comment RETURNING VALUE(found) TYPE tv_flag
                      RAISING   lcx_lisp_exception,
 
-        line_ending RETURNING VALUE(rv_has_next) TYPE flag
+        line_ending RETURNING VALUE(rv_has_next) TYPE tv_flag
                     RAISING   lcx_lisp_exception.
 
       METHODS to_delimiter RETURNING VALUE(token) TYPE string
                            RAISING   lcx_lisp_exception.
       METHODS match_string CHANGING cv_val TYPE string
                            RAISING  lcx_lisp_exception.
-      METHODS match_escape RETURNING VALUE(pchar) TYPE tv_char
-                           RAISING   lcx_lisp_exception.
+      METHODS decode_escape RETURNING VALUE(pchar) TYPE tv_char
+                            RAISING   lcx_lisp_exception.
+      METHODS decode_hex_digits RETURNING VALUE(pchar) TYPE tv_char
+                                RAISING   lcx_lisp_exception.
       METHODS match_atom CHANGING cv_val TYPE string.
 
       METHODS skip_one_datum RAISING lcx_lisp_exception.
 
       METHODS skip_block_comment RAISING lcx_lisp_exception.
-      METHODS match_directive RETURNING VALUE(found) TYPE flag
+      METHODS match_directive RETURNING VALUE(found) TYPE tv_flag
                               RAISING   lcx_lisp_exception.
 
       METHODS match_token RETURNING VALUE(element) TYPE REF TO lcl_lisp
@@ -2817,7 +2842,7 @@
 
       METHODS is_macro_call
         IMPORTING cont          TYPE ts_continuation
-        RETURNING VALUE(result) TYPE flag
+        RETURNING VALUE(result) TYPE tv_flag
         RAISING   lcx_lisp_exception.
 
       METHODS syntax_expand
@@ -2895,7 +2920,7 @@
 
       METHODS unicode_digit_zero RETURNING VALUE(rt_zero) TYPE tt_digit.
 
-      METHODS unicode_to_digit IMPORTING iv_char         TYPE char01
+      METHODS unicode_to_digit IMPORTING iv_char         TYPE tv_char
                                RETURNING VALUE(rv_digit) TYPE i.
 
       METHODS char_to_integer IMPORTING io_char       TYPE REF TO lcl_lisp
@@ -3016,13 +3041,13 @@
                              RAISING   lcx_lisp_exception.
 
       METHODS map_next_expr IMPORTING io_proc       TYPE REF TO lcl_lisp
-                            EXPORTING ev_has_next   TYPE flag
+                            EXPORTING ev_has_next   TYPE tv_flag
                             CHANGING  ct_list       TYPE tt_lisp
                             RETURNING VALUE(result) TYPE REF TO lcl_lisp
                             RAISING   lcx_lisp_exception.
 
       METHODS is_constant IMPORTING exp            TYPE REF TO lcl_lisp
-                          RETURNING VALUE(rv_flag) TYPE flag.
+                          RETURNING VALUE(rv_flag) TYPE tv_flag.
       METHODS combine IMPORTING left          TYPE REF TO lcl_lisp
                                 right         TYPE REF TO lcl_lisp
                                 exp           TYPE REF TO lcl_lisp
@@ -3094,6 +3119,7 @@
       mv_delimiters+12(1) = c_open_curly.
       mv_delimiters+13(1) = c_text_quote.
       mv_delimiters+14(1) = c_semi_colon.
+
       mv_delimiters+15(1) = c_vertical_line.
 
     ENDMETHOD.                    "constructor
@@ -3246,20 +3272,11 @@
       rv_flag = abap_true.
     ENDMETHOD.
 
-    METHOD match_escape.
+    METHOD decode_escape.
       " <escape> -> <inline hex escape> | <mnemonic escape>
 
       "  <mnemonic escape> -> \a | \b | \t | \n | \r
       "  <inline hex escape> -> \x<hex scalar value>;
-
-      CONSTANTS:
-        c_esc_a          TYPE tv_char VALUE 'a',
-        c_esc_b          TYPE tv_char VALUE 'b',
-        c_esc_t          TYPE tv_char VALUE 't',
-        c_esc_n          TYPE tv_char VALUE 'n',
-        c_esc_r          TYPE tv_char VALUE 'r',
-        c_esc_semi_colon TYPE tv_char VALUE c_semi_colon,
-        c_esc_vline      TYPE tv_char VALUE c_vertical_line.
 
       CASE char.
         WHEN c_text_quote    " \" : double quote, U+0022
@@ -3283,29 +3300,37 @@
           pchar = lcl_lisp=>char_return->value+0(1).
 
         WHEN c_lisp_xx+0(1) OR c_lisp_xx+1(1).      " inline hex escape:
-          DATA lv_xstr TYPE string.                 " hex scalar value terminated by semi-colon ;
-          DATA lo_char TYPE REF TO lcl_lisp_char.
-          next_char( ).
-          CLEAR lv_xstr.
-          WHILE index < length.
-            lv_xstr = |{ lv_xstr }{ char }|.
-            next_char( ).
-            CHECK char EQ c_esc_semi_colon.
-            EXIT.
-          ENDWHILE.
-          CONDENSE lv_xstr.
-          IF strlen( lv_xstr ) LE 4 AND char EQ c_esc_semi_colon.
-            lo_char = lcl_lisp_new=>charx( lv_xstr ).
-          ELSE.
-            throw( |unknown char #\\x{ lv_xstr } found| ).
-          ENDIF.
-
-          pchar = lo_char->value+0(1).
+          pchar = decode_hex_digits( ).
 
         WHEN OTHERS.
           throw( |invalid Escape char { char } found| ).
 
       ENDCASE.
+    ENDMETHOD.
+
+    METHOD decode_hex_digits.
+      " hex scalar value terminated by semi-colon ;
+
+      "  <inline hex escape> -> \x<hex scalar value>;
+      DATA lv_xstr TYPE string.
+      DATA lo_char TYPE REF TO lcl_lisp_char.
+      next_char( ).
+      CLEAR lv_xstr.
+      WHILE index < length.
+        "lv_xstr = |{ lv_xstr }{ char }|.
+        CONCATENATE lv_xstr char INTO lv_xstr RESPECTING BLANKS.
+        next_char( ).
+        CHECK char EQ c_esc_semi_colon.
+        EXIT.
+      ENDWHILE.
+      CONDENSE lv_xstr.
+      IF char EQ c_esc_semi_colon.
+        lo_char = lcl_lisp_new=>esc_charx( lv_xstr ).
+      ELSE.
+        throw( |unknown char #\\x{ lv_xstr } found| ).
+      ENDIF.
+
+      pchar = lo_char->value+0(1).
     ENDMETHOD.
 
     METHOD match_string.
@@ -3319,7 +3344,7 @@
       "  <line ending> -> <newline> | <return> <newline> | <return>
 
       DATA pchar TYPE tv_char.
-      DATA escape_mode TYPE flag VALUE abap_false.
+      DATA escape_mode TYPE tv_flag VALUE abap_false.
 *     " is included in a string as \"
 
       next_char( ).                 " Skip past opening quote
@@ -3346,7 +3371,7 @@
               CONTINUE.
 
             WHEN OTHERS.
-              pchar = match_escape( ).
+              pchar = decode_escape( ).
           ENDCASE.
 
           escape_mode = abap_false.
@@ -3411,7 +3436,7 @@
                 EXIT.
               WHEN c_escape_char.
                 next_char( ).
-                char = match_escape( ).
+                char = decode_escape( ).
               WHEN OTHERS.
                 CONTINUE.
             ENDCASE.
@@ -3534,13 +3559,8 @@
               DATA(char_len) = strlen( sval ).
               IF char_len GT 1   " difference between #\x and e.g. #\x30BB
                 AND sval+0(1) CO c_lisp_xx.
-                sval = sval+1.            " skip x
-                char_len = char_len - 1.  " adjust length
-                IF char_len LE 4.
-                  element = lcl_lisp_new=>charx( sval ).
-                ELSE.
-                  throw( |unknown char #\\x{ sval } found| ).
-                ENDIF.
+                sval = sval+1.            " skip x,  char_len -= 1. not needed anymore
+                element = lcl_lisp_new=>esc_charx( sval ).
               ELSE.
                 CASE sval.
                   WHEN 'alarm'.
@@ -3578,7 +3598,7 @@
             WHEN c_number_exact+0(1) OR c_number_exact+1(1)   "#e (exact)
               OR c_number_inexact+0(1) OR c_number_inexact+1(1). "#i (inexact)
 
-              DATA lv_exact TYPE flag.
+              DATA lv_exact TYPE tv_flag.
               _get_exact lv_exact.
 
               DATA lx_error TYPE REF TO cx_root.
@@ -4371,7 +4391,7 @@
       DATA lo_param TYPE REF TO lcl_lisp.
       DATA lo_values TYPE REF TO lcl_lisp.
       DATA lo_lambda TYPE REF TO lcl_lisp_lambda.
-      DATA lv_parameter_object TYPE flag VALUE abap_false.
+      DATA lv_parameter_object TYPE tv_flag VALUE abap_false.
 
       DEFINE _to_param_object.
         &2 = eval( VALUE #( elem = &1
@@ -5180,6 +5200,29 @@
                         cont-elem = thunk.
                         _tail_expression cont-elem.
 
+*                      WHEN 'define-library'.
+                       WHEN 'export'
+                         OR 'import'
+                         OR 'cond-expand'.
+                         result = nil.
+
+*                      WHEN 'cond-expand'.
+*                      WHEN 'import'.
+*                      WHEN 'rename'.
+*                      WHEN 'only'.
+*                      WHEN 'include-library-declarations'.
+                      WHEN 'library'.
+                        " not implemented: for now, try to skip library code
+                        IF lr_tail IS BOUND.
+                            cont-elem = lr_tail->cdr.
+                            IF cont-elem NE nil.
+                              result = eval_list_tco( CHANGING cs_cont = cont ).
+                              _tail_expression cont-elem.
+                            ELSE.  " empty (library) ?
+                              CONTINUE.
+                            ENDIF.
+                        ENDIF.
+
                       WHEN 'call/cc' OR 'call-with-current-continuation'.
                         DATA lo_proc TYPE REF TO lcl_lisp.
 
@@ -5346,7 +5389,7 @@
     METHOD read_string.
       DATA k TYPE tv_index.
       DATA lv_input TYPE string.
-      DATA lv_char TYPE char01.
+      DATA lv_char TYPE tv_char.
       DATA li_port TYPE REF TO lif_input_port.
 
       _validate io_arg.
@@ -6215,7 +6258,7 @@
       DATA lt_byte TYPE tt_byte.
       DATA lo_ptr TYPE REF TO lcl_lisp.
       DATA lo_bytes TYPE REF TO lcl_lisp_bytevector.
-      DATA lv_mutable TYPE flag.
+      DATA lv_mutable TYPE tv_flag.
       _validate list.
 
       lo_ptr = list.
@@ -7786,7 +7829,7 @@
       DATA carry TYPE f.
       DATA y TYPE f.
       _data_local_numeric_cell.
-      DATA complex_logic TYPE flag.
+      DATA complex_logic TYPE tv_flag.
 
       result = nil.
       _validate list.
@@ -7838,7 +7881,7 @@
       DATA carry TYPE f.
       DATA y TYPE f.
       _data_local_numeric_cell.
-      DATA complex_logic TYPE flag.
+      DATA complex_logic TYPE tv_flag.
 
       result = nil.
       _validate list.
@@ -8143,7 +8186,7 @@
       DATA n2 TYPE tv_int.
       DATA nq TYPE tv_int.  " quotient
       DATA nr TYPE tv_int.  " remainder
-      DATA exact TYPE flag.
+      DATA exact TYPE tv_flag.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_real TYPE REF TO lcl_lisp_real.
 
@@ -8172,7 +8215,7 @@
       DATA n1 TYPE tv_int.
       DATA n2 TYPE tv_int.
       DATA nq TYPE tv_int.  " quotient
-      DATA exact TYPE flag.
+      DATA exact TYPE tv_flag.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_real TYPE REF TO lcl_lisp_real.
 
@@ -8195,7 +8238,7 @@
       DATA n2 TYPE tv_int.
       DATA nq TYPE tv_int.  " quotient
       DATA nr TYPE tv_int.  " remainder
-      DATA exact TYPE flag.
+      DATA exact TYPE tv_flag.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_real TYPE REF TO lcl_lisp_real.
 
@@ -8220,7 +8263,7 @@
       DATA n2 TYPE tv_int.
       DATA nq TYPE tv_int.  " quotient
       DATA nr TYPE tv_int.  " remainder
-      DATA exact TYPE flag.
+      DATA exact TYPE tv_flag.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_real TYPE REF TO lcl_lisp_real.
 
@@ -8248,7 +8291,7 @@
       DATA n1 TYPE tv_int.
       DATA n2 TYPE tv_int.
       DATA nq TYPE tv_int.  " quotient
-      DATA exact TYPE flag.
+      DATA exact TYPE tv_flag.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_real TYPE REF TO lcl_lisp_real.
 
@@ -8271,7 +8314,7 @@
       DATA n2 TYPE tv_int.
       DATA nq TYPE tv_int.  " quotient
       DATA nr TYPE tv_int.  " remainder
-      DATA exact TYPE flag.
+      DATA exact TYPE tv_flag.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_real TYPE REF TO lcl_lisp_real.
 
@@ -8502,7 +8545,7 @@
 
     METHOD proc_num_to_string.
       DATA lv_radix TYPE i VALUE 10.
-      DATA lv_radix_error TYPE flag VALUE abap_false.
+      DATA lv_radix_error TYPE tv_flag VALUE abap_false.
       DATA lv_text TYPE string.
       DATA lv_int TYPE tv_int.
       DATA lv_real TYPE tv_real.
@@ -8560,10 +8603,10 @@
     ENDMETHOD.
 
     METHOD string_to_number.
-      DATA lv_radix_error TYPE flag VALUE abap_false.
+      DATA lv_radix_error TYPE tv_flag VALUE abap_false.
       DATA lv_text TYPE string.
       DATA lv_radix TYPE i.
-      DATA lv_exact TYPE flag.
+      DATA lv_exact TYPE tv_flag.
 
       result = false.
       CHECK iv_text NE space.
@@ -8700,7 +8743,7 @@
 
     METHOD proc_make_string.
       DATA lv_len TYPE tv_index.
-      DATA lv_char TYPE char01.
+      DATA lv_char TYPE tv_char.
       DATA lv_text TYPE string.
 
       _validate: list.
@@ -9224,7 +9267,7 @@
     ENDMETHOD.
 
     METHOD proc_is_char_alphabetic.
-      DATA lv_char TYPE char01.
+      DATA lv_char TYPE tv_char.
       _validate list.
       _validate_char list->car `char-alphabetic?`.
       result = false.
@@ -9234,7 +9277,7 @@
     ENDMETHOD.
 
     METHOD proc_is_char_numeric.
-      DATA lv_char TYPE char01.
+      DATA lv_char TYPE tv_char.
 
       _validate list.
       _validate_char list->car `char-numeric?`.
@@ -9285,7 +9328,7 @@
     ENDMETHOD.
 
     METHOD proc_digit_value.
-      DATA lv_char TYPE char01.
+      DATA lv_char TYPE tv_char.
       DATA lv_int TYPE tv_int.
 
       _validate list.
@@ -9572,7 +9615,7 @@
     ENDMETHOD.
 
     METHOD proc_integer_to_char.
-      DATA lv_char TYPE char01.
+      DATA lv_char TYPE tv_char.
       FIELD-SYMBOLS <xchar> TYPE x.
       FIELD-SYMBOLS <xint> TYPE x.
       DATA lv_int TYPE int2.
@@ -10962,6 +11005,18 @@
       define_value( symbol = c_eval_unquote_splicing type = type_syntax value   = ',@' ).
     ENDMETHOD.
 
+    METHOD load_libraries.
+      define_value( symbol = 'define-library'  type = type_syntax value   = 'define-library' ).
+      define_value( symbol = 'export'          type = type_syntax value   = 'export' ).
+      define_value( symbol = 'cond-expand'     type = type_syntax value   = 'cond-expand' ).
+      define_value( symbol = 'import'          type = type_syntax value   = 'import' ).
+      define_value( symbol = 'rename'          type = type_syntax value   = 'rename' ).
+      define_value( symbol = 'only'            type = type_syntax value   = 'only' ).
+      define_value( symbol = 'library'         type = type_syntax value   = 'library' ).
+
+      define_value( symbol = 'include-library-declarations' type = type_syntax value   = 'include-library-declarations' ).
+    ENDMETHOD.
+
     METHOD load_list.
 *     Compatibility
       define_value( symbol = 'empty?'  type = type_native value   = 'PROC_NILP' ).
@@ -11396,15 +11451,15 @@
       cons = lcl_lisp_new=>symbol( c_eval_cons ).
       list = lcl_lisp_new=>symbol( c_eval_list ).
 
-      char_alarm = lcl_lisp_new=>charx( '0007' ).
-      char_backspace = lcl_lisp_new=>charx( '0008' ).
-      char_delete = lcl_lisp_new=>charx( '007F' ).
-      char_escape = lcl_lisp_new=>charx( '001B' ).
-      char_linefeed = lcl_lisp_new=>charx( '000A' ).
-      char_null = lcl_lisp_new=>charx( '0000' ).
-      char_return = lcl_lisp_new=>charx( '000D' ).
+      char_alarm = lcl_lisp_new=>xchar( '0007' ).
+      char_backspace = lcl_lisp_new=>xchar( '0008' ).
+      char_delete = lcl_lisp_new=>xchar( '007F' ).
+      char_escape = lcl_lisp_new=>xchar( '001B' ).
+      char_linefeed = lcl_lisp_new=>xchar( '000A' ).
+      char_null = lcl_lisp_new=>xchar( '0000' ).
+      char_return = lcl_lisp_new=>xchar( '000D' ).
       char_space = lcl_lisp_new=>char( ` ` ).
-      char_tab = lcl_lisp_new=>charx( '0009' ).
+      char_tab = lcl_lisp_new=>xchar( '0009' ).
 
       new_line = lcl_lisp_new=>string( |\n| ).
       eof_object = lcl_lisp_new=>char( c_lisp_eof ).
@@ -11648,10 +11703,10 @@
 
     METHOD list_to_string.
       DATA lv_str TYPE string.
-      DATA lv_skip TYPE flag.
+      DATA lv_skip TYPE tv_flag.
       DATA lv_separator TYPE string.
-      DATA lv_parens TYPE flag.
-      DATA lv_first TYPE flag VALUE abap_true.
+      DATA lv_parens TYPE tv_flag.
+      DATA lv_first TYPE tv_flag VALUE abap_true.
       DATA lo_elem TYPE REF TO lcl_lisp.
       DATA lo_fast TYPE REF TO lcl_lisp.
       DATA lv_shared TYPE i VALUE -1.
@@ -12066,28 +12121,39 @@
       ro_elem = lcl_lisp_char=>new( value ).
     ENDMETHOD.
 
-    METHOD charx.
-      DATA lv_str TYPE c LENGTH 4.
+    METHOD esc_charx.
+      DATA lv_numc TYPE tv_hex04.
+      DATA lv_str TYPE string.
 
       lv_str = to_upper( value ).
       DATA(lv_times) = 4 - numofchar( lv_str ).
-      DO lv_times TIMES.
-        lv_str = '0' && lv_str.
-      ENDDO.
-      ro_elem = char( hex_to_char( lv_str ) ).
+
+      IF lv_times GE 0 AND lv_str CO c_hex_digits.
+        lv_numc = lv_str.
+        DO lv_times TIMES.
+          lv_numc = '0' && lv_numc.   " insert leading zero
+        ENDDO.
+
+        ro_elem = xchar( lv_numc ).
+      ELSE.
+        lcl_lisp=>throw( |unknown char #\\x{ value } found| ).
+      ENDIF.
     ENDMETHOD.
 
-    METHOD hex_to_char.
+    METHOD xchar.
       FIELD-SYMBOLS <xword> TYPE x.
       FIELD-SYMBOLS <xchar> TYPE x.
-      DATA xword TYPE tv_xword.
       DATA lv_int TYPE int2.
+      DATA xword TYPE tv_xword.
+      DATA lv_char TYPE tv_char.
 
       xword = value.
       lv_int = xword.
       ASSIGN lv_int TO <xword> CASTING.
-      ASSIGN rv_char TO <xchar> CASTING.
+      ASSIGN lv_char TO <xchar> CASTING.
       <xchar> = <xword>.
+
+      ro_elem = char( lv_char ).
     ENDMETHOD.
 
     METHOD match_initial.
@@ -12275,8 +12341,8 @@
       DATA lv_symbol TYPE string.
       DATA lv_index TYPE sytabix.
       DATA lv_len_1 TYPE i.
-      DATA lv_escape_mode TYPE flag.
-      DATA lv_escape_hex_mode TYPE flag.
+      DATA lv_escape_mode TYPE tv_flag.
+      DATA lv_escape_hex_mode TYPE tv_flag.
       DATA lv_escape_char TYPE string.
 
       lv_len_1 = numofchar( value ) - 1.
@@ -12309,12 +12375,8 @@
               ENDIF.
             WHEN c_semi_colon.
               IF lv_escape_hex_mode = abap_true.
-                IF strlen( lv_escape_char ) LE 4.
-                  DATA(lo_char) = lcl_lisp_new=>charx( lv_escape_char ).
-                ELSE.
-                  lcl_lisp=>throw( |unknown char #\\x{ lv_escape_char } found| ).
-                ENDIF.
 
+                DATA(lo_char) = lcl_lisp_new=>esc_charx( lv_escape_char ).
                 lv_char = lo_char->value.
 
                 lv_escape_mode = abap_false.
@@ -12899,7 +12961,7 @@
       DATA lv_text TYPE string.
       DATA lv_index TYPE sytabix.
       DATA lv_size TYPE sytabix.
-      DATA lv_char TYPE char01.
+      DATA lv_char TYPE tv_char.
       DATA lv_radix TYPE i VALUE 1.
 
       CLEAR rv_int.
@@ -13204,6 +13266,12 @@
       ELSE.
         me->infnan = abap_true.
         me->value = value.
+        CASE value.
+          WHEN c_lisp_pos_inf.
+            real = c_max_float.
+          WHEN c_lisp_neg_inf.
+            real = c_min_float.
+        ENDCASE.
       ENDIF.
     ENDMETHOD.
 
@@ -13747,7 +13815,7 @@
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
       DATA lv_denom TYPE tv_int.
       DATA lv_nummer TYPE tv_int.
-      DATA lv_error TYPE flag VALUE abap_false.
+      DATA lv_error TYPE tv_flag VALUE abap_false.
 
       IF exact EQ abap_true.
         result = me.
