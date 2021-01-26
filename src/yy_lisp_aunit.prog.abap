@@ -2540,6 +2540,8 @@
 *----------------------------------------------------------------------*
    CLASS ltc_math DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PUBLIC SECTION.
+       METHODS constructor.
      PRIVATE SECTION.
 
        METHODS math_addition FOR TESTING.
@@ -2625,6 +2627,10 @@
 *
 *----------------------------------------------------------------------*
    CLASS ltc_math IMPLEMENTATION.
+
+     METHOD constructor.
+       super->constructor( ).
+     ENDMETHOD.
 
      METHOD math_addition.
        scheme( code = '(+ 22 24 25)'
@@ -3832,11 +3838,10 @@
      ENDMETHOD.
 
      METHOD list_cons_error_2.
-       CONSTANTS c_cons_error TYPE string VALUE 'Eval: cons: only 2 arguments allowed'.
        scheme( code = |(cons 'a)|
-               expected = c_cons_error ).
+               expected = `Eval: '() Parameter mismatch` ).
        scheme( code = |(cons 'a 'b 'c)|
-               expected = c_cons_error ).
+               expected = `Eval: (b c) Parameter mismatch` ).
      ENDMETHOD.
 
      METHOD list_make_list.
@@ -3979,7 +3984,7 @@
                expected = '"ABAPSchemeLisp"' ).
      ENDMETHOD.                    "string_append_1
 
-ENDCLASS.                    "ltc_list IMPLEMENTATION
+  ENDCLASS.                    "ltc_list IMPLEMENTATION
 
 *----------------------------------------------------------------------*
 
@@ -4157,7 +4162,7 @@ ENDCLASS.                    "ltc_list IMPLEMENTATION
                expected = '#(1 2 smash smash 5)' ).
      ENDMETHOD.
 
-ENDCLASS.                    "ltc_vector IMPLEMENTATION
+  ENDCLASS.                    "ltc_vector IMPLEMENTATION
 
    CLASS ltc_bytevector DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
@@ -4378,7 +4383,7 @@ ENDCLASS.                    "ltc_vector IMPLEMENTATION
                expected = 'Eval: radix (0) must be 2, 8, 10 or 16 in number->string' ).
      ENDMETHOD.
 
-ENDCLASS.                    "ltc_library_function IMPLEMENTATION
+  ENDCLASS.                    "ltc_library_function IMPLEMENTATION
 
 *----------------------------------------------------------------------*
 *       CLASS ltc_higher_order DEFINITION
@@ -5264,7 +5269,7 @@ ENDCLASS.                    "ltc_library_function IMPLEMENTATION
                expected = `Eval: no clause matching the arguments` ).
      ENDMETHOD.
 
-ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
+  ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
 
 *----------------------------------------------------------------------*
 *       CLASS ltc_hash_element DEFINITION
@@ -5319,6 +5324,131 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
 
    ENDCLASS.                    "ltc_hash_element IMPLEMENTATION
 
+   CLASS ltc_delayed_evaluation DEFINITION INHERITING FROM ltc_interpreter
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PUBLIC SECTION.
+       METHODS constructor.
+     PRIVATE SECTION.
+       METHODS setup.
+       METHODS teardown.
+
+       METHODS define_integers.
+
+       METHODS delay_0  FOR TESTING.
+       METHODS force_0  FOR TESTING.
+       METHODS force_1  FOR TESTING.
+       METHODS force_2  FOR TESTING.
+       METHODS force_3  FOR TESTING.
+       METHODS promise_0  FOR TESTING.
+       METHODS delay_force_0  FOR TESTING.
+       METHODS delay_force_1  FOR TESTING.
+   ENDCLASS.                    "ltc_abap_integration DEFINITION
+
+   CLASS ltc_delayed_evaluation IMPLEMENTATION.
+
+     METHOD constructor.
+       super->constructor( ).
+     ENDMETHOD.
+
+     METHOD setup.
+       new_interpreter( ).
+     ENDMETHOD.                    "setup
+
+     METHOD teardown.
+       FREE mo_int.
+     ENDMETHOD.                    "teardown
+
+     METHOD delay_0.
+       scheme( code = '(delay (+ 1 2))'
+               expected = '<promise>' ).
+     ENDMETHOD.
+
+     METHOD force_0.
+       scheme( code = '(let ((p (delay (+ 1 2))))' &
+                      '  (list (force p) (force p)))'
+               expected = '(3 3)' ).
+     ENDMETHOD.
+
+     METHOD define_integers.
+       scheme( code = |(define integers| &
+                      |  (letrec ((next| &
+                      |     (lambda (n)| &
+                      |        (delay (cons n (next (+ n 1)))))))| &
+                      |    (next 0)))|
+               expected = 'integers' ).
+
+       scheme( code = |(define head| &
+                      |  (lambda (stream) (car (force stream))))|
+               expected = 'head' ).
+
+       scheme( code = |(define tail| &
+                      |  (lambda (stream) (cdr (force stream))))|
+               expected = 'tail' ).
+     ENDMETHOD.
+
+     METHOD force_1.
+       define_integers( ).
+
+       scheme( code = |(head (tail (tail integers)))|
+               expected = '2' ).
+     ENDMETHOD.
+
+     METHOD force_2.
+       scheme( code = |(force (+ 1 2))|
+               expected = '3' ).
+     ENDMETHOD.
+
+     METHOD force_3.
+       scheme( code = |(force 3)|
+               expected = '3' ).
+     ENDMETHOD.
+
+     METHOD delay_force_0.
+       scheme( code = '(delay-force (+ 1 2))'
+               expected = '3' ).
+     ENDMETHOD.
+
+     METHOD delay_force_1.
+       define_integers( ).
+
+       scheme( code = |(define (stream-filter p? s)| &
+                      |  (delay-force| &
+                      |     (if (null? (force s))| &
+                      |        (delay '())| &
+                      |        (let ((h (car (force s)))| &
+                      |             (t (cdr (force s))))| &
+                      |          (if (p? h)| &
+                      |             (delay (cons h (stream-filter p? t)))| &
+                      |             (stream-filter p? t))))))|
+               expected = 'stream-filter' ).
+
+       scheme( code = |(head (tail (stream-filter odd? integers)))|
+               expected = '5' ).
+     ENDMETHOD.
+
+     METHOD promise_0.
+       scheme( code = |(define count 0)|
+               expected = 'count' ).
+       scheme( code = |(define p| &
+                      |   (delay (begin (set! count (+ count 1))| &
+                      |      (if (> count x)| &
+                      |        count)| &
+                      |        (force p)))))|
+               expected = 'p' ).
+       scheme( code = |(define x 5)|
+               expected = 'x' ).
+       scheme( code = |p|
+               expected = '<promise>' ).
+       scheme( code = |(force p)|
+               expected = '6' ).
+       scheme( code = |p|
+               expected = '<promise>' ).
+       scheme( code = |(begin (set! x 10)| &
+                      |       (force p))|
+               expected = '6' ).
+     ENDMETHOD.
+
+  ENDCLASS.
 *----------------------------------------------------------------------*
 *       CLASS ltc_abap_integration DEFINITION
 *----------------------------------------------------------------------*
@@ -5589,8 +5719,8 @@ ENDCLASS.                    "ltc_basic_functions IMPLEMENTATION
                       |                  '(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))))| &
                       |  (lambda (q) `(,q ',q))| &
                       |  '(lambda (q) `(,q ',q)))|
-           expected = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))) | &
-                                        |'(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq))))) | &
+           expected = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) ,(q qq))) | &
+                                        |'(lambda (x) `((lambda (q qq) ,(q x)) ,(q qq))))) | &
                         |(lambda (q) `(,q ',q))| &
                         |'(lambda (q) `(,q ',q)))| ).
      ENDMETHOD.
