@@ -1,5 +1,4 @@
 *&---------------------------------------------------------------------*
-*&---------------------------------------------------------------------*
 *& Include           YY_LIB_LISP
 *& https://github.com/nomssi/abap_scheme
 *& https://github.com/mydoghasworms/abap-lisp
@@ -69,8 +68,7 @@
   CONSTANTS:
     c_open_paren  TYPE tv_char VALUE '(',
     c_close_paren TYPE tv_char VALUE ')',
-    c_lisp_equal  TYPE tv_char VALUE '=',
-    c_lisp_xx     TYPE tv_char2 VALUE 'xX'.
+    c_lisp_equal  TYPE tv_char VALUE '='.
   CONSTANTS:
     c_lisp_hash     TYPE tv_char VALUE '#',
     c_lisp_comment  TYPE tv_char VALUE c_semi_colon,
@@ -127,14 +125,17 @@
     c_lisp_neg_img TYPE string VALUE '-I'.
 
   CONSTANTS:
-    c_pattern_inexact TYPE string VALUE '.eE'.
-
-  CONSTANTS:
     c_number_exact   TYPE tv_char2 VALUE 'eE',
     c_number_inexact TYPE tv_char2 VALUE 'iI',
-    c_number_octal   TYPE tv_char2 VALUE 'oO',
-    c_number_binary  TYPE tv_char2 VALUE 'bB',
-    c_number_decimal TYPE tv_char2 VALUE 'dD'.
+    c_pattern_inexact TYPE string VALUE '.eE',
+    c_pattern_exactness TYPE string VALUE 'eEiI'.
+
+  CONSTANTS:
+    c_pattern_radix TYPE string VALUE 'oObBdDxX',
+    c_number_octal TYPE tv_char2 VALUE 'oO',
+    c_number_binary TYPE tv_char2 VALUE 'bB',
+    c_number_decimal TYPE tv_char2 VALUE 'dD',
+    c_number_hex TYPE tv_char2 VALUE 'xX'.
 
   DATA gv_lisp_trace TYPE tv_flag VALUE abap_false ##NEEDED.
 
@@ -2399,12 +2400,25 @@
                     RAISING   lcx_lisp_exception,
         parse_datum RETURNING VALUE(element) TYPE REF TO lcl_lisp
                     RAISING   lcx_lisp_exception.
+
+      METHODS read_character RETURNING VALUE(element) TYPE REF TO lcl_lisp
+                             RAISING lcx_lisp_exception.
+
+      METHODS read_number IMPORTING iv_peek_char TYPE tv_char
+                          EXPORTING element TYPE REF TO lcl_lisp
+                          RETURNING VALUE(found) TYPE tv_flag
+                          RAISING lcx_lisp_exception cx_sy_conversion_no_number.
+
+      METHODS radix_number IMPORTING iv_peek_char TYPE tv_char
+                                     iv_exact TYPE tv_flag
+                           RETURNING VALUE(element) TYPE REF TO lcl_lisp
+                           RAISING lcx_lisp_exception cx_sy_conversion_no_number.
     PROTECTED SECTION.
       DATA mi_stream TYPE REF TO lif_stream.
 
       TYPES tv_text16 TYPE c LENGTH 16.
 
-      CLASS-DATA mv_valid_paren TYPE char03.
+      CLASS-DATA mv_open_paren TYPE char03.
 
       CLASS-DATA mv_newline TYPE tv_char.
       CLASS-DATA mv_whitespace TYPE char07. " Case sensitive
@@ -2430,8 +2444,11 @@
                               area    TYPE string DEFAULT c_area_parse
                     RAISING   lcx_lisp_exception.
 
-      METHODS match_atom RETURNING VALUE(rv_val) TYPE string
-                         RAISING   lcx_lisp_exception.
+      METHODS get_atom RETURNING VALUE(rv_val) TYPE string
+                       RAISING   lcx_lisp_exception.
+
+      METHODS read_exact RETURNING VALUE(rv_exact) TYPE tv_flag
+                         RAISING lcx_lisp_exception.
 
       METHODS match_token RETURNING VALUE(element) TYPE REF TO lcl_lisp
                           RAISING   lcx_lisp_exception.
@@ -2440,7 +2457,6 @@
   CLASS lcl_stream IMPLEMENTATION.
 
     METHOD class_constructor.
-      mv_valid_paren = c_open_paren && c_open_bracket && c_open_curly.
 *     End of line value
       mv_newline = |\n|.  " cl_abap_char_utilities=>newline.
 
@@ -2463,6 +2479,7 @@
 
       " <delimiter> -> <whitespace> | <vertical line> | ( | ) | " | ;
       " we add racket like syntax: { | [ | ] | }
+      mv_open_paren = c_open_paren && c_open_bracket && c_open_curly.
 
       mv_delimiters = mv_whitespace.
       mv_delimiters+7(1) = c_close_paren.
@@ -2562,7 +2579,7 @@
 *     process does not have the concept of threads, we are safe :-)
       IF mi_stream->state-ready EQ abap_true.
         WHILE intertoken_space( ).
-          IF mi_stream->state-char CA mv_valid_paren.
+          IF mi_stream->state-char CA mv_open_paren.
             APPEND parse_pair( mi_stream->state-char ) TO elements.
           ELSEIF mi_stream->state-ready EQ abap_true.
             APPEND parse_token( ) TO elements.
@@ -2576,7 +2593,7 @@
     METHOD read_stream.
       IF mi_stream->state-ready EQ abap_true.
         intertoken_space( ).
-        IF mi_stream->state-char CA mv_valid_paren.
+        IF mi_stream->state-char CA mv_open_paren.
           element = parse_pair( mi_stream->state-char ).
         ELSEIF mi_stream->state-ready EQ abap_true.
           element = parse_token( ).
@@ -2734,7 +2751,7 @@
         WHEN c_esc_r.       " \r : return, U+000D
           pchar = lcl_lisp=>char_return->value+0(1).
 
-        WHEN c_lisp_xx+0(1) OR c_lisp_xx+1(1).      " inline hex escape:
+        WHEN c_number_hex+0(1) OR c_number_hex+1(1).      " inline hex escape:
           pchar = decode_hex_digits( ).
 
         WHEN OTHERS.
@@ -2793,9 +2810,270 @@
       next_char( ).                 "Skip past closing quote
     ENDMETHOD.                    "match_string
 
-    METHOD match_atom.
+    METHOD get_atom.
+      next_char( ).        " skip #
+      next_char( ).        " skip
       rv_val = read_atom( ).
     ENDMETHOD.
+
+    METHOD read_character.
+      " <character> -> #\ <any character> | #\ <character name> | #\x<hex scalar value>
+      " <character name> -> alarm | backspace | delete | escape | newline | null | return | space | tab
+
+      next_char( ).        " skip #
+      next_char( ).        " skip
+      DATA(sval) = read_atom( ).
+
+      DATA(char_len) = strlen( sval ).
+      IF char_len GT 1   " difference between #\x and e.g. #\x30BB
+        AND sval+0(1) CO c_number_hex.
+        sval = sval+1.            " skip x,  char_len -= 1. not needed anymore
+        element = lcl_lisp_new=>esc_charx( sval ).
+      ELSE.
+        CASE sval.
+          WHEN 'alarm'.
+            element = lcl_lisp=>char_alarm.
+          WHEN 'backspace'.
+            element = lcl_lisp=>char_backspace.
+          WHEN 'delete'.
+            element = lcl_lisp=>char_delete.
+          WHEN 'escape'.
+            element = lcl_lisp=>char_escape.
+          WHEN 'newline'.
+            element = lcl_lisp=>char_linefeed.
+          WHEN 'null'.
+            element = lcl_lisp=>char_null.
+          WHEN 'return'.
+            element = lcl_lisp=>char_return.
+          WHEN 'space' OR space.
+            element = lcl_lisp=>char_space.
+          WHEN 'tab'.
+            element = lcl_lisp=>char_tab.
+          WHEN OTHERS.
+            IF char_len EQ 1.
+              element = lcl_lisp_new=>char( sval ).
+            ELSE.
+              throw( |unknown char #\\{ sval } found| ).
+            ENDIF.
+        ENDCASE.
+      ENDIF.
+
+    ENDMETHOD.
+
+    METHOD radix_number.
+      DATA lx_no_number TYPE REF TO cx_sy_conversion_no_number.
+      DATA sval TYPE string.
+
+      IF iv_peek_char CA c_pattern_radix.
+        next_char( ).        " skip #
+        next_char( ).        " skip
+        sval = read_atom( ).
+
+        CASE to_lower( iv_peek_char ).
+          WHEN c_number_octal+0(1).     "#o (octal)
+            element = lcl_lisp_new=>octal( value = sval
+                                           iv_exact = iv_exact ).
+
+          WHEN c_number_binary+0(1).    "#b (binary)
+            element = lcl_lisp_new=>binary( value = sval
+                                            iv_exact = iv_exact ).
+
+          WHEN c_number_decimal+0(1).   "#d (decimal)
+            element = lcl_lisp_new=>complex_number( value = sval
+                                                    iv_exact = iv_exact ).
+
+          WHEN c_number_hex+0(1).       "#x (hexadecimal)
+            element = lcl_lisp_new=>hex( value = sval
+                                         iv_exact = iv_exact ).
+        ENDCASE.
+      ELSE.
+        sval = read_atom( ).
+        CREATE OBJECT lx_no_number
+          EXPORTING
+            textid = '995DB739AB5CE919E10000000A11447B'
+            value  = sval.   " The argument #D cannot be interpreted as a number
+        throw( lx_no_number->get_text( ) ).
+      ENDIF.
+
+    ENDMETHOD.
+
+    METHOD read_exact.
+      next_char( ).        " skip #
+
+      CASE mi_stream->state-char.
+        WHEN c_number_exact+0(1) OR c_number_exact+1(1).   "#e (exact)
+          rv_exact = abap_true.
+        WHEN c_number_inexact+0(1) OR c_number_inexact+1(1). "#i (inexact)
+          rv_exact = abap_false.
+        WHEN OTHERS.
+          throw( `Invalid exactness token in number prefix` ).
+      ENDCASE.
+
+      next_char( ).        " skip exactness i/e
+    ENDMETHOD.
+
+    METHOD read_number.
+*     Notation for numbers #e (exact) #i (inexact) #b (binary) #o (octal) #d (decimal) #x (hexadecimal)
+*     further, instead of exp:  s (short), f (single), d (double), l (long)
+*     positive infinity, negative infinity -inf / -inf.0, NaN +nan.0, positive zero, negative zero
+
+      " <number> -> <num 2> | <num 8> | <num 10> | <num 16>
+      " <num R> -> <prefix R> <complex R>
+      " <prefix R> -> <radix R> <exactness> | <exactness> <radix R>
+      " <exactness> -> <empty> | #i | #e
+      " <radix 2> -> #b
+      " <radix 8> -> #o
+      " <radix 10> -> <empty> | #d
+      " <radix 16> -> #x
+      DATA lv_exact TYPE tv_flag.
+      DATA sval TYPE string.
+      DATA lx_error TYPE REF TO cx_root.
+
+      found = abap_true.
+
+      IF iv_peek_char CA c_pattern_exactness.
+        " <prefix R> -> <exactness> <radix R>
+        lv_exact = read_exact( ).
+
+        CASE mi_stream->state-char.
+          WHEN c_lisp_hash.
+            element = radix_number( iv_peek_char = peek_char( )
+                                    iv_exact = lv_exact ).
+          WHEN OTHERS.
+            TRY.
+                sval = read_atom(  ).
+                element = lcl_lisp_new=>complex_number( value = sval
+                                                      iv_exact = lv_exact ).
+              CATCH cx_sy_conversion_no_number INTO lx_error.
+                throw( lx_error->get_text( ) ).
+            ENDTRY.
+        ENDCASE.
+
+      ELSEIF iv_peek_char CA c_pattern_radix.
+        " Now check <prefix R> -> <radix R> <exactness>
+
+        next_char( ).        " skip #
+        next_char( ).        " skip radix
+        IF mi_stream->state-char EQ c_lisp_hash.
+          lv_exact = read_exact(  ).
+        ELSE.
+          lv_exact = abap_true.
+        ENDIF.
+        sval = read_atom( ).
+
+        CASE to_lower( iv_peek_char ).
+          WHEN c_number_octal+0(1).     "#o (octal)
+            element = lcl_lisp_new=>octal( value = sval
+                                           iv_exact = lv_exact ).
+
+          WHEN c_number_binary+0(1).    "#b (binary)
+            element = lcl_lisp_new=>binary( value = sval
+                                            iv_exact = lv_exact ).
+
+          WHEN c_number_decimal+0(1).   "#d (decimal)
+            element = lcl_lisp_new=>complex_number( value = sval
+                                                    iv_exact = lv_exact ).
+
+          WHEN c_number_hex+0(1).       "#x (hexadecimal)
+            element = lcl_lisp_new=>hex( value = sval
+                                         iv_exact = lv_exact ).
+        ENDCASE.
+      ELSE.
+        found = abap_false.
+      ENDIF.
+
+    ENDMETHOD.
+
+    METHOD parse_token.
+      "<token> -> <identifier> | <boolean> | <number> | <character> | <string> | ( | ) | #( | #u8( | ' | ` | , | ,@ | .
+      DATA sval TYPE string.
+
+      intertoken_space( ).
+*     create object cell.
+      IF mi_stream->state-char CA mv_open_paren.
+        element = parse_pair( mi_stream->state-char ).
+      ELSE.
+        CASE mi_stream->state-char.
+          WHEN c_lisp_quote.
+*     ' is just a shortcut for QUOTE, so we wrap the consecutive element in a list starting with the quote symbol
+*     so that when it is evaluated later, it returns the quote elements unmodified
+            next_char( ).            " Skip past single quote
+            element = lcl_lisp_new=>quote( parse_token( ) ).
+
+          WHEN c_lisp_backquote.     " Quasiquote
+            next_char( ).            " Skip past single quote
+            element = lcl_lisp_new=>quasiquote( parse_token( ) ).
+
+          WHEN c_lisp_unquote.
+            IF peek_char( ) EQ c_lisp_splicing.  " unquote-splicing ,@
+              next_char( ).        " Skip past ,
+              next_char( ).        " Skip past @
+              element = lcl_lisp_new=>splice_unquote( parse_token( ) ).  " token must evaluate to a list, not be a list
+            ELSE.                                " unquote ,
+              next_char( ).        " Skip past ,
+              element = lcl_lisp_new=>unquote( parse_token( ) ).
+            ENDIF.
+
+          WHEN c_text_quote.
+            match_string( CHANGING cv_val = sval ).
+            element = lcl_lisp_new=>string( value = sval
+                                            iv_mutable = abap_false ).
+
+          WHEN c_lisp_hash.
+            CASE peek_char( ).
+              WHEN c_open_paren.   " Vector constant
+                next_char( ).
+                element = lcl_lisp_vector=>from_list( io_list = parse_pair( )
+                                                      iv_mutable = abap_false ).
+
+              WHEN c_escape_char.  " Character constant  #\a
+                element = read_character( ).
+
+              WHEN OTHERS.
+*               Boolean #t #f
+                "will be handled in match_token( )
+
+                IF read_number( EXPORTING iv_peek_char = peek_char( )
+                                IMPORTING element = element ).
+                ELSEIF peek_bytevector( ).
+                  " Bytevector constant #u8( ... )
+                  next_char( ).      " skip #
+                  next_char( ).      " skip u
+                  next_char( ).      " skip 8
+                  element = lcl_lisp_bytevector=>from_list( io_list = parse_pair( )
+                                                            iv_mutable = abap_false ).
+
+                ELSE.
+
+                  " Referencing other literal data #<n>= #<n>#
+                  DATA lv_label TYPE string.
+                  IF match_label( EXPORTING iv_limit = c_lisp_equal
+                                  IMPORTING ev_label = lv_label ).
+*                   New datum
+*                   Now Add: (set! |#{ lv_label }#| element)
+                    element = parse_token( ).
+                    element->mv_label = |#{ lv_label }#|.
+
+                  ELSEIF match_label( EXPORTING iv_limit = c_lisp_hash
+                                      IMPORTING ev_label = lv_label ).
+*                   Reference to datum
+                    element = lcl_lisp_new=>symbol( |#{ lv_label }#| ).
+                  ELSE.
+                    " Others <identifier> | <boolean> | <number>
+                    element = match_token( ).
+                  ENDIF.
+
+                ENDIF.
+
+            ENDCASE.
+
+          WHEN OTHERS.
+            " Others <identifier> | <boolean> | <number>
+            element = match_token( ).
+
+        ENDCASE.
+      ENDIF.
+    ENDMETHOD.                    "parse_token
 
     METHOD match_token.
       " Others <identifier> | <boolean> | <number>
@@ -2823,7 +3101,7 @@
           ENDWHILE.
 
         WHEN OTHERS.
-          sval = match_atom( ).
+          sval = read_atom( ).
       ENDCASE.
 
       CASE sval.
@@ -2839,8 +3117,10 @@
         WHEN c_lisp_dot
           OR c_lisp_quote
           OR c_lisp_backquote
-          OR c_lisp_unquote
-          OR ',@'.
+          OR c_lisp_unquote.
+          element = lcl_lisp_new=>identifier( sval ).
+
+        WHEN ',@'.
           element = lcl_lisp_new=>identifier( sval ).
 
         WHEN OTHERS.
@@ -2848,253 +3128,6 @@
       ENDCASE.
 
     ENDMETHOD.
-
-    DEFINE _get_atom.
-      next_char( ).        " skip #
-      next_char( ).        " skip
-      &1 = match_atom( ).
-    END-OF-DEFINITION.
-
-    DEFINE _get_exact.
-      next_char( ).        " skip #
-
-      CASE mi_stream->state-char.
-        WHEN c_number_exact+0(1) OR c_number_exact+1(1).   "#e (exact)
-          &1 = abap_true.
-        WHEN c_number_inexact+0(1) OR c_number_inexact+1(1). "#i (inexact)
-          &1 = abap_false.
-        WHEN OTHERS.
-          throw( `Invalid exactness token in number prefix` ).
-      ENDCASE.
-    END-OF-DEFINITION.
-
-    DEFINE _get_atom_exact.
-      next_char( ).        " skip #
-      next_char( ).        " skip
-      IF mi_stream->state-char EQ c_lisp_hash.
-        _get_exact lv_exact.
-        next_char( ).
-      ELSE.
-        lv_exact = abap_true.
-      ENDIF.
-      &1 = match_atom( ).
-    END-OF-DEFINITION.
-
-    METHOD parse_token.
-      "<token> -> <identifier> | <boolean> | <number> | <character> | <string> | ( | ) | #( | #u8( | ' | ` | , | ,@ | .
-      DATA sval TYPE string.
-
-      intertoken_space( ).
-*     create object cell.
-      CASE mi_stream->state-char.
-        WHEN c_open_paren OR c_open_bracket OR c_open_curly.
-          element = parse_pair( mi_stream->state-char ).
-          RETURN.
-
-        WHEN c_lisp_quote.
-* ' is just a shortcut for QUOTE, so we wrap the consecutive element in a list starting with the quote symbol
-* so that when it is evaluated later, it returns the quote elements unmodified
-          next_char( ).            " Skip past single quote
-          element = lcl_lisp_new=>quote( parse_token( ) ).
-          RETURN.
-
-        WHEN c_lisp_backquote.     " Quasiquote
-          next_char( ).            " Skip past single quote
-          element = lcl_lisp_new=>quasiquote( parse_token( ) ).
-          RETURN.
-
-        WHEN c_lisp_unquote.
-          IF peek_char( ) EQ c_lisp_splicing.  " unquote-splicing ,@
-            next_char( ).        " Skip past ,
-            next_char( ).        " Skip past @
-            element = lcl_lisp_new=>splice_unquote( parse_token( ) ).  " token must evaluate to a list, not be a list
-          ELSE.                                " unquote ,
-            next_char( ).        " Skip past ,
-            element = lcl_lisp_new=>unquote( parse_token( ) ).
-          ENDIF.
-          RETURN.
-
-        WHEN c_text_quote.
-          match_string( CHANGING cv_val = sval ).
-          element = lcl_lisp_new=>string( value = sval
-                                          iv_mutable = abap_false ).
-          RETURN.
-
-        WHEN c_lisp_hash.
-          CASE peek_char( ).
-            WHEN c_open_paren.   " Vector constant
-              next_char( ).
-              element = lcl_lisp_vector=>from_list( io_list = parse_pair( )
-                                                    iv_mutable = abap_false ).
-              RETURN.
-
-              " <character> -> #\ <any character> | #\ <character name> | #\x<hex scalar value>
-              " <character name> -> alarm | backspace | delete | escape | newline | null | return | space | tab
-
-            WHEN c_escape_char.  " Character constant  #\a
-              next_char( ).      " skip #
-              next_char( ).      " skip \
-              sval = match_atom( ).
-
-              DATA(char_len) = strlen( sval ).
-              IF char_len GT 1   " difference between #\x and e.g. #\x30BB
-                AND sval+0(1) CO c_lisp_xx.
-                sval = sval+1.            " skip x,  char_len -= 1. not needed anymore
-                element = lcl_lisp_new=>esc_charx( sval ).
-              ELSE.
-                CASE sval.
-                  WHEN 'alarm'.
-                    element = lcl_lisp=>char_alarm.
-                  WHEN 'backspace'.
-                    element = lcl_lisp=>char_backspace.
-                  WHEN 'delete'.
-                    element = lcl_lisp=>char_delete.
-                  WHEN 'escape'.
-                    element = lcl_lisp=>char_escape.
-                  WHEN 'newline'.
-                    element = lcl_lisp=>char_linefeed.
-                  WHEN 'null'.
-                    element = lcl_lisp=>char_null.
-                  WHEN 'return'.
-                    element = lcl_lisp=>char_return.
-                  WHEN 'space' OR space.
-                    element = lcl_lisp=>char_space.
-                  WHEN 'tab'.
-                    element = lcl_lisp=>char_tab.
-                  WHEN OTHERS.
-                    IF char_len EQ 1.
-                      element = lcl_lisp_new=>char( sval ).
-                    ELSE.
-                      throw( |unknown char #\\{ sval } found| ).
-                    ENDIF.
-                ENDCASE.
-              ENDIF.
-
-              RETURN.
-
-*           Notation for numbers #e (exact) #i (inexact) #b (binary) #o (octal) #d (decimal) #x (hexadecimal)
-*           further, instead of exp:  s (short), f (single), d (double), l (long)
-*           positive infinity, negative infinity -inf / -inf.0, NaN +nan.0, positive zero, negative zero
-            WHEN c_number_exact+0(1) OR c_number_exact+1(1)   "#e (exact)
-              OR c_number_inexact+0(1) OR c_number_inexact+1(1). "#i (inexact)
-
-              DATA lv_exact TYPE tv_flag.
-              _get_exact lv_exact.
-
-              DATA lx_error TYPE REF TO cx_root.
-              CASE peek_char( ).
-                WHEN c_lisp_hash.
-                  next_char( ).        " skip i/e
-
-                  CASE peek_char( ).
-                    WHEN c_number_octal+0(1) OR c_number_octal+1(1).     "#o (octal)
-                      _get_atom sval.
-                      element = lcl_lisp_new=>octal( value = sval
-                                                     iv_exact = lv_exact ).
-                      RETURN.
-
-                    WHEN c_number_binary+0(1) OR c_number_binary+1(1).  "#b (binary)
-                      _get_atom sval.
-                      element = lcl_lisp_new=>binary( value = sval
-                                                      iv_exact = lv_exact ).
-                      RETURN.
-
-                    WHEN c_number_decimal+0(1) OR c_number_decimal+1(1). "#d (decimal)
-                      _get_atom sval.
-                      element = lcl_lisp_new=>complex_number( value = sval
-                                                              iv_exact = lv_exact ).
-                      RETURN.
-
-                    WHEN c_lisp_xx+0(1) OR c_lisp_xx+1(1).                "#x (hexadecimal)
-                      _get_atom sval.
-                      element = lcl_lisp_new=>hex( value = sval
-                                                   iv_exact = lv_exact ).
-                      RETURN.
-
-                    WHEN OTHERS.
-                      sval = match_atom( ).
-                      DATA lo_no_number TYPE REF TO cx_sy_conversion_no_number.
-                      CREATE OBJECT lo_no_number
-                        EXPORTING
-                          textid = '995DB739AB5CE919E10000000A11447B'
-                          value  = sval.   " The argument #D cannot be interpreted as a number
-                      throw( lo_no_number->get_text( ) ).
-
-                  ENDCASE.
-
-                WHEN OTHERS.
-                  TRY.
-                      next_char( ).        " skip i/e
-                      sval = match_atom(  ).
-                      element = lcl_lisp_new=>complex_number( value = sval
-                                                              iv_exact = lv_exact ).
-                      RETURN.
-                    CATCH cx_sy_conversion_no_number INTO lx_error.
-                      throw( lx_error->get_text( ) ).
-                  ENDTRY.
-              ENDCASE.
-
-            WHEN c_number_octal+0(1) OR c_number_octal+1(1).     "#o (octal)
-              _get_atom_exact sval.
-              element = lcl_lisp_new=>octal( value = sval
-                                             iv_exact = lv_exact ).
-              RETURN.
-
-            WHEN c_number_binary+0(1) OR c_number_binary+1(1).  "#b (binary)
-              _get_atom_exact sval.
-              element = lcl_lisp_new=>binary( value = sval
-                                              iv_exact = lv_exact ).
-              RETURN.
-
-            WHEN c_number_decimal+0(1) OR c_number_decimal+1(1). "#d (decimal)
-              _get_atom_exact sval.
-              element = lcl_lisp_new=>complex_number( value = sval
-                                                      iv_exact = lv_exact ).
-              RETURN.
-
-            WHEN c_lisp_xx+0(1) OR c_lisp_xx+1(1).                "#x (hexadecimal)
-              _get_atom_exact sval.
-              element = lcl_lisp_new=>hex( value = sval
-                                           iv_exact = lv_exact ).
-              RETURN.
-
-            WHEN OTHERS.
-*             Boolean #t #f
-              "will be handled in match_atom( )
-
-              IF peek_bytevector( ).
-                " Bytevector constant #u8( ... )
-                next_char( ).      " skip #
-                next_char( ).      " skip u
-                next_char( ).      " skip 8
-                element = lcl_lisp_bytevector=>from_list( io_list = parse_pair( )
-                                                          iv_mutable = abap_false ).
-                RETURN.
-              ENDIF.
-
-*             Referencing other literal data #<n>= #<n>#
-              DATA lv_label TYPE string.
-              IF match_label( EXPORTING iv_limit = c_lisp_equal
-                              IMPORTING ev_label = lv_label ).
-*               New datum
-*               Now Add: (set! |#{ lv_label }#| element)
-                element = parse_token( ).
-                element->mv_label = |#{ lv_label }#|.
-
-                RETURN.
-              ELSEIF match_label( EXPORTING iv_limit = c_lisp_hash
-                                  IMPORTING ev_label = lv_label ).
-*               Reference to datum
-                element = lcl_lisp_new=>symbol( |#{ lv_label }#| ).
-                RETURN.
-              ENDIF.
-
-          ENDCASE.
-
-      ENDCASE.
-*     Others <identifier> | <boolean> | <number>
-      element = match_token( ).
-    ENDMETHOD.                    "parse_token
 
     METHOD parse_datum.
       parse_token( ).   " Caution: left recursive grammar/expression?
@@ -3780,7 +3813,7 @@
 
     PRIVATE SECTION.
       TYPES: BEGIN OF ts_digit,
-               zero  TYPE x LENGTH 3,
+               zero  TYPE x LENGTH 3,  " SCPUCHAR
                langu TYPE string,
              END OF ts_digit.
       TYPES tt_digit TYPE SORTED TABLE OF ts_digit WITH UNIQUE KEY zero.
@@ -9534,6 +9567,9 @@
       ENDMETHOD.
 
       METHOD unicode_digit_zero.
+        " https://www.unicode.org/versions/Unicode13.0.0/ch04.pdf#G134153
+        "SELECT charid FROM tcpucattr INTO TABLE rt_zero
+        "  WHERE attr LIKE '%DIGIT ZERO%'.
 *     https://www.fileformat.info/info/unicode/category/Nd/list.htm
         rt_zero = VALUE #(
            ( zero = '000030' )       " Default
@@ -9565,6 +9601,8 @@
            ( zero = '001BB0' )       " SUNDANESE DIGIT ZERO
            ( zero = '001C40' )       " LEPCHA DIGIT ZERO
            ( zero = '001C50' )       " OL CHIKI DIGIT ZERO
+ "          ( zero = '0024EA' )       " CIRCLED DIGIT ZERO
+ "          ( zero = '0024FF' )       " NEGATIVE CIRCLED DIGIT ZERO
            ( zero = '00A620' )       " VAI DIGIT ZERO
            ( zero = '00A8D0' )       " SAURASHTRA DIGIT ZERO
            ( zero = '00A900' )       " KAYAH LI DIGIT ZERO
