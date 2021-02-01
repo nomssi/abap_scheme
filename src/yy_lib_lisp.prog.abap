@@ -693,6 +693,7 @@
 *    type_abap_class    TYPE tv_type VALUE 'a',
 *    type_abap_method   TYPE tv_type VALUE 'm',
 
+    type_record_type   TYPE tv_type VALUE 'Y',
     "type_env_spec    TYPE tv_type VALUE 'e',
     type_values        TYPE tv_type VALUE 'V',
     type_abap_turtle   TYPE tv_type VALUE 't'.  " for Turtles graphic
@@ -1367,7 +1368,21 @@
     METHODS put IMPORTING iv_text TYPE string.
   ENDINTERFACE.
 
-  CLASS lcl_port_to_stream DEFINITION.
+  INTERFACE lif_binary_input_port.
+    METHODS read_xstring IMPORTING k TYPE tv_index
+                         RETURNING VALUE(rv_input) TYPE xstring.
+    METHODS peek_u8 RETURNING VALUE(rv_char) TYPE tv_char.
+    METHODS read_u8 RETURNING VALUE(rv_char) TYPE tv_char.
+    METHODS is_u8_ready RETURNING VALUE(rv_flag) TYPE tv_flag.
+    METHODS put IMPORTING iv_bin TYPE xstring.
+  ENDINTERFACE.
+
+  INTERFACE lif_binary_output_port.
+    METHODS write_xstring IMPORTING iv_xstring TYPE xstring.
+    METHODS write_u8 IMPORTING elem TYPE REF TO lcl_lisp_char.
+  ENDINTERFACE.
+
+  CLASS lcl_input_port_to_stream DEFINITION.
     PUBLIC SECTION.
       INTERFACES lif_stream.
       METHODS constructor IMPORTING ii_port TYPE REF TO lif_input_port.
@@ -1376,7 +1391,7 @@
       DATA saved_state TYPE ts_stream_state.
   ENDCLASS.
 
-  CLASS lcl_port_to_stream IMPLEMENTATION.
+  CLASS lcl_input_port_to_stream IMPLEMENTATION.
 
     METHOD constructor.
       mi_port = ii_port.
@@ -1417,7 +1432,9 @@
         c_port_binary  TYPE tv_port_type VALUE 'b'.
 
       INTERFACES lif_input_port.
+      INTERFACES lif_binary_input_port.
       INTERFACES lif_output_port.
+      INTERFACES lif_binary_output_port.
 
       ALIASES: read FOR lif_input_port~read,
                write FOR lif_output_port~write,
@@ -1440,12 +1457,19 @@
       DATA error TYPE tv_flag READ-ONLY.
     PROTECTED SECTION.
 *     input is always buffered
-      DATA last_input TYPE string.
-      DATA last_index TYPE tv_index.
-      DATA last_len TYPE tv_index.
       DATA finite_size TYPE tv_flag.
 
+      DATA last_index TYPE tv_index.
+      DATA last_len TYPE tv_index.
+      DATA last_input TYPE string.  " Text buffer
+
       METHODS block_read RETURNING VALUE(rv_char) TYPE tv_char.
+
+      DATA last_xindex TYPE tv_index.
+      DATA last_xlen TYPE tv_index.
+      DATA last_xinput TYPE xstring.  " Binary buffer
+
+      METHODS xblock_read RETURNING VALUE(rv_char) TYPE tv_char.
   ENDCLASS.
 
   CLASS lcl_lisp_buffered_port DEFINITION INHERITING FROM lcl_lisp_port FRIENDS lcl_lisp_new.
@@ -1767,7 +1791,9 @@
     ENDMETHOD.
 
     METHOD lif_output_port~write.
-      CHECK output EQ abap_true.
+      IF output EQ abap_false.
+        throw( `Error: Output on closed port` ).
+      ENDIF.
       RETURN.
     ENDMETHOD.
 
@@ -1822,6 +1848,17 @@
       rv_char = last_input+0(1).
     ENDMETHOD.
 
+    METHOD xblock_read.
+      IF finite_size EQ abap_true.
+        last_xinput = c_lisp_eof.
+        last_xlen = 0.
+      ELSE.
+        last_xinput = read_stream( ).
+        last_xlen = strlen( last_input ).
+      ENDIF.
+      rv_char = last_input+0(1).
+    ENDMETHOD.
+
     METHOD lif_input_port~peek_char.
       CHECK input EQ abap_true.
       IF last_index < last_len.
@@ -1857,7 +1894,66 @@
       ENDIF.
     ENDMETHOD.
 
-  ENDCLASS.
+    " Binary input
+    METHOD lif_binary_input_port~is_u8_ready.
+      rv_flag = abap_false.
+      CHECK input EQ abap_true
+        AND port_type EQ c_port_binary.
+      rv_flag = xsdbool( last_xindex < last_xlen ).
+    ENDMETHOD.
+
+    METHOD lif_binary_input_port~peek_u8.
+      CHECK input EQ abap_true
+        AND port_type EQ c_port_binary.
+      IF last_xindex < last_xlen.
+        rv_char = last_xinput+last_xindex(1).
+      ELSE.
+        rv_char = xblock_read( ).
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD lif_binary_input_port~put.
+      IF output EQ abap_false.
+        throw( `Error: Output on closed binary port` ).
+      ENDIF.
+      CHECK port_type EQ c_port_binary.
+      throw( `put u8 not implemented yet` ).
+    ENDMETHOD.
+
+    METHOD lif_binary_input_port~read_u8.
+      CHECK input EQ abap_true
+        AND port_type EQ c_port_binary.
+      IF last_xindex < last_xlen.
+        rv_char = last_xinput+last_xindex(1).
+      ELSE.
+        rv_char = xblock_read( ).
+      ENDIF.
+      ADD 1 TO last_xindex.
+    ENDMETHOD.
+
+    METHOD lif_binary_input_port~read_xstring.
+      CHECK input EQ abap_true
+        AND port_type EQ c_port_binary.
+      throw( `read xstring / bytevector not implemented yet` ).
+    ENDMETHOD.
+
+    METHOD lif_binary_output_port~write_u8.
+      IF output EQ abap_false.
+        throw( `Error: Output on closed binary port` ).
+      ENDIF.
+      CHECK port_type EQ c_port_binary.
+      throw( `write u8 not implemented yet` ).
+    ENDMETHOD.
+
+    METHOD lif_binary_output_port~write_xstring.
+      IF output EQ abap_false.
+        throw( `Error: Output on closed binary port` ).
+      ENDIF.
+      CHECK port_type EQ c_port_binary.
+      throw( `write_xstring not implemented yet` ).
+    ENDMETHOD.
+
+ENDCLASS.
 
   CLASS lcl_lisp_buffered_port IMPLEMENTATION.
 
@@ -2346,6 +2442,8 @@
         c_esc_semi_colon TYPE tv_char VALUE c_semi_colon,
         c_esc_vline      TYPE tv_char VALUE c_vertical_line.
 
+      CLASS-DATA gv_line_ending TYPE char04.
+
       CLASS-METHODS:
         class_constructor.
 
@@ -2423,7 +2521,6 @@
       CLASS-DATA mv_newline TYPE tv_char.
       CLASS-DATA mv_whitespace TYPE char07. " Case sensitive
       CLASS-DATA mv_space_or_tab TYPE char03.
-      CLASS-DATA mv_line_ending TYPE char04.
       CLASS-DATA mv_delimiters TYPE tv_text16. " Case sensitive
 
       DATA mv_fold_case TYPE tv_flag.
@@ -2465,10 +2562,10 @@
       mv_space_or_tab+1(1) = |\t|.  " cl_abap_char_utilities=>horizontal_tab.
       mv_space_or_tab+2(1) = cl_abap_char_utilities=>vertical_tab.
       " line ending
-      CLEAR mv_line_ending.
-      mv_line_ending+0(1) = mv_newline.     " \n
-      mv_line_ending+1(2) = |\r\n|.         " return newline   cl_abap_char_utilities=>cr_lf.
-      mv_line_ending+3(1) = |\r|.           " return           cl_abap_char_utilities=>cr_lf(1).
+      CLEAR gv_line_ending.
+      gv_line_ending+0(1) = mv_newline.     " \n
+      gv_line_ending+1(2) = |\r\n|.         " return newline   cl_abap_char_utilities=>cr_lf.
+      gv_line_ending+3(1) = |\r|.           " return           cl_abap_char_utilities=>cr_lf(1).
       " Whitespace values
       CLEAR mv_whitespace.
       mv_whitespace+0(3) = mv_space_or_tab.
@@ -3472,6 +3569,7 @@
       proc_is_list         ##called,
       proc_is_pair         ##called,
       proc_is_boolean      ##called,
+      proc_symbol_list_is_equal  ##called,
       proc_boolean_list_is_equal ##called,
       proc_is_vector             ##called,
       proc_is_alist              ##called,
@@ -3548,11 +3646,19 @@
       proc_display           ##called,
       proc_read              ##called,
       proc_write_char        ##called,
+      proc_write_u8          ##called,
       proc_write_string      ##called,
+      proc_write_bytevector  ##called,
       proc_read_char         ##called,
+      proc_read_line         ##called,
       proc_read_string       ##called,
+      proc_read_bytevector   ##called,
       proc_peek_char         ##called,
       proc_is_char_ready     ##called,
+
+      proc_read_u8            ##called,
+      proc_peek_u8            ##called,
+      proc_is_u8_ready        ##called,
 
       proc_is_char_alphabetic ##called,
       proc_is_char_numeric    ##called,
@@ -3697,8 +3803,8 @@
       proc_close_input_port       ##called,
       proc_close_output_port      ##called,
       proc_close_port             ##called,
-      proc_current_input_port     ##called,
-      proc_current_output_port    ##called,
+      proc_current_input_port         ##called,
+      proc_current_output_port        ##called,
       proc_current_error_port     ##called,
       proc_open_output_string     ##called,
       proc_open_input_string      ##called,
@@ -3794,6 +3900,11 @@
                     RETURNING VALUE(result) TYPE REF TO lcl_lisp
                     RAISING   lcx_lisp_exception.
 
+      METHODS write_u8 IMPORTING io_elem       TYPE REF TO lcl_lisp
+                                 io_arg         TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
+                       RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                       RAISING   lcx_lisp_exception.
+
       METHODS display IMPORTING io_elem       TYPE REF TO lcl_lisp
                                 io_arg        TYPE REF TO lcl_lisp
                       RETURNING VALUE(result) TYPE REF TO lcl_lisp
@@ -3807,9 +3918,21 @@
                         RETURNING VALUE(result) TYPE REF TO lcl_lisp
                         RAISING   lcx_lisp_exception.
 
+      METHODS read_u8 IMPORTING io_arg        TYPE REF TO lcl_lisp
+                      RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                      RAISING   lcx_lisp_exception.
+
       METHODS read_string IMPORTING io_arg        TYPE REF TO lcl_lisp
                           RETURNING VALUE(result) TYPE REF TO lcl_lisp
                           RAISING   lcx_lisp_exception.
+
+      METHODS read_bytevector IMPORTING io_arg        TYPE REF TO lcl_lisp
+                              RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                              RAISING   lcx_lisp_exception.
+
+      METHODS read_line IMPORTING io_arg        TYPE REF TO lcl_lisp
+                        RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                        RAISING   lcx_lisp_exception.
 
     PRIVATE SECTION.
       TYPES: BEGIN OF ts_digit,
@@ -5079,6 +5202,12 @@
                         result = define_values( element = lr_tail
                                                 environment = cont-env ).
 
+ "                     WHEN 'define-record-type'.
+"  (define-record-type <name> <constructor> <pred> <field> ... )
+" Syntax: <name> and <pred> are identifiers. The <constructor> is of the form
+" (<constructor name> <field name> ... ) and each <field> is either of the form
+" (field name> <accessor name>) or of the form (<field name> <accessor name> <modifier name>)
+
                       WHEN 'set!'.                        " Re-Assign symbol
                         result = assign_symbol( element     = lr_tail
                                                 environment = cont-env ).
@@ -5524,9 +5653,7 @@
 
       ENDMETHOD.
 
-      DEFINE _optional_port.
-        DATA li_port TYPE REF TO lif_&2_port.
-
+      DEFINE _optional_port_template.
         TRY.
             IF &1->type EQ type_pair.
               _validate_port &1->car &3.
@@ -5539,6 +5666,18 @@
         ENDTRY.
       END-OF-DEFINITION.
 
+      DEFINE _optional_binary_port.
+        DATA li_port TYPE REF TO lif_binary_&2_port.
+
+        _optional_port_template &1 &2 &3.
+      END-OF-DEFINITION.
+
+      DEFINE _optional_port.
+        DATA li_port TYPE REF TO lif_&2_port.
+
+        _optional_port_template &1 &2 &3.
+      END-OF-DEFINITION.
+
       DEFINE _optional_port_arg.
         _optional_port io_arg &1 &2.
       END-OF-DEFINITION.
@@ -5546,6 +5685,13 @@
       METHOD write.
         _optional_port_arg output `write`.
         li_port->write( io_elem ).
+        result = io_elem.
+      ENDMETHOD.
+
+      METHOD write_u8.
+        _optional_binary_port io_arg output `write-u8`.
+        _validate_char io_elem `write-u8`.
+        li_port->write_u8( CAST lcl_lisp_char( io_elem ) ).
         result = io_elem.
       ENDMETHOD.
 
@@ -5566,7 +5712,7 @@
               li_port ?= proc_current_input_port( nil ).
             ENDIF.
 
-            result = read_from( NEW lcl_port_to_stream( li_port ) ).
+            result = read_from( NEW lcl_input_port_to_stream( li_port ) ).
         CATCH cx_root INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
         ENDTRY.
@@ -5576,6 +5722,42 @@
         _optional_port_arg input `read-char`.
 
         result = lcl_lisp_new=>char( li_port->read_char( ) ).
+      ENDMETHOD.
+
+      METHOD read_u8.
+        _optional_binary_port io_arg input `read-u8`.
+
+        result = lcl_lisp_new=>char( li_port->read_u8( ) ).
+      ENDMETHOD.
+
+      METHOD read_line.
+        DATA lv_input TYPE string.
+        DATA lv_char TYPE tv_char.
+        DATA li_port TYPE REF TO lif_input_port.
+
+        _validate io_arg.
+
+        IF io_arg->cdr->type EQ type_pair.
+          _validate_port io_arg->cdr->car `read-line`.
+          li_port ?= io_arg->cdr->car.
+        ELSE.
+          li_port ?= proc_current_input_port( nil ).
+        ENDIF.
+
+        IF NOT li_port->is_char_ready( ).
+          result = lcl_lisp=>eof_object.
+        ELSE.
+          WHILE li_port->is_char_ready( ) AND li_port->peek_char( ) CN lcl_stream=>gv_line_ending.
+            lv_char = li_port->read_char( ).
+            CONCATENATE lv_input lv_char INTO lv_input RESPECTING BLANKS.
+          ENDWHILE.
+          " Skip end-of-line sequence
+          WHILE li_port->is_char_ready( ) AND li_port->peek_char( ) CA lcl_stream=>gv_line_ending.
+            li_port->read_char( ).
+          ENDWHILE.
+
+          result = lcl_lisp_new=>string( lv_input ).
+        ENDIF.
       ENDMETHOD.
 
       METHOD read_string.
@@ -5604,6 +5786,35 @@
           ENDIF.
         ENDDO.
         result = lcl_lisp_new=>string( lv_input ).
+      ENDMETHOD.
+
+      METHOD read_bytevector.
+        DATA k TYPE tv_index.
+        DATA lt_byte TYPE tt_byte.
+        DATA lv_byte TYPE tv_byte.
+        DATA li_port TYPE REF TO lif_binary_input_port.
+
+        _validate io_arg.
+        _validate_index io_arg->car `read-bytevector`.
+        k = CAST lcl_lisp_integer( io_arg->car )->int.
+
+        IF io_arg->cdr->type EQ type_pair.
+          _validate_port io_arg->cdr->car `read-bytevector`.
+          li_port ?= io_arg->cdr->car.
+        ELSE.
+          li_port ?= proc_current_input_port( nil ).
+        ENDIF.
+
+        DO k TIMES.
+          IF li_port->is_u8_ready( ).
+            lv_byte = li_port->read_u8( ).
+            APPEND lv_byte TO lt_byte.
+          ELSE.
+            EXIT.
+          ENDIF.
+        ENDDO.
+        result = lcl_lisp_new=>bytevector( it_byte = lt_byte
+                                           iv_mutable = abap_true ).
       ENDMETHOD.
 
       METHOD eval_source.
@@ -7866,6 +8077,41 @@
         _is_type symbol.
       ENDMETHOD.
 
+      METHOD proc_symbol_list_is_equal.
+        DATA lv_ref TYPE string.
+        DATA lo_test TYPE REF TO lcl_lisp.
+        DATA lo_arg TYPE REF TO lcl_lisp.
+
+        _validate list.
+
+        result = false.
+        lo_arg = list.
+
+        lo_test = nil.
+        IF lo_arg->type EQ type_pair AND lo_arg->car->type EQ type_symbol.
+          lo_test = lo_arg->car.
+          lv_ref = lo_test->value.
+          lo_arg = lo_arg->cdr.
+        ENDIF.
+        IF lo_test EQ nil OR lo_arg EQ nil.
+          throw( |symbol=? missing symbol argument in { lo_arg->car->to_string( ) }| ).
+        ENDIF.
+
+        WHILE lo_arg->type EQ type_pair AND lo_arg->car->type EQ type_symbol.
+          IF lo_arg->car->value NE lv_ref.
+            RETURN.
+          ENDIF.
+          lo_arg = lo_arg->cdr.
+        ENDWHILE.
+
+        IF lo_arg NE nil.
+          throw( |symbol=? wrong argument { lo_arg->car->to_string( ) }| ).
+        ENDIF.
+        CHECK lo_arg = nil.
+        result = true.
+
+      ENDMETHOD.
+
       METHOD proc_is_pair. " argument in list->car
         _is_type pair.
       ENDMETHOD.                    "proc_is_pair
@@ -7938,7 +8184,7 @@
         ENDIF.
         CHECK lo_arg = nil.
         result = true.
-      ENDMETHOD.                    "proc_is_boolean
+      ENDMETHOD.
 
       METHOD proc_is_procedure.
         result = false.
@@ -8909,11 +9155,25 @@
                         io_arg = list->cdr ).
       ENDMETHOD.
 
+      METHOD proc_write_bytevector.
+        _validate list.
+        _validate_bytevector list->car `write-bytevector`.
+        result = write( io_elem = list->car
+                        io_arg = list->cdr ).
+      ENDMETHOD.
+
       METHOD proc_write_char.
         _validate list.
         _validate_char list->car `write-char`.
         result = write( io_elem = list->car
                         io_arg = list->cdr ).
+      ENDMETHOD.
+
+      METHOD proc_write_u8.
+        _validate list.
+        _validate_bytevector list->car `write-u8`.
+        result = write_u8( io_elem = list->car
+                           io_arg = list->cdr ).
       ENDMETHOD.
 
       METHOD proc_display.
@@ -8930,13 +9190,38 @@
         result = read_char( io_arg = list ).
       ENDMETHOD.
 
+      METHOD proc_read_u8.
+        result = read_u8( io_arg = list ).
+      ENDMETHOD.
+
       METHOD proc_read_string.
         result = read_string( io_arg = list ).
+      ENDMETHOD.
+
+      METHOD proc_read_bytevector.
+        result = read_bytevector( io_arg = list ).
+      ENDMETHOD.
+
+      METHOD proc_read_line.
+        result = read_line( io_arg = list ).
       ENDMETHOD.
 
       METHOD proc_peek_char.
         _optional_port list input `peek-char`.
         result = lcl_lisp_new=>char( li_port->peek_char( ) ).
+      ENDMETHOD.
+
+      METHOD proc_peek_u8.
+        _optional_binary_port list input `peek-u8`.
+        result = lcl_lisp_new=>char( li_port->peek_u8( ) ).
+      ENDMETHOD.
+
+      METHOD proc_is_u8_ready.
+        _optional_binary_port list input `u8-ready?`.
+
+        result = false.
+        CHECK li_port->is_u8_ready( ).
+        result = true.
       ENDMETHOD.
 
       METHOD proc_is_char_ready.
@@ -11265,6 +11550,7 @@
 
     define_value( symbol = c_eval_unquote          type = type_syntax value   = ',' ).
     define_value( symbol = c_eval_unquote_splicing type = type_syntax value   = ',@' ).
+    define_value( symbol = 'define-record-type'    type = type_syntax value   = 'define-record-type' ).
 
     define_value( symbol = 'guard'    type = type_syntax value = 'guard' ).
   ENDMETHOD.
@@ -11589,6 +11875,7 @@
     define_value( symbol = 'alist?'      type = type_native value = 'PROC_IS_ALIST' ).
     define_value( symbol = 'procedure?'  type = type_native value = 'PROC_IS_PROCEDURE' ).
     define_value( symbol = 'symbol?'     type = type_native value = 'PROC_IS_SYMBOL' ).
+    define_value( symbol = 'symbol=?'    type = type_native value = 'PROC_SYMBOL_LIST_IS_EQUAL' ).
     define_value( symbol = 'port?'       type = type_native value = 'PROC_IS_PORT' ).
     define_value( symbol = 'boolean=?'   type = type_native value = 'PROC_BOOLEAN_LIST_IS_EQUAL' ).
     define_value( symbol = 'exact?'      type = type_native value = 'PROC_IS_EXACT' ).
@@ -11596,16 +11883,28 @@
 
 *     Format
     define_value( symbol = 'newline'     type = type_native value = 'PROC_NEWLINE' ).
-    define_value( symbol = 'write'       type = type_native value = 'PROC_WRITE' ).
     define_value( symbol = 'display'     type = type_native value = 'PROC_DISPLAY' ).
 
     define_value( symbol = 'read'         type = type_native value = 'PROC_READ' ).
-    define_value( symbol = 'write-string' type = type_native value = 'PROC_WRITE_STRING' ).
-    define_value( symbol = 'write-char'   type = type_native value = 'PROC_WRITE_CHAR' ).
     define_value( symbol = 'read-char'    type = type_native value = 'PROC_READ_CHAR' ).
+    define_value( symbol = 'read-line'    type = type_native value = 'PROC_READ_LINE' ).
     define_value( symbol = 'read-string'  type = type_native value = 'PROC_READ_STRING' ).
-    define_value( symbol = 'char-ready?'  type = type_native value = 'PROC_IS_CHAR_READY' ).
+
+    define_value( symbol = 'read-u8'      type = type_native value = 'PROC_READ_U8' ).
+
     define_value( symbol = 'peek-char'    type = type_native value = 'PROC_PEEK_CHAR' ).
+    define_value( symbol = 'peek-u8'      type = type_native value = 'PROC_PEEK_U8' ).
+
+    define_value( symbol = 'write'            type = type_native value = 'PROC_WRITE' ).
+    define_value( symbol = 'write-char'       type = type_native value = 'PROC_WRITE_CHAR' ).
+    define_value( symbol = 'write-u8'         type = type_native value = 'PROC_WRITE_U8' ).
+    define_value( symbol = 'write-string'     type = type_native value = 'PROC_WRITE_STRING' ).
+
+    define_value( symbol = 'write-bytevector' type = type_native value = 'PROC_WRITE_BYTEVECTOR' ).
+    define_value( symbol = 'read-bytevector'  type = type_native value = 'PROC_READ_BYTEVECTOR' ).
+
+    define_value( symbol = 'char-ready?'  type = type_native value = 'PROC_IS_CHAR_READY' ).
+    define_value( symbol = 'u8-ready?'    type = type_native value = 'PROC_IS_U8_READY' ).
 
     load_strings( ).
     load_numbers( ).
@@ -11659,11 +11958,11 @@
     define_value( symbol = 'binary-port?'        type = type_native value   = 'PROC_IS_BINARY_PORT' ).
     define_value( symbol = 'input-port-open?'    type = type_native value   = 'PROC_IS_OPEN_INPUT_PORT' ).
     define_value( symbol = 'output-port-open?'   type = type_native value   = 'PROC_IS_OPEN_OUTPUT_PORT' ).
-    define_value( symbol = 'eof-object?'         type = type_native value   = 'PROC_IS_EOF_OBJECT' ).
     define_value( symbol = 'open-output-string'  type = type_native value   = 'PROC_OPEN_OUTPUT_STRING' ).
     define_value( symbol = 'open-input-string'   type = type_native value   = 'PROC_OPEN_INPUT_STRING' ).
     define_value( symbol = 'get-output-string'   type = type_native value   = 'PROC_GET_OUTPUT_STRING' ).
     define_value( symbol = 'eof-object'          type = type_native value   = 'PROC_EOF_OBJECT' ).
+    define_value( symbol = 'eof-object?'         type = type_native value   = 'PROC_IS_EOF_OBJECT' ).
 
     load_chars( ).
 
