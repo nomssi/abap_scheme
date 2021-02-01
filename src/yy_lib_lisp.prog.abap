@@ -693,8 +693,8 @@
 *    type_abap_class    TYPE tv_type VALUE 'a',
 *    type_abap_method   TYPE tv_type VALUE 'm',
 
-    type_record_type   TYPE tv_type VALUE 'Y',
     "type_env_spec    TYPE tv_type VALUE 'e',
+    type_record_type   TYPE tv_type VALUE 'Y',
     type_values        TYPE tv_type VALUE 'V',
     type_abap_turtle   TYPE tv_type VALUE 't'.  " for Turtles graphic
 
@@ -1460,8 +1460,8 @@
       DATA finite_size TYPE tv_flag.
 
       DATA last_index TYPE tv_index.
+      DATA last_input TYPE string.
       DATA last_len TYPE tv_index.
-      DATA last_input TYPE string.  " Text buffer
 
       METHODS block_read RETURNING VALUE(rv_char) TYPE tv_char.
 
@@ -1470,6 +1470,7 @@
       DATA last_xinput TYPE xstring.  " Binary buffer
 
       METHODS xblock_read RETURNING VALUE(rv_char) TYPE tv_char.
+
   ENDCLASS.
 
   CLASS lcl_lisp_buffered_port DEFINITION INHERITING FROM lcl_lisp_port FRIENDS lcl_lisp_new.
@@ -1894,6 +1895,7 @@
       ENDIF.
     ENDMETHOD.
 
+
     " Binary input
     METHOD lif_binary_input_port~is_u8_ready.
       rv_flag = abap_false.
@@ -1953,7 +1955,7 @@
       throw( `write_xstring not implemented yet` ).
     ENDMETHOD.
 
-ENDCLASS.
+  ENDCLASS.
 
   CLASS lcl_lisp_buffered_port IMPLEMENTATION.
 
@@ -2781,6 +2783,8 @@ ENDCLASS.
               next_char( ).                 "Skip past closing iv_limit ( = or # )
               rv_found = abap_true.
               RETURN.
+            ELSE.  " match was not successful
+              EXIT.
             ENDIF.
           ENDWHILE.
         CATCH lcx_lisp_exception.
@@ -3082,6 +3086,7 @@ ENDCLASS.
     ENDMETHOD.
 
     METHOD parse_token.
+      " <datum> -> <simple datum> | <compound datum> | <label> = <datum> | <label> #
       "<token> -> <identifier> | <boolean> | <number> | <character> | <string> | ( | ) | #( | #u8( | ' | ` | , | ,@ | .
       DATA sval TYPE string.
 
@@ -3144,17 +3149,17 @@ ENDCLASS.
 
                   " Referencing other literal data #<n>= #<n>#
                   DATA lv_label TYPE string.
-                  IF match_label( EXPORTING iv_limit = c_lisp_equal
+                  IF match_label( EXPORTING iv_limit = c_lisp_hash
                                   IMPORTING ev_label = lv_label ).
+*                   Reference to datum
+                    element = lcl_lisp_new=>symbol( |#{ lv_label }#| ).
+
+                  ELSEIF match_label( EXPORTING iv_limit = c_lisp_equal
+                                      IMPORTING ev_label = lv_label ).
 *                   New datum
 *                   Now Add: (set! |#{ lv_label }#| element)
                     element = parse_token( ).
                     element->mv_label = |#{ lv_label }#|.
-
-                  ELSEIF match_label( EXPORTING iv_limit = c_lisp_hash
-                                      IMPORTING ev_label = lv_label ).
-*                   Reference to datum
-                    element = lcl_lisp_new=>symbol( |#{ lv_label }#| ).
                   ELSE.
                     " Others <identifier> | <boolean> | <number>
                     element = match_token( ).
@@ -3803,8 +3808,8 @@ ENDCLASS.
       proc_close_input_port       ##called,
       proc_close_output_port      ##called,
       proc_close_port             ##called,
-      proc_current_input_port         ##called,
-      proc_current_output_port        ##called,
+      proc_current_input_port     ##called,
+      proc_current_output_port    ##called,
       proc_current_error_port     ##called,
       proc_open_output_string     ##called,
       proc_open_input_string      ##called,
@@ -5202,7 +5207,7 @@ ENDCLASS.
                         result = define_values( element = lr_tail
                                                 environment = cont-env ).
 
- "                     WHEN 'define-record-type'.
+"                      WHEN 'define-record-type'.
 "  (define-record-type <name> <constructor> <pred> <field> ... )
 " Syntax: <name> and <pred> are identifiers. The <constructor> is of the form
 " (<constructor name> <field name> ... ) and each <field> is either of the form
@@ -5723,7 +5728,6 @@ ENDCLASS.
 
         result = lcl_lisp_new=>char( li_port->read_char( ) ).
       ENDMETHOD.
-
       METHOD read_u8.
         _optional_binary_port io_arg input `read-u8`.
 
@@ -11958,6 +11962,7 @@ ENDCLASS.
     define_value( symbol = 'binary-port?'        type = type_native value   = 'PROC_IS_BINARY_PORT' ).
     define_value( symbol = 'input-port-open?'    type = type_native value   = 'PROC_IS_OPEN_INPUT_PORT' ).
     define_value( symbol = 'output-port-open?'   type = type_native value   = 'PROC_IS_OPEN_OUTPUT_PORT' ).
+
     define_value( symbol = 'open-output-string'  type = type_native value   = 'PROC_OPEN_OUTPUT_STRING' ).
     define_value( symbol = 'open-input-string'   type = type_native value   = 'PROC_OPEN_INPUT_STRING' ).
     define_value( symbol = 'get-output-string'   type = type_native value   = 'PROC_GET_OUTPUT_STRING' ).
@@ -15147,9 +15152,9 @@ ENDCLASS.
     result = true.
   ENDMETHOD.
 
-  ENDCLASS.
+ENDCLASS.
 
-  CLASS lcl_lisp_query IMPLEMENTATION.
+CLASS lcl_lisp_query IMPLEMENTATION.
 
   METHOD constructor.
     super->constructor( type_abap_query ).
@@ -15211,4 +15216,4 @@ ENDCLASS.
                                    angle = init_angle->real ) ).
   ENDMETHOD.
 
-  ENDCLASS.
+ENDCLASS.
