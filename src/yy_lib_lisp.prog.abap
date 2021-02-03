@@ -4948,8 +4948,9 @@
           result = lcl_lisp_new=>quote( exp ).
         ELSE.
 *         (list 'quote (cons (eval left) (eval right)))))
-          result = lcl_lisp_new=>quote( eval_left ).
-          result->cdr->cdr = eval_right.
+          result = lcl_lisp_new=>quote(
+                      lcl_lisp_new=>cons( io_car = eval_left
+                                          io_cdr = eval_right ) ).
         ENDIF.
       ELSEIF right = nil.
 *       ((null? right) (list 'list left))
@@ -4979,7 +4980,7 @@
 *        `(x1 x2 ... . ,xn)  -> (append y1 y2 ... xn)
 *        `(x1 x2 ... . ,@xn) -> error
 *      where each yi is the output of (qq-transform xi)
-    METHOD quasiquote.
+     METHOD quasiquote.
 *     adapted from http://norvig.com/jscheme/primitives.scm
       DATA(lo_ptr) = exp.
 
@@ -5836,19 +5837,16 @@
 
         ls_cont = create_ast( iv_code = code
                               io_env = env ).
-        lo_result = lcl_lisp=>nil.
-        DO.
-          IF ls_cont-next IS BOUND.
-            ASSIGN ls_cont-next->* TO <ls_cont>.
-            ls_cont = <ls_cont>.
-          ELSE.
-            EXIT.
-          ENDIF.
+        lo_result = lcl_lisp=>eof_object.
+
+        WHILE ls_cont-next IS BOUND.
+          ASSIGN ls_cont-next->* TO <ls_cont>.
+          ls_cont = <ls_cont>.
 
           lo_result = eval( ls_cont ).
 
           gi_log->put( lo_result ).
-        ENDDO.
+        ENDWHILE.
 
         output = lo_result->to_text( ).
         response = gi_log->get( ).
@@ -15187,21 +15185,22 @@ CLASS lcl_lisp_query IMPLEMENTATION.
 
   CLASS lcl_lisp_sql_result IMPLEMENTATION.
 
-  METHOD constructor.
-    super->constructor( type_abap_sql_set ).
-    result_set = io_result.
-  ENDMETHOD.
+    METHOD constructor.
+      super->constructor( type_abap_sql_set ).
+      result_set = io_result.
+    ENDMETHOD.
 
-  METHOD clear.
-    CHECK result_set IS BOUND.
-    result_set->clear_parameters( ).
-  ENDMETHOD.
+    METHOD clear.
+      CHECK result_set IS BOUND.
+      result_set->clear_parameters( ).
+    ENDMETHOD.
 
-  METHOD close.
-    CHECK result_set IS BOUND.
-    result_set->close( ).
-    FREE result_set.
-  ENDMETHOD.
+    METHOD close.
+      CHECK result_set IS BOUND.
+      result_set->close( ).
+      FREE result_set.
+    ENDMETHOD.
+
   ENDCLASS.
 
   CLASS lcl_lisp_turtle IMPLEMENTATION.

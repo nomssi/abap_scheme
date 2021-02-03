@@ -704,6 +704,7 @@
        METHODS quasiquote_10 FOR TESTING.
        METHODS quasiquote_11 FOR TESTING.
        METHODS quasiquote_12 FOR TESTING.
+       METHODS quasiquote_13 FOR TESTING.
 
        METHODS quine_1 FOR TESTING.
        METHODS quine_2 FOR TESTING.
@@ -5713,6 +5714,11 @@
        scheme( code = |`(,'five 5)|
                expected = '(five 5)' ).
      ENDMETHOD.                    "quasiquote_12
+
+     METHOD quasiquote_13.
+       scheme( code = |`(,1 2 3)|
+               expected = '(1 2 3)' ).
+     ENDMETHOD.                    "quasiquote_13
 
      METHOD quine_1.
        scheme( code = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))| &
