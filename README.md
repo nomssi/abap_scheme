@@ -2,7 +2,7 @@
 [![Language: ABAP](https://img.shields.io/badge/Language-ABAP-blue.svg?style=flat)](https://www.sap.com/developer/topics/abap-platform.html)
 [![License: MIT](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat)](https://opensource.org/licenses/MIT)
 
-- is an interpreter for the Scheme dialect of Lisp
+- is an interpreter for Scheme, a Lisp dialect with exceptionally clear and simple semantics
 - provides a SAP GUI based workbench for Scheme
 - is written in, and can be called from ABAP
 
