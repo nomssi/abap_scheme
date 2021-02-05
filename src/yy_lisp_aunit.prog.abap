@@ -655,6 +655,7 @@
        METHODS cond_3 FOR TESTING.
        METHODS cond_4 FOR TESTING.
        METHODS cond_5 FOR TESTING.
+       METHODS cond_else FOR TESTING.
 
        METHODS case_no_args FOR TESTING.
        METHODS case_no_clauses FOR TESTING.
@@ -1959,6 +1960,13 @@
                expected = |y| ).
      ENDMETHOD.                    "cond_5
 
+     METHOD cond_else.
+       scheme( code = |(cond ('(1 2 3) => cadr)| &
+                      |      (else #f)|  &
+                      |      (#t #f))|
+               expected = |Eval: else clause must be last in cond| ).
+     ENDMETHOD.
+
      METHOD case_no_args.
        scheme_incorrect( |(case)| ).
      ENDMETHOD.                    "case_no_args
@@ -2590,6 +2598,7 @@
        METHODS math_int_sqrt FOR TESTING.
        METHODS math_square FOR TESTING.
        METHODS math_complex FOR TESTING.
+       METHODS math_complex_1 FOR TESTING.
        METHODS math_log FOR TESTING.
 
        METHODS math_floor FOR TESTING.
@@ -2845,9 +2854,14 @@
                expected = '1+i' ).
        scheme( code =  '(integer? 3+0i)'
                expected = '#t' ).
-
      ENDMETHOD.
 
+     METHOD math_complex_1.
+       scheme( code =  '1/4+6/10i'
+               expected = '1/4+3/5i' ).
+       scheme( code =  '-inf.0-nan.0i'
+               expected = '-inf.0+nan.0i' ).
+     ENDMETHOD.
      METHOD math_log.
        code_test_f( code =  '(log 7.389056)'
                  expected = '1.999999986611192' ) ##literal.

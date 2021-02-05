@@ -79,7 +79,7 @@
 
   CONSTANTS:
     c_lisp_input     TYPE string VALUE 'ABAP Lisp Input' ##NO_TEXT,
-    c_lisp_eof       TYPE x LENGTH 2 VALUE 'FFFF', " we do not expect this in source code
+    c_lisp_eof       TYPE x LENGTH 2 VALUE 'FEFF', " we do not expect this in source code
     c_lisp_nil       TYPE string VALUE '''()',
     c_expr_separator TYPE string VALUE ` `,   " multiple expression output
     c_undefined      TYPE string VALUE '<undefined>'.
@@ -288,23 +288,12 @@
     ENDIF.
   END-OF-DEFINITION.
 
-  DEFINE _error_no_list.
-    lcl_lisp=>throw( |{ &2 }: { &1->to_string( ) } is not a proper list| ) ##NO_TEXT.
-  END-OF-DEFINITION.
-
   DEFINE _to_integer.
     &2 = CAST lcl_lisp_integer( &1 )->int.
   END-OF-DEFINITION.
 
   DEFINE _to_real.
     &2 = CAST lcl_lisp_real( &1 )->real.
-  END-OF-DEFINITION.
-
-  DEFINE _validate_tail.
-    IF &1 NE nil.
-*     if the last element in the list is not a cons cell, we cannot append
-      _error_no_list &2 &3.
-    ENDIF.
   END-OF-DEFINITION.
 
   DEFINE _values_get_next.
@@ -795,6 +784,8 @@
 
       METHODS set_shared_structure RAISING lcx_lisp_exception.
 
+      METHODS is_eof RETURNING VALUE(flag) TYPE tv_flag.
+
       METHODS is_procedure RETURNING VALUE(result) TYPE REF TO lcl_lisp.
 
       METHODS is_number RETURNING VALUE(result) TYPE REF TO lcl_lisp.
@@ -802,6 +793,9 @@
                      RAISING   lcx_lisp_exception.
 
       METHODS error_not_a_pair IMPORTING context TYPE string DEFAULT space
+                               RAISING   lcx_lisp_exception.
+
+      METHODS error_not_a_list IMPORTING context TYPE string DEFAULT space
                                RAISING   lcx_lisp_exception.
 
       METHODS raise IMPORTING context TYPE string DEFAULT space
@@ -819,6 +813,7 @@
                                               lcx_lisp_no_number.
 
       CLASS-METHODS throw IMPORTING message TYPE string
+                                    area TYPE string DEFAULT c_area_eval
                           RAISING   lcx_lisp_exception.
 
       METHODS assert_last_param  RAISING lcx_lisp_exception.
@@ -1605,6 +1600,9 @@
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_string.
       CLASS-METHODS char IMPORTING value          TYPE any
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_char.
+
+      CLASS-METHODS eof RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_char.
+
       CLASS-METHODS esc_charx IMPORTING value          TYPE any
                               RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_char
                               RAISING   lcx_lisp_exception.
@@ -2541,8 +2539,8 @@
       METHODS match_directive RETURNING VALUE(found) TYPE tv_flag
                               RAISING   lcx_lisp_exception.
 
-      METHODS intertoken_space RETURNING VALUE(rv_has_next) TYPE tv_flag
-                               RAISING   lcx_lisp_exception.
+      METHODS skip_intertoken_space RETURNING VALUE(rv_has_next) TYPE tv_flag
+                                    RAISING   lcx_lisp_exception.
 
       METHODS throw IMPORTING message TYPE string
                               area    TYPE string DEFAULT c_area_parse
@@ -2682,26 +2680,17 @@
 *     Entry point for parsing code. This is not thread-safe, but as an ABAP
 *     process does not have the concept of threads, we are safe :-)
       IF mi_stream->state-ready EQ abap_true.
-        WHILE intertoken_space( ).
-          IF mi_stream->state-char CA mv_open_paren.
-            APPEND parse_pair( mi_stream->state-char ) TO elements.
-          ELSEIF mi_stream->state-ready EQ abap_true.
-            APPEND parse_token( ) TO elements.
-          ENDIF.
+        WHILE skip_intertoken_space( ).
+          APPEND parse_token( ) TO elements.
         ENDWHILE.
       ELSE.
         APPEND lcl_lisp=>eof_object TO elements.
       ENDIF.
-    ENDMETHOD.                    "parse
+    ENDMETHOD.
 
     METHOD read_stream.
       IF mi_stream->state-ready EQ abap_true.
-        intertoken_space( ).
-        IF mi_stream->state-char CA mv_open_paren.
-          element = parse_pair( mi_stream->state-char ).
-        ELSEIF mi_stream->state-ready EQ abap_true.
-          element = parse_token( ).
-        ENDIF.
+        element = parse_token( ).
       ELSE.
         element = lcl_lisp=>eof_object.
       ENDIF.
@@ -2819,7 +2808,7 @@
       parse_datum( ).   " skip one datum
     ENDMETHOD.
 
-    METHOD intertoken_space.
+    METHOD skip_intertoken_space.
       " <intertoken space> -> <atmosphere>*
       " <atmosphere> -> <whitespace> | <comment> | <directive>
 
@@ -3095,7 +3084,7 @@
       "<token> -> <identifier> | <boolean> | <number> | <character> | <string> | ( | ) | #( | #u8( | ' | ` | , | ,@ | .
       DATA sval TYPE string.
 
-      intertoken_space( ).
+      skip_intertoken_space( ).
 *     create object cell.
       IF mi_stream->state-char CA mv_open_paren.
         element = parse_pair( mi_stream->state-char ).
@@ -3252,7 +3241,7 @@
                                              ELSE c_close_paren ).
 
       next_char( ).                 " Skip past opening paren
-      WHILE intertoken_space( ).
+      WHILE skip_intertoken_space( ).
         CASE mi_stream->state-char.
           WHEN lv_close_delim.
             IF lv_empty_list = abap_true.
@@ -3962,6 +3951,9 @@
       METHODS unicode_to_digit IMPORTING iv_char         TYPE tv_char
                                RETURNING VALUE(rv_digit) TYPE i.
 
+      METHODS unicode_to_integer IMPORTING iv_char       TYPE tv_char
+                                 RETURNING VALUE(rv_int) TYPE tv_int.
+
       METHODS char_to_integer IMPORTING io_char       TYPE REF TO lcl_lisp
                               RETURNING VALUE(rv_int) TYPE tv_int
                               RAISING   lcx_lisp_exception.
@@ -4139,6 +4131,7 @@
     METHOD create_ast.
 *     Entry point for parsing code. This is not thread-safe, but as an ABAP
 *     process does not have the concept of threads, we are safe :-)
+      "DATA(li_stream) = NEW lcl_string_stream( iv_code ).
       DATA(lt_elem) = parse( iv_code ).
       rs_cont = to_linked_list( elements = lt_elem
                                 io_env = io_env ).
@@ -4398,7 +4391,10 @@
         elem = elem->cdr.
       ENDWHILE.
 
-      _validate_tail elem io_list space.
+      IF elem NE nil.  " _validate_tail
+*       if the last element in the list is not a cons cell, we cannot append
+        io_list->error_not_a_list( space ).
+      ENDIF.
 
     ENDMETHOD.                    "evaluate_parameters
 
@@ -4607,7 +4603,10 @@
         cs_cont-elem = cs_cont-elem->cdr.
       ENDWHILE.
 
-      _validate_tail cs_cont-elem->cdr lo_head space.
+      IF cs_cont-elem->cdr NE nil. " _validate_tail cs_cont-elem->cdr lo_head space.
+*       if the last element in the list is not a cons cell, we cannot append
+        lo_head->error_not_a_list( space ).
+      ENDIF.
     ENDMETHOD.
 
     METHOD lambda_environment.
@@ -5168,19 +5167,28 @@
 *                   Derived expression: Conditional
                         lo_ptr = lr_tail.
                         cont-elem = nil.
+                        DATA(lo_test) = false.
                         WHILE lo_ptr->type EQ type_pair.
                           DATA(lo_clause) = lo_ptr->car.
-                          IF lo_clause->car->value EQ c_lisp_else.
-                            cont-elem = lo_clause->cdr.
-                            EXIT.
-                          ENDIF.
-                          DATA(lo_test) = eval_ast( VALUE #( BASE cont
-                                                             elem = lo_clause->car ) ).
-                          IF lo_test NE false.
-                            cont-elem = lo_clause->cdr.
-                            EXIT.
-                          ENDIF.
                           lo_ptr = lo_ptr->cdr.
+
+                          IF lo_clause->car->value EQ c_lisp_else.
+                            IF lo_ptr->type EQ type_pair.
+                              throw( `else clause must be last in cond` ).
+                            ENDIF.
+                            IF lo_test EQ false.  " only if clause was not previously matched
+                              cont-elem = lo_clause->cdr.
+                              "lo_test = true.
+                            ENDIF.
+                            EXIT.
+                          ELSEIF lo_test EQ false.
+                            lo_test = eval_ast( VALUE #( BASE cont
+                                                         elem = lo_clause->car ) ).
+                            IF lo_test NE false.
+                              cont-elem = lo_clause->cdr.
+                            ENDIF.
+                            " clause matched, but continue to check if eventual 'else' clause is correctly specified last
+                          ENDIF.
                         ENDWHILE.
                         IF cont-elem EQ nil.
                           result = lo_test.
@@ -5920,7 +5928,10 @@
 *     Append next list
         WHILE lo_iter->has_next( ).
 
-          _validate_tail lo_arg first `append`.
+          IF lo_arg NE nil.  " _validate_tail lo_arg first `append`.
+*           if the last element in the list is not a cons cell, we cannot append
+            first->error_not_a_list( `append` ).
+          ENDIF.
 
           first = lo_arg = lo_iter->next( ).
           CHECK first NE nil.
@@ -6023,7 +6034,7 @@
 *       Get to last element in list - this can make APPEND expensive, like LENGTH
           DATA(lo_last) = list->car.
           IF lo_last->type NE type_pair.
-            _error_no_list list `append!`.
+            list->error_not_a_list( `append!` ).
           ENDIF.
 
           WHILE lo_last->cdr IS BOUND AND lo_last->cdr NE nil.
@@ -6033,7 +6044,7 @@
           "TO DO - replace with _validate_tail lo_last (?) list->car.
           IF lo_last->type NE type_pair.
 *         If the last item is not a cons cell, return an error
-            _error_no_list list->car  `append!`.
+            list->car->error_not_a_list( `append!` ).
           ENDIF.
 
 *       Last item is a cons cell; tack on the new value
@@ -6287,7 +6298,7 @@
         ENDWHILE.
         CHECK lo_fast NE nil.
 *     If the last item is not a cons cell, return an error
-        _error_no_list list `list-length`.
+        list->error_not_a_list( `list-length` ).
       ENDMETHOD.
 
       METHOD proc_length.
@@ -9807,21 +9818,27 @@
         ENDIF.
       ENDMETHOD.
 
+      METHOD unicode_to_integer.
+        FIELD-SYMBOLS <xword> TYPE x.
+        FIELD-SYMBOLS <xint> TYPE x.
+        DATA lv_int TYPE int2.
+
+        ASSIGN iv_char TO <xword> CASTING.
+        ASSIGN lv_int TO <xint> CASTING.
+        <xint> = <xword>.                 " conversion
+        rv_int = lv_int.
+      ENDMETHOD.
+
       METHOD unicode_to_digit.
-        FIELD-SYMBOLS <lv_hex> TYPE x.
-        FIELD-SYMBOLS <lv_int> TYPE x.
-        DATA ls_digit TYPE ts_digit.
+        DATA lv_int TYPE tv_int.
         DATA lv_xdigit TYPE ts_digit-zero.
+
+        DATA ls_digit TYPE ts_digit.
         DATA lv_zero TYPE i.
         DATA lv_index TYPE sytabix.
-        DATA lv_int TYPE tv_int.
 
         rv_digit = -1.
-
-        ASSIGN iv_char TO <lv_hex> CASTING.
-        ASSIGN lv_int TO <lv_int> CASTING.
-        <lv_int> = <lv_hex>. " conversion
-        lv_xdigit = lv_int.
+        lv_xdigit = lv_int = unicode_to_integer( iv_char ).
 
         READ TABLE mt_zero INTO ls_digit WITH TABLE KEY zero = lv_xdigit.
         CASE sy-subrc.
@@ -9965,29 +9982,18 @@
         rv_string = element->value.
       ENDMETHOD.
 
-      DEFINE _char01_to_integer.
-        FIELD-SYMBOLS <xword> TYPE x.
-        FIELD-SYMBOLS <xint> TYPE x.
-        DATA lv_int TYPE int2.
-
-        ASSIGN &1 TO <xword> CASTING.
-        ASSIGN lv_int TO <xint> CASTING.
-        <xint> = <xword>.
-        &2 = lv_int.
-      END-OF-DEFINITION.
-
       METHOD char_to_integer.
         DATA lv_char TYPE tv_char.
 
         lv_char = io_char->value+0(1).
-        _char01_to_integer lv_char rv_int.
+        rv_int = unicode_to_integer( lv_char ).
       ENDMETHOD.
 
       METHOD char_fold_case_to_integer.
         DATA lv_char TYPE tv_char.
 
         lv_char = to_upper( element->value+0(1) ).
-        _char01_to_integer lv_char rv_int.
+        rv_int = unicode_to_integer( lv_char ).
       ENDMETHOD.
 
       DEFINE _proc_list_compare.
@@ -12053,7 +12059,7 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
     char_tab = lcl_lisp_new=>xchar( '0009' ).
 
     new_line = lcl_lisp_new=>string( |\n| ).
-    eof_object = lcl_lisp_new=>char( c_lisp_eof ).
+    eof_object = lcl_lisp_new=>eof( ).
 
   ENDMETHOD.
 
@@ -12563,7 +12569,7 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
     RAISE EXCEPTION TYPE lcx_lisp_exception
       EXPORTING
         message = message
-        area    = c_area_eval.
+        area    = area.
   ENDMETHOD.
 
   METHOD raise.
@@ -12593,6 +12599,16 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
   METHOD error_not_a_pair.
     raise( context = context
            message = ` is not a pair` ).
+  ENDMETHOD.
+
+  METHOD error_not_a_list.
+    raise( context = context && `: `
+           message = ` is not a proper list` ).
+    "lcl_lisp=>throw( |{ &2 }: { &1->to_string( ) } is not a proper list| ) ##NO_TEXT.
+  ENDMETHOD.
+
+  METHOD is_eof.
+    flag = xsdbool( type EQ type_char AND me = eof_object ).
   ENDMETHOD.
 
   METHOD is_procedure.
@@ -12710,6 +12726,10 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
 
   METHOD char.
     ro_elem = lcl_lisp_char=>new( value ).
+  ENDMETHOD.
+
+  METHOD eof.
+    ro_elem = lcl_lisp_char=>new( c_lisp_eof ).
   ENDMETHOD.
 
   METHOD esc_charx.
@@ -13487,13 +13507,6 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
     ENDCASE.
   ENDMETHOD.
 
-  DEFINE _throw_radix.
-    RAISE EXCEPTION TYPE lcx_lisp_exception
-      EXPORTING
-        message = &1
-        area    = c_area_radix.
-  END-OF-DEFINITION.
-
   METHOD hex_integer.
     DATA lv_text TYPE string VALUE '0000000000000000'. " 2x8 = 16
     DATA lv_len TYPE tv_int.
@@ -13512,8 +13525,7 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
       lv_hex = lv_text.
       rv_int = lv_hex.
     ELSE.
-      lv_text = `Invalid hexadecimal number ` && value.
-      _throw_radix lv_text.
+      throw_radix( `Invalid hexadecimal number ` && value ).
     ENDIF.
   ENDMETHOD.
 
@@ -13558,7 +13570,7 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
     CLEAR rv_int.
     lv_text = value.
     IF lv_text CN '01234567'.
-      _throw_radix `Invalid octal number`.
+      throw_radix( `Invalid octal number` ).
     ENDIF.
 
     lv_index = lv_size = strlen( lv_text ).
@@ -13610,7 +13622,7 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
 
     lv_text = value.
     IF lv_text CN '01'.
-      _throw_radix `Invalid binary number`.
+      throw_radix( `Invalid binary number` ).
     ENDIF.
 
     lv_index = lv_size = strlen( lv_text ).
@@ -13834,10 +13846,8 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
   ENDMETHOD.
 
   METHOD throw_radix.
-    RAISE EXCEPTION TYPE lcx_lisp_exception
-      EXPORTING
-        message = message
-        area    = c_area_radix.
+    lcl_lisp=>throw( message = message
+                     area = c_area_radix ).
   ENDMETHOD.
 
   ENDCLASS.
