@@ -22,10 +22,10 @@ To check your installation, execute this <i>guess my number</i> game...
                (answer (+ 1 (random 100))) )
           (quit)
           (set! guess (read))
-          (cond ((and (number? guess) (< guess answer)) (display "Too low. Please guess again: ") )
-                ((and (number? guess) (> guess answer)) (display "Too high. Please guess again: ") )
-                (else (set! quit #t) (if (number? guess) (display "Correct!")
-                                                         (display "Good bye...") ) ) ) ) )
+          (cond ((and (number? guess) (< guess answer)) (display "\nToo low. Please guess again: ") )
+                ((and (number? guess) (> guess answer)) (display "\nToo high. Please guess again: ") )
+                (else (set! quit #t) (if (number? guess) (display "\nCorrect!")
+                                                         (display "\nGood bye...") ) ) ) ) )
 ```
 
 To get used to the language, the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) are a good place to start.
