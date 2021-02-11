@@ -711,27 +711,26 @@ CLASS lcl_ide IMPLEMENTATION.
              time TYPE syuzeit,
            END OF ts_header.
     DATA header TYPE ts_header.
-    DATA out TYPE REF TO lcl_demo_output.
 
     header-user = sy-uname.
     header-time = sy-uzeit.
-    out = NEW #( out = cl_demo_output=>new( ) ).
+    go_out = NEW #( out = cl_demo_output=>new( ) ).
     gv_lisp_trace = abap_true.
-    out->begin_section( `ABAP LISP Workbench` ).
-    out->write( header ).
+    go_out->begin_section( `ABAP LISP Workbench` ).
+    go_out->write( header ).
     " cl_demo_output=>set_mode( cl_demo_output=>text_mode  ).
 
-    out->begin_section( `Scheme Code` ).
-    out->write( mi_source->to_string( ) ).
+    go_out->begin_section( `Scheme Code` ).
+    go_out->write( mi_source->to_string( ) ).
 
-    out->begin_section( `Trace Output` ).
+    go_out->begin_section( `Trace Output` ).
 
 *   Run
     evaluate( ).
 
     gv_lisp_trace = abap_false.
 
-    out->display( ).
+    go_out->display( ).
 
   ENDMETHOD.
 

@@ -72,6 +72,7 @@
        METHODS teardown.
        METHODS closing_1 FOR TESTING.
        METHODS closing_2 FOR TESTING.
+       METHODS rational_inexact FOR TESTING.
 
 *   Stability tests - No Dump should occur
        METHODS stability_1 FOR TESTING.
@@ -188,6 +189,11 @@
        scheme( code = 'a'
                expected = `23` ).
      ENDMETHOD.                    "basic_define_a_23
+
+     METHOD rational_inexact.
+       scheme( code = '(rational? 24.0/3)'
+               expected = 'Error: Invalid number' ).
+     ENDMETHOD.
 
      METHOD basic_string_value.
        scheme( code = '"string value"'
@@ -709,7 +715,7 @@
 
        METHODS quine_1 FOR TESTING.
        METHODS quine_2 FOR TESTING.
-
+       METHODS quine_3 FOR TESTING.
    ENDCLASS.                    "ltc_quote DEFINITION
 
 *----------------------------------------------------------------------*
@@ -1003,11 +1009,9 @@
           |;; Returns the harmonic means of a nested list of numbers\n| &
           |(define (means ton)| &
           |  (letrec*| &
-          |     ((mean| &
-          |        (lambda (f g)| &
-          |          (f (/ (sum g ton) n))))| &
-          |      (sum| &
-          |        (lambda (g ton)| &
+          |     ((mean (lambda ()| &
+          |          (/ (/ (sum / ton) n))))| &
+          |      (sum (lambda (g ton)| &
           |          (if (null? ton)| &
           |            (+)| &
           |            (if (number? ton)| &
@@ -1015,7 +1019,7 @@
           |                (+ (sum g (car ton))| &
           |                   (sum g (cdr ton)))))))| &
           |      (n (sum (lambda (x) 1) ton)))| &
-          |   (mean / /)))|
+          |   (mean)))|
                expected = 'means' ).
 
        scheme( code = |(means '(3 (1 4)))|
@@ -1140,6 +1144,10 @@
                expected = 'x y' ).   " nicht definiert in r7rs
        scheme( code = |(list x y)|
                expected = '(4 1)' ).
+       scheme( code = |(define-values (x y) (exact-integer-sqrt 8))|
+               expected = 'x y' ).
+       scheme( code = |(list x y)|
+               expected = '(2 4)' ).
      ENDMETHOD.
 
      METHOD define_values_1.
@@ -1274,6 +1282,10 @@
        scheme( code = |(define n 5)|
                expected = 'n' ).
        scheme( code = |(number? n)|
+               expected = '#t' ).
+       scheme( code = |(number? 3+4i)|
+               expected = '#t' ).
+       scheme( code = |(number? -inf.0)|
                expected = '#t' ).
      ENDMETHOD.                    "is_number_true
 
@@ -2186,6 +2198,7 @@
        METHODS exact_5 FOR TESTING.
        METHODS exact_6 FOR TESTING.
        METHODS exact_7 FOR TESTING.
+       METHODS exact_8 FOR TESTING.
 
        METHODS compare_eq FOR TESTING.
        METHODS compare_lt FOR TESTING.
@@ -2248,6 +2261,10 @@
      ENDMETHOD.                    "is_negative
 
      METHOD is_complex.
+       scheme( code = '(complex? 3+4i)'
+               expected = '#t' ).
+       scheme( code = '(complex? 2.5+0i)'
+               expected = '#t' ).
        scheme( code = '(complex? 3)'
                expected = '#t' ).
      ENDMETHOD.                    "is_complex
@@ -2255,10 +2272,16 @@
      METHOD is_real.
        scheme( code = '(real? 3)'
                expected = '#t' ).
+       scheme( code = '(real? 2.5+0i)'
+               expected = '#t' ).
      ENDMETHOD.                    "is_real
 
      METHOD is_real_1.
        scheme( code = '(real? #e1e10)'
+               expected = '#t' ).
+       scheme( code = '(real? +inf.0)'
+               expected = '#t' ).
+       scheme( code = '(real? +nan.0)'
                expected = '#t' ).
      ENDMETHOD.                    "is_real_1
 
@@ -2267,20 +2290,32 @@
                expected = '#t' ).
        scheme( code = '(rational? 6/3)'
                expected = '#t' ).
+       scheme( code = '(+ (/ 3) (+ 1 (/ 4)))'
+               expected = '19/12' ).
      ENDMETHOD.                    "is_rational
 
      METHOD is_rational_inexact.
+       scheme( code = '(rational? -inf.0)'
+               expected = '#f' ).
        scheme( code = '(rational? 3.5)'
                expected = '#t' ).
        scheme( code = '(rational? 3.1416)'
                expected = '#t' ).
+       scheme( code = '(rational? 6/10)'
+               expected = '#t' ).
+       scheme( code = '(rational? 6/3)'
+               expected = '#t' ).
      ENDMETHOD.                    "is_rational
 
      METHOD is_integer.
+       scheme( code = '(integer? 3+0i)'
+               expected = '#t' ).
        scheme( code = '(integer? 3.0)'
                expected = '#t' ).
        scheme( code = '(integer? 8/4)'
                expected = '#t' ).
+       scheme( code = '(integer? 22/7)'
+               expected = '#f' ).
      ENDMETHOD.                    "is_integer
 
      METHOD gcd_1.
@@ -2402,6 +2437,11 @@
      METHOD exact_7.
        scheme( code = '(exact? #x#iff)'
                expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD exact_8.
+       scheme( code = '(eqv? (* #e1.1 #e1.1) 121/100)'
+               expected = '#t' ).
      ENDMETHOD.
 
      METHOD compare_eq.
@@ -2559,6 +2599,7 @@
        METHODS math_mult_1 FOR TESTING.
        METHODS math_mult_2 FOR TESTING.
        METHODS math_mult_3 FOR TESTING.
+       METHODS math_mult_4 FOR TESTING.
 
        METHODS math_subtract_1 FOR TESTING.
        METHODS math_subtract_2 FOR TESTING.
@@ -2573,6 +2614,9 @@
        METHODS math_division_5 FOR TESTING.
        METHODS math_division_6 FOR TESTING.
        METHODS math_division_7 FOR TESTING.
+       METHODS math_division_8 FOR TESTING.
+       METHODS math_division_9 FOR TESTING.
+       METHODS math_division_10 FOR TESTING.
 
        METHODS math_sin FOR TESTING.
        METHODS math_cos FOR TESTING.
@@ -2590,6 +2634,7 @@
        METHODS math_asin FOR TESTING.
        METHODS math_acos FOR TESTING.
        METHODS math_atan FOR TESTING.
+       METHODS math_atan_1 FOR TESTING.
 
        METHODS math_exp FOR TESTING.
        METHODS math_expt FOR TESTING.
@@ -2668,6 +2713,11 @@
                expected = '1716' ).
      ENDMETHOD.                    "math_mult_3
 
+     METHOD math_mult_4.
+       scheme( code = '(* 0 +inf.0)'
+               expected = '+nan.0' ).
+     ENDMETHOD.
+
      METHOD math_subtract_1.
        " one argument: inverse
        scheme( code = '(- 22)'
@@ -2730,6 +2780,23 @@
      METHOD math_division_7.
        scheme( code = '(/ 0)'
                expected = '+inf.0' ).
+     ENDMETHOD.
+
+     METHOD math_division_8.
+       scheme( code = '(/ 0.0 0)'
+               expected = '+nan.0' ).
+       scheme( code = '(/ #e0 #e0)'
+               expected = '1' ).
+     ENDMETHOD.
+
+     METHOD math_division_9.
+       scheme( code = '(/ 0 +inf.0)'
+               expected = '0' ).
+     ENDMETHOD.
+
+     METHOD math_division_10.
+       scheme( code = '(/ 0 6 +nan.0)'
+               expected = '+nan.0' ).
      ENDMETHOD.
 
      METHOD math_sin.
@@ -2806,6 +2873,13 @@
        code_test_f( code =  '(atan 1)'
                     expected = '0.78539816339744830961566084581988' ) ##literal.
      ENDMETHOD.                    "math_atan
+
+     METHOD math_atan_1.
+       scheme( code =  '(define pi (atan 0 -1))'
+               expected = 'pi' ).
+       code_test_f( code =  'pi'
+                    expected = '3.141592653589793' ) ##literal.
+     ENDMETHOD.                    "math_atan_1
 
      METHOD math_exp.
        code_test_f( code =  '(exp 2)'
@@ -3237,6 +3311,7 @@
        METHODS list_to_string_1   FOR TESTING.
 
        METHODS string_to_number_empty FOR TESTING.
+       METHODS string_to_number_0 FOR TESTING.
        METHODS string_to_number_1 FOR TESTING.
        METHODS string_to_number_2 FOR TESTING.
        METHODS string_to_number_3 FOR TESTING.
@@ -3946,6 +4021,11 @@
 
      METHOD string_to_number_empty.
        scheme( code = |(string->number "")|
+               expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD string_to_number_0.
+       scheme( code = |(string->number "Am I a hot number?")|
                expected = '#f' ).
      ENDMETHOD.
 
@@ -5739,17 +5819,20 @@
                       |                  '(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))))| &
                       |  (lambda (q) `(,q ',q))| &
                       |  '(lambda (q) `(,q ',q)))|
-           expected = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) ,(q qq))) | &
-                                        |'(lambda (x) `((lambda (q qq) ,(q x)) ,(q qq))))) | &
-                        |(lambda (q) `(,q ',q))| &
-                        |'(lambda (q) `(,q ',q)))| ).
+           expected = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))| &
+                      | '(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))))| &
+                      | (lambda (q) `(,q ',q))| &
+                      |'(lambda (q) `(,q ',q)))| ).
      ENDMETHOD.
-
-
 
      METHOD quine_2.
        scheme( code =     |( ( lambda ( x ) `(,( reverse x ) ',x ) ) '(`(,( reverse x ) ',x ) ( x ) lambda) )|
                expected = |((lambda (x) `(,(reverse x) ',x)) '(`(,(reverse x) ',x) (x) lambda))| ).
+     ENDMETHOD.
+
+     METHOD quine_3.
+       scheme( code =     |((lambda (q) `(,q ',q)) '(lambda (q) `(,q ',q)))|
+               expected = |((lambda (q) `(,q ',q)) '(lambda (q) `(,q ',q)))| ).
      ENDMETHOD.
 
    ENDCLASS.                    "ltc_quote IMPLEMENTATION
