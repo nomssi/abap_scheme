@@ -16,7 +16,7 @@ The code can be cloned with [ABAP GIT](http://docs.abapgit.org/).
 To check your installation, execute this <i>guess my number</i> game...
 
 ```Scheme
-      (begin (display "Please enter a number between 1 - 99: ")
+      (begin (display "Please enter a number between 1 - 100: ")
           (do ((quit #f)
                (guess 0)   
                (answer (+ 1 (random 100))) )
