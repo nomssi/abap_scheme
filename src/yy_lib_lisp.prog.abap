@@ -117,6 +117,10 @@
     c_special_initial     TYPE string VALUE '!$%&*/:<=>?@^_~'.
 
   CONSTANTS:
+    c_plus_sign TYPE string VALUE `+`,
+    c_explicit_sign TYPE string VALUE '+-'.
+
+  CONSTANTS:
     c_lisp_pos_inf TYPE string VALUE '+INF.0',
     c_lisp_neg_inf TYPE string VALUE '-INF.0',
     c_lisp_pos_nan TYPE string VALUE '+NAN.0',
@@ -132,13 +136,15 @@
     c_imaginary_neg_nan TYPE string VALUE '-NAN.0I'.
 
   CONSTANTS:
-    c_number_exact   TYPE tv_char2 VALUE 'eE',
-    c_number_inexact TYPE tv_char2 VALUE 'iI',
-    c_pattern_inexact TYPE string VALUE '.eE',
+    c_pattern_radix TYPE string VALUE 'oObBdDxX',
     c_pattern_exactness TYPE string VALUE 'eEiI'.
 
   CONSTANTS:
-    c_pattern_radix TYPE string VALUE 'oObBdDxX',
+    c_number_exact   TYPE tv_char2 VALUE 'eE',
+    c_number_inexact TYPE tv_char2 VALUE 'iI',
+    c_pattern_inexact TYPE string VALUE '.eE'.
+
+  CONSTANTS:
     c_number_octal TYPE tv_char2 VALUE 'oO',
     c_number_binary TYPE tv_char2 VALUE 'bB',
     c_number_decimal TYPE tv_char2 VALUE 'dD',
@@ -651,6 +657,11 @@
     PUBLIC SECTION.
   ENDCLASS.                    "lcx_lisp_no_number DEFINITION
 
+  CLASS lcx_lisp_radix  DEFINITION INHERITING FROM lcx_lisp_exception.
+    PUBLIC SECTION.
+      METHODS constructor IMPORTING message TYPE string.
+  ENDCLASS.
+
   CLASS lcl_lisp DEFINITION DEFERRED.
   CLASS lcl_lisp_environment DEFINITION DEFERRED.
 
@@ -696,6 +707,13 @@
     ENDMETHOD.                    "get_text
 
   ENDCLASS.                    "lcx_lisp_exception IMPLEMENTATION
+
+  CLASS lcx_lisp_radix IMPLEMENTATION.
+    METHOD constructor.
+      super->constructor( message = message
+                          area = c_area_radix ).
+    ENDMETHOD.
+  ENDCLASS.
 
   TYPES tv_type TYPE tv_char.
   TYPES tv_category TYPE tv_char.
@@ -872,9 +890,15 @@
                                     RAISING   cx_sy_conversion_no_number
                                               lcx_lisp_no_number.
 
+      CLASS-METHODS throw_no_number IMPORTING message TYPE string
+                                    RAISING   lcx_lisp_no_number.
+
       CLASS-METHODS throw IMPORTING message TYPE string
                                     area TYPE string DEFAULT c_area_eval
                           RAISING   lcx_lisp_exception.
+
+      CLASS-METHODS radix_throw IMPORTING message TYPE string
+                                RAISING   lcx_lisp_radix.
 
       METHODS assert_last_param  RAISING lcx_lisp_exception.
 
@@ -985,6 +1009,11 @@
                                   PREFERRED PARAMETER operation
                       RETURNING VALUE(rv_real) TYPE tv_real
                       RAISING   lcx_lisp_exception.
+
+      METHODS number_to_string IMPORTING iv_radix TYPE tv_int DEFAULT 10
+                               RETURNING VALUE(str) TYPE string
+                               RAISING   lcx_lisp_exception.
+
       METHODS to_exact RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
                        RAISING   lcx_lisp_exception.
       METHODS to_inexact RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
@@ -1760,7 +1789,7 @@
                             RETURNING VALUE(ro_turtle) TYPE REF TO lcl_lisp_turtle.
 
       CLASS-METHODS throw_radix IMPORTING message TYPE string
-                                RAISING   lcx_lisp_exception.
+                                RAISING   lcx_lisp_radix.
 
       CLASS-METHODS values IMPORTING io_elem        TYPE REF TO lcl_lisp DEFAULT lcl_lisp=>nil
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_values.
@@ -1772,8 +1801,7 @@
     PRIVATE SECTION.
       CONSTANTS:
         c_dot           TYPE tv_char VALUE c_lisp_dot,
-        c_at            TYPE tv_char VALUE c_lisp_splicing,
-        c_explicit_sign TYPE string VALUE '+-'.
+        c_at            TYPE tv_char VALUE c_lisp_splicing.
 
       CLASS-METHODS match_initial IMPORTING initial      TYPE tv_char
                                   RETURNING VALUE(match) TYPE tv_flag.
@@ -2513,6 +2541,7 @@
         c_esc_semi_colon TYPE tv_char VALUE c_semi_colon,
         c_esc_vline      TYPE tv_char VALUE c_vertical_line.
 
+      CLASS-DATA mv_whitespace TYPE char07 READ-ONLY. " Case sensitive
       CLASS-DATA gv_line_ending TYPE char04.
 
       CLASS-METHODS:
@@ -2574,26 +2603,31 @@
                              RAISING lcx_lisp_exception.
 
       METHODS read_number IMPORTING iv_peek_char TYPE tv_char
+                                    iv_radix TYPE tv_int DEFAULT 10
                           EXPORTING element TYPE REF TO lcl_lisp
                           RETURNING VALUE(found) TYPE tv_flag
                           RAISING lcx_lisp_exception cx_sy_conversion_no_number.
 
-      METHODS radix_number IMPORTING iv_peek_char TYPE tv_char
-                                     iv_exact TYPE tv_flag
+      METHODS radix_number IMPORTING iv_exact TYPE tv_flag OPTIONAL
+                                     iv_radix TYPE tv_int
                            RETURNING VALUE(element) TYPE REF TO lcl_lisp
                            RAISING lcx_lisp_exception cx_sy_conversion_no_number.
-    PROTECTED SECTION.
-      DATA mi_stream TYPE REF TO lif_stream.
 
+      METHODS read_complex10 EXPORTING element TYPE REF TO lcl_lisp
+                             RAISING lcx_lisp_exception cx_sy_conversion_no_number.
+
+      CLASS-METHODS char_to_radix IMPORTING iv_char TYPE tv_char
+                                  CHANGING cv_radix TYPE tv_int.
+    PROTECTED SECTION.
       TYPES tv_text16 TYPE c LENGTH 16.
 
       CLASS-DATA mv_open_paren TYPE char03.
 
       CLASS-DATA mv_newline TYPE tv_char.
-      CLASS-DATA mv_whitespace TYPE char07. " Case sensitive
       CLASS-DATA mv_space_or_tab TYPE char03.
       CLASS-DATA mv_delimiters TYPE tv_text16. " Case sensitive
 
+      DATA mi_stream TYPE REF TO lif_stream.
       DATA mv_fold_case TYPE tv_flag.
 
       METHODS bookmark.
@@ -2617,6 +2651,9 @@
 
       METHODS read_exact RETURNING VALUE(rv_exact) TYPE tv_flag
                          RAISING lcx_lisp_exception.
+
+      METHODS exactness RETURNING VALUE(rv_exact) TYPE tv_flag
+                        RAISING lcx_lisp_exception.
 
       METHODS match_token RETURNING VALUE(element) TYPE REF TO lcl_lisp
                           RAISING   lcx_lisp_exception.
@@ -3021,50 +3058,13 @@
 
     ENDMETHOD.
 
-    METHOD radix_number.
-      DATA lx_no_number TYPE REF TO cx_sy_conversion_no_number.
-      DATA sval TYPE string.
-
-      IF iv_peek_char CA c_pattern_radix.
-        next_char( ).        " skip #
-        next_char( ).        " skip
-        sval = read_atom( ).
-
-        CASE to_lower( iv_peek_char ).
-          WHEN c_number_octal+0(1).     "#o (octal)
-            element = lcl_lisp_new=>octal( value = sval
-                                           iv_exact = iv_exact ).
-
-          WHEN c_number_binary+0(1).    "#b (binary)
-            element = lcl_lisp_new=>binary( value = sval
-                                            iv_exact = iv_exact ).
-
-          WHEN c_number_decimal+0(1).   "#d (decimal)
-            element = lcl_lisp_new=>complex_number( value = sval
-                                                    iv_exact = iv_exact ).
-
-          WHEN c_number_hex+0(1).       "#x (hexadecimal)
-            element = lcl_lisp_new=>hex( value = sval
-                                         iv_exact = iv_exact ).
-        ENDCASE.
-      ELSE.
-        sval = read_atom( ).
-        CREATE OBJECT lx_no_number
-          EXPORTING
-            textid = '995DB739AB5CE919E10000000A11447B'
-            value  = sval.   " The argument #D cannot be interpreted as a number
-        throw( lx_no_number->get_text( ) ).
-      ENDIF.
-
-    ENDMETHOD.
-
     METHOD read_exact.
       next_char( ).        " skip #
 
       CASE mi_stream->state-char.
-        WHEN c_number_exact+0(1) OR c_number_exact+1(1).   "#e (exact)
+        WHEN c_number_exact+0(1) OR c_number_exact+1(1).     "#e or #E (exact)
           rv_exact = abap_true.
-        WHEN c_number_inexact+0(1) OR c_number_inexact+1(1). "#i (inexact)
+        WHEN c_number_inexact+0(1) OR c_number_inexact+1(1). "#i or #I (inexact)
           rv_exact = abap_false.
         WHEN OTHERS.
           throw( `Invalid exactness token in number prefix` ).
@@ -3073,7 +3073,68 @@
       next_char( ).        " skip exactness i/e
     ENDMETHOD.
 
-    METHOD read_number.
+    METHOD exactness.
+      " <exactness> -> <empty> | #i | #I | #e | #E
+      IF mi_stream->state-char EQ c_lisp_hash.
+        rv_exact = read_exact(  ).
+      ELSE.
+        rv_exact = abap_true.
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD read_complex10.
+      throw( `read_complex10( ) not implemented yet` ).
+      " <num 10> -> <prefix 10> <complex 10>
+      " <prefix 10> -> <radix 10> <exactness> | <exactness> <radix 10>
+
+      " <radix 10> -> <empty> | #d | #D
+    ENDMETHOD.
+
+    METHOD char_to_radix.
+      CASE to_lower( iv_char ).
+        WHEN c_number_octal+0(1).     "#o (octal)
+          cv_radix = 8.
+
+        WHEN c_number_binary+0(1).    "#b (binary)
+          cv_radix = 2.
+
+        WHEN c_number_decimal+0(1).   "#d (decimal)
+          cv_radix = 10.
+
+        WHEN c_number_hex+0(1).       "#x (hexadecimal)
+          cv_radix = 16.
+      ENDCASE.
+    ENDMETHOD.
+
+    METHOD radix_number.
+      DATA lv_exact TYPE tv_flag.
+
+      DATA(sval) = read_atom( ).
+      IF iv_exact IS SUPPLIED.
+        lv_exact = iv_exact.
+      ELSE.
+        lv_exact = xsdbool( sval NA c_pattern_inexact ).
+      ENDIF.
+
+      CASE iv_radix.
+        WHEN 8.  " octal
+          element = lcl_lisp_new=>octal( value = sval
+                                         iv_exact = lv_exact ).
+        WHEN 2.    " binary
+          element = lcl_lisp_new=>binary( value = sval
+                                          iv_exact = lv_exact ).
+        WHEN 10.   " decimal
+          element = lcl_lisp_new=>complex_number( value = sval
+                                                  iv_exact = lv_exact ).
+        WHEN 16.    " hexadecimal
+          element = lcl_lisp_new=>hex( value = sval
+                                       iv_exact = lv_exact ).
+        WHEN OTHERS.
+          lcl_lisp=>radix_throw( |Invalid radix ({ iv_radix }) must be 2, 8, 10 or 16 in string->number| ).
+      ENDCASE.
+  ENDMETHOD.
+
+  METHOD read_number.
 *     Notation for numbers #e (exact) #i (inexact) #b (binary) #o (octal) #d (decimal) #x (hexadecimal)
 *     further, instead of exp:  s (short), f (single), d (double), l (long)
 *     positive infinity, negative infinity -inf / -inf.0, NaN +nan.0, positive zero, negative zero
@@ -3086,64 +3147,58 @@
       " <radix 8> -> #o
       " <radix 10> -> <empty> | #d
       " <radix 16> -> #x
-      DATA lv_exact TYPE tv_flag.
-      DATA sval TYPE string.
-      DATA lx_error TYPE REF TO cx_root.
+    DATA lv_exact TYPE tv_flag.
+    DATA lv_peek_char TYPE tv_char.
+    DATA lv_radix TYPE tv_int.
 
-      found = abap_true.
+    found = abap_true.
+    lv_radix = iv_radix.
 
-      IF iv_peek_char CA c_pattern_exactness.
-        " <prefix R> -> <exactness> <radix R>
-        lv_exact = read_exact( ).
+    IF iv_peek_char CA c_pattern_exactness.        " <prefix R> -> <exactness> <radix R>
+      lv_exact = read_exact( ).
+      lv_peek_char = peek_char( ).
 
-        CASE mi_stream->state-char.
-          WHEN c_lisp_hash.
-            element = radix_number( iv_peek_char = peek_char( )
-                                    iv_exact = lv_exact ).
-          WHEN OTHERS.
-            TRY.
-                sval = read_atom(  ).
-                element = lcl_lisp_new=>complex_number( value = sval
-                                                      iv_exact = lv_exact ).
-              CATCH cx_sy_conversion_no_number INTO lx_error.
-                throw( lx_error->get_text( ) ).
-            ENDTRY.
-        ENDCASE.
+      CASE mi_stream->state-char.
+        WHEN c_lisp_hash.
+          IF lv_peek_char CA c_pattern_radix.
+            next_char( ).        " skip #
+            next_char( ).        " skip
+            char_to_radix( EXPORTING iv_char = lv_peek_char
+                           CHANGING cv_radix = lv_radix ).
 
-      ELSEIF iv_peek_char CA c_pattern_radix.
-        " Now check <prefix R> -> <radix R> <exactness>
+            element = radix_number( iv_exact = lv_exact
+                                    iv_radix = lv_radix ).
+          ELSE.
+            lcl_lisp=>throw_no_number( read_atom( ) ).
+          ENDIF.
 
-        next_char( ).        " skip #
-        next_char( ).        " skip radix
-        IF mi_stream->state-char EQ c_lisp_hash.
-          lv_exact = read_exact(  ).
-        ELSE.
-          lv_exact = abap_true.
-        ENDIF.
-        sval = read_atom( ).
-
-        CASE to_lower( iv_peek_char ).
-          WHEN c_number_octal+0(1).     "#o (octal)
-            element = lcl_lisp_new=>octal( value = sval
-                                           iv_exact = lv_exact ).
-
-          WHEN c_number_binary+0(1).    "#b (binary)
-            element = lcl_lisp_new=>binary( value = sval
-                                            iv_exact = lv_exact ).
-
-          WHEN c_number_decimal+0(1).   "#d (decimal)
-            element = lcl_lisp_new=>complex_number( value = sval
+        WHEN OTHERS.
+          TRY.
+              element = lcl_lisp_new=>complex_number( value = read_atom(  )
                                                     iv_exact = lv_exact ).
+            CATCH cx_sy_conversion_no_number INTO DATA(lx_error).
+              throw( lx_error->get_text( ) ).
+          ENDTRY.
+      ENDCASE.
 
-          WHEN c_number_hex+0(1).       "#x (hexadecimal)
-            element = lcl_lisp_new=>hex( value = sval
-                                         iv_exact = lv_exact ).
-        ENDCASE.
-      ELSE.
-        found = abap_false.
-      ENDIF.
+    ELSEIF iv_peek_char CA c_pattern_radix.        " Now check <prefix R> -> <radix R> <exactness>
+      next_char( ).        " skip #
+      next_char( ).        " skip radix
 
-    ENDMETHOD.
+      lv_exact = exactness( ).
+
+      char_to_radix( EXPORTING iv_char = iv_peek_char
+                     CHANGING cv_radix = lv_radix ).
+      element = radix_number( iv_exact = lv_exact
+                              iv_radix = lv_radix ).
+    ELSEIF iv_peek_char EQ space.
+      element = radix_number( iv_radix = lv_radix ).
+    ELSE.
+      found = abap_false.
+      RETURN.
+    ENDIF.
+
+  ENDMETHOD.
 
     METHOD parse_token.
       " <datum> -> <simple datum> | <compound datum> | <label> = <datum> | <label> #
@@ -4003,7 +4058,7 @@
       DATA mt_zero TYPE tt_digit.
 
       METHODS string_to_number IMPORTING iv_text       TYPE string
-                                         iv_radix      TYPE i DEFAULT 10
+                                         iv_radix      TYPE tv_int DEFAULT 10
                                RETURNING VALUE(result) TYPE REF TO lcl_lisp
                                RAISING   lcx_lisp_exception.
 
@@ -5546,7 +5601,9 @@
                         "result = bind_symbol( element = lr_tail
                         "                      environment = cont-env
                         "                      iv_category = tv_category_macro ).
-
+                       result = lcl_lisp_new=>lambda( io_car = lcl_lisp=>nil        " List of parameters
+                                                      io_cdr = lr_tail->car         " Body
+                                                      io_env = cont-env ).
 *(define-macro (delay exp)
 *    (define (make-promise proc)
 *      (let ((result-ready? #f)
@@ -5562,10 +5619,12 @@
 *               result)))))))
 *    `(,make-promise (lambda () ,exp)))
 
-                        throw( |delay not implemented yet| ).
+                        "throw( |delay not implemented yet| ).
 
                         WHEN 'delay-force'.
-                          throw( |delay-force not implemented yet| ).
+                          cont-elem = lr_tail.
+                          "throw( |delay-force not implemented yet| ).
+                          _tail_expression cont-elem.
 
                         WHEN 'call-with-values'.
                           " we are trying to: (define (call-with-values producer consumer) (apply consumer (producer)))
@@ -7580,7 +7639,22 @@
                     "res-real_part-subtype = type_real.
                     IF res-real_part-infnan EQ abap_false.
                       res-real_part-real = res-real_part-real * lo_int->int.
-                    ENDIF.
+                    ELSE.
+                      CASE res-real_part-ref.
+                        WHEN lcl_lisp_number=>inf.
+                          IF lo_int->int EQ 0.
+                            res-real_part-ref = lcl_lisp_number=>nan.
+                            EXIT.
+                          ENDIF.
+                        WHEN lcl_lisp_number=>neg_inf.
+                          IF lo_int->int EQ 0.
+                            res-real_part-ref = lcl_lisp_number=>neg_nan.
+                            EXIT.
+                          ENDIF.
+                        WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
+                          EXIT.
+                     ENDCASE.
+                   ENDIF.
 
                   WHEN OTHERS.
                     res-real_part-subtype = type_integer.
@@ -7615,7 +7689,22 @@
                     "res-real_part-subtype = type_real.
                     IF res-real_part-infnan EQ abap_false.
                       res-real_part-real = res-real_part-real * lo_rat->int / lo_rat->denominator.
-                    ENDIF.
+                    ELSE.
+                      CASE res-real_part-ref.
+                        WHEN lcl_lisp_number=>inf.
+                          IF lo_int->int EQ 0.
+                            res-real_part-ref = lcl_lisp_number=>nan.
+                            EXIT.
+                          ENDIF.
+                        WHEN lcl_lisp_number=>neg_inf.
+                          IF lo_int->int EQ 0.
+                            res-real_part-ref = lcl_lisp_number=>neg_nan.
+                            EXIT.
+                          ENDIF.
+                        WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
+                          EXIT.
+                     ENDCASE.
+                   ENDIF.
 
                   WHEN OTHERS.
                     res-real_part-subtype = type_rational.
@@ -7633,8 +7722,16 @@
                     IF lo_real->infnan EQ abap_false.
                       res-real_part-real = res-real_part-int * lo_real->real.
                     ELSE.
-                      res-real_part-ref = lo_real.
                       res-real_part-infnan = abap_true.
+                      res-real_part-ref = lo_real.
+                      IF res-real_part-int EQ 0.
+                        CASE lo_real.
+                          WHEN lcl_lisp_number=>inf.
+                            res-real_part-ref = lcl_lisp_number=>nan.
+                          WHEN lcl_lisp_number=>neg_inf.
+                            res-real_part-ref = lcl_lisp_number=>neg_nan.
+                        ENDCASE.
+                      ENDIF.
                     ENDIF.
 
                   WHEN type_rational.
@@ -7644,6 +7741,14 @@
                     ELSE.
                       res-real_part-ref = lo_real.
                       res-real_part-infnan = abap_true.
+                      IF res-real_part-nummer EQ 0.
+                        CASE lo_real.
+                          WHEN lcl_lisp_number=>inf.
+                            res-real_part-ref = lcl_lisp_number=>nan.
+                          WHEN lcl_lisp_number=>neg_inf.
+                            res-real_part-ref = lcl_lisp_number=>neg_nan.
+                        ENDCASE.
+                      ENDIF.
                     ENDIF.
 
                   WHEN type_real.
@@ -7652,14 +7757,53 @@
                       IF res-real_part-infnan EQ abap_false.
                         res-real_part-real = res-real_part-real * lo_real->real.
                       ELSE.
-                        " inf / nan vs. finite number -> no change
+                        " inf / nan * finite number
+                        CASE res-real_part-ref.
+                            WHEN lcl_lisp_number=>inf.
+                              IF lo_real->real EQ 0.
+                                res-real_part-ref = lcl_lisp_number=>nan.
+                                EXIT.
+                              ENDIF.
+                            WHEN lcl_lisp_number=>neg_inf.
+                              IF lo_real->real EQ 0.
+                                res-real_part-ref = lcl_lisp_number=>neg_nan.
+                                EXIT.
+                              ENDIF.
+                            WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
+                              EXIT.
+                        ENDCASE.
                       ENDIF.
                     ELSE.
                       IF res-real_part-infnan EQ abap_false.
-                        res-real_part-ref = lo_real.
                         res-real_part-infnan = abap_true.
+                        res-real_part-ref = lo_real.
+                        IF res-real_part-real EQ 0.
+                          CASE lo_real.
+                            WHEN lcl_lisp_number=>inf.
+                              res-real_part-ref = lcl_lisp_number=>nan.
+                              EXIT.
+                            WHEN lcl_lisp_number=>neg_inf.
+                              res-real_part-ref = lcl_lisp_number=>neg_nan.
+                              EXIT.
+                            WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
+                              res-real_part-ref = lo_real.
+                              EXIT.
+                          ENDCASE.
+                        ENDIF.
                       ELSE.
                         " inf / nan vs. inf / nan -> not defined, keep value
+                        CASE lo_real.
+                          WHEN lcl_lisp_number=>neg_inf.
+                            CASE res-real_part-ref.
+                              WHEN lcl_lisp_number=>neg_inf.
+                                res-real_part-ref = lcl_lisp_number=>inf.
+                              WHEN lcl_lisp_number=>inf.
+                                res-real_part-ref = lcl_lisp_number=>neg_inf.
+                            ENDCASE.
+                          WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
+                            res-real_part-ref = lo_real.
+                            EXIT.
+                        ENDCASE.
                       ENDIF.
                     ENDIF.
 
@@ -8442,7 +8586,7 @@
         " using the parameter values and exception handler of the call to force which first requested its value.
 
         " IF promise IS NOT a promise, it may be returned unchanged.
-          throw( |force not implemented yet| ).
+        result = list. " evaluated param           throw( |force not implemented yet| ).
 
       ENDMETHOD.
 
@@ -8932,14 +9076,18 @@
       ENDMETHOD.                    "proc_tan
 
       METHOD proc_asin.
+        "sin^-1 z = -i log(iz + sqrt(1 - z^2))
         _trigonometric asin '[asin]'.
       ENDMETHOD.                    "proc_asin
 
       METHOD proc_acos.
+         "cos^-1 z = pi/2 - sin^-1 z
         _trigonometric acos '[acos]'.
       ENDMETHOD.                    "proc_acos
 
       METHOD proc_atan.
+        "tan^-1 z = (log(1+iz) - log(1-iz))/(2i)
+        " (atan y x) cf. table page 38 in r7rs
         DATA carry TYPE f.
         DATA x TYPE tv_real.
         DATA lo_y TYPE REF TO lcl_lisp_number.
@@ -9092,6 +9240,8 @@
 
       METHOD proc_log.
         "(log z1 z2)
+        " log 0.0  => -inf.0
+        " log -0.0 => -inf.0 + pi * i
         DATA carry TYPE tv_real.
         DATA z2 TYPE tv_real.
         DATA base TYPE tv_real VALUE 1.
@@ -9586,116 +9736,44 @@
       ENDMETHOD.
 
       METHOD proc_num_to_string.
-        DATA lv_radix TYPE i VALUE 10.
-        DATA lv_radix_error TYPE tv_flag VALUE abap_false.
-        DATA lv_text TYPE string.
-        DATA lv_int TYPE tv_int.
-        DATA lv_real TYPE tv_real.
-        DATA lv_digit TYPE i.
+        DATA lv_radix TYPE tv_int VALUE 10.
 
         _validate list.
-        "_validate_number list->car `number->string`.
-        _validate list->car.
-*     Optional radix
+        _validate_number list->car `number->string`.
+        " Optional radix
         _validate list->cdr.
         IF list->cdr NE nil.
           _validate_integer list->cdr->car `number->string`.
           _to_integer list->cdr->car lv_radix.
         ENDIF.
 
-        CASE list->car->type.
-          WHEN type_integer.
-            _to_integer list->car lv_int.
-            CASE lv_radix.
-              WHEN 10.
-                lv_text = lv_int.
-                result = lcl_lisp_new=>string( condense( lv_text ) ).
-
-              WHEN 2 OR 8 OR 16.
-                CLEAR lv_text.
-                WHILE lv_int GT 0.
-                  lv_digit = lv_int MOD lv_radix.
-                  lv_int = lv_int DIV lv_radix.
-                  lv_text = c_hex_digits+lv_digit(1) && lv_text.
-                ENDWHILE.
-                result = lcl_lisp_new=>string( lv_text ).
-
-              WHEN OTHERS.
-                lv_radix_error = abap_true.
-            ENDCASE.
-
-          WHEN type_real.
-            lv_radix_error = xsdbool( lv_radix NE 10 ).
-            _to_real list->car lv_real.
-            lv_text = lv_real.
-            result = lcl_lisp_new=>string( condense( lv_text ) ).
-
-          WHEN type_rational.
-            lv_radix_error = xsdbool( lv_radix NE 10 ).
-            lv_text = list->car->to_string( ).
-            result = lcl_lisp_new=>string( lv_text ).
-
-          WHEN OTHERS.
-            throw( |{ list->car->to_string( ) } is not a number in number->string| ) ##NO_TEXT.
-        ENDCASE.
-        IF lv_radix_error EQ abap_true.
-          throw( |{ list->car->to_string( ) } radix { lv_radix } not supported in number->string| ) ##NO_TEXT.
-        ENDIF.
-
+        result = lcl_lisp_new=>string( CAST lcl_lisp_number( list->car )->number_to_string( lv_radix ) ).
       ENDMETHOD.
 
       METHOD string_to_number.
-        DATA lv_radix_error TYPE tv_flag VALUE abap_false.
-        DATA lv_text TYPE string.
-        DATA lv_radix TYPE i.
-        DATA lv_exact TYPE tv_flag.
-
         result = false.
         CHECK iv_text NE space.
-        lv_exact = xsdbool( iv_text CN c_pattern_inexact ).
-        lv_text = iv_text.
-        lv_radix = iv_radix.
-        IF numofchar( lv_text ) GT 2.
-          CASE lv_text+0(2).
-            WHEN '#o'.
-              lv_text = lv_text+2.
-              lv_radix = 8.
-            WHEN '#b'.
-              lv_text = lv_text+2.
-              lv_radix = 2.
-            WHEN '#d'.
-              lv_text = lv_text+2.
-              lv_radix = 10.
-            WHEN '#x'.
-              lv_text = lv_text+2.
-              lv_radix = 16.
-
-          ENDCASE.
-        ENDIF.
         TRY.
-            CASE lv_radix.
-              WHEN 2.
-                result = lcl_lisp_new=>binary( value = lv_text
-                                               iv_exact = lv_exact ).
-              WHEN 8.
-                result = lcl_lisp_new=>octal( value = lv_text
-                                              iv_exact = lv_exact ).
-              WHEN 10.
-                result = lcl_lisp_new=>complex_number( value = lv_text ).
-              WHEN 16.
-                result = lcl_lisp_new=>hex( value = lv_text
-                                            iv_exact = lv_exact ).
-              WHEN OTHERS.
-                lv_radix_error = abap_true.
-            ENDCASE.
-          CATCH lcx_lisp_exception cx_sy_conversion_error ##NO_HANDLER.
+            DATA(li_string_stream) = NEW lcl_string_stream( iv_text ).
+            DATA(lo_stream) = NEW lcl_stream( li_string_stream ).
+            IF lo_stream->read_number( EXPORTING iv_peek_char = space
+                                                 iv_radix = iv_radix
+                                       IMPORTING element = result ).
+              lo_stream->skip_while( lcl_stream=>mv_whitespace ).
+              IF li_string_stream->state-ready = abap_true.
+                result = false.
+              ENDIF.
+            ENDIF.
+          CATCH lcx_lisp_radix INTO DATA(lx_radix).
+            " Repeat: generate error
+            RAISE EXCEPTION lx_radix.
+          CATCH cx_sy_conversion_error lcx_lisp_exception.
+            result = false.
         ENDTRY.
-        CHECK lv_radix_error EQ abap_true.
-        throw( |radix ({ iv_radix }) must be 2, 8, 10 or 16 in string->number| ).
       ENDMETHOD.
 
       METHOD proc_string_to_num.
-        DATA lv_radix TYPE i VALUE 10.
+        DATA lv_radix TYPE tv_int VALUE 10.
 
         _validate list.
         _validate_string list->car `string->number`.
@@ -13010,57 +13088,11 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
             ENDIF.
         ENDCASE.
 
-        " A numerical constant can be specified to be either exact or inexact by a prefix #e for exact and #i for inexact.
-        " An exactness prefix can appear before or after any radix prefix that is used.
-        " If the written representation of a number has no exactness prefix, the constant is inexact if it contains a
-        " decimal point or an exponent. Otherwise, it is exact.
-
-      WHEN type_integer.
-        DATA lv_real TYPE tv_real.
-        DATA lo_int TYPE REF TO lcl_lisp_integer.
-
-        lo_int ?= me.
-        lv_real = lo_int->int.
-        str = lv_real.
-        str = condense( str ).
-
-        IF lo_int->exact EQ abap_false AND str CN `.`.
-          str = str && `.0`.
-        ENDIF.
-
-      WHEN type_real.
-        DATA lo_real TYPE REF TO lcl_lisp_real.
-        lo_real ?= me.
-
-        IF lo_real->infnan EQ abap_false.
-          DATA(lv_float) = lo_real->real.
-          str = condense( CAST lcl_lisp_real( me )->real ). " condense( CONV #( lo_real->real ) ).
-
-          IF lo_real->exact EQ abap_false AND frac( lv_float ) EQ 0 AND str CN c_pattern_inexact.
-            str = str && `.0`.
-          ENDIF.
-        ELSE.
-          str = to_lower( lo_real->value ).
-        ENDIF.
-
-      WHEN type_rational.
-        DATA(lo_rat) = CAST lcl_lisp_rational( me ).
-        IF lo_rat->exact EQ abap_false.
-          lv_float = lo_rat->to_real( ).
-          str = lv_float.
-          str = condense( str ).
-          IF strlen( str ) GT 5.
-            str = |#i{ lo_rat->int }/{ lo_rat->denominator }|.
-          ELSEIF frac( lv_float ) EQ 0 AND str CN c_pattern_inexact.
-            str = str && `.0`.
-          ENDIF.
-        ELSE.
-          str = str && |{ lo_rat->int }/{ lo_rat->denominator }|.
-        ENDIF.
-
-
-*        WHEN type_complex.
-*          str = ?.
+      WHEN type_integer
+        OR type_rational
+        OR type_real
+        OR type_complex.
+        str = CAST lcl_lisp_number( me )->number_to_string( iv_radix = 10 ).
 
       WHEN type_native.
         str = |<native> { to_lower( value ) }|.
@@ -13132,6 +13164,12 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
         area    = area.
   ENDMETHOD.
 
+  METHOD radix_throw.
+    RAISE EXCEPTION TYPE lcx_lisp_radix
+      EXPORTING
+        message = message.
+  ENDMETHOD.
+
   METHOD raise.
     throw( context && to_string( ) && message ).
   ENDMETHOD.
@@ -13149,6 +13187,16 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
     RAISE EXCEPTION TYPE cx_sy_conversion_no_number
       EXPORTING
         value = value.
+  ENDMETHOD.
+
+  METHOD throw_no_number.
+    DATA lx_no_number TYPE REF TO cx_sy_conversion_no_number.
+
+    CREATE OBJECT lx_no_number
+      EXPORTING
+        textid = '995DB739AB5CE919E10000000A11447B'
+        value  = message.   " The argument #D cannot be interpreted as a number
+    throw( lx_no_number->get_text( ) ).
   ENDMETHOD.
 
   METHOD assert_last_param.
@@ -13964,10 +14012,11 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
 
             TRY.
                 lv_nummer_str = value.
-                IF NOT contains_any_of( val = lv_nummer_str sub = c_pattern_inexact ) OR iv_exact EQ abap_true.
+                lv_exact = xsdbool( lv_nummer_str NA c_pattern_inexact OR iv_exact EQ abap_true ).
+                IF lv_exact EQ abap_true.
                   MOVE EXACT value TO lv_int.
                   ro_elem = integer( value = lv_int
-                                     iv_exact = abap_true ).
+                                     iv_exact = lv_exact ).
                   RETURN.
                 ENDIF.
               CATCH cx_sy_conversion_error.
@@ -13975,14 +14024,14 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
                     IF iv_exact EQ abap_true.
                       MOVE EXACT lv_real TO lv_int.
                       ro_elem = integer( value = lv_int
-                                         iv_exact = abap_true ).
+                                         iv_exact = iv_exact ).
                       RETURN.
                     ENDIF.
                   CATCH cx_sy_conversion_error ##NO_HANDLER.
                 ENDTRY.
             ENDTRY.
 
-            IF contains_any_of( val = lv_nummer_str sub = c_pattern_inexact ) AND iv_exact EQ abap_true.
+            IF lv_nummer_str CA c_pattern_inexact AND iv_exact EQ abap_true.
               DATA lv_int_str TYPE string.
               DATA lv_dec_str TYPE string.
               SPLIT lv_nummer_str AT c_lisp_dot INTO lv_int_str lv_dec_str.
@@ -14400,8 +14449,7 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
   ENDMETHOD.
 
   METHOD throw_radix.
-    lcl_lisp=>throw( message = message
-                     area = c_area_radix ).
+    lcl_lisp=>radix_throw(  message ).
   ENDMETHOD.
 
   ENDCLASS.
@@ -14956,6 +15004,94 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
         raise( `not a real` ).
     ENDCASE.
   ENDMETHOD.
+
+  METHOD number_to_string.
+    " A numerical constant can be specified to be either exact or inexact by a prefix #e for exact and #i for inexact.
+    " An exactness prefix can appear before or after any radix prefix that is used.
+    " If the written representation of a number has no exactness prefix, the constant is inexact if it contains a
+    " decimal point or an exponent. Otherwise, it is exact.
+    DATA lv_text TYPE string.
+    DATA lv_digit TYPE i.
+    DATA lv_real TYPE tv_real.
+    DATA lv_radix_error TYPE tv_flag VALUE abap_false.
+
+    CASE type.
+      WHEN type_integer.
+        DATA(lo_int) = CAST lcl_lisp_integer( me ).
+
+        CASE iv_radix.
+          WHEN 10.
+            lv_real = lo_int->int.
+            str = lv_real.
+            str = condense( str ).
+
+            IF lo_int->exact EQ abap_false AND str CN `.`.
+              str = str && `.0`.
+            ENDIF.
+
+          WHEN 2 OR 8 OR 16.
+            DATA(lv_int) = lo_int->int.
+            WHILE lv_int GT 0.
+              lv_digit = lv_int MOD iv_radix.
+              lv_int = lv_int DIV iv_radix.
+              str = c_hex_digits+lv_digit(1) && str.
+            ENDWHILE.
+
+          WHEN OTHERS.
+            lv_radix_error = abap_true.
+        ENDCASE.
+
+      WHEN type_real.
+        lv_radix_error = xsdbool( iv_radix NE 10 ).
+        DATA(lo_real) = CAST lcl_lisp_real( me ).
+        IF lo_real->infnan EQ abap_false.
+          DATA(lv_float) = lo_real->real.
+          str = condense( CAST lcl_lisp_real( lo_real )->real ). " condense( CONV #( lo_real->real ) ).
+
+          IF lo_real->exact EQ abap_false AND frac( lv_float ) EQ 0 AND str NA c_pattern_inexact.
+            str = str && `.0`.
+          ENDIF.
+        ELSE.
+          str = to_lower( lo_real->value ).
+        ENDIF.
+
+      WHEN type_rational.
+        lv_radix_error = xsdbool( iv_radix NE 10 ).
+        DATA(lo_rat) = CAST lcl_lisp_rational( me ).
+        IF lo_rat->exact EQ abap_false.
+          lv_real = lo_rat->to_real( ).
+          str = lv_real.
+          str = condense( str ).
+
+          IF strlen( str ) GT 5.
+            str = |#i{ lo_rat->int }/{ lo_rat->denominator }|.
+          ELSEIF frac( lv_float ) EQ 0 AND str NA c_pattern_inexact.
+            str = str && `.0`.
+          ENDIF.
+        ELSE.
+          str = str && |{ lo_rat->int }/{ lo_rat->denominator }|.
+        ENDIF.
+
+      WHEN type_complex.
+        DATA(lo_z) = CAST lcl_lisp_complex( me ).
+        str = lo_z->zreal->number_to_string( iv_radix ).
+        DATA(str_imag) = lo_z->zimag->number_to_string( iv_radix ).
+        IF strlen( str_imag ) GT 0 AND str_imag+0(1) NA c_explicit_sign.
+          str_imag = c_plus_sign && str_imag.
+        ENDIF.
+        str = str && str_imag && c_imaginary_marker.
+        str = to_lower( str ).
+
+      WHEN OTHERS.
+        raise_nan( `number->string` ).
+    ENDCASE.
+    str = condense( str ).
+    IF lv_radix_error EQ abap_true.
+      throw( |Radix { iv_radix } not supported in number->string| ) ##NO_TEXT.
+    ENDIF.
+
+  ENDMETHOD.
+
 
   METHOD to_inexact.
     IF exact EQ abap_true.

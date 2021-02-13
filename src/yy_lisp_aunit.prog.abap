@@ -4056,7 +4056,7 @@
 
      METHOD string_to_num_radix_error.
        scheme( code = |(string->number "100" 12)|
-               expected = 'Eval: radix (12) must be 2, 8, 10 or 16 in string->number' ).
+               expected = 'Radix: Invalid radix (12) must be 2, 8, 10 or 16 in string->number' ).
      ENDMETHOD.                    "string_to_num_radix_error
 
      METHOD number_to_string_1.
