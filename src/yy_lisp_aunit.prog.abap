@@ -2786,7 +2786,7 @@
        scheme( code = '(/ 0.0 0)'
                expected = '+nan.0' ).
        scheme( code = '(/ #e0 #e0)'
-               expected = '1' ).
+               expected = '+nan.0' ).
      ENDMETHOD.
 
      METHOD math_division_9.

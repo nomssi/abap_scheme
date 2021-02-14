@@ -868,7 +868,7 @@
       METHODS is_procedure RETURNING VALUE(result) TYPE REF TO lcl_lisp.
 
       METHODS is_number RETURNING VALUE(result) TYPE REF TO lcl_lisp.
-      METHODS is_nan RETURNING VALUE(result) TYPE REF TO lcl_lisp
+      METHODS is_nan RETURNING VALUE(flag) TYPE tv_flag
                      RAISING   lcx_lisp_exception.
 
       METHODS error_not_a_pair IMPORTING context TYPE string DEFAULT space
@@ -1647,7 +1647,7 @@
                           RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_complex
                           RAISING   lcx_lisp_exception.
 
-      CLASS-METHODS complex_number IMPORTING value          TYPE any
+      CLASS-METHODS decimal_number IMPORTING value          TYPE any
                                              iv_exact       TYPE tv_flag OPTIONAL
                                    RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_number
                                    RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
@@ -1665,11 +1665,11 @@
                                 RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp_number
                                 RAISING   lcx_lisp_exception.
 
-      CLASS-METHODS radix_number IMPORTING iv_radix TYPE tv_int
-                                           iv_exact TYPE tv_flag
-                                           iv_atom TYPE string
-                                 RETURNING VALUE(element) TYPE REF TO lcl_lisp
-                                 RAISING lcx_lisp_exception cx_sy_conversion_no_number.
+      CLASS-METHODS complex_number IMPORTING iv_radix TYPE tv_int
+                                             iv_exact TYPE tv_flag
+                                             iv_atom TYPE string
+                                   RETURNING VALUE(element) TYPE REF TO lcl_lisp
+                                   RAISING lcx_lisp_exception cx_sy_conversion_no_number.
 
       CLASS-METHODS string IMPORTING value          TYPE any
                                      iv_mutable     TYPE tv_flag DEFAULT abap_true
@@ -1783,6 +1783,12 @@
                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                            RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
+
+      CLASS-METHODS radix_number IMPORTING iv_radix TYPE tv_int
+                                           iv_exact TYPE tv_flag
+                                           iv_atom TYPE string
+                                 RETURNING VALUE(element) TYPE REF TO lcl_lisp
+                                 RAISING lcx_lisp_exception cx_sy_conversion_no_number.
 
       CLASS-METHODS binary_integer IMPORTING value         TYPE csequence
                                    RETURNING VALUE(rv_int) TYPE tv_int
@@ -3059,6 +3065,7 @@
     ENDMETHOD.
 
     METHOD read_exact.
+      " <exactness> -> <empty> | #i | #e
       next_char( ).        " skip #
 
       CASE mi_stream->state-char.
@@ -3095,7 +3102,6 @@
     " <number> -> <num 2> | <num 8> | <num 10> | <num 16>
     " <num R> -> <prefix R> <complex R>
     " <prefix R> -> <radix R> <exactness> | <exactness> <radix R>
-    " <exactness> -> <empty> | #i | #e
 
     " Possible Cases for number
     " 1. <exactness> <Radix R> <Complex R>
@@ -3154,10 +3160,10 @@
         DATA(lv_radix) = iv_radix.
         char_to_radix( EXPORTING iv_peek_char = lv_radix_char
                        CHANGING cv_radix = lv_radix ).
-
-        element = lcl_lisp_new=>radix_number( iv_radix = lv_radix
-                                              iv_exact = lv_exact
-                                              iv_atom = sval ).
+        " <Complex R>
+        element = lcl_lisp_new=>complex_number( iv_radix = lv_radix
+                                                iv_exact = lv_exact
+                                                iv_atom = sval ).
       CATCH cx_sy_conversion_no_number INTO DATA(lx_error).
         throw( lx_error->get_text( ) ).
     ENDTRY.
@@ -8009,6 +8015,7 @@
                           ENDIF.
                           res-infnan = abap_true.
                           res-type = res-subtype = type_real.
+                          cell_exact = abap_false.
                         ELSE.
                           res-nummer = res-int.
                           res-denom = lo_int->int.
@@ -8029,6 +8036,7 @@
                             res-ref = lcl_lisp_number=>neg_inf.
                           ENDIF.
                           res-infnan = abap_true.
+                          cell_exact = abap_false.
                         ELSE.
                           IF res-infnan EQ abap_false.
                             res-real = res-real / lo_int->int.
@@ -8048,6 +8056,7 @@
                           ENDIF.
                           res-infnan = abap_true.
                           res-type = res-subtype = type_real.
+                          cell_exact = abap_false.
                         ELSE.
                           res-denom = res-denom * lo_int->int.
                           lv_gcd = lcl_lisp_rational=>gcd( n = res-nummer
@@ -8082,19 +8091,21 @@
                                 res-ref = lcl_lisp_number=>neg_inf.
                               ENDIF.
                               res-infnan = abap_true.
+                              cell_exact = abap_false.
                             ELSE.
                               res-real = res-real / lo_real->real.
                             ENDIF.
                           ELSE.
                             res-infnan = abap_true.
                             IF res-real EQ 0.      " division 0 / +nan.0 or 0 / +inf.0 or 0 / -inf.0
-                              IF lo_real->is_nan( ) EQ true.
+                              IF lo_real->is_nan( ).
                                 res-ref = lcl_lisp_number=>nan.
                               ELSEIF lo_real EQ lcl_lisp_number=>inf.
                                 res-ref = lcl_lisp_number=>pos_zero.
                               ELSE.
                                 res-ref = lcl_lisp_number=>neg_zero.
                               ENDIF.
+                              cell_exact = abap_false.
                             ELSEIF res-real LT 0.
                               res-ref = lo_real->negative_infnan( ).
                             ELSE.
@@ -8127,6 +8138,7 @@
                           ELSE.
                             res-real = res-nummer / res-denom / lo_real->real.
                           ENDIF.
+                          cell_exact = abap_false.
                         ELSE.
                           res-infnan = abap_true.
                           IF res-nummer EQ 0.
@@ -8137,6 +8149,7 @@
                             ELSE.
                               res-ref = lcl_lisp_number=>neg_zero.
                             ENDIF.
+                            cell_exact = abap_false.
                           ELSEIF res-nummer / res-denom LT 0.
                             res-ref = lo_real->negative_infnan( ).
                           ELSE.
@@ -8156,6 +8169,7 @@
                             ELSE.
                               res-ref = lcl_lisp_number=>neg_inf.
                             ENDIF.
+                            cell_exact = abap_false.
                           ELSE.
                             res-real = res-int / lo_real->real.
                           ENDIF.
@@ -8164,10 +8178,19 @@
                             IF lo_real->is_nan( ).
                               res-ref = lcl_lisp_number=>nan.
                             ELSEIF lo_real = lcl_lisp_number=>inf.
-                              res-ref = lcl_lisp_number=>pos_zero.
+                              IF res-exact = abap_true.
+                                res-ref = lcl_lisp_number=>zero.
+                              ELSE.
+                                res-ref = lcl_lisp_number=>pos_zero.
+                              ENDIF.
                             ELSE.
-                              res-ref = lcl_lisp_number=>neg_zero.
+                              IF res-exact = abap_true.
+                                res-ref = lcl_lisp_number=>zero.
+                              ELSE.
+                                res-ref = lcl_lisp_number=>neg_zero.
+                              ENDIF.
                             ENDIF.
+                            cell_exact = res-ref->exact.
                           ELSE.
                             IF lo_real->is_nan( ).
                               IF res-int GT 0.
@@ -8178,10 +8201,19 @@
                             ELSE.
                               IF ( res-int GT 0 AND lo_real EQ lcl_lisp_number=>inf )
                                 OR (  res-int LT 0 AND lo_real EQ lcl_lisp_number=>neg_inf ).
-                                res-ref = lcl_lisp_number=>pos_zero.
+                                IF res-exact = abap_true.
+                                  res-ref = lcl_lisp_number=>zero.
+                                ELSE.
+                                  res-ref = lcl_lisp_number=>pos_zero.
+                                ENDIF.
                               ELSE.
-                                res-ref = lcl_lisp_number=>neg_zero.
+                                IF res-exact = abap_true.
+                                  res-ref = lcl_lisp_number=>zero.
+                                ELSE.
+                                  res-ref = lcl_lisp_number=>neg_zero.
+                                ENDIF.
                               ENDIF.
+                              cell_exact = res-ref->exact.
                             ENDIF.
                           ENDIF.
                         ENDIF.
@@ -8209,6 +8241,7 @@
                       res-type = type_real.
                       res-subtype = type_real.
                       " cell->raise( ' is invalid in [/]' ).
+                      cell_exact = abap_true.
                     ENDIF.
 
                     CASE res-type.
@@ -8331,7 +8364,7 @@
 
         _validate_number lo_ptr->car '='.
         lo_number ?= lo_ptr->car.
-        IF lo_number->is_nan( ) EQ true.
+        IF lo_number->is_nan( ).
           RETURN.
         ENDIF.
 
@@ -8359,7 +8392,7 @@
         WHILE lo_ptr NE nil.
           _validate_number lo_ptr->car '='.
           lo_number ?= lo_ptr->car.
-          IF lo_number->is_nan( ) EQ true.
+          IF lo_number->is_nan( ).
             result = false.
             RETURN.
           ENDIF.
@@ -8606,8 +8639,8 @@
 
       METHOD proc_is_nan. " argument in list->car
         result = false.
-        CHECK list IS BOUND AND list->car IS BOUND.
-        result = list->car->is_nan( ).
+        CHECK list IS BOUND AND list->car IS BOUND AND list->car->is_nan( ).
+        result = true.
       ENDMETHOD.
 
       METHOD proc_is_finite. " argument in list->car
@@ -13214,11 +13247,7 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
         OR type_rational
         OR type_real
         OR type_complex.
-        IF ( me = lcl_lisp_number=>nan OR me = lcl_lisp_number=>neg_nan ).
-          result = true.
-        ELSE.
-          result = false.
-        ENDIF.
+        flag = xsdbool( me = lcl_lisp_number=>nan OR me = lcl_lisp_number=>neg_nan ).
       WHEN OTHERS.
         raise_nan( `nan?` ).
     ENDCASE.
@@ -13499,7 +13528,7 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
           ro_elem = identifier( value ).
         ELSE.
           TRY.
-              ro_elem = complex_number( value = value ).  " iv_exact ?
+              ro_elem = decimal_number( value = value ).  " iv_exact ?
             CATCH cx_sy_conversion_no_number.
               lcl_lisp=>throw( `Not a valid number ` && value ).
           ENDTRY.
@@ -13704,7 +13733,7 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
                                            angle = angle ).
   ENDMETHOD.
 
-  METHOD complex_number.
+  METHOD decimal_number.
 *     Notation for numbers #e (exact) #i (inexact) #b (binary) #o (octal) #d (decimal) #x (hexadecimal)
 *     further, instead of exp:  s (short), f (single), d (double), l (long)
 *     positive infinity, negative infinity -inf / -inf.0, NaN +nan.0, positive zero, negative zero
@@ -14078,6 +14107,12 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
     ENDCASE.
   ENDMETHOD.
 
+  METHOD complex_number.
+    element = radix_number( iv_radix = iv_radix
+                            iv_exact = iv_exact
+                            iv_atom = iv_atom ).
+  ENDMETHOD.
+
   METHOD radix_number.
     CASE iv_radix.
       WHEN 8.
@@ -14086,8 +14121,8 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
       WHEN 2.
         element = binary( value = iv_atom
                           iv_exact = iv_exact ).
-      WHEN 10.   " decimal
-        element = complex_number( value = iv_atom
+      WHEN 10.
+        element = decimal_number( value = iv_atom
                                   iv_exact = iv_exact ).
       WHEN 16.    " hexadecimal
         element = hex( value = iv_atom
@@ -14911,7 +14946,7 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
       WHEN type_real.
         DATA(lo_real) = CAST lcl_lisp_real( me ).
 
-        IF is_nan( ) EQ true. " NaN is not equal to NaN
+        IF is_nan( ). " NaN is not equal to NaN
           result = false.
           RETURN.
         ENDIF.
@@ -14945,8 +14980,7 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
                 result = false.
               ENDIF.
 
-            ELSEIF lo_real EQ res-ref
-              AND lo_real->is_nan( ) EQ false.
+            ELSEIF lo_real EQ res-ref AND lo_real->is_nan( ).
               result = true.
             ELSE.
               result = false.
@@ -15409,10 +15443,7 @@ ENDCLASS.                    "lcl_lisp_environment IMPLEMENTATION
   ENDMETHOD.
 
   METHOD is_nan.
-    result = zreal->is_nan( ).
-    IF result = false.  " real OR imaginary parts must be NaN
-      result = zimag->is_nan( ).
-    ENDIF.
+    flag = xsdbool( zreal->is_nan( ) OR zimag->is_nan( ) ). " real OR imaginary parts must be NaN
   ENDMETHOD.
 
   METHOD is_real.
