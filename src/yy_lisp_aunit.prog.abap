@@ -99,7 +99,7 @@
 
      METHOD new_interpreter.
        mo_port ?= lcl_lisp_new=>port(
-           iv_port_type =  lcl_lisp_port=>c_port_textual
+           iv_port_type =  c_port_textual
            iv_buffered = abap_true
            iv_input  = abap_false
            iv_output = abap_true
@@ -1352,7 +1352,7 @@
 
      METHOD setup.
        mo_port ?= lcl_lisp_new=>port(
-           iv_port_type = lcl_lisp_port=>c_port_textual
+           iv_port_type = c_port_textual
            iv_buffered = abap_true
            iv_input  = abap_false
            iv_output = abap_true
@@ -1476,7 +1476,7 @@
            value  = '#D'.   " The argument #D cannot be interpreted as a number
 
        scheme( code = `(char-ci>=? #e #D #\B #\b)`
-               expected = |Parse: { lo_no_number->get_text( ) }| ).
+               expected = |Eval: { lo_no_number->get_text( ) }| ).
      ENDMETHOD.                    "char_unknown
 
      METHOD string_len.
