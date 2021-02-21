@@ -46,7 +46,7 @@ I suggest you check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Lear
 - In constrast to ABAP, Scheme has a very small number of rules for forming expressions that can be composed without restrictions. Scheme is lexically scoped and requires proper tail call optimization. Scheme is apt at [symbolic processing](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Symbolic-Derivation).
 
 ### Features
-- Check the current [list of features](https://github.com/nomssi/abap_scheme/wiki/Features)
+- ABAP Scheme supports a subset of [R7RS](http://www.r7rs.org/). Check the current [list of features](https://github.com/nomssi/abap_scheme/wiki/Features)
 - This documentation is the source of many of the 500+ tests implemented in the ABAP unit test suite. 
 - Access to ABAP global fields and function modules
 - a programming environment to make it fun to use, featuring the editor and console views, a trace view, a graphical S-Expression viewer
