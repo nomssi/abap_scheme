@@ -60,6 +60,8 @@
                                 expected TYPE any
                                 level    TYPE aunit_level
                                   DEFAULT if_aunit_constants=>critical.
+       METHODS invalid_digit IMPORTING digit TYPE tv_char
+                             RETURNING VALUE(text) TYPE string.
        METHODS scheme_incorrect IMPORTING code TYPE string.
        METHODS code_test_f IMPORTING code     TYPE string
                                      expected TYPE numeric.
@@ -99,7 +101,7 @@
 
      METHOD new_interpreter.
        mo_port ?= lcl_lisp_new=>port(
-           iv_port_type =  c_port_textual
+           iv_port_type =  textual
            iv_buffered = abap_true
            iv_input  = abap_false
            iv_output = abap_true
@@ -144,6 +146,10 @@
                     title = 'CODE'
                     level = level ).
      ENDMETHOD.                    "code_test
+
+     METHOD invalid_digit.
+       text = |Eval: The argument digit { digit } cannot be interpreted as a number|.
+     ENDMETHOD.
 
      METHOD scheme_incorrect.
        scheme( code = code
@@ -192,7 +198,7 @@
 
      METHOD rational_inexact.
        scheme( code = '(rational? 24.0/3)'
-               expected = 'Error: Invalid number' ).
+               expected = invalid_digit( '/' ) ).
      ENDMETHOD.
 
      METHOD basic_string_value.
@@ -919,7 +925,7 @@
                       |      (i 1 (+ 1 i))| &
                       |      ((= i 9) (display lst )| &
                       |       (append num lst)) ))|
-               expected = 'Eval: Not a valid number )' ).                  " should not dump!
+               expected = invalid_digit( ')' ) ).                  " should not dump!
      ENDMETHOD.                    "do_4
 
      METHOD do_5.
@@ -1352,7 +1358,7 @@
 
      METHOD setup.
        mo_port ?= lcl_lisp_new=>port(
-           iv_port_type = c_port_textual
+           iv_port_type = textual
            iv_buffered = abap_true
            iv_input  = abap_false
            iv_output = abap_true
@@ -1473,7 +1479,7 @@
        CREATE OBJECT lo_no_number
          EXPORTING
            textid = '995DB739AB5CE919E10000000A11447B'
-           value  = '#D'.   " The argument #D cannot be interpreted as a number
+           value  = 'digit #'.   " The argument digit # cannot be interpreted as a number
 
        scheme( code = `(char-ci>=? #e #D #\B #\b)`
                expected = |Eval: { lo_no_number->get_text( ) }| ).
@@ -1663,7 +1669,7 @@
        scheme( code = '(char->integer #\x9E9)'
                expected = '2537' ).
        scheme( code = '\x9E9'
-               expected = 'Eval: Not a valid number \x9E9' ).
+               expected = invalid_digit( '\' ) ).
      ENDMETHOD.                    "char_unicode_1
 
      METHOD char_whitespace_1.
@@ -2934,7 +2940,7 @@
        scheme( code =  '1/4+6/10i'
                expected = '1/4+3/5i' ).
        scheme( code =  '-inf.0-nan.0i'
-               expected = '-inf.0+nan.0i' ).
+               expected = '-inf.0-nan.0i' ).
      ENDMETHOD.
      METHOD math_log.
        code_test_f( code =  '(log 7.389056)'

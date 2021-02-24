@@ -65,6 +65,7 @@ public section.
     importing
       !INST_NAME type SHM_INST_NAME default CL_SHM_AREA=>DEFAULT_INSTANCE
       !TERMINATE_CHANGER type ABAP_BOOL default ABAP_TRUE
+      !AFFECT_SERVER type SHM_AFFECT_SERVER default CL_SHM_AREA=>AFFECT_LOCAL_SERVER
     preferred parameter INST_NAME
     returning
       value(RC) type SHM_RC
@@ -73,6 +74,7 @@ public section.
   class-methods INVALIDATE_AREA
     importing
       !TERMINATE_CHANGER type ABAP_BOOL default ABAP_TRUE
+      !AFFECT_SERVER type SHM_AFFECT_SERVER default CL_SHM_AREA=>AFFECT_LOCAL_SERVER
     returning
       value(RC) type SHM_RC
     raising
@@ -81,6 +83,7 @@ public section.
     importing
       !INST_NAME type SHM_INST_NAME default CL_SHM_AREA=>DEFAULT_INSTANCE
       !TERMINATE_CHANGER type ABAP_BOOL default ABAP_TRUE
+      !AFFECT_SERVER type SHM_AFFECT_SERVER default CL_SHM_AREA=>AFFECT_LOCAL_SERVER
     preferred parameter INST_NAME
     returning
       value(RC) type SHM_RC
@@ -89,6 +92,7 @@ public section.
   class-methods FREE_AREA
     importing
       !TERMINATE_CHANGER type ABAP_BOOL default ABAP_TRUE
+      !AFFECT_SERVER type SHM_AFFECT_SERVER default CL_SHM_AREA=>AFFECT_LOCAL_SERVER
     returning
       value(RC) type SHM_RC
     raising
@@ -117,7 +121,7 @@ public section.
 protected section.
 private section.
 
-  constants _VERSION_ type I value 23 ##NO_TEXT.
+  constants _VERSION_ type I value 25 ##NO_TEXT.
   class-data _TRACE_SERVICE type ref to IF_SHM_TRACE .
   class-data _TRACE_ACTIVE type ABAP_BOOL value ABAP_FALSE ##NO_TEXT.
   constants _TRANSACTIONAL type ABAP_BOOL value ABAP_FALSE ##NO_TEXT.
@@ -746,8 +750,7 @@ CLASS ZCL_LISP_AREA IMPLEMENTATION.
     l_client TYPE shm_client,
     l_client_supplied TYPE abap_bool VALUE abap_false.
 
-  CONSTANTS: affect_server TYPE shm_affect_server
-             VALUE cl_shm_area=>affect_local_server.
+* GEN_INFO_INSERT_AFFECT_LOCAL_SERVER
 
 
 * >
@@ -782,8 +785,7 @@ CLASS ZCL_LISP_AREA IMPLEMENTATION.
     l_client TYPE shm_client,
     l_client_supplied TYPE abap_bool VALUE abap_false.
 
-  CONSTANTS: affect_server TYPE shm_affect_server
-             VALUE cl_shm_area=>affect_local_server.
+* GEN_INFO_INSERT_AFFECT_LOCAL_SERVER
 
 
 * >
@@ -938,8 +940,7 @@ CLASS ZCL_LISP_AREA IMPLEMENTATION.
     l_client TYPE shm_client,
     l_client_supplied TYPE abap_bool VALUE abap_false.
 
-  CONSTANTS: affect_server TYPE shm_affect_server
-             VALUE cl_shm_area=>affect_local_server.
+* GEN_INFO_INSERT_AFFECT_LOCAL_SERVER
 
 
 * >
@@ -974,8 +975,7 @@ CLASS ZCL_LISP_AREA IMPLEMENTATION.
     l_client TYPE shm_client,
     l_client_supplied TYPE abap_bool value abap_false.
 
-  CONSTANTS: affect_server TYPE shm_affect_server
-             VALUE cl_shm_area=>affect_local_server.
+* GEN_INFO_INSERT_AFFECT_LOCAL_SERVER
 
 
 * >
