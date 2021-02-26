@@ -148,7 +148,7 @@
      ENDMETHOD.                    "code_test
 
      METHOD invalid_digit.
-       text = |Eval: The argument digit { digit } cannot be interpreted as a number|.
+       text = |Eval: The argument 'digit { digit }' cannot be interpreted as a number|.
      ENDMETHOD.
 
      METHOD scheme_incorrect.
@@ -2273,6 +2273,8 @@
                expected = '#t' ).
        scheme( code = '(complex? 3)'
                expected = '#t' ).
+       scheme( code = '(complex? 1-i)'
+               expected = '#t' ).
      ENDMETHOD.                    "is_complex
 
      METHOD is_real.
@@ -2623,6 +2625,7 @@
        METHODS math_division_8 FOR TESTING.
        METHODS math_division_9 FOR TESTING.
        METHODS math_division_10 FOR TESTING.
+       METHODS math_division_11 FOR TESTING.
 
        METHODS math_sin FOR TESTING.
        METHODS math_cos FOR TESTING.
@@ -2803,6 +2806,11 @@
      METHOD math_division_10.
        scheme( code = '(/ 0 6 +nan.0)'
                expected = '+nan.0' ).
+     ENDMETHOD.
+
+     METHOD math_division_11.
+       scheme( code = '-1/0'
+               expected = '-inf.0' ).
      ENDMETHOD.
 
      METHOD math_sin.
@@ -3078,8 +3086,8 @@
        scheme( code =  '(begin (define a (random 1)) (or (= a 0) (= a 1)) )'
                expected = '#t' ).
        scheme( code =  '(random -5 4)'
-               expected = 'Eval: (-5 4) Parameter mismatch' ).
-     ENDMETHOD.                    "math_modulo
+               expected = 'Eval: Only one parameter expected in random' ).
+     ENDMETHOD.
 
      METHOD math_random_invalid.
        DATA lo_rand TYPE REF TO cx_abap_random.
