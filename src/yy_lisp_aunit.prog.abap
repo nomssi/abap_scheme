@@ -2909,7 +2909,7 @@
 
      METHOD math_expt_1.
        scheme( code =  '(exp 2 10)'
-               expected = 'Eval: (2 10) Parameter mismatch' ) ##literal.
+               expected = 'Eval: Only one parameter expected in [exp]' ) ##literal.
      ENDMETHOD.                    "math_expt_1
 
      METHOD math_sqrt.
@@ -2917,6 +2917,8 @@
                     expected = '1.4142135623730950488016887242097' ) ##literal.
        scheme( code =  '(sqrt 9)'
                expected = '3' ).
+       scheme( code =  '(sqrt -1)'
+               expected = '+i' ).
      ENDMETHOD.                    "math_sqrt
 
      METHOD math_int_sqrt.

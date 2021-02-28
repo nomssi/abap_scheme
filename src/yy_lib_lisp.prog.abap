@@ -548,7 +548,7 @@
     _get_real carry list->car &2.
 
     IF sign( carry ) NE &1.
-    RETURN.
+      RETURN.
     ENDIF.
     result = true.
   END-OF-DEFINITION.
@@ -581,22 +581,6 @@
   END-OF-DEFINITION.
 
 * Macro that implements the logic for call of ABAP math statements
-  DEFINE _math.
-    DATA carry TYPE tv_real.
-    _data_local_numeric_cell.
-
-    result = nil.
-    _validate list.
-    TRY.
-        _get_real carry list->car &2.
-        list->assert_last_param( ).
-
-        result = lcl_lisp_new=>real_number( value = &1( carry )
-                                            iv_exact = cell_exact ).
-      _catch_arithmetic_error.
-    ENDTRY.
-  END-OF-DEFINITION.
-
   DEFINE _math_to_int.
     DATA carry TYPE tv_real.
     _data_local_numeric_cell.
@@ -610,7 +594,7 @@
     ENDIF.
     TRY.
         _get_real carry list->car &2.
-        list->assert_last_param( ).
+        _assert_one_param &2.
 
         result = lcl_lisp_new=>integer( value = &1( carry )
                                         iv_exact = cell_exact ).
@@ -619,8 +603,10 @@
   END-OF-DEFINITION.
 
   DEFINE _trigonometric_header.
-    DATA x TYPE f.
-    DATA y TYPE f.
+    DATA x TYPE tv_real.
+    DATA y TYPE tv_real.
+    DATA a TYPE f.
+    DATA b TYPE f.
     DATA lo_number TYPE REF TO lcl_lisp_number.
     _data_local_numeric_cell.
 
@@ -1207,8 +1193,14 @@
                      d = denominator ).
       int = trunc( int / g ).
       denominator = trunc( denominator / g ).
-      IF int = 0 AND denominator = 0.
-        raise_nan( `invalid rational 0/0` ).
+      IF denominator = 0.
+        IF int = 0.
+          raise( `invalid rational 0/0` ).
+        ELSEIF int GE 0.
+          raise( `invalid rational +inf.0` ).
+        ELSE.
+          raise( `invalid rational -inf.0` ).
+        ENDIF.
       ENDIF.
       IF denominator LT 0.
         int = - int.
@@ -1477,7 +1469,7 @@
                    RETURNING VALUE(match)      TYPE tv_flag
                    RAISING   lcx_lisp_exception.
     METHODS: bookmark,
-      backtrack.
+             backtrack.
     DATA state TYPE ts_stream_state.
   ENDINTERFACE.
 
@@ -1491,7 +1483,7 @@
   ENDINTERFACE.
 
   INTERFACE lif_binary_input_port.
-    METHODS read_xstring IMPORTING k               TYPE tv_index
+    METHODS read_xstring IMPORTING k TYPE tv_index
                          RETURNING VALUE(rv_input) TYPE xstring.
     METHODS peek_u8 RETURNING VALUE(rv_char) TYPE tv_char.
     METHODS read_u8 RETURNING VALUE(rv_char) TYPE tv_char.
@@ -2919,7 +2911,7 @@
     METHOD read_suffix. "  decimal only with radix 10
       str = space.
       CHECK ii_stream->state-ready EQ abap_true.
-      IF to_lower( ii_stream->state-char ) CA c_exponent_marker_long.
+      IF ii_stream->state-char CA c_exponent_marker_long.
         ii_stream->next_char( ).
         str = c_exponent_marker.
         CASE ii_stream->state-char.
@@ -2952,6 +2944,7 @@
       DATA lv_int TYPE tv_int.
       DATA lv_real TYPE tv_real.
 
+
       IF number_match( c_lisp_pos_inf ).
         elem = lcl_lisp_number=>inf.
       ELSEIF number_match( c_lisp_neg_inf ).
@@ -2974,61 +2967,72 @@
         elem = lcl_lisp_number=>neg_nan_imag.
       ELSE.
 
-          CASE mi_stream->state-char.
-            WHEN c_plus_sign.
-              sep = pos_sep = c_plus_sign.
-              mi_stream->next_char( ).
-            WHEN c_minus_sign.
-              sep = neg_sep = c_minus_sign.
-              mi_stream->next_char( ).
-          ENDCASE.
+        CASE mi_stream->state-char.
+          WHEN c_plus_sign.
+            sep = pos_sep = c_plus_sign.
+            mi_stream->next_char( ).
+          WHEN c_minus_sign.
+            sep = neg_sep = c_minus_sign.
+            mi_stream->next_char( ).
+        ENDCASE.
 
-          CASE mi_stream->state-char.
-            WHEN c_lisp_dot.  " One decimal10 variant
-              mi_stream->next_char( ).  " skip dot
-              uReal_str = neg_sep && `0.` && uInt_dec_radix( domain ) && read_suffix( mi_stream ).
+        CASE mi_stream->state-char.
+          WHEN c_lisp_dot.  " One decimal10 variant
+            mi_stream->next_char( ).  " skip dot
+            ureal_str = neg_sep && `0.` && uint_dec_radix( domain ) && read_suffix( mi_stream ).
 
-            WHEN OTHERS. " unsigned real
-              uInt_str = neg_sep && uInteger_radix( domain ).
-              IF mi_stream->state-ready EQ abap_true.
-                CASE mi_stream->state-char.
-                  WHEN  c_lisp_slash.
-                    mi_stream->next_char( ).  " skip slash
-                    uDenom_str = uInteger_radix( domain ).
 
+          WHEN OTHERS. " unsigned real
+            uint_str = neg_sep && uinteger_radix( domain ).
+            IF mi_stream->state-ready EQ abap_true.
+              CASE mi_stream->state-char.
+                WHEN  c_lisp_slash.
+                  mi_stream->next_char( ).  " skip slash
+                  udenom_str = uinteger_radix( domain ).
+
+                  num-real = uint_str.
+                  lv_real = udenom_str.
+                  IF lv_real EQ 0.
+                    IF num-real GT 0.
+                      elem = lcl_lisp_number=>inf.
+                    ELSEIF num-real LT 0.
+                      elem = lcl_lisp_number=>neg_inf.
+                    ELSE.
+                      elem = lcl_lisp_number=>nan.
+                    ENDIF.
+                  ELSE.
                     TRY.
-                        MOVE EXACT uInt_str TO lv_int.
-                        MOVE EXACT uDenom_str TO lv_denom.
+                        MOVE EXACT uint_str TO lv_int.
+                        MOVE EXACT lv_real TO lv_denom.
 
                         elem = lcl_lisp_new=>rational( nummer = lv_int
                                                        denom = lv_denom
                                                        iv_exact = iv_exact ).
                       CATCH cx_root.
-                        num-real = uInt_str.
-                        lv_real = uDenom_str.
+                        num-real = uint_str.
                         num-real = num-real / lv_real.
-
-                        uReal_str = num-real.
+                        ureal_str = num-real.
                     ENDTRY.
+                  ENDIF.
 
-                  WHEN c_lisp_dot.  " another decimal10 variant
-                    mi_stream->next_char( ).  " skip dot
-                    uReal_str = uInt_str && c_lisp_dot && uInt_dec_radix( domain ) && read_suffix( mi_stream ).
+                WHEN c_lisp_dot.  " another decimal10 variant
+                  mi_stream->next_char( ).  " skip dot
+                  ureal_str = uint_str && c_lisp_dot && uint_dec_radix( domain ) && read_suffix( mi_stream ).
 
-                  WHEN OTHERS.
-                    uReal_str = uInt_str && read_suffix( mi_stream ).
+                WHEN OTHERS.
+                  ureal_str = uint_str && read_suffix( mi_stream ).
 
-                ENDCASE.
-              ELSE.
-                uReal_str = uInt_str.
-              ENDIF.
+              ENDCASE.
+            ELSE.
+              ureal_str = uint_str.
+            ENDIF.
 
-          ENDCASE.
+        ENDCASE.
 
-          IF elem IS INITIAL.
-            elem = lcl_lisp_new=>real_number( value = uReal_str
-                                              iv_exact = iv_exact ).
-          ENDIF.
+        IF elem IS INITIAL.
+          elem = lcl_lisp_new=>real_number( value = ureal_str
+                                            iv_exact = iv_exact ).
+        ENDIF.
 
       ENDIF.
 
@@ -4321,10 +4325,16 @@
                                RETURNING VALUE(result) TYPE REF TO lcl_lisp
                                RAISING   lcx_lisp_exception.
 
-      METHODS complex_log IMPORTING x TYPE tv_real
-                                    y TYPE tv_real
-                                    base TYPE tv_real DEFAULT 1
+      METHODS complex_log IMPORTING x           TYPE tv_real
+                                    y           TYPE tv_real
+                                    base        TYPE tv_real DEFAULT 1
+                                    iv_exact    TYPE tv_flag DEFAULT abap_false
                           RETURNING VALUE(ln_z) TYPE REF TO lcl_lisp_number.
+
+      METHODS complex_sqrt IMPORTING x           TYPE numeric
+                                     y           TYPE numeric
+                                     iv_exact    TYPE tv_flag DEFAULT abap_false
+                           RETURNING VALUE(sqrt_z) TYPE REF TO lcl_lisp_number.
 
       METHODS unicode_digit_zero RETURNING VALUE(rt_zero) TYPE tt_digit.
 
@@ -5298,7 +5308,7 @@
 
     DEFINE _validate_quote.
       IF NOT ( &1->cdr->type = type_pair AND &1->cdr->cdr = nil ).
-        lcl_lisp=>throw( |invalid form { &1->car->to_string( ) } in { &2 }| ).
+        &1->car->raise( | invalid form in { &2 }| ).
       ENDIF.
     END-OF-DEFINITION.
 
@@ -9251,156 +9261,104 @@
 
     METHOD proc_sin.
       " sin(x + iy) = sin(x) cosh(y) + i cos(x) sinh(y)
-      DATA carry TYPE f.
-      DATA y TYPE f.
-      _data_local_numeric_cell.
-      DATA complex_logic TYPE tv_flag.
+      _trigonometric_header 'sin'.
 
-      result = nil.
-      _validate list.
-      TRY.
-          "_get_real carry list->car '[sin]'.
-          _validate list->car.
-          cell = list->car.
-          _values_get_next cell.
-          CASE cell->type.
-            WHEN type_integer
-              OR type_rational
-              OR type_real.
-              carry = CAST lcl_lisp_number( cell )->to_real( 'sin' ).
-
-
-            WHEN type_complex.
-              DATA(z) = CAST lcl_lisp_complex( cell ).
-              carry = z->zreal->to_real( 'sin' ).
-
-              DATA(lo_zimag) = z->zimag.
-              IF lo_zimag NE z->zero.
-                complex_logic = abap_true.
-                y = lo_zimag->to_real( 'sin' ).
-              ELSE.
-                y = 0.
-              ENDIF.
-
-            WHEN OTHERS.
-              cell->raise_nan( '[sin]' ).
-          ENDCASE.
-          cell_exact = CAST lcl_lisp_number( cell )->exact.
-
-          list->assert_last_param( ).
-
-          IF complex_logic EQ abap_false.
-            result = lcl_lisp_new=>real( value = sin( carry )
-                                         iv_exact = cell_exact ).
-          ELSE.
-            result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = sin( carry ) * cosh( y )
-                                                                           iv_exact = cell_exact )
-                                                imag = lcl_lisp_new=>real( value = cos( carry ) * sinh( y )
-                                                                           iv_exact = cell_exact ) ) .
-          ENDIF.
-          _catch_arithmetic_error.
-      ENDTRY.
+      a = x.
+      b = y.
+      IF y = 0.
+        result = lcl_lisp_new=>real( value = sin( a )
+                                     iv_exact = cell_exact ).
+      ELSE.
+        result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = sin( a ) * cosh( b )
+                                                                       iv_exact = cell_exact )
+                                            imag = lcl_lisp_new=>real( value = cos( a ) * sinh( b )
+                                                                       iv_exact = cell_exact ) ) .
+      ENDIF.
+      _trigonometric_footer.
     ENDMETHOD.                    "proc_sin
 
     METHOD proc_cos.
       " cos(x + iy) = cos(x) cosh(y) - i sin(x) sinh(y)
-      DATA carry TYPE f.
-      DATA y TYPE f.
-      _data_local_numeric_cell.
-      DATA complex_logic TYPE tv_flag.
+      _trigonometric_header 'cos'.
 
-      result = nil.
-      _validate list.
-      TRY.
-          "_get_real carry list->car '[cos]'.
-          _validate list->car.
-          cell = list->car.
-          _values_get_next cell.
-          CASE cell->type.
-            WHEN type_integer
-              OR type_rational
-              OR type_real.
-              carry = CAST lcl_lisp_number( cell )->to_real( 'cos' ).
-
-            WHEN type_complex.
-              DATA(z) = CAST lcl_lisp_complex( cell ).
-              carry = z->zreal->to_real( 'cos' ).
-
-              DATA(lo_zimag) = z->zimag.
-              IF lo_zimag NE z->zero.
-                complex_logic = abap_true.
-                y = lo_zimag->to_real( 'cos' ).
-              ELSE.
-                y = 0.
-              ENDIF.
-
-            WHEN OTHERS.
-              cell->raise_nan( '[cos]' ).
-          ENDCASE.
-          cell_exact = CAST lcl_lisp_number( cell )->exact.
-
-          list->assert_last_param( ).
-
-          IF complex_logic EQ abap_false.
-            result = lcl_lisp_new=>real( value = cos( carry )
-                                         iv_exact = cell_exact ).
-          ELSE.
-            result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = cos( carry ) * cosh( y )
-                                                                           iv_exact = cell_exact )
-                                                imag = lcl_lisp_new=>real( value = - sin( carry ) * sinh( y )
-                                                                           iv_exact = cell_exact ) ) .
-          ENDIF.
-          _catch_arithmetic_error.
-      ENDTRY.
+      a = x.
+      b = y.
+      IF y = 0.
+        result = lcl_lisp_new=>real( value = cos( a )
+                                     iv_exact = cell_exact ).
+      ELSE.
+        result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = cos( a ) * cosh( b )
+                                                                       iv_exact = cell_exact )
+                                            imag = lcl_lisp_new=>real( value = - sin( a ) * sinh( b )
+                                                                       iv_exact = cell_exact ) ) .
+      ENDIF.
+      _trigonometric_footer.
     ENDMETHOD.                    "proc_cos
 
     METHOD proc_tan.
-       _trigonometric_header 'tan'.
+      _trigonometric_header 'tan'.
 
-          IF y EQ 0.
-            result = lcl_lisp_new=>real( value = tan( x )
-                                         iv_exact = lo_number->exact ).
-          ELSE.
-            DATA(magnitude) = cos( x ) ** 2 + sinh( y ) ** 2.
-            result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = sin( x ) * cos( x ) / magnitude
-                                                                           iv_exact = abap_false )
-                                                imag = lcl_lisp_new=>real( value = sinh( y ) * cosh( y ) / magnitude
-                                                                           iv_exact = abap_false ) ) .
-          ENDIF.
+      a = x.
+      b = y.
+      IF y EQ 0.
+        result = lcl_lisp_new=>real( value = tan( a )
+                                     iv_exact = cell_exact ).
+      ELSE.
+        DATA(magnitude) = cos( a ) ** 2 + sinh( b ) ** 2.
+        result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = sin( a ) * cos( a ) / magnitude
+                                                                       iv_exact = cell_exact )
+                                            imag = lcl_lisp_new=>real( value = sinh( b ) * cosh( b ) / magnitude
+                                                                       iv_exact = cell_exact ) ) .
+      ENDIF.
       _trigonometric_footer.
     ENDMETHOD.                    "proc_tan
 
     METHOD proc_asin.
-      "sin^-1 z = -i log(iz + sqrt(1 - z^2))
       _trigonometric_header '[asin]'.
-          IF y EQ 0.
-            result = lcl_lisp_new=>real( value = asin( x )
-                                         iv_exact = lo_number->exact ).
-          ELSE.
-*            DATA(magnitude) = cos( x ) ** 2 + sinh( y ) ** 2.
-*            result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = sin( x ) * cos( x ) / magnitude
-*                                                                           iv_exact = abap_false )
-*                                                imag = lcl_lisp_new=>real( value = sinh( y ) * cosh( y ) / magnitude
-*                                                                           iv_exact = abap_false ) ) .
-          ENDIF.
+
+      a = x.
+      b = y.
+      IF y EQ 0.
+        result = lcl_lisp_new=>real( value = asin( a )
+                                     iv_exact = cell_exact ).
+      ELSE.
+        "sin^-1 z = -i log(iz + sqrt(1 - z^2))
+
+        lo_z ?= complex_sqrt( x = 1 - x * x + y * y
+                              y = - 2 * x * y ).
+
+        lo_z ?= complex_log( x = lo_z->zreal->to_real( ) - y
+                             y = lo_z->zimag->to_real( ) + x ).
+
+        result = lcl_lisp_new=>rectangular( real = lo_z->zimag
+                                            imag = lcl_lisp_new=>real( value = - lo_z->zreal->to_real( )
+                                                                       iv_exact = cell_exact ) ) .
+      ENDIF.
       _trigonometric_footer.
     ENDMETHOD.                    "proc_asin
 
     METHOD proc_acos.
-      "cos^-1 z = pi/2 - sin^-1 z
       _trigonometric_header '[acos]'.
-          IF y EQ 0.
-            result = lcl_lisp_new=>real( value = acos( x )
-                                         iv_exact = lo_number->exact ).
-          ELSE.
-*            DATA(magnitude) = cos( x ) ** 2 + sinh( y ) ** 2.
-*            result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = sin( x ) * cos( x ) / magnitude
-*                                                                           iv_exact = abap_false )
-*                                                imag = lcl_lisp_new=>real( value = sinh( y ) * cosh( y ) / magnitude
-*                                                                           iv_exact = abap_false ) ) .
-          ENDIF.
+
+      a = x.
+      b = y.
+      IF y EQ 0.
+        result = lcl_lisp_new=>real( value = acos( a )
+                                     iv_exact = cell_exact ).
+      ELSE.
+        "cos^-1 z = -i log( z + i sqrt( 1 - z^2 ) )
+        lo_z ?= complex_sqrt( x = 1 - x * x + y * y
+                              y = - 2 * x * y ).
+
+        lo_z ?= complex_log( x = y - lo_z->zimag->to_real( )
+                             y = x + lo_z->zreal->to_real( ) ).
+
+        result = lcl_lisp_new=>rectangular( real = lo_z->zimag
+                                            imag = lcl_lisp_new=>real( value = - lo_z->zreal->to_real( )
+                                                                       iv_exact = cell_exact ) ) .
+      ENDIF.
       _trigonometric_footer.
-    ENDMETHOD.                    "proc_acos
+    ENDMETHOD.
 
     METHOD proc_atan.
       "tan^-1 z = (log(1+iz) - log(1-iz))/(2i)
@@ -9448,6 +9406,7 @@
               x = 1.
             ENDIF.
           ENDIF.
+          cell_exact = abap_false.
 
           IF y = 0.
             IF x = 0.
@@ -9463,7 +9422,7 @@
           ENDIF.
 
           result = lcl_lisp_new=>real( value = arctan
-                                       iv_exact = abap_false ).
+                                       iv_exact = cell_exact ).
 
           _catch_arithmetic_error.
       ENDTRY.
@@ -9471,46 +9430,43 @@
 
     METHOD proc_sinh.
       _trigonometric_header '[sinh]'.
-          IF y EQ 0.
-            result = lcl_lisp_new=>real( value = sinh( x )
-                                         iv_exact = lo_number->exact ).
-          ELSE.
-*            DATA(magnitude) = cos( x ) ** 2 + sinh( y ) ** 2.
-*            result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = sin( x ) * cos( x ) / magnitude
-*                                                                           iv_exact = abap_false )
-*                                                imag = lcl_lisp_new=>real( value = sinh( y ) * cosh( y ) / magnitude
-*                                                                           iv_exact = abap_false ) ) .
-          ENDIF.
+
+      a = x.
+      b = y.
+      IF y EQ 0.
+        result = lcl_lisp_new=>real( value = sinh( a )
+                                     iv_exact = cell_exact ).
+      ELSE.
+        throw( `sinh not implemented yet for complex arguments` ).
+      ENDIF.
       _trigonometric_footer.
     ENDMETHOD.                    "proc_sinh
 
     METHOD proc_cosh.
       _trigonometric_header '[cosh]'.
-          IF y EQ 0.
-            result = lcl_lisp_new=>real( value = cosh( x )
-                                         iv_exact = lo_number->exact ).
-          ELSE.
-*            DATA(magnitude) = cos( x ) ** 2 + sinh( y ) ** 2.
-*            result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = sin( x ) * cos( x ) / magnitude
-*                                                                           iv_exact = abap_false )
-*                                                imag = lcl_lisp_new=>real( value = sinh( y ) * cosh( y ) / magnitude
-*                                                                           iv_exact = abap_false ) ) .
-          ENDIF.
+
+      a = x.
+      b = y.
+      IF y EQ 0.
+        result = lcl_lisp_new=>real( value = cosh( a )
+                                     iv_exact = cell_exact ).
+      ELSE.
+        throw( `cosh not implemented yet for complex arguments` ).
+      ENDIF.
       _trigonometric_footer.
     ENDMETHOD.                    "proc_cosh
 
     METHOD proc_tanh.
       _trigonometric_header '[tanh]'.
-          IF y EQ 0.
-            result = lcl_lisp_new=>real( value = tanh( x )
-                                         iv_exact = lo_number->exact ).
-          ELSE.
-*            DATA(magnitude) = cos( x ) ** 2 + sinh( y ) ** 2.
-*            result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = sin( x ) * cos( x ) / magnitude
-*                                                                           iv_exact = abap_false )
-*                                                imag = lcl_lisp_new=>real( value = sinh( y ) * cosh( y ) / magnitude
-*                                                                           iv_exact = abap_false ) ) .
-          ENDIF.
+
+      a = x.
+      b = y.
+      IF y EQ 0.
+        result = lcl_lisp_new=>real( value = tanh( a )
+                                     iv_exact = cell_exact ).
+      ELSE.
+        throw( `tanh not implemented yet for complex arguments` ).
+      ENDIF.
       _trigonometric_footer.
     ENDMETHOD.                    "proc_tanh
 
@@ -9610,8 +9566,27 @@
     ENDMETHOD.                    "proc_expt
 
     METHOD proc_exp.
-      _math exp '[exp]'.
-    ENDMETHOD.                    "proc_exp
+      _trigonometric_header '[exp]'.
+      IF y = 0.
+        result = lcl_lisp_new=>real_number( value = exp( x )
+                                            iv_exact = cell_exact ).
+      ELSE.
+        DATA siny TYPE f.
+        DATA cosy TYPE f.
+        DATA exp_real TYPE tv_real.
+
+        a = x.
+        b = y.
+        siny = sin( b ).
+        cosy = cos( b ).
+        exp_real = exp( x ).
+        result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real_number( value = exp_real * cosy
+                                                                              iv_exact = cell_exact )
+                                            imag = lcl_lisp_new=>real_number( value = exp_real * siny
+                                                                             iv_exact = cell_exact ) ).
+      ENDIF.
+      _trigonometric_footer.
+    ENDMETHOD.
 
     METHOD complex_log.
       DATA arctan TYPE f.
@@ -9694,44 +9669,40 @@
       ENDTRY.
     ENDMETHOD.                    "proc_log
 
+    METHOD complex_sqrt.
+      DATA(r) = sqrt( x ** 2 + y ** 2 ).
+
+      sqrt_z = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real_number( value = r * sqrt( ( 1 + x / r ) / 2 )
+                                                                            iv_exact = iv_exact )
+                                          imag = lcl_lisp_new=>real_number( value = r * sqrt( ( 1 - x / r ) / 2 )
+                                                                            iv_exact = iv_exact ) ).
+    ENDMETHOD.
+
     METHOD proc_sqrt.
       _trigonometric_header '[sqrt]'.
-          IF y = 0.
-              IF x LE 0.
-                result = lcl_lisp_new=>rectangular( imag = lcl_lisp_new=>real_number( value = sqrt( - x )
-                                                                                      iv_exact = cell_exact ) ).
-
-              ELSE.
-                result = lcl_lisp_new=>real_number( value = sqrt( x )
-                                                    iv_exact = cell_exact ).
-              ENDIF.
-
-          ELSE.
-            DATA(r) = sqrt( x ** 2 + y ** 2 ).
-
-            result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real_number( value = r * sqrt( ( 1 + x / r ) / 2 )
-                                                                                  iv_exact = cell_exact )
-                                                imag = lcl_lisp_new=>real_number( value = r * sqrt( ( 1 - x / r ) / 2 )
-                                                                                 iv_exact = cell_exact ) ).
-          ENDIF.
+      IF y = 0 AND x GE 0.
+        result = lcl_lisp_new=>real_number( value = sqrt( x )
+                                            iv_exact = cell_exact ).
+      ELSE.
+        result = complex_sqrt( x = x
+                               y = y
+                               iv_exact = cell_exact ).
+      ENDIF.
       _trigonometric_footer.
     ENDMETHOD.                    "proc_sqrt
 
     METHOD proc_square.
-      "_math square '[square]' real.
-      DATA carry TYPE tv_real.
-      _data_local_numeric_cell.
-
-      result = nil.
-      _validate list.
-      TRY.
-          _get_real carry list->car 'square'.
-          list->assert_last_param( ).
-
-          result = lcl_lisp_new=>real_number( value = carry * carry
-                                         iv_exact = cell_exact ).
-          _catch_arithmetic_error.
-      ENDTRY.
+      _trigonometric_header '[square]'.
+      IF y = 0.
+        result = lcl_lisp_new=>real_number( value = x * x
+                                            iv_exact = cell_exact ).
+      ELSE.
+        result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real_number( value = x ** 2 - y ** 2
+                                                                              iv_exact = cell_exact )
+                                            imag = lcl_lisp_new=>real_number( value = 2 * x * y
+                                                                             iv_exact = cell_exact ) ).
+      ENDIF.
+      _trigonometric_footer.
     ENDMETHOD.                    "proc_square
 
     METHOD proc_int_sqrt.
@@ -15300,9 +15271,13 @@
 
         WHEN type_complex.
           DATA(lo_z) = CAST lcl_lisp_complex( me ).
-          str = lo_z->zreal->number_to_string( iv_radix ).
+          IF lo_z->zreal EQ lcl_lisp_number=>zero.
+            str = ``.
+          ELSE.
+            str = lo_z->zreal->number_to_string( iv_radix ).
+          ENDIF.
           DATA(str_imag) = lo_z->zimag->number_to_string( iv_radix ).
-          IF strlen( str_imag ) GT 0 AND str_imag+0(1) NA c_explicit_sign.
+          IF str_imag+0(1) NA c_explicit_sign AND  strlen( str_imag ) GT 0.
             str_imag = c_plus_sign && str_imag.
           ENDIF.
           str &&= str_imag && c_imaginary_marker.
@@ -15504,8 +15479,16 @@
     ENDMETHOD.
 
     METHOD set.
-      zreal = x.
-      zimag = y.
+      IF x->number_is_equal( zero ).
+        zreal = zero.
+      ELSE.
+        zreal = x.
+      ENDIF.
+      IF y->number_is_equal( zero ).
+        zimag = zero.
+      ELSE.
+        zimag = y.
+      ENDIF.
       exact = xsdbool( zreal->exact EQ abap_true AND zimag->exact EQ abap_true ).
       infnan = xsdbool( zreal->infnan EQ abap_true OR zimag->infnan EQ abap_true ).
     ENDMETHOD.
