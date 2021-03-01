@@ -6,7 +6,7 @@ CONSTANTS:
   c_lisp_untitled   TYPE programm VALUE 'Untitled',
 * enable if you uploaded LISP config files or also change c_source_type to 'LISP'
 * check: https://github.com/nomssi/abap_scheme/blob/master/editor/README.md
-  c_new_abap_editor TYPE flag VALUE abap_false,
+  c_new_abap_editor TYPE flag VALUE abap_true,
   c_source_type     TYPE string VALUE 'LISP'.
 
 CONSTANTS:
