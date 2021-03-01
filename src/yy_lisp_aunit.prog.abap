@@ -2933,6 +2933,12 @@
      METHOD math_square.
        scheme( code =  '(square 2.0)'
                expected = '4.0' ).
+       scheme( code =  '(square 2)'
+               expected = '4' ).
+       scheme( code =  '(square -i)'
+               expected = '-1' ).
+       scheme( code =  '(square 1+i)'
+               expected = '+2i' ).
        scheme( code =  '(square 42)'
                expected = '1764' ).
      ENDMETHOD.
