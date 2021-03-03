@@ -1283,12 +1283,10 @@ CLASS lcl_configuration IMPLEMENTATION.
 *                     ' ' - ?? private attributes?
 *                     'I' - ?? Integer?
     DEFINE _add_attr.
-      CLEAR ls_attr.
-      GET REFERENCE OF &1 INTO ls_attr-ref.
-      ls_attr-text = &2.
-      ls_attr-kind = &3.
-      ls_attr-button_group = &4.
-      INSERT ls_attr INTO TABLE rt_attr.
+      INSERT VALUE #( ref = REF #( &1 )
+                      text = &2
+                      kind = &3
+                      button_group = &4 ) INTO TABLE rt_attr.
     END-OF-DEFINITION.
 
     _add_attr: gs_cfg-skip_dialog      'Remember my settings'(c00)     'C' space,
