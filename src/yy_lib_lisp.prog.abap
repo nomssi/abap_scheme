@@ -1030,6 +1030,12 @@
       METHODS square RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
                      RAISING   lcx_lisp_exception.
 
+      METHODS sum IMPORTING first TYPE ts_result
+                            second TYPE ts_result
+                            operation TYPE string DEFAULT '+'
+                  RETURNING VALUE(result) TYPE ts_result
+                  RAISING   lcx_lisp_exception.
+
       METHODS add IMPORTING other         TYPE REF TO lcl_lisp_number
                   RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
                   RAISING   lcx_lisp_exception.
@@ -1053,6 +1059,9 @@
       METHODS negative IMPORTING number TYPE ts_number
                        RETURNING VALUE(res) TYPE ts_number.
 
+      METHODS neg_sign IMPORTING number TYPE ts_result
+                       RETURNING VALUE(res) TYPE ts_result.
+
       METHODS multiply_real IMPORTING self  TYPE ts_number
                                       other TYPE ts_number
                                       operation TYPE string DEFAULT '*'
@@ -1064,9 +1073,22 @@
                           RETURNING VALUE(number) TYPE ts_number
                           RAISING   lcx_lisp_exception.
 
+      METHODS product IMPORTING first TYPE ts_result
+                                second TYPE ts_result
+                                operation TYPE string DEFAULT '*'
+                      RETURNING VALUE(result) TYPE ts_result
+                      RAISING   lcx_lisp_exception.
+
       METHODS multiply IMPORTING other         TYPE REF TO lcl_lisp_number
                        RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
                        RAISING   lcx_lisp_exception.
+
+      METHODS quotient IMPORTING numerator TYPE ts_result
+                                 denominator TYPE ts_result
+                                 operation TYPE string DEFAULT '/'
+                       RETURNING VALUE(result) TYPE ts_result
+                       RAISING   lcx_lisp_exception.
+
       METHODS divide IMPORTING other        TYPE REF TO lcl_lisp_number
                      RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
                      RAISING   lcx_lisp_exception.
@@ -7549,42 +7571,55 @@
 
 **********************************************************************
     METHOD proc_add.
+      DATA res TYPE ts_result.
       DATA num TYPE REF TO lcl_lisp_number.
       DATA next TYPE REF TO lcl_lisp.
       DATA lo_head TYPE REF TO lcl_lisp.
+
       _validate list.
-      num = lcl_lisp_number=>zero.
+
+      res = lcl_lisp_number=>zero->get_state( '+' ).
       DATA(iter) = list->new_iterator( ).
 
       WHILE iter->has_next( ).
         next = iter->next( ).
+
         _values_get_next next.
         _validate_number next `+`.
+        num = CAST lcl_lisp_number( next ).
 
-        num = num->add( CAST lcl_lisp_number( next ) ).
+        res = num->sum( first = res
+                        second = num->get_state( '+' ) ).
       ENDWHILE.
-      result = num.
+
+      result = lcl_lisp_new=>numeric( res ).
     ENDMETHOD.
 
     METHOD proc_multiply.
+      DATA res TYPE ts_result.
       DATA num TYPE REF TO lcl_lisp_number.
       DATA next TYPE REF TO lcl_lisp.
       DATA lo_head TYPE REF TO lcl_lisp.
+
       _validate list.
-      num = lcl_lisp_number=>one.
+      res = lcl_lisp_number=>one->get_state( '*' ).
       DATA(iter) = list->new_iterator( ).
 
       WHILE iter->has_next( ).
         next = iter->next( ).
+
         _values_get_next next.
         _validate_number next `*`.
+        num = CAST lcl_lisp_number( next ).
 
-        num = num->multiply( CAST lcl_lisp_number( next ) ).
+        res = num->product( first = res
+                            second = num->get_state( '*' ) ).
       ENDWHILE.
-      result = num.
+      result = lcl_lisp_new=>numeric( res ).
     ENDMETHOD.                    "proc_multiply
 
     METHOD proc_subtract.
+      DATA res TYPE ts_result.
       DATA num TYPE REF TO lcl_lisp_number.
       DATA next TYPE REF TO lcl_lisp.
       DATA lo_head TYPE REF TO lcl_lisp.
@@ -7599,23 +7634,27 @@
       next = iter->next( ).
       _values_get_next next.
       _validate_number next `-`.
+      num = CAST lcl_lisp_number( next ).
 
       IF iter->has_next( ) EQ abap_false.
-        num = lcl_lisp_number=>zero->substract( CAST lcl_lisp_number( next ) ).
+        result = lcl_lisp_number=>zero->substract( num ).
       ELSE.
         " Subtract all subsequent numbers from the first
-        num = CAST lcl_lisp_number( next ).
+        res = num->get_state( '-' ).
 
         WHILE iter->has_next( ).
           next = iter->next( ).
           _values_get_next next.
           _validate_number next `-`.
+          num = CAST lcl_lisp_number( next ).
 
-          num = num->substract( CAST lcl_lisp_number( next ) ).
+          res = num->sum( first = res
+                          second = num->neg_sign( num->get_state( '-' ) ) ).
         ENDWHILE.
+
+        result = lcl_lisp_new=>numeric( res ).
       ENDIF.
 
-      result = num.
     ENDMETHOD.
 
     METHOD proc_divide.
@@ -7633,22 +7672,27 @@
       next = iter->next( ).
       _values_get_next next.
       _validate_number next `/`.
-
       num = CAST lcl_lisp_number( next ).
+
       IF iter->has_next( ) EQ abap_false.
-        num = lcl_lisp_number=>one->divide( num ).
+        result = lcl_lisp_number=>one->divide( num ).
       ELSE.
         " Divide by all subsequent numbers
+        DATA(res) = num->get_state( '/' ).
+
         WHILE iter->has_next( ).
           next = iter->next( ).
           _values_get_next next.
           _validate_number next `/`.
+          num = CAST lcl_lisp_number( next ).
 
-          num = num->divide( CAST lcl_lisp_number( next ) ).
+          res = num->quotient( numerator = res
+                               denominator = num->get_state( '/' ) ).
         ENDWHILE.
+
+        result = lcl_lisp_new=>numeric( res ).
       ENDIF.
 
-      result = num.
     ENDMETHOD.
 
 **********************************************************************
@@ -13744,9 +13788,9 @@
     ENDMETHOD.
 
     METHOD class_constructor.
-      zero = lcl_lisp_new=>integer( value = 0 ).         " exact 0
-      one = lcl_lisp_new=>integer( value = 1 ).          " exact 1
-      minus_one = lcl_lisp_new=>integer( value = -1 ).   " exact -1
+      zero = lcl_lisp_new=>integer( value = 0  iv_exact = abap_true ).        " exact 0
+      one = lcl_lisp_new=>integer( value = 1 iv_exact = abap_true ).          " exact 1
+      minus_one = lcl_lisp_new=>integer( value = -1 iv_exact = abap_true ).   " exact -1
 
       pos_zero = lcl_lisp_new=>real( value = c_lisp_pos_zero iv_exact = abap_false ).
       neg_zero = lcl_lisp_new=>real( value = c_lisp_neg_zero iv_exact = abap_false ).
@@ -13893,7 +13937,7 @@
           ENDIF.
 
         WHEN OTHERS.
-          throw( operation && ` get_real( ) not supported` ).
+          throw( operation && ` number cannot be converted [get_real]` ).
       ENDCASE.
     ENDMETHOD.
 
@@ -13999,44 +14043,28 @@
 
     ENDMETHOD.
 
-    METHOD add.
-      DATA number TYPE ts_result.
-      DATA self  TYPE ts_result.
-
-      self = me->get_state( '+' ).
-      number = other->get_state( '+' ).
-
-      self-real_part = add_real( self = self-real_part
-                                 other = number-real_part
-                                 operation = '+' ).    " add real parts
-      IF number-type EQ type_complex.
-        self-type = type_complex.
-        self-imag_part = add_real( self = self-imag_part
-                                   other = number-imag_part
-                                   operation = '+' ).  " add imag parts
+    METHOD sum.
+      result = first.
+      result-real_part = add_real( self = first-real_part
+                                   other = second-real_part
+                                   operation = operation ).    " add real parts
+      IF second-type EQ type_complex.
+        result-type = type_complex.
+        result-imag_part = add_real( self = first-imag_part
+                                     other = second-imag_part
+                                     operation = operation ).  " add imag parts
       ENDIF.
+    ENDMETHOD.
 
-      result = lcl_lisp_new=>numeric( self ).
+    METHOD add.
+      result = lcl_lisp_new=>numeric( sum( first = me->get_state( '+' )
+                                           second = other->get_state( '+' ) ) ).
     ENDMETHOD.
 
     METHOD substract.
-      DATA number TYPE ts_result.
-      DATA self  TYPE ts_result.
-
-      self = me->get_state( '-' ).
-      number = other->get_state( '-' ).
-
-      self-real_part = add_real( self = self-real_part
-                                 other = negative( number-real_part )
-                                 operation = '-' ).    " substract real part
-      IF number-type EQ type_complex.
-        self-type = type_complex.
-        self-imag_part = add_real( self = self-imag_part
-                                   other = negative( number-imag_part )
-                                   operation = '-' ).  " substract imag part
-      ENDIF.
-
-      result = lcl_lisp_new=>numeric( self ).
+      result = lcl_lisp_new=>numeric( sum( first = me->get_state( '-' )
+                                           second = neg_sign( other->get_state( '-' ) )
+                                           operation = '-' ) ).
     ENDMETHOD.
 
     METHOD negative.
@@ -14047,6 +14075,12 @@
       IF number-infnan EQ abap_true.
         res-ref = number-ref->negative_infnan( ).
       ENDIF.
+    ENDMETHOD.
+
+    METHOD neg_sign.
+      res = number.
+      res-real_part = negative( res-real_part ).
+      res-imag_part = negative( res-imag_part ).
     ENDMETHOD.
 
     METHOD multiply_real.
@@ -14195,37 +14229,36 @@
 
     ENDMETHOD.
 
-    METHOD multiply.
-      DATA number TYPE ts_result.
-      DATA self  TYPE ts_result.
+    METHOD product.
       DATA term_real TYPE ts_number.
       DATA term_imag TYPE ts_number.
 
-      number = other->get_state( '*' ).
-      self = me->get_state( '*' ).
+      IF first-type EQ type_complex OR second-type EQ type_complex.
+        term_real = add_real( self = multiply_real( self = first-real_part
+                                                    other = second-real_part )
+                              other = negative( multiply_real( self = first-imag_part
+                                                               other = second-imag_part ) )
+                              operation = operation ).
 
-      IF self-type EQ type_complex OR number-type EQ type_complex.
-        term_real = add_real( self = multiply_real( self = self-real_part
-                                                    other = number-real_part )
-                              other = negative( multiply_real( self = self-imag_part
-                                                               other = number-imag_part ) )
-                              operation = '*' ).
+        term_imag = add_real( self = multiply_real( self = first-real_part
+                                                    other = second-imag_part )
+                              other = multiply_real( self = first-imag_part
+                                                     other = second-real_part )
+                              operation = operation ).
 
-        term_imag = add_real( self = multiply_real( self = self-real_part
-                                                    other = number-imag_part )
-                              other = multiply_real( self = self-imag_part
-                                                     other = number-real_part )
-                              operation = '*' ).
-
-        self-type = type_complex.
-        self-real_part = term_real.
-        self-imag_part = term_imag.
+        result = VALUE #( type = type_complex
+                          real_part = term_real
+                          imag_part = term_imag ).
       ELSE.
-        self-real_part = multiply_real( self = self-real_part
-                                        other = number-real_part ).    " multiply real parts
+        result = first.
+        result-real_part = multiply_real( self = first-real_part
+                                          other = second-real_part ).    " multiply real parts
       ENDIF.
+    ENDMETHOD.
 
-      result = lcl_lisp_new=>numeric( self ).
+    METHOD multiply.
+      result = lcl_lisp_new=>numeric( product( first = me->get_state( '*' )
+                                               second = other->get_state( '*' ) ) ).
     ENDMETHOD.
 
     METHOD divide_real.
@@ -14494,46 +14527,47 @@
 
     ENDMETHOD.
 
-    METHOD divide.
-      DATA number TYPE ts_result.
-      DATA self  TYPE ts_result.
+    METHOD quotient.
       DATA denom TYPE ts_number.
       DATA nummer_real TYPE ts_number.
       DATA nummer_imag TYPE ts_number.
 
-      self = me->get_state( '/' ).
-      number = other->get_state( '/' ).
+      result = numerator.
 
-      IF self-type EQ type_complex OR number-type EQ type_complex.
-        denom = add_real( self = multiply_real( self = number-real_part
-                                                other = number-real_part )
-                          other = multiply_real( self = number-imag_part
-                                                 other = number-imag_part )
-                          operation = '/' ).
+      IF numerator-type EQ type_complex OR denominator-type EQ type_complex.
+        denom = add_real( self = multiply_real( self = denominator-real_part
+                                                other = denominator-real_part )
+                          other = multiply_real( self = denominator-imag_part
+                                                 other = denominator-imag_part )
+                          operation = operation ).
 
-        nummer_real = add_real( self = multiply_real( self = self-real_part
-                                                      other = number-real_part )
-                                other = multiply_real( self = self-imag_part
-                                                       other = number-imag_part )
-                                operation = '/' ).
+        nummer_real = add_real( self = multiply_real( self = numerator-real_part
+                                                      other = denominator-real_part )
+                                other = multiply_real( self = numerator-imag_part
+                                                       other = denominator-imag_part )
+                                operation = operation ).
 
-        nummer_imag = add_real( self = multiply_real( self = number-real_part
-                                                      other = self-imag_part )
-                                other = negative( multiply_real( self = self-real_part
-                                                                 other = number-imag_part ) )
-                                operation = '/' ).
+        nummer_imag = add_real( self = multiply_real( self = denominator-real_part
+                                                      other = numerator-imag_part )
+                                other = negative( multiply_real( self = numerator-real_part
+                                                                 other = denominator-imag_part ) )
+                                operation = operation ).
 
-        self-type = type_complex.
-        self-real_part = divide_real( self = nummer_real
+        result-type = type_complex.
+        result-real_part = divide_real( self = nummer_real
                                       other = denom ).
-        self-imag_part = divide_real( self = nummer_imag
+        result-imag_part = divide_real( self = nummer_imag
                                       other = denom ).
       ELSE.
-        self-real_part = divide_real( self = self-real_part
-                                      other = number-real_part ).    " divide real parts
+        result-real_part = divide_real( self = numerator-real_part
+                                        other = denominator-real_part ).    " divide real parts
       ENDIF.
 
-      result = lcl_lisp_new=>numeric( self ).
+    ENDMETHOD.
+
+    METHOD divide.
+      result = lcl_lisp_new=>numeric( quotient( numerator = me->get_state( '/' )
+                                                denominator = other->get_state( '/' ) ) ).
     ENDMETHOD.
 
     METHOD square.
@@ -15398,13 +15432,16 @@
     ENDMETHOD.
 
     METHOD to_list.
-      ro_elem = nil.
-      LOOP AT array ASSIGNING FIELD-SYMBOL(<vec>).
-        AT FIRST.
-          ro_elem = lcl_lisp_new=>cons( io_car = <vec> ).
-          DATA(lo_ptr) = ro_elem.
-          CONTINUE.
-        ENDAT.
+      DATA lo_ptr TYPE REF TO lcl_lisp.
+
+      ASSIGN array[ 1 ] TO FIELD-SYMBOL(<vec>).
+      IF sy-subrc EQ 0.
+        lo_ptr = ro_elem = lcl_lisp_new=>cons( io_car = <vec> ).
+      ELSE.
+        ro_elem = nil.
+      ENDIF.
+
+      LOOP AT array FROM 2 ASSIGNING <vec>.
         lo_ptr = lo_ptr->cdr = lcl_lisp_new=>cons( io_car = <vec> ).
       ENDLOOP.
     ENDMETHOD.
