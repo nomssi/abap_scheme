@@ -7922,234 +7922,249 @@
     ENDMETHOD.                    "proc_add
 
     METHOD proc_multiply.
-      _cell_arith_definition.
-
+      DATA num TYPE REF TO lcl_lisp_number.
+      DATA next TYPE REF TO lcl_lisp.
       _validate list.
+      num = lcl_lisp_number=>one.
       DATA(iter) = list->new_iterator( ).
-      res = VALUE #( type = type_integer
-                     subtype = type_integer
-                     int = 1
-                     denom = 1
-                     exact = abap_true
-                     imag_part-exact = abap_true
-                     operation = '*' ).
 
       WHILE iter->has_next( ).
-        cell = iter->next( ).
-
-        CASE cell->type.
-          WHEN type_integer.
-            lo_int ?= cell.
-            cell_exact = lo_int->exact.
-
-            CASE res-real_part-subtype.
-              WHEN type_integer.
-                "res-&2-subtype = type_integer.
-                res-real_part-int = res-real_part-int * lo_int->int.
-
-              WHEN type_rational.
-                "res-real_part-subtype = type_rational.
-                res-real_part-nummer = res-real_part-nummer * ( lo_int->int * res-real_part-denom ).
-                lv_gcd = lcl_lisp_rational=>gcd( n = res-real_part-nummer
-                                                 d = res-real_part-denom ).
-                res-real_part-nummer = res-real_part-nummer DIV lv_gcd.
-                res-real_part-denom = res-real_part-denom DIV lv_gcd.
-
-              WHEN type_real.
-                "res-real_part-subtype = type_real.
-                IF res-real_part-infnan EQ abap_false.
-                  res-real_part-real = res-real_part-real * lo_int->int.
-                ELSE.
-                  CASE res-real_part-ref.
-                    WHEN lcl_lisp_number=>inf.
-                      IF lo_int->int EQ 0.
-                        res-real_part-ref = lcl_lisp_number=>nan.
-                        EXIT.
-                      ENDIF.
-                    WHEN lcl_lisp_number=>neg_inf.
-                      IF lo_int->int EQ 0.
-                        res-real_part-ref = lcl_lisp_number=>neg_nan.
-                        EXIT.
-                      ENDIF.
-                    WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
-                      EXIT.
-                  ENDCASE.
-                ENDIF.
-
-              WHEN OTHERS.
-                res-real_part-subtype = type_integer.
-                res-real_part-int = lo_int->int.
-            ENDCASE.
-
-          WHEN type_rational.
-            lo_rat ?= cell.
-            cell_exact = lo_rat->exact.
-
-            CASE res-real_part-subtype.
-              WHEN type_integer.
-                res-type = res-real_part-subtype = type_rational.
-                res-real_part-nummer = res-real_part-int * lo_rat->int.
-                res-real_part-denom = lo_rat->denominator.
-
-                lv_gcd = lcl_lisp_rational=>gcd(  n = res-real_part-nummer
-                                                  d = res-real_part-denom ).
-                res-real_part-nummer = res-real_part-nummer DIV lv_gcd.
-                res-real_part-denom = res-real_part-denom DIV lv_gcd.
-
-              WHEN type_rational.
-                "res-real_part-subtype = type_rational.
-                res-real_part-nummer = res-real_part-nummer * lo_rat->int.               " multiplication of rationals
-                res-real_part-denom = res-real_part-denom * lo_rat->denominator.
-                lv_gcd = lcl_lisp_rational=>gcd( n = res-real_part-nummer
-                                                 d = res-real_part-denom ).
-                res-real_part-nummer = res-real_part-nummer DIV lv_gcd.
-                res-real_part-denom = res-real_part-denom DIV lv_gcd.
-
-              WHEN type_real.
-                "res-real_part-subtype = type_real.
-                IF res-real_part-infnan EQ abap_false.
-                  res-real_part-real = res-real_part-real * lo_rat->int / lo_rat->denominator.
-                ELSE.
-                  CASE res-real_part-ref.
-                    WHEN lcl_lisp_number=>inf.
-                      IF lo_int->int EQ 0.
-                        res-real_part-ref = lcl_lisp_number=>nan.
-                        EXIT.
-                      ENDIF.
-                    WHEN lcl_lisp_number=>neg_inf.
-                      IF lo_int->int EQ 0.
-                        res-real_part-ref = lcl_lisp_number=>neg_nan.
-                        EXIT.
-                      ENDIF.
-                    WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
-                      EXIT.
-                  ENDCASE.
-                ENDIF.
-
-              WHEN OTHERS.
-                res-real_part-subtype = type_rational.
-                res-real_part-nummer = lo_rat->int.
-                res-real_part-denom = lo_rat->denominator.
-            ENDCASE.
-
-          WHEN type_real.
-            lo_real ?= cell.
-            cell_exact = lo_real->exact.
-
-            CASE res-real_part-subtype.
-              WHEN type_integer.
-                res-real_part-subtype = type_real.
-                IF lo_real->infnan EQ abap_false.
-                  res-real_part-real = res-real_part-int * lo_real->real.
-                ELSE.
-                  res-real_part-infnan = abap_true.
-                  res-real_part-ref = lo_real.
-                  IF res-real_part-int EQ 0.
-                    CASE lo_real.
-                      WHEN lcl_lisp_number=>inf.
-                        res-real_part-ref = lcl_lisp_number=>nan.
-                      WHEN lcl_lisp_number=>neg_inf.
-                        res-real_part-ref = lcl_lisp_number=>neg_nan.
-                    ENDCASE.
-                  ENDIF.
-                ENDIF.
-
-              WHEN type_rational.
-                res-real_part-subtype = type_real.
-                IF lo_real->infnan EQ abap_false.
-                  res-real_part-real = res-nummer / res-denom * lo_real->real.
-                ELSE.
-                  res-real_part-ref = lo_real.
-                  res-real_part-infnan = abap_true.
-                  IF res-real_part-nummer EQ 0.
-                    CASE lo_real.
-                      WHEN lcl_lisp_number=>inf.
-                        res-real_part-ref = lcl_lisp_number=>nan.
-                      WHEN lcl_lisp_number=>neg_inf.
-                        res-real_part-ref = lcl_lisp_number=>neg_nan.
-                    ENDCASE.
-                  ENDIF.
-                ENDIF.
-
-              WHEN type_real.
-                "res-real_part-subtype = type_real.
-                IF lo_real->infnan EQ abap_false.
-                  IF res-real_part-infnan EQ abap_false.
-                    res-real_part-real = res-real_part-real * lo_real->real.
-                  ELSE.
-                    " inf / nan * finite number
-                    CASE res-real_part-ref.
-                      WHEN lcl_lisp_number=>inf.
-                        IF lo_real->real EQ 0.
-                          res-real_part-ref = lcl_lisp_number=>nan.
-                          EXIT.
-                        ENDIF.
-                      WHEN lcl_lisp_number=>neg_inf.
-                        IF lo_real->real EQ 0.
-                          res-real_part-ref = lcl_lisp_number=>neg_nan.
-                          EXIT.
-                        ENDIF.
-                      WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
-                        EXIT.
-                    ENDCASE.
-                  ENDIF.
-                ELSE.
-                  IF res-real_part-infnan EQ abap_false.
-                    res-real_part-infnan = abap_true.
-                    res-real_part-ref = lo_real.
-                    IF res-real_part-real EQ 0.
-                      CASE lo_real.
-                        WHEN lcl_lisp_number=>inf.
-                          res-real_part-ref = lcl_lisp_number=>nan.
-                          EXIT.
-                        WHEN lcl_lisp_number=>neg_inf.
-                          res-real_part-ref = lcl_lisp_number=>neg_nan.
-                          EXIT.
-                        WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
-                          res-real_part-ref = lo_real.
-                          EXIT.
-                      ENDCASE.
-                    ENDIF.
-                  ELSE.
-                    " inf / nan vs. inf / nan -> not defined, keep value
-                    CASE lo_real.
-                      WHEN lcl_lisp_number=>neg_inf.
-                        CASE res-real_part-ref.
-                          WHEN lcl_lisp_number=>neg_inf.
-                            res-real_part-ref = lcl_lisp_number=>inf.
-                          WHEN lcl_lisp_number=>inf.
-                            res-real_part-ref = lcl_lisp_number=>neg_inf.
-                        ENDCASE.
-                      WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
-                        res-real_part-ref = lo_real.
-                        EXIT.
-                    ENDCASE.
-                  ENDIF.
-                ENDIF.
-
-              WHEN OTHERS.
-                res-real_part-subtype = type_real.
-                IF lo_real->infnan EQ abap_false.
-                  res-real_part-real = lo_real->real.
-                ELSE.
-                  res-real_part-ref = lo_real.
-                  res-real_part-infnan = abap_true.
-                ENDIF.
-            ENDCASE.
-
-          WHEN OTHERS.
-            cell->raise_nan( '*' ).
-        ENDCASE.
-
-
-        IF res-exact EQ abap_true.
-          res-exact = cell_exact.
-        ENDIF.
-
+        next = iter->next( ).
+        _validate_number next `*`.
+        num = num->multiply( CAST lcl_lisp_number( next ) ).
       ENDWHILE.
-
-      result = lcl_lisp_new=>numeric( res ).
+      result = num.
     ENDMETHOD.                    "proc_multiply
+
+*    METHOD proc_multiply.
+*      _cell_arith_definition.
+*
+*      _validate list.
+*      DATA(iter) = list->new_iterator( ).
+*      res = VALUE #( type = type_integer
+*                     subtype = type_integer
+*                     int = 1
+*                     denom = 1
+*                     exact = abap_true
+*                     imag_part-exact = abap_true
+*                     operation = '*' ).
+*
+*      WHILE iter->has_next( ).
+*        cell = iter->next( ).
+*
+*        CASE cell->type.
+*          WHEN type_integer.
+*            lo_int ?= cell.
+*            cell_exact = lo_int->exact.
+*
+*            CASE res-real_part-subtype.
+*              WHEN type_integer.
+*                "res-&2-subtype = type_integer.
+*                res-real_part-int = res-real_part-int * lo_int->int.
+*
+*              WHEN type_rational.
+*                "res-real_part-subtype = type_rational.
+*                res-real_part-nummer = res-real_part-nummer * ( lo_int->int * res-real_part-denom ).
+*                lv_gcd = lcl_lisp_rational=>gcd( n = res-real_part-nummer
+*                                                 d = res-real_part-denom ).
+*                res-real_part-nummer = res-real_part-nummer DIV lv_gcd.
+*                res-real_part-denom = res-real_part-denom DIV lv_gcd.
+*
+*              WHEN type_real.
+*                "res-real_part-subtype = type_real.
+*                IF res-real_part-infnan EQ abap_false.
+*                  res-real_part-real = res-real_part-real * lo_int->int.
+*                ELSE.
+*                  CASE res-real_part-ref.
+*                    WHEN lcl_lisp_number=>inf.
+*                      IF lo_int->int EQ 0.
+*                        res-real_part-ref = lcl_lisp_number=>nan.
+*                        EXIT.
+*                      ENDIF.
+*                    WHEN lcl_lisp_number=>neg_inf.
+*                      IF lo_int->int EQ 0.
+*                        res-real_part-ref = lcl_lisp_number=>neg_nan.
+*                        EXIT.
+*                      ENDIF.
+*                    WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
+*                      EXIT.
+*                  ENDCASE.
+*                ENDIF.
+*
+*              WHEN OTHERS.
+*                res-real_part-subtype = type_integer.
+*                res-real_part-int = lo_int->int.
+*            ENDCASE.
+*
+*          WHEN type_rational.
+*            lo_rat ?= cell.
+*            cell_exact = lo_rat->exact.
+*
+*            CASE res-real_part-subtype.
+*              WHEN type_integer.
+*                res-type = res-real_part-subtype = type_rational.
+*                res-real_part-nummer = res-real_part-int * lo_rat->int.
+*                res-real_part-denom = lo_rat->denominator.
+*
+*                lv_gcd = lcl_lisp_rational=>gcd(  n = res-real_part-nummer
+*                                                  d = res-real_part-denom ).
+*                res-real_part-nummer = res-real_part-nummer DIV lv_gcd.
+*                res-real_part-denom = res-real_part-denom DIV lv_gcd.
+*
+*              WHEN type_rational.
+*                "res-real_part-subtype = type_rational.
+*                res-real_part-nummer = res-real_part-nummer * lo_rat->int.               " multiplication of rationals
+*                res-real_part-denom = res-real_part-denom * lo_rat->denominator.
+*                lv_gcd = lcl_lisp_rational=>gcd( n = res-real_part-nummer
+*                                                 d = res-real_part-denom ).
+*                res-real_part-nummer = res-real_part-nummer DIV lv_gcd.
+*                res-real_part-denom = res-real_part-denom DIV lv_gcd.
+*
+*              WHEN type_real.
+*                "res-real_part-subtype = type_real.
+*                IF res-real_part-infnan EQ abap_false.
+*                  res-real_part-real = res-real_part-real * lo_rat->int / lo_rat->denominator.
+*                ELSE.
+*                  CASE res-real_part-ref.
+*                    WHEN lcl_lisp_number=>inf.
+*                      IF lo_int->int EQ 0.
+*                        res-real_part-ref = lcl_lisp_number=>nan.
+*                        EXIT.
+*                      ENDIF.
+*                    WHEN lcl_lisp_number=>neg_inf.
+*                      IF lo_int->int EQ 0.
+*                        res-real_part-ref = lcl_lisp_number=>neg_nan.
+*                        EXIT.
+*                      ENDIF.
+*                    WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
+*                      EXIT.
+*                  ENDCASE.
+*                ENDIF.
+*
+*              WHEN OTHERS.
+*                res-real_part-subtype = type_rational.
+*                res-real_part-nummer = lo_rat->int.
+*                res-real_part-denom = lo_rat->denominator.
+*            ENDCASE.
+*
+*          WHEN type_real.
+*            lo_real ?= cell.
+*            cell_exact = lo_real->exact.
+*
+*            CASE res-real_part-subtype.
+*              WHEN type_integer.
+*                res-real_part-subtype = type_real.
+*                IF lo_real->infnan EQ abap_false.
+*                  res-real_part-real = res-real_part-int * lo_real->real.
+*                ELSE.
+*                  res-real_part-infnan = abap_true.
+*                  res-real_part-ref = lo_real.
+*                  IF res-real_part-int EQ 0.
+*                    CASE lo_real.
+*                      WHEN lcl_lisp_number=>inf.
+*                        res-real_part-ref = lcl_lisp_number=>nan.
+*                      WHEN lcl_lisp_number=>neg_inf.
+*                        res-real_part-ref = lcl_lisp_number=>neg_nan.
+*                    ENDCASE.
+*                  ENDIF.
+*                ENDIF.
+*
+*              WHEN type_rational.
+*                res-real_part-subtype = type_real.
+*                IF lo_real->infnan EQ abap_false.
+*                  res-real_part-real = res-nummer / res-denom * lo_real->real.
+*                ELSE.
+*                  res-real_part-ref = lo_real.
+*                  res-real_part-infnan = abap_true.
+*                  IF res-real_part-nummer EQ 0.
+*                    CASE lo_real.
+*                      WHEN lcl_lisp_number=>inf.
+*                        res-real_part-ref = lcl_lisp_number=>nan.
+*                      WHEN lcl_lisp_number=>neg_inf.
+*                        res-real_part-ref = lcl_lisp_number=>neg_nan.
+*                    ENDCASE.
+*                  ENDIF.
+*                ENDIF.
+*
+*              WHEN type_real.
+*                "res-real_part-subtype = type_real.
+*                IF lo_real->infnan EQ abap_false.
+*                  IF res-real_part-infnan EQ abap_false.
+*                    res-real_part-real = res-real_part-real * lo_real->real.
+*                  ELSE.
+*                    " inf / nan * finite number
+*                    CASE res-real_part-ref.
+*                      WHEN lcl_lisp_number=>inf.
+*                        IF lo_real->real EQ 0.
+*                          res-real_part-ref = lcl_lisp_number=>nan.
+*                          EXIT.
+*                        ENDIF.
+*                      WHEN lcl_lisp_number=>neg_inf.
+*                        IF lo_real->real EQ 0.
+*                          res-real_part-ref = lcl_lisp_number=>neg_nan.
+*                          EXIT.
+*                        ENDIF.
+*                      WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
+*                        EXIT.
+*                    ENDCASE.
+*                  ENDIF.
+*                ELSE.
+*                  IF res-real_part-infnan EQ abap_false.
+*                    res-real_part-infnan = abap_true.
+*                    res-real_part-ref = lo_real.
+*                    IF res-real_part-real EQ 0.
+*                      CASE lo_real.
+*                        WHEN lcl_lisp_number=>inf.
+*                          res-real_part-ref = lcl_lisp_number=>nan.
+*                          EXIT.
+*                        WHEN lcl_lisp_number=>neg_inf.
+*                          res-real_part-ref = lcl_lisp_number=>neg_nan.
+*                          EXIT.
+*                        WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
+*                          res-real_part-ref = lo_real.
+*                          EXIT.
+*                      ENDCASE.
+*                    ENDIF.
+*                  ELSE.
+*                    " inf / nan vs. inf / nan -> not defined, keep value
+*                    CASE lo_real.
+*                      WHEN lcl_lisp_number=>neg_inf.
+*                        CASE res-real_part-ref.
+*                          WHEN lcl_lisp_number=>neg_inf.
+*                            res-real_part-ref = lcl_lisp_number=>inf.
+*                          WHEN lcl_lisp_number=>inf.
+*                            res-real_part-ref = lcl_lisp_number=>neg_inf.
+*                        ENDCASE.
+*                      WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
+*                        res-real_part-ref = lo_real.
+*                        EXIT.
+*                    ENDCASE.
+*                  ENDIF.
+*                ENDIF.
+*
+*              WHEN OTHERS.
+*                res-real_part-subtype = type_real.
+*                IF lo_real->infnan EQ abap_false.
+*                  res-real_part-real = lo_real->real.
+*                ELSE.
+*                  res-real_part-ref = lo_real.
+*                  res-real_part-infnan = abap_true.
+*                ENDIF.
+*            ENDCASE.
+*
+*          WHEN OTHERS.
+*            cell->raise_nan( '*' ).
+*        ENDCASE.
+*
+*
+*        IF res-exact EQ abap_true.
+*          res-exact = cell_exact.
+*        ENDIF.
+*
+*      ENDWHILE.
+*
+*      result = lcl_lisp_new=>numeric( res ).
+*    ENDMETHOD.                    "proc_multiply
 
     METHOD proc_subtract.
       _cell_arith_definition.
@@ -14914,6 +14929,7 @@
               raise_nan( operation ).  "assert violation - Not a Number
           ENDCASE.
 
+        WHEN type_rational.
           CASE number-subtype.
             WHEN type_integer.  " Integer + Rational
               number-subtype = type_rational.
@@ -14974,7 +14990,7 @@
                 ENDIF.
 
               WHEN OTHERS.
-                raise_nan( `+` ).  "assert violation - Not a Number
+                raise_nan( operation ).  "assert violation - Not a Number
             ENDCASE.
 
           ENDIF.
@@ -14996,6 +15012,7 @@
                                  other = number-real_part
                                  operation = '+' ).    " add real parts
       IF number-type EQ type_complex.
+        self-type = type_complex.
         self-imag_part = add_real( self = self-imag_part
                                    other = number-imag_part
                                    operation = '+' ).  " add imag parts
@@ -15015,6 +15032,7 @@
                                  other = negative( number-real_part )
                                  operation = '-' ).    " substract real part
       IF number-type EQ type_complex.
+        self-type = type_complex.
         self-imag_part = add_real( self = self-imag_part
                                    other = negative( number-imag_part )
                                    operation = '-' ).  " substract imag part
@@ -15028,6 +15046,9 @@
       res-int = 0 - number-int.
       res-nummer = 0 - number-nummer.
       res-real = 0 - number-real.
+      IF number-infnan EQ abap_true.
+        res-ref = number-ref->negative_infnan( ).
+      ENDIF.
     ENDMETHOD.
 
     METHOD multiply_real.
@@ -15055,7 +15076,7 @@
               IF number-infnan EQ abap_false.
                 number-real = number-real * other-int.
               ELSE.
-                " Sonderfall (* 0.0 +Inf.0)
+                " Sonderfall (* +Inf.0 0)
                 IF other-int EQ 0.
                   IF number-ref = inf OR number-ref EQ neg_inf.
                     number-ref = nan.
@@ -15092,7 +15113,7 @@
               IF number-infnan EQ abap_false.
                 number-real = number-real * other-nummer / other-denom.
               ELSE.
-                " Sonderfall (* 0.0 +Inf.0)
+                " Sonderfall (* +Inf.0 0/1)
                 IF other-nummer EQ 0 AND ( number-ref = inf OR number-ref EQ neg_inf ).
                   number-ref = nan.
                 ELSEIF other-nummer LT 0.
@@ -15105,37 +15126,70 @@
           ENDCASE.
 
         WHEN type_real.
-          IF other-infnan EQ abap_true.
-            IF number-infnan EQ abap_false.
-              number-ref = other-ref.
-              number-infnan = abap_true.
-              number-subtype = type_real.
-            ELSE.
-
-            ENDIF.
-
-          ELSE.
-            number-subtype = type_real.
-
             CASE number-subtype.
               WHEN type_integer.  " Integer * Real
-                number-real = number-int * other-real.
+                IF other-infnan EQ abap_true.
+                  IF number-int EQ 0 AND ( other-ref = inf OR other-ref = neg_inf ).
+                    number-ref = nan.
+                  ELSEIF number-int LE 0.
+                    number-ref = other-ref->negative_infnan( ).
+                  ELSE.
+                    number-ref = other-ref.
+                  ENDIF.
+                  number-infnan = abap_true.
+                ELSE.
+                  number-real = number-int * other-real.
+                ENDIF.
 
               WHEN type_rational.  " Rational * Real
-                number-real = number-nummer / number-denom * other-real.
+                IF other-infnan EQ abap_true.
+                  IF number-nummer EQ 0 AND ( other-ref = inf OR other-ref = neg_inf ).
+                    number-ref = nan.
+                  ELSE.
+                    number-ref = other-ref.
+                  ENDIF.
+                  number-infnan = abap_true.
+                ELSE.
+                  number-real = number-nummer / number-denom * other-real.
+                ENDIF.
 
               WHEN type_real. " Real * Real
-                IF number-infnan EQ abap_false.
+                IF other-infnan EQ abap_true.
+                  IF number-infnan EQ abap_false.
+                    " Inf / NaN * finite number
+                    number-ref = other-ref.
+                    IF number-real EQ 0 AND ( other-ref = inf OR other-ref = neg_inf ).
+                      number-ref = nan.
+                    ELSEIF number-real LT 0.
+                      number-ref = number-ref->negative_infnan( ).
+                    ENDIF.
+                  ENDIF.
+                  number-infnan = abap_true.
+                ELSEIF number-infnan EQ abap_true.
+                  " Inf / NaN *  Inf / NaN
+                  CASE number-ref.
+                    WHEN nan.
+                      IF other-ref EQ neg_inf.
+                        number-ref = neg_nan.
+                      ENDIF.
+                    WHEN neg_nan.
+                      IF other-ref EQ neg_inf.
+                        number-ref = nan.
+                      ENDIF.
+                    WHEN inf.
+                      number-ref = other-ref.
+                    WHEN neg_inf.
+                      number-ref = other-ref->negative_infnan( ).
+                  ENDCASE.
+                ELSE. " IF number-infnan EQ abap_false.
                   number-real = number-real * other-real.
-                ELSE.
-                  " inf / nan - finite number -> no change
                 ENDIF.
 
               WHEN OTHERS.
                 raise_nan( operation ).  "assert violation - Not a Number
             ENDCASE.
+          number-subtype = type_real.
 
-          ENDIF.
 
         WHEN OTHERS.
           raise_nan( operation ).  "assert violation - Real part of other is Not a Number
@@ -15165,6 +15219,7 @@
                                                      other = number-real_part )
                               operation = '*' ).
 
+        self-type = type_complex.
         self-real_part = term_real.
         self-imag_part = term_imag.
       ELSE.
@@ -15355,6 +15410,7 @@
                                                                  other = number-imag_part ) )
                                 operation = '/' ).
 
+        self-type = type_complex.
         self-real_part = divide_real( self = nummer_real
                                       other = denom ).
         self-imag_part = divide_real( self = nummer_imag
