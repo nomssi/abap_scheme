@@ -610,6 +610,7 @@
     DATA a TYPE f.
     DATA b TYPE f.
     DATA cell_exact TYPE tv_flag.
+    DATA res TYPE ts_result.
 
     result = nil.
     _validate list.
@@ -851,7 +852,7 @@
                            RAISING   lcx_lisp_exception.
 
       METHODS is_equivalent IMPORTING io_elem       TYPE REF TO lcl_lisp
-                            RETURNING VALUE(result) TYPE REF TO lcl_lisp
+                            RETURNING VALUE(result) TYPE tv_flag
                             RAISING   lcx_lisp_exception.
 
       METHODS is_equal IMPORTING io_elem       TYPE REF TO lcl_lisp
@@ -5862,7 +5863,7 @@
                             ENDIF.
 
                             " eqv? match
-                            IF lo_key->is_equivalent( lo_datum->car ) NE false.
+                            IF lo_key->is_equivalent( lo_datum->car ).
                               cont-elem = lo_clause->cdr.
                               lv_match = abap_true.
                               EXIT.
@@ -7439,7 +7440,7 @@
       DATA(lo_sublist) = list->cdr->car.
       DATA(lo_item) = list->car.
       WHILE lo_sublist->type EQ type_pair.
-        IF lo_sublist->car->is_equivalent( lo_item ) NE false.
+        IF lo_sublist->car->is_equivalent( lo_item ).
           result = lo_sublist.
           RETURN.
         ENDIF.
@@ -7561,7 +7562,7 @@
       WHILE lo_sublist->type EQ type_pair.
         DATA(lo_pair) = lo_sublist->car.
         _validate lo_pair->car.
-        IF lo_pair->car->is_equivalent( lo_key ) NE false.
+        IF lo_pair->car->is_equivalent( lo_key ).
           result = lo_pair.
           RETURN.
         ENDIF.
@@ -7906,19 +7907,15 @@
     ENDMETHOD.                    "proc_equal
 
     METHOD proc_eqv. " eqv?
-      _validate: list, list->car.
+      _validate: list, list->car, list->cdr, list->cdr->car.
       result = false.
+      list->cdr->assert_last_param(  ).
 
-      DATA(lo_ptr) = list.
-      WHILE lo_ptr->cdr NE nil.
-        DATA(lo_next) = lo_ptr->cdr->car.
-        _validate lo_next.
-        result = lo_next->is_equivalent( lo_ptr->car ).
-        IF result EQ false.
-          RETURN.
+      DATA(lo_obj1) = list->car.
+      DATA(lo_obj2) = list->cdr->car.
+        IF lo_obj1->is_equivalent( lo_obj2 ).
+          result = true.
         ENDIF.
-        lo_ptr = lo_ptr->cdr.
-      ENDWHILE.
 
     ENDMETHOD.
 
@@ -8067,25 +8064,25 @@
 
     METHOD proc_is_exact_integer.
       _validate list.
-      list->assert_last_param( ).
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-*     (exact-integer? z) procedure
+      _assert_one_param 'exact-integer?'.
 *     Returns #t if z is both exact and an integer; otherwise returns #f.
       result = false.
       CHECK list->car IS BOUND.
       CASE list->car->type.
-        WHEN type_integer.
-          result = true.
-        WHEN type_rational.
-          lo_rat ?= list->car.
-          CHECK lo_rat->denominator EQ 1.
-          result = true.
+        WHEN type_integer
+          OR type_rational
+          OR type_real
+          OR type_complex.
+          DATA(num) = CAST lcl_lisp_number( list->car ).
+          IF num->exact EQ abap_true AND num->is_integer( ).
+            result = true.
+          ENDIF.
       ENDCASE.
     ENDMETHOD.
 
     METHOD proc_is_integer.
       _validate list.
-      list->assert_last_param( ).
+      _assert_one_param 'integer?'.
 *     If x is an inexact real number, then (integer? x) is true if and only if (= x (round x)).
 
       result = false.
@@ -8288,10 +8285,8 @@
     METHOD proc_magnitude.
       DATA z TYPE REF TO lcl_lisp_complex.
       _validate list.
-      IF list->cdr NE nil.
-        throw( |magnitude takes only one argument| ).
-      ENDIF.
-      _validate_complex list->car `[magnitude]`.
+      _assert_one_param `magnitude`.
+      _validate_type list->car `[magnitude]` complex `complex`.
 
       z ?= list->car.
       result = lcl_lisp_new=>real_number( value = abs( z->magnitude )
@@ -8300,10 +8295,8 @@
 
     METHOD proc_angle.
       _validate list.
-      IF list->cdr NE nil.
-        throw( |angle takes only one argument| ).
-      ENDIF.
-      _validate_complex list->car `[angle]`.
+      _assert_one_param `angle`.
+      _validate_type list->car `[angle]` complex `complex`.
 
       result = lcl_lisp_new=>real_number( value = CAST lcl_lisp_complex( list->car )->angle
                                           iv_exact = abap_false ).
@@ -8437,8 +8430,6 @@
             _get_real y lo_y '[atan y x]'.
 
             cell = list->cdr->car.
-            _values_get_next cell.
-
             _get_real x cell '[atan y x]'.
 
             list->cdr->assert_last_param( ).
@@ -8585,6 +8576,7 @@
 *          _get_real exp1 list->cdr->car '[expt]'.
           _validate list->cdr->car.
           cell = list->cdr->car.
+          _values_get_next cell.
           IF lv_exact EQ abap_true.
             lv_exact = CAST lcl_lisp_number( cell )->exact.
           ENDIF.
@@ -12148,14 +12140,14 @@
       DATA lo_real TYPE REF TO lcl_lisp_real.
       DATA lo_z TYPE REF TO lcl_lisp_complex.
 
-      result = false.
+      result = abap_false.
 
       DATA(b) = io_elem.
 *     Object a and Object b are both #t or both #f or both the empty list.
       IF ( me EQ true AND b EQ true )
         OR ( me EQ false AND b EQ false )
         OR ( me EQ nil AND b EQ nil ).
-        result = true.
+        result = abap_true.
         RETURN.
       ENDIF.
 
@@ -12209,7 +12201,7 @@
 
           CHECK me = b.
       ENDCASE.
-      result = true.
+      result = abap_true.
     ENDMETHOD.
 
     METHOD is_equal. "equal?
@@ -12290,7 +12282,9 @@
 *        WHEN type_bytevector.
 
         WHEN OTHERS.
-          result = is_equivalent( io_elem ).
+          IF is_equivalent( io_elem ).
+            result = true.
+          ENDIF.
 
       ENDCASE.
 
