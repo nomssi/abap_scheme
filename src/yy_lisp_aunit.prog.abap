@@ -197,6 +197,8 @@
      ENDMETHOD.                    "basic_define_a_23
 
      METHOD rational_inexact.
+       scheme( code = '24.0/3'
+               expected = invalid_digit( '/' ) ).
        scheme( code = '(rational? 24.0/3)'
                expected = invalid_digit( '/' ) ).
      ENDMETHOD.
@@ -1479,7 +1481,7 @@
        CREATE OBJECT lo_no_number
          EXPORTING
            textid = '995DB739AB5CE919E10000000A11447B'
-           value  = 'digit #'.   " The argument digit # cannot be interpreted as a number
+           value  = `digit `.   " The argument digit  cannot be interpreted as a number
 
        scheme( code = `(char-ci>=? #e #D #\B #\b)`
                expected = |Eval: { lo_no_number->get_text( ) }| ).
@@ -2167,12 +2169,15 @@
 
        METHODS is_even FOR TESTING.
        METHODS is_odd FOR TESTING.
+       METHODS is_zero FOR TESTING.
+       METHODS is_positive FOR TESTING.
        METHODS is_negative FOR TESTING.
 
        METHODS is_complex FOR TESTING.
        METHODS is_real FOR TESTING.
        METHODS is_real_1 FOR TESTING.
        METHODS is_rational FOR TESTING.
+       METHODS rationalize FOR TESTING.
        METHODS is_rational_inexact FOR TESTING.
        METHODS is_integer FOR TESTING.
 
@@ -2181,6 +2186,7 @@
 
        METHODS to_exact_1 FOR TESTING.
        METHODS to_exact_2 FOR TESTING.
+       METHODS to_exact_3 FOR TESTING.
        METHODS to_inexact_1 FOR TESTING.
 
        METHODS finite_1 FOR TESTING.
@@ -2223,6 +2229,7 @@
        METHODS inexact_5 FOR TESTING.
 
        METHODS binary_1 FOR TESTING.
+       METHODS decimal_1 FOR TESTING.
        METHODS octal_1 FOR TESTING.
        METHODS hexadecimal_1 FOR TESTING.
 
@@ -2248,6 +2255,8 @@
                expected = '#f' ).
        scheme( code = '(even? 0)'
                expected = '#t' ).
+       scheme( code = '(even? +inf.0)'
+               expected = 'Eval: +inf.0 is not an integer in even?' ).
      ENDMETHOD.                    "is_even
 
      METHOD is_odd.
@@ -2255,6 +2264,8 @@
                expected = '#t' ).
        scheme( code = '(odd? 0)'
                expected = '#f' ).
+       scheme( code = '(odd? +inf.0)'
+               expected = 'Eval: +inf.0 is not an integer in odd?' ).
      ENDMETHOD.                    "is_odd
 
      METHOD is_negative.
@@ -2262,9 +2273,31 @@
                expected = '#f' ).
        scheme( code = '(negative? 0)'
                expected = '#f' ).
+       scheme( code = '(negative? 0.0)'
+               expected = '#f' ).
        scheme( code = '(negative? -1/3)'
                expected = '#t' ).
      ENDMETHOD.                    "is_negative
+
+     METHOD is_zero.
+       scheme( code = '(zero? 3)'
+               expected = '#f' ).
+       scheme( code = '(zero? -0.0)'
+               expected = '#t' ).
+       scheme( code = '(zero? 0)'
+               expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD is_positive.
+       scheme( code = '(positive? 3)'
+               expected = '#t' ).
+       scheme( code = '(positive? -10)'
+               expected = '#f' ).
+       scheme( code = '(positive? 0)'
+               expected = '#f' ).
+       scheme( code = '(positive? 0.0)'
+               expected = '#f' ).
+     ENDMETHOD.
 
      METHOD is_complex.
        scheme( code = '(complex? 3+4i)'
@@ -2275,12 +2308,22 @@
                expected = '#t' ).
        scheme( code = '(complex? 1-i)'
                expected = '#t' ).
+       scheme( code = '(complex? 1@1)'
+               expected = '#t' ).
      ENDMETHOD.                    "is_complex
 
      METHOD is_real.
        scheme( code = '(real? 3)'
                expected = '#t' ).
        scheme( code = '(real? 2.5+0i)'
+               expected = '#t' ).
+       scheme( code = '(real? 2.5+0.0i)'
+               expected = '#f' ).
+       scheme( code = '(real? 0/0)'
+               expected = '#t' ).
+       scheme( code = '(real? 1/0)'
+               expected = '#t' ).
+       scheme( code = '(real? -1/0)'
                expected = '#t' ).
      ENDMETHOD.                    "is_real
 
@@ -2300,7 +2343,24 @@
                expected = '#t' ).
        scheme( code = '(+ (/ 3) (+ 1 (/ 4)))'
                expected = '19/12' ).
+       scheme( code = '(rational? 0/0)'
+               expected = '#f' ).
+       scheme( code = '(rational? 1/0)'
+               expected = '#f' ).
+       scheme( code = '(rational? -1/0)'
+               expected = '#f' ).
      ENDMETHOD.                    "is_rational
+
+     METHOD rationalize.
+       scheme( code = '(rationalize 1/4 1/10)'
+               expected = '1/3' ).
+       scheme( code = '(rationalize -1/4 1/10)'
+               expected = '-1/3' ).
+       scheme( code = '(rationalize 1/4 1/4)'
+               expected = '0' ).
+       scheme( code = '(rationalize 11/40 1/4)'
+               expected = '1/2' ).
+     ENDMETHOD.
 
      METHOD is_rational_inexact.
        scheme( code = '(rational? -inf.0)'
@@ -2350,6 +2410,11 @@
      METHOD to_exact_2.
        scheme( code = '(exact 3e10)'
                expected = '30000000000' ).
+     ENDMETHOD.
+
+     METHOD to_exact_3.
+       scheme( code = '(exact .3)'
+               expected = '3/10' ).
      ENDMETHOD.
 
      METHOD to_inexact_1.
@@ -2545,6 +2610,11 @@
      METHOD inexact_5.
        scheme( code = '(eq? 1/3 #i1/3)'
                expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD decimal_1.
+       scheme( code = '#D23f2'
+               expected = '2300.0' ).
      ENDMETHOD.
 
      METHOD binary_1.
@@ -2919,6 +2989,9 @@
                expected = '3' ).
        scheme( code =  '(sqrt -1)'
                expected = '+i' ).
+       scheme( code =  '(sqrt -4.0)'
+               expected = '+2.0i' ).
+
      ENDMETHOD.                    "math_sqrt
 
      METHOD math_int_sqrt.
