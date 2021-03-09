@@ -2398,8 +2398,10 @@
                expected = |1| ).
        scheme( code = |(lcm 32 -36)|
                expected = |288| ).
-*       scheme( code = |(lcm 32.0 -36)|
-*               expected = |288.0| ).   " inexact
+       scheme( code = |(lcm 32.0 -36)|
+               expected = |288.0| ).   " inexact
+       scheme( code = |(lcm 1/2 2/3)|
+               expected = |2| ).
      ENDMETHOD.                    "lcm_1
 
      METHOD to_exact_1.
@@ -2839,6 +2841,8 @@
      METHOD math_division_3.
        scheme( code =  '(/ 5 10)'
                expected = '1/2' ).
+       scheme( code =  '(/ 5 10.0)'
+               expected = '0.5' ).
      ENDMETHOD.                    "math_division_3
 
      METHOD math_division_4.
