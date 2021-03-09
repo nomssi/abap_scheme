@@ -3163,6 +3163,8 @@
             zimag = lo_z->zimag.
           ELSEIF to_upper( mi_stream->state-char ) NE c_imaginary_marker.
             throw( c_error_complex_parse ).
+          ELSE.
+            mi_stream->next_char( ).   " Skip Imaginary symbol
           ENDIF.
       ENDCASE.
 
@@ -8359,41 +8361,58 @@
     METHOD proc_real_part.
       _get_arg0_as_number `real-part`.
 
-      IF lo_number->type NE type_complex.
-        lo_number->raise( ` is not a complex number in [real-part]` ) ##NO_TEXT.
+      IF lo_number->type EQ type_complex.
+        result = CAST lcl_lisp_complex( lo_number )->zreal.
+      ELSE.
+        result = lo_number.
       ENDIF.
-
-      result = CAST lcl_lisp_complex( lo_number )->zreal.
     ENDMETHOD.
 
     METHOD proc_imag_part.
       _get_arg0_as_number `imag-part`.
 
-      IF lo_number->type NE type_complex.
-        lo_number->raise( ` is not a complex number in [imag-part]` ) ##NO_TEXT.
+      IF lo_number->type EQ type_complex.
+        result = CAST lcl_lisp_complex( lo_number )->zimag.
+      ELSE.
+        result = lcl_lisp_number=>zero.
       ENDIF.
-
-      result = CAST lcl_lisp_complex( lo_number )->zimag.
     ENDMETHOD.
 
     METHOD proc_magnitude.
       DATA z TYPE REF TO lcl_lisp_complex.
-      _validate list.
-      _assert_one_param `magnitude`.
-      _validate_type list->car `[magnitude]` complex `complex`.
+      _get_arg0_as_number `magnitude`.
 
-      z ?= list->car.
-      result = lcl_lisp_new=>real_number( value = abs( z->magnitude )
-                                          iv_exact = abap_true ).
+      IF lo_number->type EQ type_complex.
+        z ?= lo_number.
+        IF z->infnan EQ abap_true.
+          IF z->zreal = lcl_lisp_number=>nan OR z->zimag = lcl_lisp_number=>nan.
+            result = lcl_lisp_number=>nan.
+          ELSE.
+            result = lcl_lisp_number=>inf.
+          ENDIF.
+        ELSE.
+          result = lcl_lisp_new=>real_number( value = abs( z->magnitude )
+                                              iv_exact = z->exact ).
+        ENDIF.
+      ELSE.
+        result = lo_number->absolute( ).
+      ENDIF.
     ENDMETHOD.
 
     METHOD proc_angle.
-      _validate list.
-      _assert_one_param `angle`.
-      _validate_type list->car `[angle]` complex `complex`.
+      DATA z TYPE REF TO lcl_lisp_complex.
+      _get_arg0_as_number `angle`.
 
-      result = lcl_lisp_new=>real_number( value = CAST lcl_lisp_complex( list->car )->angle
-                                          iv_exact = abap_false ).
+      IF lo_number->type EQ type_complex.
+        z ?= lo_number.
+        result = lcl_lisp_new=>real_number( value = z->angle
+                                            iv_exact = z->exact ).
+      ELSEIF sign( lo_number->to_real( ) ) GE 0.
+        result = lo_number->zero.
+      ELSE.
+        result = lcl_lisp_new=>real_number( value = c_pi
+                                            iv_exact = abap_false ).
+      ENDIF.
     ENDMETHOD.
 
     METHOD proc_abs.
@@ -8478,21 +8497,21 @@
 
     METHOD proc_acos.
       _trigonometric_header '[acos]'.
-      DATA lo_z TYPE REF TO lcl_lisp_complex.
+      DATA z TYPE REF TO lcl_lisp_complex.
 
       IF y EQ 0.
         result = lcl_lisp_new=>real( value = acos( a )
                                      iv_exact = cell_exact ).
       ELSE.
         "cos^-1 z = -i log( z + i sqrt( 1 - z^2 ) )
-        lo_z ?= complex_sqrt( x = 1 - x * x + y * y
-                              y = - 2 * x * y ).
+        z ?= complex_sqrt( x = 1 - x * x + y * y
+                           y = - 2 * x * y ).
 
-        lo_z ?= complex_log( x = y - lo_z->zimag->to_real( )
-                             y = x + lo_z->zreal->to_real( ) ).
+        z ?= complex_log( x = x - z->zimag->to_real( )
+                          y = y + z->zreal->to_real( ) ).
 
-        result = lcl_lisp_new=>rectangular( real = lo_z->zimag
-                                            imag = lcl_lisp_new=>real( value = - lo_z->zreal->to_real( )
+        result = lcl_lisp_new=>rectangular( real = z->zimag
+                                            imag = lcl_lisp_new=>real( value = - z->zreal->to_real( )
                                                                        iv_exact = cell_exact ) ) .
       ENDIF.
         _catch_arithmetic_error.
@@ -8502,7 +8521,7 @@
     METHOD proc_atan.
       "tan^-1 z = (log(1+iz) - log(1-iz))/(2i)
       " (atan y x) cf. table page 38 in r7rs
-      DATA y TYPE f.
+      DATA y TYPE tv_real.
       DATA x TYPE tv_real.
       DATA arctan TYPE f.
       DATA lv_tan TYPE f.
@@ -8519,23 +8538,30 @@
           IF list->cdr IS BOUND AND list->cdr->car IS BOUND.
             _get_real y lo_y '[atan y x]'.
 
-            cell = list->cdr->car.
-            _get_real x cell '[atan y x]'.
+            _get_real x list->cdr->car '[atan y x]'.
 
             list->cdr->assert_last_param( ).
           ELSE.
-            list->assert_last_param( ).
+            _assert_one_param '[atan z]'.
             IF lo_y->type = type_complex.
-              lo_z ?= lo_y.
-              lo_x = lo_z->zreal.
-              lo_y = lo_z->zimag.
-              IF lo_x->infnan EQ abap_true OR lo_y->infnan EQ abap_true.
-                result = lcl_lisp_number=>nan.
-                RETURN.
-              ELSE.
-                y = lo_y->to_real( ).
-                x = lo_x->to_real( ).
-              ENDIF.
+"-------------------------------------------------------------------
+              DATA lo_number TYPE REF TO lcl_lisp_number.
+              DATA ln_z TYPE REF TO lcl_lisp_complex.
+              DATA i_quotient TYPE REF TO lcl_lisp_complex.
+
+              lo_number ?= lo_y.
+              cell_exact = lo_number->exact.
+
+              DATA(i_minus_z) = lo_number->imaginary->substract( lo_number ).
+              DATA(i_plus_z) = lo_number->imaginary->add( lo_number ).
+              i_quotient ?= i_minus_z->divide( i_plus_z ).
+              ln_z ?= complex_log( x = i_quotient->zreal->to_real( )
+                                   y = i_quotient->zimag->to_real( )
+                                   iv_exact = cell_exact ).
+              DATA(z2i) = lo_number->imaginary->add( lo_number->imaginary ).
+              result = ln_z->divide( z2i ).
+              RETURN.
+"---------------------------------------------------------------------
             ELSE.
               _get_real y list->car '[atan z]'.
               x = 1.
@@ -9121,17 +9147,24 @@
     METHOD proc_remainder.
       DATA numerator TYPE tv_real.
       DATA denominator TYPE tv_real.
-      _data_local_numeric_cell.
+      DATA lv_exact TYPE tv_flag.
 
       result = nil.
       _validate: list, list->cdr.
-      _get_real numerator list->car '[remainder]'.
-      lv_exact = cell_exact.
-      _get_real denominator list->cdr->car '[remainder]'.
+
+      _validate_number list->car 'remainder'.
+      DATA(num) = CAST lcl_lisp_number( list->car ).
+      numerator = num->to_real( 'remainder' ).
+      lv_exact = num->exact.
+
+      _validate_number list->cdr->car 'remainder'.
+      num = CAST lcl_lisp_number( list->cdr->car ).
+      denominator = num->to_real( 'remainder' ).
       IF lv_exact EQ abap_true.
-        lv_exact = cell_exact.
+        lv_exact = num->exact.
       ENDIF.
       _assert_last_param list->cdr.
+
       TRY.
           result = lcl_lisp_new=>real_number( value = numerator - denominator * trunc( numerator / denominator )
                                               iv_exact = lv_exact ).
@@ -9142,15 +9175,21 @@
     METHOD proc_quotient.
       DATA numerator TYPE tv_real.
       DATA denominator TYPE tv_real.
-      _data_local_numeric_cell.
+      DATA lv_exact TYPE tv_flag.
 
       result = nil.
       _validate: list, list->cdr.
-      _get_real numerator list->car '[quotient]'.
-      lv_exact = cell_exact.
-      _get_real denominator list->cdr->car '[quotient]'.
+
+      _validate_number list->car 'quotient'.
+      DATA(num) = CAST lcl_lisp_number( list->car ).
+      numerator = num->to_real( 'quotient' ).
+      lv_exact = num->exact.
+
+      _validate_number list->cdr->car 'quotient'.
+      num = CAST lcl_lisp_number( list->cdr->car ).
+      denominator = num->to_real( 'quotient' ).
       IF lv_exact EQ abap_true.
-        lv_exact = cell_exact.
+        lv_exact = num->exact.
       ENDIF.
       _assert_last_param list->cdr.
       TRY.
@@ -9168,17 +9207,24 @@
 
       result = nil.
       _validate: list, list->cdr.
-      _get_real numerator list->car '[modulo]'.
-      lv_exact = cell_exact.
-      _get_real base list->cdr->car '[modulo]'.
+
+      _validate_number list->car 'modulo'.
+      DATA(num) = CAST lcl_lisp_number( list->car ).
+      numerator = num->to_real( 'modulo' ).
+      lv_exact = num->exact.
+
+      _validate_number list->cdr->car 'modulo'.
+      num = CAST lcl_lisp_number( list->cdr->car ).
+      base = num->to_real( 'modulo' ).
       IF lv_exact EQ abap_true.
-        lv_exact = cell_exact.
+        lv_exact = num->exact.
       ENDIF.
+
       _assert_last_param list->cdr.
       TRY.
           mod = numerator MOD base.
           IF sign( base ) LE 0 AND mod NE 0.
-            mod = mod + base.
+            mod += base.
           ENDIF.
           result = lcl_lisp_new=>real_number( value = mod
                                               iv_exact = lv_exact ).
@@ -13919,12 +13965,8 @@
         WHEN type_real.
           DATA(lo_real) = CAST lcl_lisp_real( me ).
           rs_info-ref = lo_real.
-          IF lo_real->infnan EQ abap_false.
-            rs_info-real = lo_real->real.
-            rs_info-infnan = abap_false.
-          ELSE.
-            rs_info-infnan = abap_true.
-          ENDIF.
+          rs_info-infnan = lo_real->infnan.
+          rs_info-real = lo_real->real.
 
         WHEN type_complex.
           throw( `Invalid complex part in [get_number_info]` ).
@@ -13966,7 +14008,7 @@
           IF self-denom NE 0.
             rv_real = self-nummer / self-denom.
           ELSE.
-            throw( `not a rational ` && operation ).
+            throw( `Not a rational in ` && operation ).
           ENDIF.
 
         WHEN type_real.
@@ -13975,7 +14017,7 @@
           ELSEIF infnan_value IS SUPPLIED.
             rv_real = infnan_value.
           ELSE.
-            throw( `Not a Number ` && operation ).
+            throw( `Not a rational in ` && operation ).
           ENDIF.
 
         WHEN OTHERS.
@@ -15328,14 +15370,62 @@
     METHOD to_polar.
       DATA lv_tan TYPE f.
       DATA lv_angle TYPE f.
-      IF real_part EQ c_max_float OR imaginary_part EQ c_max_float.
+
+      IF real_part EQ 0.
+        IF imaginary_part GT 0.
+          magnitude = imaginary_part.
+          angle = c_pi / 2.
+        ELSEIF imaginary_part LT 0.
+          magnitude = - imaginary_part.
+          angle = - c_pi / 2.
+        ELSE.
+          magnitude = 0.
+          angle = 0.  " undefined
+        ENDIF.
+      ELSEIF real_part EQ c_max_float.
         magnitude = c_max_float.
-        lv_tan = nmin( val1 = imaginary_part val2 = c_max_int ).
-      ELSE.
-        magnitude = sqrt( real_part ** 2 + imaginary_part ** 2 ).
-        lv_tan = imaginary_part.
+        IF imaginary_part EQ c_max_float.
+          lv_angle = c_pi / 4.
+        ELSEIF imaginary_part EQ c_min_float.
+          lv_angle = - c_pi / 4.
+        ELSE.
+          lv_angle = 0.
+        ENDIF.
+      ELSEIF real_part EQ c_min_float.
+        magnitude = c_max_float.
+        IF imaginary_part EQ c_max_float.
+          lv_angle = 3 * c_pi / 4.
+        ELSEIF imaginary_part EQ c_min_float.
+          lv_angle = - 3 * c_pi / 4.
+        ELSE.
+          lv_angle = - c_pi.
+        ENDIF.
+      ELSEIF real_part GT 0.
+        IF imaginary_part EQ c_max_float.
+          magnitude = c_max_float.
+          lv_angle = c_pi / 2.
+        ELSEIF imaginary_part EQ c_min_float.
+          magnitude = c_max_float.
+          lv_angle = - c_pi / 2.
+        ELSE.
+          magnitude = sqrt( real_part ** 2 + imaginary_part ** 2 ).
+          lv_tan = imaginary_part / real_part.
+          lv_angle = atan( lv_tan ).
+        ENDIF.
+      ELSEIF real_part LT 0.
+        IF imaginary_part EQ c_max_float.
+          magnitude = c_max_float.
+          lv_angle = c_pi / 2.
+        ELSEIF imaginary_part EQ c_min_float.
+          magnitude = c_max_float.
+          lv_angle = - c_pi / 2.
+        ELSE.
+          magnitude = sqrt( real_part ** 2 + imaginary_part ** 2 ).
+          lv_tan = imaginary_part / real_part.
+          lv_angle = atan( lv_tan ).
+          lv_angle = lv_angle + c_pi.
+        ENDIF.
       ENDIF.
-      lv_angle = atan( lv_tan ). "  + k * pi
       angle = lv_angle.
     ENDMETHOD.
 
@@ -15343,6 +15433,7 @@
       DATA lv_angle TYPE f.
       DATA lv_cos TYPE f.
       DATA lv_sin TYPE f.
+
       lv_angle = angle.
       lv_cos = cos( lv_angle ).
       real_part = magnitude * lv_cos.

@@ -2953,8 +2953,15 @@
      ENDMETHOD.                    "math_asin
 
      METHOD math_acos.
+       DATA lv_exp TYPE tv_real.
        code_test_f( code =  '(acos 0)'
-                 expected = '1.5707963267948966192313216916398' ) ##literal.
+                    expected = '1.5707963267948966192313216916398' ) ##literal.
+       lv_exp = '1.3770031902399644'.
+       code_test_f( code =  '(real-part (acos 1.0+5.0i))'
+                    expected = lv_exp ) ##literal.
+       lv_exp = '-2.330974653049312448379523056074553'.
+       code_test_f( code =  '(imag-part (acos 1.0+5.0i))'
+                    expected = lv_exp ) ##literal.
      ENDMETHOD.                    "math_acos
 
      METHOD math_atan.
@@ -3415,6 +3422,7 @@
        METHODS string_to_number_2 FOR TESTING.
        METHODS string_to_number_3 FOR TESTING.
        METHODS string_to_number_4 FOR TESTING.
+       METHODS string_to_number_5 FOR TESTING.
        METHODS string_to_num_radix FOR TESTING.
        METHODS string_to_num_radix_error FOR TESTING.
        METHODS number_to_string_1 FOR TESTING.
@@ -4147,6 +4155,11 @@
        scheme( code = |(string->number "1a2")|
                expected = '#f' ).
      ENDMETHOD.                    "string_to_number_4
+
+     METHOD string_to_number_5.
+       scheme( code = |(string->number "3.0+2.5i")|
+               expected = '3.0+2.5i' ).
+     ENDMETHOD.
 
      METHOD string_to_num_radix.
        scheme( code = |(string->number "100" 16)|
@@ -4986,6 +4999,8 @@
      METHOD compa_lte_1.
 *   Test LT
        scheme( code = '(< 1 2 3)'
+               expected = '#t' ).
+       scheme( code = '(< 1 +inf.0)'
                expected = '#t' ).
      ENDMETHOD.                    "compa_lte_1
 
