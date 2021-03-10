@@ -8531,37 +8531,34 @@
       _data_local_numeric_cell.
 
       result = nil.
-      _validate list.
+      _validate: list, list->car.
       TRY.
           lo_y ?= list->car.
 
           IF list->cdr IS BOUND AND list->cdr->car IS BOUND.
             _get_real y lo_y '[atan y x]'.
 
+            lo_x ?= list->cdr->car.
             _get_real x list->cdr->car '[atan y x]'.
 
             list->cdr->assert_last_param( ).
           ELSE.
             _assert_one_param '[atan z]'.
             IF lo_y->type = type_complex.
-"-------------------------------------------------------------------
-              DATA lo_number TYPE REF TO lcl_lisp_number.
               DATA ln_z TYPE REF TO lcl_lisp_complex.
               DATA i_quotient TYPE REF TO lcl_lisp_complex.
 
-              lo_number ?= lo_y.
-              cell_exact = lo_number->exact.
+              cell_exact = lo_y->exact.
 
-              DATA(i_minus_z) = lo_number->imaginary->substract( lo_number ).
-              DATA(i_plus_z) = lo_number->imaginary->add( lo_number ).
+              DATA(i_minus_z) = lo_y->imaginary->substract( lo_y ).
+              DATA(i_plus_z) = lo_y->imaginary->add( lo_y ).
               i_quotient ?= i_minus_z->divide( i_plus_z ).
               ln_z ?= complex_log( x = i_quotient->zreal->to_real( )
                                    y = i_quotient->zimag->to_real( )
                                    iv_exact = cell_exact ).
-              DATA(z2i) = lo_number->imaginary->add( lo_number->imaginary ).
+              DATA(z2i) = lo_z->imaginary->add( lo_z->imaginary ).
               result = ln_z->divide( z2i ).
               RETURN.
-"---------------------------------------------------------------------
             ELSE.
               _get_real y list->car '[atan z]'.
               x = 1.
@@ -8575,6 +8572,31 @@
               RETURN.
             ELSE.
               arctan = c_pi.
+            ENDIF.
+          ELSEIF lo_y->infnan EQ abap_true OR ( lo_x IS BOUND AND lo_x->infnan EQ abap_true ).
+            "##TO DO fix the logic.
+            IF lo_x IS BOUND. " lo_y or lo_x is InfNaN
+              CASE lo_y.
+                WHEN lcl_lisp_number=>inf
+                  OR lcl_lisp_number=>neg_inf
+                  OR lcl_lisp_number=>nan
+                  OR lcl_lisp_number=>neg_nan.
+                  result = lcl_lisp_number=>nan.
+                  RETURN.
+                WHEN OTHERS.
+                  CASE lo_x.
+                    WHEN lcl_lisp_number=>inf.
+                      arctan = 2 * atan( 0 ).
+
+                    WHEN lcl_lisp_number=>neg_inf
+                      OR lcl_lisp_number=>nan
+                      OR lcl_lisp_number=>neg_nan.
+                      result = lcl_lisp_number=>nan.
+                      RETURN.
+                  ENDCASE.
+              ENDCASE.
+            ELSE. " lo_y is InfNaN
+              arctan = 2 * atan( 1 ).
             ENDIF.
           ELSE.
             magnitude = sqrt( x * x  + y * y ).
@@ -14759,7 +14781,8 @@
               DATA(lo_real) = CAST lcl_lisp_real( me ).
               DATA lv_nummer TYPE tv_int.
               IF lo_real->to_rational( IMPORTING ev_nummer = lv_nummer ).
-                result = lcl_lisp_new=>real_number( lv_nummer ).
+                result = lcl_lisp_new=>real_number( value = lv_nummer
+                                                    iv_exact = lo_real->exact ).
               ELSE.
                 lo_real->raise( ` is not a rational in numerator` ).
               ENDIF.

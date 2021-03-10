@@ -2716,6 +2716,7 @@
        METHODS math_acos FOR TESTING.
        METHODS math_atan FOR TESTING.
        METHODS math_atan_1 FOR TESTING.
+       METHODS math_atan_2 FOR TESTING.
 
        METHODS math_exp FOR TESTING.
        METHODS math_expt FOR TESTING.
@@ -2725,7 +2726,11 @@
        METHODS math_square FOR TESTING.
        METHODS math_complex FOR TESTING.
        METHODS math_complex_1 FOR TESTING.
+       METHODS math_complex_2 FOR TESTING.
        METHODS math_log FOR TESTING.
+       METHODS math_log_1 FOR TESTING.
+       METHODS math_log_2 FOR TESTING.
+       METHODS math_log_3 FOR TESTING.
 
        METHODS math_floor FOR TESTING.
        METHODS math_floor_new FOR TESTING.
@@ -2976,6 +2981,11 @@
                     expected = '3.141592653589793' ) ##literal.
      ENDMETHOD.                    "math_atan_1
 
+     METHOD math_atan_2.
+       code_test_f( code =  '(atan +inf.0 -inf.0)'
+                    expected = '2.356194490192345' ) ##literal.
+     ENDMETHOD.
+
      METHOD math_exp.
        code_test_f( code =  '(exp 2)'
                     expected = '7.389056098930650227230427460575' ) ##literal.
@@ -3042,10 +3052,41 @@
        scheme( code =  '-inf.0-nan.0i'
                expected = '-inf.0-nan.0i' ).
      ENDMETHOD.
+
+     METHOD math_complex_2.
+       scheme( code =  '(make-rectangular 3 4.0)'
+               expected = '3+4.0i' ).
+       scheme( code =  '(real-part 5.0)'
+               expected = '5.0' ).
+       scheme( code =  '(magnitude 3+4i)'
+               expected = '5' ).
+       code_test_f( code =  '(angle +inf.0+inf.0i)'
+                    expected = '0.7853981633974483' ).
+     ENDMETHOD.
+
      METHOD math_log.
        code_test_f( code =  '(log 7.389056)'
                  expected = '1.999999986611192' ) ##literal.
      ENDMETHOD.                    "math_log
+
+     METHOD math_log_1.
+       scheme( code =  '(log 1)'
+               expected = '0' ) ##literal.
+     ENDMETHOD.
+
+     METHOD math_log_2.
+       scheme( code =  '(log (exp 1))'
+               expected = '1' ) ##literal.
+     ENDMETHOD.
+
+     METHOD math_log_3.
+       scheme( code =  '(log 100 10)'
+               expected = '2.0' ).
+       scheme( code =  '(log 8 2)'
+               expected = '3.0' ).
+       scheme( code =  '(log 5 5)'
+               expected = '1.0' ).
+     ENDMETHOD.
 
      METHOD math_floor.
        "(floor x) - This returns the largest integer that is no larger than x.
