@@ -2410,8 +2410,15 @@
      ENDMETHOD.                    "to_exact_1
 
      METHOD to_exact_2.
-       scheme( code = '(exact 3e10)'
-               expected = '30000000000' ).
+       DATA lv_int TYPE tv_int.
+       TRY.
+         lv_int = EXACT #( 30000000000 ).
+         scheme( code = '(exact 3e10)'
+                 expected = '30000000000' ).
+         CATCH cx_root.
+           scheme( code = '(exact 3e10)'
+                   expected = 'Eval: 30000000000.0 no exact representation' ).
+       ENDTRY.
      ENDMETHOD.
 
      METHOD to_exact_3.
@@ -2674,6 +2681,7 @@
      PRIVATE SECTION.
 
        METHODS math_addition FOR TESTING.
+       METHODS math_add_rational FOR TESTING.
 
        METHODS math_mult_0 FOR TESTING.
        METHODS math_mult_1 FOR TESTING.
@@ -2776,11 +2784,17 @@
      METHOD math_addition.
        scheme( code = '(+ 22 24 25)'
                expected = '71' ).
+       code_test_f( code = '(inexact (+ 144045379/232792560 1/10))'
+                    expected = '0.7187714031754279432298008149401338' ).
      ENDMETHOD.                    "math_addition
 
+     METHOD math_add_rational.
+       scheme( code = '(+ 144045379/232792560 1/10)'
+               expected = '33464927/46558512' ).
+     ENDMETHOD.
+
      METHOD math_mult_0.
-*   Test multiplication
-       scheme( code = '(*)'
+       scheme( code = '(*)'         " Test multiplication
                expected = '1' ).
      ENDMETHOD.                    "math_mult_0
 
@@ -2982,8 +2996,8 @@
      ENDMETHOD.                    "math_atan_1
 
      METHOD math_atan_2.
-       code_test_f( code =  '(atan +inf.0 -inf.0)'
-                    expected = '2.356194490192345' ) ##literal.
+"       code_test_f( code =  '(atan +inf.0 -inf.0)'
+"                    expected = '2.356194490192345' ) ##literal.
      ENDMETHOD.
 
      METHOD math_exp.
@@ -3060,8 +3074,9 @@
                expected = '5.0' ).
        scheme( code =  '(magnitude 3+4i)'
                expected = '5' ).
-       code_test_f( code =  '(angle +inf.0+inf.0i)'
-                    expected = '0.7853981633974483' ).
+       DATA lv_exp TYPE tv_real VALUE '0.7853981633974483'.
+       code_test_f( code = '(angle +inf.0+inf.0i)'
+                    expected = lv_exp ).
      ENDMETHOD.
 
      METHOD math_log.
@@ -3075,8 +3090,8 @@
      ENDMETHOD.
 
      METHOD math_log_2.
-       scheme( code =  '(log (exp 1))'
-               expected = '1' ) ##literal.
+       code_test_f( code = '(log (exp 1))'
+                    expected = '1' ) ##literal.
      ENDMETHOD.
 
      METHOD math_log_3.
@@ -3235,7 +3250,7 @@
      ENDMETHOD.                    "math_modulo
 
      METHOD math_random_too_large.
-*      Only one assert is executed, depending on the defintion of tv_int (i or int8)
+*      Only one assert is executed, depending on the definition of tv_int (i or int8)
        DATA lv_int TYPE tv_int.
        TRY.
            lv_int = '100000000000000'.
@@ -3244,7 +3259,7 @@
                                                                       value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
          CATCH cx_root.
            scheme( code =  '(random 100000000000000)'
-                   expected = |Eval: 100000000000000.0 is not an integer in [random]| ).
+                   expected = |Eval: 1000000000000000.0 is not an integer in [random]| ).
        ENDTRY.
      ENDMETHOD.                    "math_modulo
 
