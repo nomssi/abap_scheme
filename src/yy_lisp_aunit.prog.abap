@@ -64,7 +64,7 @@
                              RETURNING VALUE(text) TYPE string.
        METHODS scheme_incorrect IMPORTING code TYPE string.
        METHODS code_test_f IMPORTING code     TYPE string
-                                     expected TYPE numeric.
+                                     expected TYPE tv_real.
 
        METHODS riff_shuffle_code RETURNING VALUE(code) TYPE string.
 
@@ -74,7 +74,8 @@
        METHODS teardown.
        METHODS closing_1 FOR TESTING.
        METHODS closing_2 FOR TESTING.
-       METHODS rational_inexact FOR TESTING.
+
+       METHODS error_1 FOR TESTING.
 
 *   Stability tests - No Dump should occur
        METHODS stability_1 FOR TESTING.
@@ -196,11 +197,9 @@
                expected = `23` ).
      ENDMETHOD.                    "basic_define_a_23
 
-     METHOD rational_inexact.
-       scheme( code = '24.0/3'
-               expected = invalid_digit( '/' ) ).
-       scheme( code = '(rational? 24.0/3)'
-               expected = invalid_digit( '/' ) ).
+     METHOD error_1.
+       scheme( code = '(error)'
+               expected = |Eval: { c_error_message }| ).
      ENDMETHOD.
 
      METHOD basic_string_value.
@@ -310,7 +309,7 @@
 
      METHOD empty.
        assert_parse( code = ''
-                     expected = '<eof>' ).
+                     expected = '#!eof' ).
      ENDMETHOD.                    "lambda
 
      METHOD char_x.
@@ -1825,12 +1824,12 @@
 
      METHOD read_char_2.
        scheme( code = |(read-char (open-input-string ""))|
-               expected = '<eof>' ).
+               expected = '#!eof' ).
      ENDMETHOD.                    "read_char_2
 
      METHOD read_string_1.
        scheme( code = |(read-string 50 (open-input-string ""))|
-               expected = '""' ).  " <eof>
+               expected = '""' ).
      ENDMETHOD.                    "read_string_1
 
      METHOD read_string_2.
@@ -2181,7 +2180,11 @@
        METHODS is_rational_inexact FOR TESTING.
        METHODS is_integer FOR TESTING.
 
+       METHODS rational_inexact FOR TESTING.
+       METHODS create_rational FOR TESTING.
+
        METHODS gcd_1 FOR TESTING.
+       METHODS gcd_2 FOR TESTING.
        METHODS lcm_1 FOR TESTING.
 
        METHODS to_exact_1 FOR TESTING.
@@ -2351,6 +2354,32 @@
                expected = '#f' ).
      ENDMETHOD.                    "is_rational
 
+     METHOD rational_inexact.
+       scheme( code = '24.0/3'
+               expected = invalid_digit( '/' ) ).
+       scheme( code = '(rational? 24.0/3)'
+               expected = invalid_digit( '/' ) ).
+     ENDMETHOD.
+
+     METHOD create_rational.
+       scheme( code = '-4/3'
+               expected = '-4/3' ).
+       scheme( code = '-5/0'
+               expected = '-inf.0' ).
+       scheme( code = '0/0'
+               expected = '+nan.0' ).
+       scheme( code = '25/0'
+               expected = '+inf.0' ).
+
+       scheme( code = '(/ -5 0)'
+               expected = '-inf.0' ).
+       scheme( code = '(/ 0 0)'
+               expected = '+nan.0' ).
+       scheme( code = '(/ 25 0)'
+               expected = '+inf.0' ).
+
+     ENDMETHOD.
+
      METHOD rationalize.
        scheme( code = '(rationalize 1/4 1/10)'
                expected = '1/3' ).
@@ -2392,6 +2421,11 @@
        scheme( code = |(gcd 32 -36)|
                expected = |4| ).
      ENDMETHOD.                    "gcd_1
+
+     METHOD gcd_2.
+       scheme( code = |(gcd 32 0)|
+               expected = |0| ).
+     ENDMETHOD.
 
      METHOD lcm_1.
        scheme( code = |(lcm)|
@@ -2454,6 +2488,8 @@
      METHOD infinite_2.
        scheme( code = '(infinite? +inf.0)'
                expected = '#t' ).
+       scheme( code = '(infinite? -inf.0)'
+               expected = '#t' ).
      ENDMETHOD.
 
      METHOD infinite_3.
@@ -2462,6 +2498,8 @@
      ENDMETHOD.
 
      METHOD infinite_4.
+       scheme( code = '(infinite? 0-inf.0i)'
+               expected = '#t' ).
        scheme( code = '(infinite? 3.0+inf.0i)'
                expected = '#t' ).
      ENDMETHOD.
@@ -2688,6 +2726,7 @@
        METHODS math_mult_2 FOR TESTING.
        METHODS math_mult_3 FOR TESTING.
        METHODS math_mult_4 FOR TESTING.
+       METHODS math_mult_5 FOR TESTING.
 
        METHODS math_subtract_1 FOR TESTING.
        METHODS math_subtract_2 FOR TESTING.
@@ -2735,6 +2774,8 @@
        METHODS math_complex FOR TESTING.
        METHODS math_complex_1 FOR TESTING.
        METHODS math_complex_2 FOR TESTING.
+       METHODS math_complex_3 FOR TESTING.
+       METHODS math_complex_4 FOR TESTING.
        METHODS math_log FOR TESTING.
        METHODS math_log_1 FOR TESTING.
        METHODS math_log_2 FOR TESTING.
@@ -2816,6 +2857,57 @@
      METHOD math_mult_4.
        scheme( code = '(* 0 +inf.0)'
                expected = '+nan.0' ).
+     ENDMETHOD.
+
+     METHOD math_mult_5.
+       scheme( code = '(* -inf.0 -inf.0)'
+               expected = '+inf.0' ).
+       scheme( code = '(* -inf.0 +inf.0)'
+               expected = '-inf.0' ).
+       scheme( code = '(* +inf.0 +inf.0)'
+               expected = '+inf.0' ).
+
+       scheme( code = '(* 1/3 -inf.0)'
+               expected = '-inf.0' ).
+       scheme( code = '(* -1/4 -inf.0)'
+               expected = '+inf.0' ).
+       scheme( code = '(* -2.133 -inf.0)'
+               expected = '+inf.0' ).
+       scheme( code = '(* -1/4 +3.25)'
+               expected = '-0.8125' ).
+
+       scheme( code = '(* -inf.0 -5/9)'
+               expected = '+inf.0' ).
+       scheme( code = '(* +inf.0 12)'
+               expected = '+inf.0' ).
+       scheme( code = '(* +inf.0 -4)'
+               expected = '-inf.0' ).
+       scheme( code = '(* +inf.0 -492/7)'
+               expected = '-inf.0' ).
+       scheme( code = '(* +inf.0 -0.2342)'
+               expected = '-inf.0' ).
+
+       scheme( code = '(* +3 -1/12)'
+               expected = '-1/4' ).
+       scheme( code = '(* +300000000 -1/12)'
+               expected = '-25000000' ).
+
+       code_test_f( code = '(* 23344430 8942422)'
+                    expected = '208755744409460' ).
+       code_test_f( code = '(* 233444300 89424220)'
+                    expected = '20875574440946000' ).
+
+       code_test_f( code = '(* 34523344430422 -5/9)'
+                    expected = '-19179635794678.89' ).
+       code_test_f( code = '(* -172616722152110/9 -172616722152110/9)'
+                    expected = '367858429216527693703425334.567' ).
+
+       scheme( code = '(* -inf.0 +0.0)'
+               expected = '+nan.0' ).
+       scheme( code = '(* -inf.0 -0.0)'
+               expected = '+nan.0' ).
+       scheme( code = '(* +inf.0 -0.0)'
+               expected = '-nan.0' ).
      ENDMETHOD.
 
      METHOD math_subtract_1.
@@ -3077,6 +3169,42 @@
        DATA lv_exp TYPE tv_real VALUE '0.7853981633974483'.
        code_test_f( code = '(angle +inf.0+inf.0i)'
                     expected = lv_exp ).
+     ENDMETHOD.
+
+     METHOD math_complex_3.
+       scheme( code =  '-i'
+               expected = '-i' ).
+       scheme( code =  '-1i'
+               expected = '-i' ).
+       scheme( code =  '-inf.0'
+               expected = '-inf.0' ).
+       scheme( code =  '-inf.0i'
+               expected = '-inf.0i' ).
+       scheme( code =  '-nan.0i'
+               expected = '-nan.0i' ).
+       scheme( code =  '-1/4+nan.0i'
+               expected = '-1/4+nan.0i' ).
+       scheme( code =  '-nan.0-inf.0i'
+               expected = '-nan.0-inf.0i' ).
+       scheme( code =  '+inf.0-i'
+               expected = '+inf.0-i' ).
+     ENDMETHOD.
+
+     METHOD math_complex_4.
+       scheme( code =  '(+ 1+3i 1/4-i)'
+               expected = '5/4+2i' ).
+       scheme( code =  '(* 1+3i 1/4-i)'
+               expected = '13/4-1/4i' ).
+       scheme( code =  '(* 1+3i +i)'
+               expected = '-3+i' ).
+       code_test_f( code = '(real-part (/ -1+2i 2.4+9i))'
+                    expected = '0.1798063623789765' ).
+       code_test_f( code = '(imag-part (/ -1+2i 2.4+9i))'
+                    expected = '0.15905947441217153' ).
+       scheme( code =  '(- -inf.0 1-i)'
+               expected = '-inf.0+i' ).
+       scheme( code =  '(+ 1-inf.0i +nan.0)'
+               expected = '+nan.0-inf.0i' ).
      ENDMETHOD.
 
      METHOD math_log.
@@ -4230,6 +4358,12 @@
      METHOD number_to_string_1.
        scheme( code = |(number->string '21)|
                expected = '"21"' ).
+       scheme( code = |(number->string -8/3+2.3i)|
+               expected = '"-8/3+2.3i"' ).
+       scheme( code = |(number->string 26+inf.0i)|
+               expected = '"26+inf.0i"' ).
+       scheme( code = |(number->string -inf.0+nan.0i)|
+               expected = '"-inf.0+nan.0i"' ).
      ENDMETHOD.                    "number_to_string_1
 
      METHOD number_to_string_2.
@@ -4687,6 +4821,7 @@
        METHODS map_5 FOR TESTING.
        METHODS map_6 FOR TESTING.
        METHODS map_7 FOR TESTING.
+       METHODS map_8 FOR TESTING.
 
        METHODS for_each_1 FOR TESTING.
        METHODS for_each_2 FOR TESTING.
@@ -4907,6 +5042,17 @@
        scheme( code = |(map car '())|
                expected = c_lisp_nil ).
      ENDMETHOD.                    "map_7
+
+     METHOD map_8.
+       scheme( code = |(map (lambda (x y) (+  x y 10))| &
+                          |     '(1 2 3 4 5) | &
+                          |     '(-1 -2 -3 -4) )|
+               expected = |(10 10 10 10)| ).
+       scheme( code = |(map (lambda (x y) (+  x y 10))| &
+                          |     '(1 2 3 4) | &
+                          |     '(-1 -2 -3 -4 -5) )|
+               expected = |(10 10 10 10)| ).
+     ENDMETHOD.
 
      METHOD for_each_1.
        scheme( code = |(for-each + (list 3 4))|
@@ -5155,6 +5301,14 @@
 *      Test =
        scheme( code = '(= 2 3)'
                expected = '#f' ).
+       scheme( code = '(= 2.0 3+i)'
+               expected = '#f' ).
+       scheme( code = '(= 2.5i 0.0+5/2i)'
+               expected = '#t' ).
+       scheme( code = '(= 2.0 2+0.0i)'
+               expected = '#t' ).
+       scheme( code = '(= 1/4 0.25)'
+               expected = '#t' ).
        scheme( code = '(= 3 3)'
                expected = '#t' ).
      ENDMETHOD.                    "compa_eq_1
@@ -5570,7 +5724,7 @@
        scheme( code = '(define h1 (make-hash ''(dog "bow-wow" cat "meow" kennel (dog cat hedgehog))))'
                expected = 'h1' ).
        scheme( code = 'h1'
-               expected = '<hash>' ).
+               expected = '#!hash' ).
        scheme( code = '(hash-keys h1)'
                expected = '(dog cat kennel)' ).
        scheme( code = '(hash-get h1 ''kennel)'
@@ -5752,7 +5906,7 @@
        scheme( code = '(ab-set-value mandt "000")'
                expected = c_lisp_nil ).
        scheme( code = 'mandt'
-               expected = '<ABAP Data>' ).
+               expected = '#!ABAP-Data' ).
      ENDMETHOD.                    "abap_data
 
      METHOD abap_data_t005g.
@@ -5886,7 +6040,7 @@
        scheme( code = '(define profiles (ab-get f3 "PROFILES"))'
                expected = 'profiles' ).
        scheme( code = 'profiles'
-               expected = '<ABAP Table>' ).
+               expected = '#!ABAP-Table' ).
 
        scheme( code = '(define profile (ab-get profiles 1))'
                expected = 'profile' ).
@@ -5985,14 +6139,13 @@
      ENDMETHOD.                    "quasiquote_13
 
      METHOD quine_1.
+       "http://community.schemewiki.org/?quines
        scheme( code = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))| &
-                      |                  '(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))))| &
-                      |  (lambda (q) `(,q ',q))| &
-                      |  '(lambda (q) `(,q ',q)))|
-           expected = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))| &
                       | '(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))))| &
-                      | (lambda (q) `(,q ',q))| &
-                      |'(lambda (q) `(,q ',q)))| ).
+                      | (lambda (q) `(,q ',q)) '(lambda (q) `(,q ',q)))|
+           expected = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) ,(q qq)))| &
+                      | '(lambda (x) `((lambda (q qq) ,(q x)) ,(q qq)))))| &
+                      | (lambda (q) `(,q ',q)) '(lambda (q) `(,q ',q)))| ).
      ENDMETHOD.
 
      METHOD quine_2.
@@ -6113,7 +6266,7 @@
 
      METHOD select_1.
        scheme( code = |(sql-query "SELECT * FROM USR01 WHERE BNAME = 'DEVELOPER' ")|
-               expected = '<ABAP Query Result Set>' ).
+               expected = '#!ABAP-Query-Result-Set' ).
      ENDMETHOD.                    "select_1
 
    ENDCLASS.                    "ltc_query IMPLEMENTATION
@@ -6121,6 +6274,7 @@
    CLASS ltc_turtles DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
      PRIVATE SECTION.
+       CONSTANTS c_abap_turtle TYPE string VALUE '#!ABAP-Turtle'.
        METHODS setup.
        METHODS teardown.
        METHODS new_turtle.
@@ -6172,7 +6326,7 @@
      METHOD turtle_move.
        new_turtle( ).
        scheme( code = |(move 100 t) |
-               expected = '<ABAP turtle>' ).
+               expected = c_abap_turtle ).
        scheme( code = |(turtle-state t)|
                expected = '(#(300 300 90.0))' ).
      ENDMETHOD.
@@ -6180,7 +6334,7 @@
      METHOD turtle_move_offset.
        new_turtle( ).
        scheme( code = |(move-offset 50 50 t) |
-               expected = '<ABAP turtle>' ).
+               expected = c_abap_turtle ).
        scheme( code = |(turtle-state t)|
                expected = '(#(350 250 90.0))' ).
      ENDMETHOD.
@@ -6188,7 +6342,7 @@
      METHOD turtle_turn.
        new_turtle( ).
        scheme( code = |(turn 90 t) |
-               expected = '<ABAP turtle>' ).
+               expected = c_abap_turtle ).
        scheme( code = |(turtle-state t)|
                expected = '(#(300 200 180.0))' ).
      ENDMETHOD.
@@ -6196,7 +6350,7 @@
      METHOD turtle_turn_radian.
        new_turtle( ).
        scheme( code = |(turn/radians 3.1415926535897932384626433832795 t) |
-               expected = '<ABAP turtle>' ).
+               expected = c_abap_turtle ).
        scheme( code = |(turtle-state t)|
                expected = '(#(300 200 270.0))' ).
      ENDMETHOD.
@@ -6204,7 +6358,7 @@
      METHOD turtle_set_pen_width.
        new_turtle( ).
        scheme( code = |(set-pen-width t 5) |
-               expected = '<ABAP turtle>' ).
+               expected = c_abap_turtle ).
        scheme( code = |(turtles-pen-width t)|
                expected = '5' ).
      ENDMETHOD.
@@ -6212,7 +6366,7 @@
      METHOD turtle_set_pen_color.
        new_turtle( ).
        scheme( code = |(set-pen-color t "23444") |
-               expected = '<ABAP turtle>' ).
+               expected = c_abap_turtle ).
        scheme( code = |(turtles-pen-color t)|
                expected = `"23444"` ).
      ENDMETHOD.
@@ -6220,9 +6374,9 @@
      METHOD turtle_examples.
        new_turtle( ).
        scheme( code = |(regular-poly 8 100 t) |  " sides radius
-               expected = '<ABAP turtle>' ).
+               expected = c_abap_turtle ).
        scheme( code = |(regular-polys 10 100 t) |  " number, side
-               expected = '<ABAP turtle>' ).
+               expected = c_abap_turtle ).
      ENDMETHOD.
 
    ENDCLASS.
