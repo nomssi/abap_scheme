@@ -53,8 +53,8 @@
                                      level    TYPE aunit_level.
        METHODS test_f IMPORTING title    TYPE string
                                 code     TYPE string
-                                actual   TYPE numeric
-                                expected TYPE numeric.
+                                actual   TYPE tv_real
+                                expected TYPE tv_real.
 
        METHODS scheme IMPORTING code     TYPE string
                                 expected TYPE any
@@ -158,7 +158,7 @@
      ENDMETHOD.                    "code_test
 
      METHOD code_test_f.
-       DATA lv_result TYPE f.
+       DATA lv_result TYPE tv_real.
        lv_result = mo_int->eval_source( code ).
        test_f( code = code
                actual = lv_result
@@ -246,11 +246,12 @@
 *----------------------------------------------------------------------*
    CLASS ltc_parse DEFINITION INHERITING FROM ltc_interpreter
      FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
-     PRIVATE SECTION.
+     PROTECTED SECTION.
        METHODS parse IMPORTING code TYPE string.
        METHODS assert_parse IMPORTING code     TYPE string
                                       expected TYPE string
                                       level    TYPE aunit_level DEFAULT if_aunit_constants=>critical.
+     PRIVATE SECTION.
        METHODS delimiter FOR TESTING.
        METHODS empty FOR TESTING.
        METHODS char_x FOR TESTING.
@@ -260,16 +261,15 @@
        METHODS skip_comments_1 FOR TESTING.
        METHODS riff_shuffle FOR TESTING.
 
+       METHODS directive FOR TESTING.
+       METHODS identifier FOR TESTING.
+
        METHODS string_controls_0 FOR TESTING.
        METHODS string_controls_1 FOR TESTING.
        METHODS string_controls_2 FOR TESTING.
        METHODS string_controls_3 FOR TESTING.
 
        METHODS write_escape FOR TESTING.
-       METHODS detect_errors_0 FOR TESTING.
-       METHODS detect_errors_1 FOR TESTING.
-       METHODS detect_errors_2 FOR TESTING.
-       METHODS detect_errors_3 FOR TESTING.
    ENDCLASS.                    "ltc_parse DEFINITION
 
 *----------------------------------------------------------------------*
@@ -301,6 +301,26 @@
                     title = 'PARSE'
                     level = level ).
      ENDMETHOD.                    "assert_parse
+
+     METHOD identifier.
+       assert_parse( code = '|two words|'
+                     expected = |two words| ).
+       assert_parse( code = '|two\x20;words|'
+                     expected = |two words| ).
+       assert_parse( code = '|H\x65;llo|'
+                     expected = |Hello| ).
+       scheme( code = `(equal? '|| '| |)`
+                     expected = '#f' ).
+     ENDMETHOD.
+
+     METHOD directive.
+       scheme( code = '#!fold-case'
+               expected = space ).
+       scheme( code = '#!no-fold-case'
+               expected = space ).
+       scheme( code = '#!no-foldcase'
+               expected = 'Parse: Invalid directive #!no-foldcase' ).
+     ENDMETHOD.
 
      METHOD delimiter.
        assert_parse( code = |list\t; return|
@@ -413,6 +433,19 @@
                expected = '"#\\"' ).
      ENDMETHOD.
 
+   ENDCLASS.                    "ltc_parse IMPLEMENTATION
+
+   CLASS ltc_grammar DEFINITION INHERITING FROM ltc_parse
+     FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+     PRIVATE SECTION.
+       METHODS detect_errors_0 FOR TESTING.
+       METHODS detect_errors_1 FOR TESTING.
+       METHODS detect_errors_2 FOR TESTING.
+       METHODS detect_errors_3 FOR TESTING.
+   ENDCLASS.
+
+  CLASS ltc_grammar IMPLEMENTATION.
+
      METHOD detect_errors_0.
        assert_parse( code = '(define f (lambda (x) (set! 3 x)))'
                      expected = 'Eval: Parse Error' ).
@@ -433,7 +466,7 @@
                      expected = 'Eval: 1 cannot be a variable identifier' ).
      ENDMETHOD.
 
-   ENDCLASS.                    "ltc_parse IMPLEMENTATION
+  ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       CLASS ltc_basic DEFINITION
@@ -506,6 +539,8 @@
 
        METHODS call_with_values_1 FOR TESTING.
        METHODS call_with_values_2 FOR TESTING.
+
+       METHODS symbol_list_equal FOR TESTING.
 
        METHODS is_symbol_true_1 FOR TESTING.
        METHODS is_symbol_true_2 FOR TESTING.
@@ -926,7 +961,7 @@
                       |      (i 1 (+ 1 i))| &
                       |      ((= i 9) (display lst )| &
                       |       (append num lst)) ))|
-               expected = invalid_digit( ')' ) ).                  " should not dump!
+               expected = 'Eval: Identifier ) not valid.' ).                  " should not dump!
      ENDMETHOD.                    "do_4
 
      METHOD do_5.
@@ -1173,6 +1208,13 @@
      METHOD call_with_values_2.
        scheme( code = |(call-with-values * -)|
                expected = '-1' ).
+     ENDMETHOD.
+
+     METHOD symbol_list_equal.
+       scheme( code = |(symbol=? 'x 'y 1 2)|
+               expected = '#f' ).
+       scheme( code = `(symbol=? 'x 'x '|x|)`
+               expected = '#t' ).
      ENDMETHOD.
 
      METHOD is_symbol_true_1.
@@ -1670,7 +1712,8 @@
        scheme( code = '(char->integer #\x9E9)'
                expected = '2537' ).
        scheme( code = '\x9E9'
-               expected = invalid_digit( '\' ) ).
+               "expected = invalid_digit( '\' ) ).
+               expected = `Eval: Identifier \x9E9 not valid.` ).
      ENDMETHOD.                    "char_unicode_1
 
      METHOD char_whitespace_1.
@@ -2173,8 +2216,10 @@
        METHODS is_negative FOR TESTING.
 
        METHODS is_complex FOR TESTING.
+       METHODS is_number FOR TESTING.
        METHODS is_real FOR TESTING.
        METHODS is_real_1 FOR TESTING.
+       METHODS is_real_2 FOR TESTING.
        METHODS is_rational FOR TESTING.
        METHODS rationalize FOR TESTING.
        METHODS is_rational_inexact FOR TESTING.
@@ -2214,6 +2259,7 @@
        METHODS exact_6 FOR TESTING.
        METHODS exact_7 FOR TESTING.
        METHODS exact_8 FOR TESTING.
+       METHODS exact_9 FOR TESTING.
 
        METHODS compare_eq FOR TESTING.
        METHODS compare_lt FOR TESTING.
@@ -2287,6 +2333,8 @@
                expected = '#f' ).
        scheme( code = '(zero? -0.0)'
                expected = '#t' ).
+       scheme( code = '(zero? +0.0)'
+               expected = '#t' ).
        scheme( code = '(zero? 0)'
                expected = '#t' ).
      ENDMETHOD.
@@ -2315,6 +2363,13 @@
                expected = '#t' ).
      ENDMETHOD.                    "is_complex
 
+     METHOD is_number.
+       scheme( code = '(real? #e31l-1)'
+               expected = '#t' ).
+       scheme( code = '(number? 2.31f0.3)'
+               expected = '#f' ).
+     ENDMETHOD.
+
      METHOD is_real.
        scheme( code = '(real? 3)'
                expected = '#t' ).
@@ -2333,11 +2388,20 @@
      METHOD is_real_1.
        scheme( code = '(real? #e1e10)'
                expected = '#t' ).
+       scheme( code = '(real? #e2.31e-2)'
+               expected = '#t' ).
+       scheme( code = '(real? 2.31f0.3)'
+               expected = '#f' ).
        scheme( code = '(real? +inf.0)'
                expected = '#t' ).
        scheme( code = '(real? +nan.0)'
                expected = '#t' ).
      ENDMETHOD.                    "is_real_1
+
+     METHOD is_real_2.
+       scheme( code = '2.31f0.3'
+               expected = 'Eval: Identifier 2.31f0.3 not valid.' ).
+     ENDMETHOD.
 
      METHOD is_rational.
        scheme( code = '(rational? 6/10)'
@@ -2356,9 +2420,9 @@
 
      METHOD rational_inexact.
        scheme( code = '24.0/3'
-               expected = invalid_digit( '/' ) ).
+               expected = `Eval: Identifier 24.0/3 not valid.` ).
        scheme( code = '(rational? 24.0/3)'
-               expected = invalid_digit( '/' ) ).
+               expected = `Eval: Identifier 24.0/3 not valid.` ).
      ENDMETHOD.
 
      METHOD create_rational.
@@ -2424,7 +2488,7 @@
 
      METHOD gcd_2.
        scheme( code = |(gcd 32 0)|
-               expected = |0| ).
+               expected = |32| ).
      ENDMETHOD.
 
      METHOD lcm_1.
@@ -2564,6 +2628,11 @@
                expected = '#t' ).
      ENDMETHOD.
 
+     METHOD exact_9.
+       scheme( code = '#| block comment |# #d#b10'
+               expected = 'Parse: Invalid exactness token in number prefix' ).
+     ENDMETHOD.                    "exact_5
+
      METHOD compare_eq.
        scheme_incorrect( '(=)' ).
        scheme_incorrect( '(= 1)' ).
@@ -2637,6 +2706,10 @@
      METHOD inexact_1.
        scheme( code = '(inexact? 0.5)'
                expected = '#t' ).
+       scheme( code = '(inexact? 0.0)'
+               expected = '#t' ).
+       scheme( code = '(inexact? -0.0)'
+               expected = '#t' ).
      ENDMETHOD.                    "inexact_1
 
      METHOD inexact_2.
@@ -2673,6 +2746,8 @@
                expected = '#t' ).
        scheme( code = '(eq? #b11100.01001 #o34.22)' " not allowed in R7RS, DrRacket does it anyway
                expected = '#t' ).
+       scheme( code = '#b1e10'
+               expected = '4.0' ).                  " not allowed in R7RS, DrRacket/ChezScheme do it anyway
      ENDMETHOD.                    "binary_1
 
      METHOD octal_1.
@@ -2727,6 +2802,8 @@
        METHODS math_mult_3 FOR TESTING.
        METHODS math_mult_4 FOR TESTING.
        METHODS math_mult_5 FOR TESTING.
+       METHODS math_mult_6 FOR TESTING.
+       METHODS math_mult_7 FOR TESTING.
 
        METHODS math_subtract_1 FOR TESTING.
        METHODS math_subtract_2 FOR TESTING.
@@ -2825,8 +2902,10 @@
      METHOD math_addition.
        scheme( code = '(+ 22 24 25)'
                expected = '71' ).
-       code_test_f( code = '(inexact (+ 144045379/232792560 1/10))'
-                    expected = '0.7187714031754279432298008149401338' ).
+*       code_test_f( code = '(inexact (+ 144045379/232792560 1/10))'
+*                    expected = '0.7187714031754279432298008149401338' ).
+       scheme( code = '(eqv? (inexact (+ 144045379/232792560 1/10)) 0.7187714031754279432298008149401338'
+               expected = '#t' ).
      ENDMETHOD.                    "math_addition
 
      METHOD math_add_rational.
@@ -2857,6 +2936,35 @@
      METHOD math_mult_4.
        scheme( code = '(* 0 +inf.0)'
                expected = '+nan.0' ).
+       scheme( code = '(* +inf.0 0)'
+               expected = '+nan.0' ).
+
+       scheme( code = '(* 0 -inf.0)'
+               expected = '-nan.0' ).
+       scheme( code = '(* -inf.0 0)'
+               expected = '-nan.0' ).
+
+       scheme( code = '(* -inf.0 +0.0)'
+               expected = '-nan.0' ).
+       scheme( code = '(* +0.0 -inf.0)'
+               expected = '-nan.0' ).
+
+       scheme( code = '(* +0.0 +inf.0)'
+               expected = '+nan.0' ).
+       scheme( code = '(* 0.0 +inf.0)'
+               expected = '+nan.0' ).
+       scheme( code = '(* +inf.0 0.0)'
+               expected = '+nan.0' ).
+
+       scheme( code = '(* -inf.0 -0.0)'
+               expected = '+nan.0' ).
+       scheme( code = '(* -0.0 -inf.0)'
+               expected = '+nan.0' ).
+
+       scheme( code = '(* +inf.0 -0.0)'
+               expected = '-nan.0' ).
+       scheme( code = '(* -0.0 +inf.0)'
+               expected = '-nan.0' ).
      ENDMETHOD.
 
      METHOD math_mult_5.
@@ -2887,27 +2995,44 @@
        scheme( code = '(* +inf.0 -0.2342)'
                expected = '-inf.0' ).
 
+       scheme( code = '(* -1/12 -8)'
+               expected = '2/3' ).
+
        scheme( code = '(* +3 -1/12)'
                expected = '-1/4' ).
+     ENDMETHOD.
+
+     METHOD math_mult_6.
+       scheme( code = '(* +nan.0 -inf.0)'
+               expected = '-nan.0' ).
+       scheme( code = '(* -inf.0 +nan.0)'
+               expected = '-nan.0' ).
+       scheme( code = '(* +nan.0 -nan.0)'
+               expected = '-nan.0' ).
+       scheme( code = '(* -nan.0 +nan.0)'
+               expected = '-nan.0' ).
+
+       scheme( code = '(* +nan.0 +inf.0)'
+               expected = '+nan.0' ).
+       scheme( code = '(* +inf.0 +nan.0)'
+               expected = '+nan.0' ).
+       scheme( code = '(* -nan.0 -nan.0)'
+               expected = '+nan.0' ).
+     ENDMETHOD.
+
+     METHOD math_mult_7.
        scheme( code = '(* +300000000 -1/12)'
                expected = '-25000000' ).
 
        code_test_f( code = '(* 23344430 8942422)'
                     expected = '208755744409460' ).
-       code_test_f( code = '(* 233444300 89424220)'
-                    expected = '20875574440946000' ).
-
-       code_test_f( code = '(* 34523344430422 -5/9)'
-                    expected = '-19179635794678.89' ).
-       code_test_f( code = '(* -172616722152110/9 -172616722152110/9)'
-                    expected = '367858429216527693703425334.567' ).
-
-       scheme( code = '(* -inf.0 +0.0)'
-               expected = '+nan.0' ).
-       scheme( code = '(* -inf.0 -0.0)'
-               expected = '+nan.0' ).
-       scheme( code = '(* +inf.0 -0.0)'
-               expected = '-nan.0' ).
+*       code_test_f( code = '(* 233444300 89424220)'
+*                    expected = '20875574440946000' ).
+*
+*       code_test_f( code = '(* 34523344430422 -5/9)'
+*                    expected = '-19179635794678.89' ).
+*       code_test_f( code = '(* -172616722152110/9 -172616722152110/9)'
+*                    expected = '367858429216527693703425334.567' ).
      ENDMETHOD.
 
      METHOD math_subtract_1.
@@ -3157,6 +3282,8 @@
                expected = '1/4+3/5i' ).
        scheme( code =  '-inf.0-nan.0i'
                expected = '-inf.0-nan.0i' ).
+       scheme( code =  '-inf.0+nan.0i'
+               expected = '-inf.0+nan.0i' ).
      ENDMETHOD.
 
      METHOD math_complex_2.
@@ -3176,12 +3303,18 @@
                expected = '-i' ).
        scheme( code =  '-1i'
                expected = '-i' ).
-       scheme( code =  '-inf.0'
-               expected = '-inf.0' ).
-       scheme( code =  '-inf.0i'
-               expected = '-inf.0i' ).
+       scheme( code =  '+i'
+               expected = '+i' ).
+       scheme( code =  '+nan.0i'
+               expected = '+nan.0i' ).
        scheme( code =  '-nan.0i'
                expected = '-nan.0i' ).
+       scheme( code =  '-inf.0'
+               expected = '-inf.0' ).
+       scheme( code =  '+inf.0i'
+               expected = '+inf.0i' ).
+       scheme( code =  '-inf.0i'
+               expected = '-inf.0i' ).
        scheme( code =  '-1/4+nan.0i'
                expected = '-1/4+nan.0i' ).
        scheme( code =  '-nan.0-inf.0i'
@@ -3378,17 +3511,10 @@
      ENDMETHOD.                    "math_modulo
 
      METHOD math_random_too_large.
-*      Only one assert is executed, depending on the definition of tv_int (i or int8)
-       DATA lv_int TYPE tv_int.
-       TRY.
-           lv_int = '100000000000000'.
-           scheme( code =  '(random 100000000000000)'
-                   expected = |Eval: { NEW cx_sy_conversion_overflow( textid = '5E429A39EE412B43E10000000A11447B'
-                                                                      value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
-         CATCH cx_root.
-           scheme( code =  '(random 100000000000000)'
-                   expected = |Eval: 1000000000000000.0 is not an integer in [random]| ).
-       ENDTRY.
+       scheme( code =  '(random 100000000000000)'
+               expected = |Eval: { NEW cx_sy_conversion_overflow( textid = '5E429A39EE412B43E10000000A11447B'
+                                                                  value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
+
      ENDMETHOD.                    "math_modulo
 
      METHOD math_min_0.
@@ -4278,6 +4404,10 @@
      METHOD make_string_error.
        scheme( code = |(make-string 3 "a")|
                expected = 'Eval: "a" is not a char in make-string' ).
+       scheme( code = `(list->string '(#\alarm #\null #\backspace #\return #\newline #\tab #\escape))`
+               expected = '"\a\x00\b\r\n\t\x1B"' ).
+       scheme( code = `"#\alarm #\null #\backspace a \u"`
+               expected = 'Parse: invalid escape char u found' ).
      ENDMETHOD.                    "make_string_error
 
      METHOD make_string_3a.
@@ -4326,7 +4456,7 @@
      ENDMETHOD.                    "string_to_number_1
 
      METHOD string_to_number_2.
-       scheme( code = |(string->number "42")|
+       scheme( code = |(string->number "#e42e+0")|
                expected = '42' ).
      ENDMETHOD.                    "string_to_number_2
 

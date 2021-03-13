@@ -37,7 +37,7 @@
   TYPES tv_byte TYPE int1.
 
   TYPES tv_real TYPE decfloat34.  " floating point data type
-  TYPES tv_int TYPE int4.         " integer data type, use int8 and max_int8 if available
+  TYPES tv_int TYPE int8.         " integer data type, use int8 and max_int8 if available
   TYPES tv_index TYPE tv_int.
   TYPES tv_flag TYPE abap_bool.
 
@@ -45,7 +45,7 @@
   TYPES tv_xword TYPE x LENGTH 2.
 
   CONSTANTS:
-    c_max_int   TYPE tv_int VALUE cl_abap_math=>max_int4,          "  cl_abap_math=>max_int8.
+    c_max_int   TYPE tv_int VALUE cl_abap_math=>max_int8,          "  cl_abap_math=>max_int8.
     c_max_float TYPE tv_real VALUE cl_abap_math=>max_decfloat34,
     c_min_float TYPE tv_real VALUE cl_abap_math=>min_decfloat34.
 
@@ -2665,9 +2665,8 @@
       METHODS read_stream RETURNING VALUE(element) TYPE REF TO lcl_lisp
                           RAISING   lcx_lisp_exception.
 
-      METHODS read_token RETURNING VALUE(token) TYPE string
-                         RAISING   lcx_lisp_exception.
-
+      METHODS read_atom RETURNING VALUE(atom) TYPE string
+                        RAISING   lcx_lisp_exception.
       METHODS:
         skip_while IMPORTING pattern      TYPE csequence
                    RETURNING VALUE(found) TYPE tv_flag
@@ -2713,9 +2712,6 @@
                           RETURNING VALUE(found) TYPE tv_flag
                           RAISING   lcx_lisp_exception.
 
-      METHODS read_atom RETURNING VALUE(atom) TYPE string
-                        RAISING   lcx_lisp_exception.
-
       METHODS uinteger_radix IMPORTING domain      TYPE csequence
                              RETURNING VALUE(uint) TYPE string
                              RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
@@ -2725,10 +2721,6 @@
                                       power       TYPE tv_real
                             RETURNING VALUE(uint) TYPE string
                             RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
-
-      METHODS float_radix IMPORTING domain      TYPE csequence
-                          RETURNING VALUE(uint) TYPE string
-                          RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
 
       METHODS uint_dec_radix IMPORTING domain      TYPE csequence
                              RETURNING VALUE(uint) TYPE string
@@ -2858,30 +2850,9 @@
                        area = area ).
     ENDMETHOD.
 
-    METHOD read_token.
-      CLEAR token.
-      WHILE mi_stream->state-char CN mv_delimiters
-        AND mi_stream->state-ready EQ abap_true.
-        next_char( ).
-        CONCATENATE token mi_stream->state-char INTO token RESPECTING BLANKS.
-      ENDWHILE.
-    ENDMETHOD.
-
     METHOD read_atom.
+      " write unit tests before changing this logic
       CLEAR atom.
-
-*      IF mi_stream->state-ready EQ abap_true.
-*        CONCATENATE atom mi_stream->state-char INTO atom RESPECTING BLANKS.
-*        next_char( ).
-*        IF mi_stream->state-ready EQ abap_false.
-*          CONCATENATE atom mi_stream->state-char INTO atom RESPECTING BLANKS.
-*        ENDIF.
-*      ENDIF.
-*      WHILE mi_stream->state-char CN mv_delimiters
-*        AND mi_stream->state-ready EQ abap_true.
-*        next_char( ).
-*        CONCATENATE atom mi_stream->state-char INTO atom RESPECTING BLANKS.
-*      ENDWHILE.
 
       WHILE mi_stream->state-ready EQ abap_true.
         CONCATENATE atom mi_stream->state-char INTO atom RESPECTING BLANKS.
@@ -2942,7 +2913,7 @@
       condense uInt.
     ENDMETHOD.
 
-    METHOD float_radix.  " floating-point number (might be non-decimal)
+    METHOD uInt_dec_radix. " floating-point number
       DATA lv_int TYPE tv_int.
       DATA lv_real TYPE tv_real.
       DATA lv_power TYPE tv_real.
@@ -2951,18 +2922,20 @@
                             IMPORTING power = lv_power
                                       value = lv_int ).
       IF lv_power NE 1.
+        " convert the floating point part to decimal
         lv_real = lv_int / lv_power.
         uInt = lv_real.
         condense uInt.
         uInt = substring_after( val = uInt sub = c_lisp_dot ).
       ENDIF.
-    ENDMETHOD.
 
-    METHOD uInt_dec_radix.
-      uInt = float_radix( domain ) && read_suffix( domain ).
+      uInt &&= read_suffix( domain ).
     ENDMETHOD.
 
     METHOD read_suffix. "  decimal only with radix 10
+      DATA lv_int TYPE tv_int.
+      DATA lv_real TYPE tv_real.
+      DATA lv_power TYPE tv_real.
 
       str = space.
       CHECK mi_stream->state-ready EQ abap_true.
@@ -2971,11 +2944,23 @@
         str = c_exponent_marker.
         CASE mi_stream->state-char.
           WHEN c_plus_sign.
+            mi_stream->next_char( ).
           WHEN c_minus_sign.
+            mi_stream->next_char( ).
             str &&= c_minus_sign.
         ENDCASE.
 
-        str &&= float_radix( domain ).
+        DATA(uInt) = radix_integer( EXPORTING domain = domain
+                                    IMPORTING power = lv_power
+                                              value = lv_int ).
+        IF lv_power NE 1.
+          throw( `Radix not supported in exponent` ).
+          " convert the exponential part to decimal
+          lv_real = lv_int * lv_power.
+          uInt = lv_real.
+          condense uInt.
+        ENDIF.
+        str &&= uInt.
       ENDIF.
     ENDMETHOD.
 
@@ -2985,28 +2970,35 @@
     ENDMETHOD.
 
     METHOD match_number.
-      IF number_match( c_lisp_pos_inf ).
-        elem = lcl_lisp_number=>inf.
-      ELSEIF number_match( c_lisp_neg_inf ).
-        elem = lcl_lisp_number=>neg_inf.
-      ELSEIF number_match( c_lisp_pos_nan ).
-        elem = lcl_lisp_number=>nan.
-      ELSEIF number_match( c_lisp_neg_nan ).
-        elem = lcl_lisp_number=>neg_nan.
-      ELSEIF number_match( c_lisp_pos_img ).          " Plus Imaginary_marker
-        elem = lcl_lisp_number=>imaginary.
-      ELSEIF number_match( c_lisp_neg_img ).
-        elem = lcl_lisp_number=>imaginary_neg.
-      ELSEIF number_match( c_imaginary_pos_inf ).     " Pos. Infinity Imaginary_marker
-        elem = lcl_lisp_number=>imaginary_neg.
-      ELSEIF number_match( c_imaginary_neg_inf ).     " Neg. Infinity Imaginary_marker
-        elem = lcl_lisp_number=>neg_inf_imag.
-      ELSEIF number_match( c_imaginary_pos_nan ).     " Pos. NaN Imaginary_marker
-        elem = lcl_lisp_number=>nan_imag.
-      ELSEIF number_match( c_imaginary_neg_nan ).     " Neg. NaN Imaginary_marker
-        elem = lcl_lisp_number=>neg_nan_imag.
+      " longest match first
+      CLEAR elem.
+      IF mi_stream->state-char EQ c_plus_sign.
+        IF number_match( c_imaginary_pos_inf ).         " +Inf.0i
+          elem = lcl_lisp_number=>inf_imag.
+        ELSEIF number_match( c_lisp_pos_inf ).          " +Inf.0
+          elem = lcl_lisp_number=>inf.
+        ELSEIF number_match( c_lisp_pos_img ).          " +i
+          elem = lcl_lisp_number=>imaginary.
+
+        ELSEIF number_match( c_imaginary_pos_nan ).     " +NaN.0i
+          elem = lcl_lisp_number=>nan_imag.
+        ELSEIF number_match( c_lisp_pos_nan ).          " +NaN.0
+          elem = lcl_lisp_number=>nan.
+        ENDIF.
       ELSE.
-        CLEAR elem.
+
+        IF number_match( c_imaginary_neg_inf ).         " -Inf.0i
+          elem = lcl_lisp_number=>neg_inf_imag.
+        ELSEIF number_match( c_lisp_neg_inf ).          " -Inf.0
+          elem = lcl_lisp_number=>neg_inf.
+        ELSEIF number_match( c_lisp_neg_img ).          " -i
+          elem = lcl_lisp_number=>imaginary_neg.
+
+        ELSEIF number_match( c_imaginary_neg_nan ).     " -NaN.0i
+          elem = lcl_lisp_number=>neg_nan_imag.
+        ELSEIF number_match( c_lisp_neg_nan ).          " -NaN.0
+          elem = lcl_lisp_number=>neg_nan.
+        ENDIF.
       ENDIF.
     ENDMETHOD.
 
@@ -3169,9 +3161,11 @@
           "TRY.
               IF mi_stream->state-char CA mv_delimiters.
                 RETURN.
-              ELSE.
+              ELSEIF mi_stream->state-char CA c_explicit_sign.
                 zimag = read_real( iv_exact_char = iv_exact_char
                                    domain = domain ).
+              ELSE. " starts with a number, but is an identifier
+                lcl_lisp=>throw_no_number( read_atom( ) ).
               ENDIF.
           "CATCH lcx_lisp_exception cx_sy_conversion_no_number.
           "  RETURN.  " performance: can we get here without exception?
@@ -3268,7 +3262,7 @@
       next_char( ).   " skip #!
       next_char( ).
 
-      fold_directive = read_token( ).
+      fold_directive = read_atom( ).
 
       CASE fold_directive.
         WHEN c_fold_case.
@@ -3387,7 +3381,7 @@
           pchar = decode_hex_digits( ).
 
         WHEN OTHERS.
-          throw( |invalid Escape char { mi_stream->state-char } found| ).
+          throw( |invalid escape char { mi_stream->state-char } found| ).
 
       ENDCASE.
     ENDMETHOD.
@@ -3505,10 +3499,18 @@
       " 5.                       <Complex R>
       DATA lv_radix_char TYPE tv_char.
       DATA lv_exact_char TYPE tv_char.
+      DATA lv_peek_char TYPE tv_char.
 
       found = abap_true.
 
-      IF iv_peek_char CA c_pattern_exactness.        " <prefix R> -> <exactness> <radix R>
+      IF iv_peek_char EQ space                     " No Prefix, called from (string->number str radix)
+        AND mi_stream->state-char EQ c_lisp_hash.  " 1st character is not number
+        lv_peek_char = peek_char( ).
+      ELSE.
+        lv_peek_char = iv_peek_char.
+      ENDIF.
+
+      IF lv_peek_char CA c_pattern_exactness.        " <prefix R> -> <exactness> <radix R>
         next_char( ).        " skip #
         lv_exact_char = mi_stream->state-char.
         next_char( ).        " skip exactness i/e
@@ -3529,8 +3531,8 @@
             " exactness found but no radix info      " Case 2.
         ENDCASE.
 
-      ELSEIF iv_peek_char CA c_pattern_radix.        " Now check <prefix R> -> <radix R> <exactness>
-        lv_radix_char = iv_peek_char.
+      ELSEIF lv_peek_char CA c_pattern_radix.        " Now check <prefix R> -> <radix R> <exactness>
+        lv_radix_char = lv_peek_char.
         next_char( ).        " skip #
         next_char( ).        " skip radix
 
@@ -3542,7 +3544,7 @@
           next_char( ).        " skip exactness i/e
         ENDIF.
 
-      ELSEIF iv_peek_char EQ space                  " No Prefix, called from (string->number str radix)
+      ELSEIF lv_peek_char EQ space                  " No Prefix, called from (string->number str radix)
         AND mi_stream->state-char CA mv_decimal_initial.  " 1st character is expected in a number
 
         lv_radix_char = space.
@@ -3552,12 +3554,16 @@
         RETURN.
       ENDIF.
 
-      " <Complex R>
-      " <prefix R> -> <radix R> <exactness> | <exactness> <radix R>
-      element = lcl_lisp_new=>read_complex( iv_radix = iv_radix
-                                            iv_radix_char = lv_radix_char
-                                            iv_exact_char = lv_exact_char
-                                            io_stream = me ).
+      TRY.
+        " <Complex R>
+        " <prefix R> -> <radix R> <exactness> | <exactness> <radix R>
+        element = lcl_lisp_new=>read_complex( iv_radix = iv_radix
+                                              iv_radix_char = lv_radix_char
+                                              iv_exact_char = lv_exact_char
+                                              io_stream = me ).
+        CATCH cx_sy_conversion_no_number INTO DATA(lx_error).
+          lcl_lisp=>throw( lx_error->get_text( ) ).
+      ENDTRY.
     ENDMETHOD.
 
     METHOD parse_token.
@@ -5527,7 +5533,6 @@
                                                                    nesting = nesting
                                                                    environment = environment ) ).
             ELSE.
-
               result = combine( left = quasiquote( exp = lo_first
                                                    nesting = nesting - 1
                                                    environment = environment )
@@ -7613,8 +7618,19 @@
 
       _validate list.
 
-      res = lcl_lisp_number=>zero->get_state( operation ).
       DATA(iter) = list->new_iterator( ).
+      if iter->has_next( ).
+        next = iter->next( ).
+
+        _values_get_next next.
+        _validate_number next operation.
+        num ?= next.
+
+        res = num->get_state( operation ).
+      ELSE.
+        result = lcl_lisp_number=>zero.
+        RETURN.
+      ENDIF.
 
       WHILE iter->has_next( ).
         next = iter->next( ).
@@ -7638,15 +7654,26 @@
       DATA lo_head TYPE REF TO lcl_lisp.
 
       _validate list.
-      res = lcl_lisp_number=>one->get_state( operation ).
       DATA(iter) = list->new_iterator( ).
+      if iter->has_next( ).
+        next = iter->next( ).
+
+        _values_get_next next.
+        _validate_number next operation.
+        num ?= next.
+
+        res = num->get_state( operation ).
+      ELSE.
+        result = lcl_lisp_number=>one.
+        RETURN.
+      ENDIF.
 
       WHILE iter->has_next( ).
         next = iter->next( ).
 
         _values_get_next next.
         _validate_number next operation.
-        num = CAST lcl_lisp_number( next ).
+        num ?= next.
 
         res = num->product( first = res
                             second = num->get_state( operation ) ).
@@ -7671,7 +7698,7 @@
       next = iter->next( ).
       _values_get_next next.
       _validate_number next operation.
-      num = CAST lcl_lisp_number( next ).
+      num ?= next.
 
       IF iter->has_next( ) EQ abap_false.
         result = lcl_lisp_number=>zero->substract( num ).
@@ -7683,7 +7710,7 @@
           next = iter->next( ).
           _values_get_next next.
           _validate_number next operation.
-          num = CAST lcl_lisp_number( next ).
+          num ?= next.
 
           res = num->add_complex( first = res
                                   second = num->neg_sign( num->get_state( operation ) ) ).
@@ -7710,7 +7737,7 @@
       next = iter->next( ).
       _values_get_next next.
       _validate_number next operation.
-      num = CAST lcl_lisp_number( next ).
+      num ?= next.
 
       IF iter->has_next( ) EQ abap_false.
         result = lcl_lisp_number=>one->divide( num ).
@@ -7722,7 +7749,7 @@
           next = iter->next( ).
           _values_get_next next.
           _validate_number next operation.
-          num = CAST lcl_lisp_number( next ).
+          num ?= next.
 
           res = num->quotient( numerator = res
                                denominator = num->get_state( operation ) ).
@@ -13035,6 +13062,7 @@
       " <atom> -> <identifier> | <number>
       DATA initial TYPE tv_char.
       DATA check_as_number TYPE tv_flag VALUE abap_false.
+      DATA check_as_identifier TYPE tv_flag VALUE abap_false.
 
       DATA(len) = strlen( value ).
       IF len LE 0.
@@ -13067,8 +13095,11 @@
       ENDIF.
 
       " <identifier> -> <initial> <subsequent>* |  <vertical line> <symbol element>* <vertical line> | <peculiar identifier>
-      IF check_as_number EQ abap_false
-        AND ( match_initial( initial ) OR initial EQ c_vertical_line OR match_peculiar_identifier( value ) ).
+      IF ( match_initial( initial ) OR initial EQ c_vertical_line OR match_peculiar_identifier( value ) ).
+        check_as_identifier = abap_true.
+      ENDIF.
+
+      IF check_as_number EQ abap_false AND check_as_identifier EQ abap_true.
         ro_elem = identifier( value ).
       ELSE.
         TRY.
@@ -13076,9 +13107,9 @@
                                     iv_radix_char = space
                                     iv_exact_char = space
                                     io_stream =  NEW lcl_stream( NEW lcl_string_stream( value ) ) ).
-
-          CATCH cx_sy_conversion_no_number.
-            lcl_lisp=>throw( `Invalid number ` && value ).
+          CATCH cx_sy_conversion_no_number INTO DATA(lx_error).
+            ro_elem = identifier( value ).
+*              lcl_lisp=>throw( lx_error->get_text( ) ).
         ENDTRY.
 
       ENDIF.
@@ -13335,7 +13366,7 @@
             IF lv_exact EQ abap_true.
               ro_elem = lcl_lisp_number=>zero.
             ELSE. " lv_exact EQ abap_false
-              IF sign( lv_real ) EQ -1.
+              IF value EQ c_lisp_neg_zero.
                 ro_elem = lcl_lisp_number=>neg_zero.
               ELSE.
                 ro_elem = lcl_lisp_number=>pos_zero.
@@ -13433,13 +13464,8 @@
       DATA(lv_digits_domain) = digits_radix( get_radix( iv_radix_char = iv_radix_char
                                                         iv_radix = iv_radix ) ).
 
-      TRY.
-          element = io_stream->read_complex( iv_exact_char = iv_exact_char
-                                             domain = lv_digits_domain ).
-
-        CATCH cx_sy_conversion_no_number INTO DATA(lx_error).
-          lcl_lisp=>throw( lx_error->get_text( ) ).
-      ENDTRY.
+      element = io_stream->read_complex( iv_exact_char = iv_exact_char
+                                         domain = lv_digits_domain ).
     ENDMETHOD.
 
     METHOD hex.
@@ -14167,7 +14193,7 @@
 
             WHEN type_rational. " Rational * Integer
               TRY.
-                  number-nummer = self-nummer * ( other-int * self-denom ).
+                  number-nummer = self-nummer * other-int.
                   lv_gcd = lcl_lisp_rational=>gcd( n = number-nummer
                                                    d = number-denom ).
                   number-nummer = number-nummer DIV lv_gcd.
@@ -14178,15 +14204,18 @@
                   number-exact = abap_false.
               ENDTRY.
 
-            WHEN type_real. " Real * Integer
+            WHEN type_real.     " Real * Integer
               IF self-infnan EQ abap_false.
                 number-real = self-real * other-int.
               ELSE.
-                " Sonderfall (* +Inf.0 0)
                 IF other-int EQ 0.
-                  IF self-ref = inf OR self-ref EQ neg_inf.
-                    number-ref = nan.
-                  ENDIF.
+                  CASE self-ref.
+                    WHEN inf.                " (* +Inf.0 0)
+                      number-ref = nan.
+                    WHEN neg_inf.            " (* -Inf.0 0)
+                      number-ref = neg_nan.
+                    "WHEN OTHERS.            " (* +nan.0 0)  " (* -nan.0 0)
+                  ENDCASE.
                 ELSEIF other-int LT 0.
                   number-ref = self-ref->negative_infnan( ).
                 ENDIF.
@@ -14227,7 +14256,7 @@
                   number-exact = abap_false.
               ENDTRY.
 
-            WHEN type_real. " Real * Rational
+            WHEN type_real.     " Real * Rational
               IF self-infnan EQ abap_false.
                 number-real = self-real * other-nummer / other-denom.
               ELSE.
@@ -14247,23 +14276,29 @@
           CASE self-subtype.
             WHEN type_integer.  " Integer * Real
               IF other-infnan EQ abap_true.
-                IF self-int EQ 0 AND ( other-ref = inf OR other-ref = neg_inf ).
-                  number-ref = nan.
-                ELSEIF number-int LE 0.
+                number = other.
+                IF self-int EQ 0.
+                  IF other-ref = inf.
+                    number-ref = nan.
+                  ELSEIF other-ref = neg_inf.
+                    number-ref = neg_nan.
+                  ENDIF.
+                ELSEIF self-int LT 0.
                   number-ref = other-ref->negative_infnan( ).
-                ELSE.
-                  number-ref = other-ref.
                 ENDIF.
-                number-infnan = abap_true.
-              ELSE.
+              ELSEIF self-int NE 0.
                 number-real = self-int * other-real.
               ENDIF.
 
             WHEN type_rational.  " Rational * Real
               IF other-infnan EQ abap_true.
                 number = other.
-                IF self-nummer EQ 0 AND ( other-ref = inf OR other-ref = neg_inf ).
-                  number-ref = nan.
+                IF self-nummer EQ 0.     " should not happen, as the rational would be coerced to an integer
+                  IF other-ref = inf.
+                    number-ref = nan.
+                  ELSEIF other-ref = neg_inf.
+                    number-ref = neg_nan.
+                  ENDIF.
                 ELSEIF self-nummer LT 0.
                   number-ref = other-ref->negative_infnan( ).
                 ENDIF.
@@ -14271,18 +14306,29 @@
                 number-real = self-nummer / self-denom * other-real.
               ENDIF.
 
-            WHEN type_real. " Real * Real
+            WHEN type_real.       " Real * Real
               IF self-infnan EQ abap_false AND other-infnan EQ abap_false.
                 number-real = self-real * other-real.
               ELSEIF self-infnan EQ abap_true AND other-infnan EQ abap_false.
                  number = self.
                  IF other-real GT 0.
                  ELSEIF other-real EQ 0.
-                   IF other-ref EQ neg_zero.
-                     number-ref = neg_nan.
-                   ELSE.
-                     number-ref = nan.
-                   ENDIF.
+                   CASE self-ref.
+                     WHEN inf OR nan.
+                       IF other-ref EQ neg_zero.   " (* +Inf.0 -0.0)  (* +NaN.0 -0.0)
+                         number-ref = neg_nan.
+                       ELSE.
+                         number-ref = nan.         " (* +Inf.0 +0.0)  (* +NaN.0 +0.0)
+                       ENDIF.
+                     WHEN neg_inf OR neg_nan.
+                       IF other-ref EQ neg_zero.   " (* -Inf.0 -0.0)  (* -NaN.0 -0.0)
+                         number-ref = nan.
+                       ELSE.
+                         number-ref = neg_nan.     " (* -Inf.0 +0.0)  (* -NaN.0 +0.0)
+                       ENDIF.
+                     WHEN OTHERS.
+                       raise( `Invalid InfNan in ` && operation ).
+                   ENDCASE.
                  ELSE.  " other-real LT 0.
                    number = negative( self ).
                  ENDIF.
@@ -14290,11 +14336,22 @@
                  number = other.
                  IF self-real GT 0.
                  ELSEIF self-real EQ 0.
-                   IF self-ref EQ neg_zero.
-                     number-ref = neg_nan.
-                   ELSE.
-                     number-ref = nan.
-                   ENDIF.
+                   CASE other-ref.
+                     WHEN inf OR nan.
+                       IF self-ref EQ neg_zero.      " (* -0.0  +Inf.0 )  (* -0.0 +NaN.0 )
+                         number-ref = neg_nan.
+                       ELSE.
+                         number-ref = nan.           " (* +0.0  +Inf.0 )  (* +0.0 +NaN.0 )
+                       ENDIF.
+                     WHEN neg_inf OR neg_nan.
+                       IF self-ref EQ neg_zero.      " (* -0.0  -Inf.0 )  (* -0.0 -NaN.0 )
+                         number-ref = nan.
+                       ELSE.
+                         number-ref = neg_nan.       " (* +0.0  -Inf.0 )  (* +0.0 -NaN.0 )
+                       ENDIF.
+                     WHEN OTHERS.
+                       raise( `Invalid InfNan in ` && operation ).
+                   ENDCASE.
                  ELSE.  " self-real LT 0.
                    number = negative( other ).
                  ENDIF.
@@ -14303,17 +14360,17 @@
                 number = self.
                 CASE self-ref.
                   WHEN nan.
-                    IF other-ref EQ neg_inf OR other-ref EQ neg_nan.
+                    IF other-ref EQ neg_inf OR other-ref EQ neg_nan. " (* +NaN.0  -Inf.0 )  (* +NaN.0 -NaN.0 )
                       number-ref = neg_nan.
                     ENDIF.
                   WHEN neg_nan.
-                    IF other-ref EQ neg_inf OR other-ref EQ neg_nan.
+                    IF other-ref EQ neg_inf OR other-ref EQ neg_nan. " (* -NaN.0  -Inf.0 )  (* -NaN.0 -NaN.0 )
                       number-ref = nan.
                     ENDIF.
                   WHEN inf.
-                    number-ref = other-ref.
+                    number-ref = other-ref.                          " (* +Inf.0 -Inf.0 )  (* +Inf.0 -NaN.0 ) (* +Inf.0 +Inf.0 )  (* +Inf.0 +NaN.0 )
                   WHEN neg_inf.
-                    number-ref = other-ref->negative_infnan( ).
+                    number-ref = other-ref->negative_infnan( ).      " (* -Inf.0 -Inf.0 )  (* -Inf.0 -NaN.0 ) (* -Inf.0 +Inf.0 )  (* -Inf.0 +NaN.0 )
                 ENDCASE.
 
               ENDIF.
