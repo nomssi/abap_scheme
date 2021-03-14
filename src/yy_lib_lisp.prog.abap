@@ -1,4 +1,3 @@
-*&---------------------------------------------------------------------*
 *& Include           YY_LIB_LISP
 *& https://github.com/nomssi/abap_scheme
 *& https://github.com/mydoghasworms/abap-lisp
@@ -87,7 +86,6 @@
 
   CONSTANTS:
     c_error_message         TYPE string VALUE 'Error in processing' ##NO_TEXT,
-    c_error_incorrect_input TYPE string VALUE 'Incorrect input' ##NO_TEXT,
     c_error_unexpected_end  TYPE string VALUE 'Unexpected end' ##NO_TEXT,
     c_error_eval            TYPE string VALUE 'EVAL( ) came up empty-handed' ##NO_TEXT,
     c_error_no_exp_in_body  TYPE string VALUE 'no expression in body' ##NO_TEXT.
@@ -200,43 +198,32 @@
 
   ENDCLASS.
 
-* Macro to simplify the definition of a native procedure
-  DEFINE _proc_meth.
-    METHODS &1 IMPORTING list TYPE REF TO lcl_lisp
-               RETURNING VALUE(result) TYPE REF TO lcl_lisp
-               RAISING lcx_lisp_exception.
-  END-OF-DEFINITION.
-
   DEFINE _validate.
     IF &1 IS NOT BOUND.
-      lcl_lisp=>throw( c_error_incorrect_input ).
-    ENDIF.
-  END-OF-DEFINITION.
-
-  DEFINE _validate_mutable.
-    _validate &1.
-    IF &1->mutable EQ abap_false.
-      throw( |constant { &2 } cannot be changed| ) ##NO_TEXT.
+      lcl_lisp=>incorrect_input( operation ).
     ENDIF.
   END-OF-DEFINITION.
 
   DEFINE _validate_type.
-    _validate &1.
-    IF &1->type NE type_&3.
+    IF &1 IS NOT BOUND.
+      lcl_lisp=>incorrect_input( operation ).
+    ELSEIF &1->type NE type_&3.
       &1->raise( ` is not a ` && &4 && ` in ` && &2 ) ##NO_TEXT.
     ENDIF.
   END-OF-DEFINITION.
 
   DEFINE _validate_integer.
-    _validate &1.
-    IF &1->type NE type_integer.
+    IF &1 IS NOT BOUND.
+      lcl_lisp=>incorrect_input( operation ).
+    ELSEIF &1->type NE type_integer.
       &1->raise( ` is not an integer in ` && &2 ) ##NO_TEXT.
     ENDIF.
   END-OF-DEFINITION.
 
   DEFINE _validate_byte.
-    _validate &1.
-    IF NOT ( &1->type = type_integer AND CAST lcl_lisp_integer( &1 )->int BETWEEN 0 AND 255 ).
+    IF &1 IS NOT BOUND.
+      lcl_lisp=>incorrect_input( operation ).
+    ELSEIF NOT ( &1->type = type_integer AND CAST lcl_lisp_integer( &1 )->int BETWEEN 0 AND 255 ).
       &1->raise( ` is not a byte in ` && &2 ) ##NO_TEXT.
     ENDIF.
   END-OF-DEFINITION.
@@ -449,7 +436,7 @@
     result = false.
     _validate: list, list->cdr.
     IF list->cdr->type NE type_pair.
-      throw( c_error_incorrect_input ).
+      lcl_lisp=>incorrect_input( operation ).
     ENDIF.
 
     DATA(lo_ptr) = list.
@@ -831,6 +818,10 @@
       METHODS to_text RETURNING VALUE(str) TYPE string
                       RAISING   lcx_lisp_exception.
 
+      METHODS new_number_iterator IMPORTING iv_operation TYPE string OPTIONAL
+                                  RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_iterator
+                                  RAISING   lcx_lisp_exception.
+
       METHODS new_iterator RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_iterator
                            RAISING   lcx_lisp_exception.
 
@@ -851,7 +842,8 @@
       METHODS is_eof RETURNING VALUE(flag) TYPE tv_flag.
       METHODS is_procedure RETURNING VALUE(result) TYPE tv_flag.
       METHODS is_number RETURNING VALUE(result) TYPE tv_flag.
-      METHODS is_nan RETURNING VALUE(flag) TYPE tv_flag
+      METHODS is_nan IMPORTING operation TYPE string DEFAULT `nan?`
+                     RETURNING VALUE(flag) TYPE tv_flag
                      RAISING   lcx_lisp_exception.
 
       " Errors
@@ -870,6 +862,9 @@
 
       CLASS-METHODS throw_no_number IMPORTING message TYPE string
                                     RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
+
+      CLASS-METHODS incorrect_input IMPORTING operation TYPE string
+                                    RAISING   lcx_lisp_exception.
 
       CLASS-METHODS throw IMPORTING message TYPE string
                                     area    TYPE string DEFAULT c_area_eval
@@ -2217,18 +2212,29 @@
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp_iterator DEFINITION
 *----------------------------------------------------------------------*
-  CLASS lcl_lisp_iterator DEFINITION CREATE PRIVATE FRIENDS lcl_lisp.
+  CLASS lcl_lisp_iterator DEFINITION CREATE PROTECTED FRIENDS lcl_lisp.
     PUBLIC SECTION.
       DATA first TYPE tv_flag VALUE abap_true READ-ONLY.
       METHODS has_next RETURNING VALUE(rv_flag) TYPE tv_flag.
       METHODS next RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp
                    RAISING   cx_dynamic_check.
-    PRIVATE SECTION.
+    PROTECTED SECTION.
       DATA elem TYPE REF TO lcl_lisp.
 
       METHODS constructor IMPORTING io_elem TYPE REF TO lcl_lisp
                           RAISING   lcx_lisp_exception.
   ENDCLASS.                    "lcl_lisp_iterator DEFINITION
+
+  CLASS lcl_lisp_number_iterator DEFINITION INHERITING FROM lcl_lisp_iterator FRIENDS lcl_lisp.
+    PUBLIC SECTION.
+      METHODS next REDEFINITION.
+    PROTECTED SECTION.
+      DATA operation TYPE string.
+
+      METHODS constructor IMPORTING io_elem TYPE REF TO lcl_lisp
+                                    iv_operation TYPE string OPTIONAL
+                          RAISING   lcx_lisp_exception.
+  ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp_hash DEFINITION
@@ -3946,363 +3952,362 @@
           RETURNING VALUE(response) TYPE string.
 
     PROTECTED SECTION.
+      DATA operation TYPE string.
       CLASS-DATA: go_input_port  TYPE REF TO lcl_lisp_lambda,
                   go_output_port TYPE REF TO lcl_lisp_lambda,
                   go_error_port  TYPE REF TO lcl_lisp_lambda.
       CLASS-DATA gensym_counter TYPE i.
 
 * Functions for dealing with lists:
-      _proc_meth:
-      proc_append          ##called,
-      proc_append_unsafe   ##called,
-      proc_reverse         ##called,
-      proc_set_car         ##called,
-      proc_set_cdr         ##called,
-      proc_car             ##called,
-      proc_cdr             ##called,
+* Functions for dealing with lists:
+      METHODS proc_append         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_append_unsafe  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_reverse        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_set_car        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_set_cdr        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_car            IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cdr            IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_caar             ##called,
-      proc_cadr             ##called,
-      proc_cdar             ##called,
-      proc_cddr             ##called,
+      METHODS proc_caar           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cadr           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cdar           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cddr           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_caaar            ##called,
-      proc_cdaar            ##called,
-      proc_caadr            ##called,
-      proc_cdadr            ##called,
-      proc_cadar            ##called,
-      proc_cddar            ##called,
-      proc_caddr            ##called,
-      proc_cdddr            ##called,
-      proc_caaaar           ##called,
-      proc_cdaaar           ##called,
-      proc_cadaar           ##called,
-      proc_cddaar           ##called,
-      proc_caaadr           ##called,
-      proc_cdaadr           ##called,
-      proc_cadadr           ##called,
-      proc_cddadr           ##called,
-      proc_caadar           ##called,
-      proc_cdadar           ##called,
-      proc_caddar           ##called,
-      proc_cdddar           ##called,
-      proc_caaddr           ##called,
-      proc_cdaddr           ##called,
-      proc_cadddr           ##called,
-      proc_cddddr           ##called,
-
-      proc_memq             ##called,
-      proc_memv             ##called,
-      proc_member           ##called,
-      proc_assq             ##called,
-      proc_assv             ##called,
-      proc_assoc            ##called,
+      METHODS proc_caaar          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cdaar          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_caadr          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cdadr          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cadar          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cddar          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_caddr          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cdddr          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_caaaar         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cdaaar         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cadaar         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cddaar         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_caaadr         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cdaadr         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cadadr         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cddadr         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_caadar         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cdadar         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_caddar         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cdddar         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_caaddr         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cdaddr         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cadddr         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cddddr         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_memq           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_memv           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_member         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_assq           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_assv           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_assoc          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
 *     Constructor
-      proc_cons             ##called,
-      proc_list             ##called,
-      proc_make_list        ##called,
-      proc_iota,            ##called
-      proc_list_copy        ##called,
+      METHODS proc_cons           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_list           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_make_list      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_iota           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_list_copy      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_list_tail        ##called,
-      proc_list_ref         ##called,
-      proc_list_to_vector   ##called,
+      METHODS proc_list_tail      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_list_ref       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_list_to_vector IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_length           ##called,
-      proc_nilp             ##called.
+      METHODS proc_length         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_nilp           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-* Native functions:
-      _proc_meth:
-      proc_add       ##called,
-      proc_subtract  ##called,
-      proc_multiply  ##called,
-      proc_divide    ##called,
-      proc_gt        ##called,
-      proc_gte       ##called,
-      proc_lt        ##called,
-      proc_lte       ##called,
-      proc_eql       ##called,
-      proc_eqv       ##called,
-      proc_not       ##called,
+*     Native functions:
+      METHODS proc_add              IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_subtract         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_multiply         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_divide           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_gt               IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_gte              IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_lt               IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_lte              IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_eql              IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_eqv              IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_not              IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_values           ##called,
+      METHODS proc_values           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_is_number        ##called,
-      proc_is_integer       ##called,
-      proc_is_exact_integer ##called,
-      proc_is_rational      ##called,
-      proc_is_real          ##called,
-      proc_is_complex       ##called,
+      METHODS proc_is_number         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_integer        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_exact_integer  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_rational       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_real           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_complex        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_is_nan           ##called,
-      proc_is_finite        ##called,
-      proc_is_infinite      ##called,
+      METHODS proc_is_nan      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_finite   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_infinite IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_is_string       ##called,
-      proc_is_char         ##called,
-      proc_is_symbol       ##called,
-      proc_is_hash         ##called,
-      proc_is_procedure    ##called,
-      proc_is_list         ##called,
-      proc_is_pair         ##called,
-      proc_is_boolean      ##called,
-      proc_symbol_list_is_equal  ##called,
-      proc_boolean_list_is_equal ##called,
-      proc_is_vector             ##called,
-      proc_is_alist              ##called,
+      METHODS proc_is_string        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_char          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_symbol        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_hash          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_procedure     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_list          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_pair          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_boolean       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_boolean_list_is_equal IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_symbol_list_is_equal  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_vector             IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_alist              IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_is_exact              ##called,
-      proc_is_inexact            ##called,
-      proc_to_exact              ##called,
-      proc_to_inexact            ##called,
+      METHODS proc_is_exact    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_inexact  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_to_exact    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_to_inexact  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
 * Delayed evaluation
-      proc_force                 ##called,
-      proc_make_promise          ##called,
-      proc_is_promise            ##called,
+      METHODS proc_force        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_make_promise IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_promise   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
 * Math
-      proc_abs,      ##called
-      proc_quotient, ##called
-      proc_sin,      ##called
-      proc_cos,      ##called
-      proc_tan,      ##called
-      proc_asin,     ##called
-      proc_acos,     ##called
-      proc_atan,     ##called
-      proc_sinh,     ##called
-      proc_cosh,     ##called
-      proc_tanh,     ##called
-      proc_asinh,    ##called
-      proc_acosh,    ##called
-      proc_atanh,    ##called
-      proc_exp,      ##called
-      proc_expt,     ##called
-      proc_log,      ##called
-      proc_sqrt,     ##called
-      proc_square,   ##called
+      METHODS proc_abs      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_quotient IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_sin      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cos      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_tan      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_asin     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_acos     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_atan     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_sinh     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_cosh     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_tanh     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_asinh    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_acosh    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_atanh    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_exp      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_expt     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_log      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_sqrt     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_square   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_make_rectangular, ##called
-      proc_make_polar,       ##called
-      proc_real_part,        ##called
-      proc_imag_part,        ##called
-      proc_magnitude,        ##called
-      proc_angle,            ##called
+      METHODS proc_make_rectangular IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_make_polar       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_real_part        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_imag_part        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_magnitude        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_angle            IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_int_sqrt,        ##called
-      proc_floor_quotient,  ##called
-      proc_floor_remainder, ##called
-      proc_trunc_quotient,  ##called
-      proc_trunc_remainder, ##called
-      proc_rationalize,     ##called
+      METHODS proc_int_sqrt        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_floor_quotient  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_floor_remainder IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_trunc_quotient  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_trunc_remainder IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_rationalize     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_is_zero,      ##called
-      proc_is_positive,  ##called
-      proc_is_negative,  ##called
-      proc_is_odd,       ##called
-      proc_is_even,      ##called
+      METHODS proc_is_zero     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_positive IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_negative IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_odd      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_even     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_floor,        ##called
-      proc_floor_new,    ##called
-      proc_ceiling,      ##called
-      proc_truncate,     ##called
-      proc_truncate_new, ##called
-      proc_round,        ##called
+      METHODS proc_floor        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_floor_new    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_ceiling      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_truncate     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_truncate_new IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_round        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_numerator,    ##called
-      proc_denominator,  ##called
-      proc_remainder,    ##called
-      proc_modulo,       ##called
-      proc_max,          ##called
-      proc_min,          ##called
-      proc_gcd,          ##called
-      proc_lcm,          ##called
-* Formating
-      proc_newline           ##called,
-      proc_write             ##called,
-      proc_display           ##called,
-      proc_read              ##called,
-      proc_write_char        ##called,
-      proc_write_u8          ##called,
-      proc_write_string      ##called,
-      proc_write_bytevector  ##called,
-      proc_read_char         ##called,
-      proc_read_line         ##called,
-      proc_read_string       ##called,
-      proc_read_bytevector   ##called,
-      proc_peek_char         ##called,
-      proc_is_char_ready     ##called,
+      METHODS proc_numerator   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_denominator IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_remainder   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_modulo      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_max         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_min         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_gcd         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_lcm         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_read_u8            ##called,
-      proc_peek_u8            ##called,
-      proc_is_u8_ready        ##called,
+*     Formating
+      METHODS proc_newline            IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_write              IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_display            IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_read               IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_write_char         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_write_u8           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_write_string       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_write_bytevector   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_read_char          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_read_line          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_read_string        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_read_bytevector    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_peek_char          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_char_ready      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_is_char_alphabetic ##called,
-      proc_is_char_numeric    ##called,
-      proc_is_char_whitespace ##called,
-      proc_is_char_upper_case ##called,
-      proc_is_char_lower_case ##called,
-      proc_digit_value        ##called,
-      proc_char_to_integer    ##called,
-      proc_integer_to_char    ##called,
-      proc_char_upcase        ##called,
-      proc_char_downcase      ##called,
+      METHODS proc_read_u8     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_peek_u8     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_u8_ready IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_char_list_is_eq    ##called,
-      proc_char_list_is_lt    ##called,
-      proc_char_list_is_gt    ##called,
-      proc_char_list_is_le    ##called,
-      proc_char_list_is_ge    ##called,
+      METHODS proc_is_char_alphabetic  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_char_numeric     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_char_whitespace  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_char_upper_case  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_char_lower_case  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_digit_value         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_char_to_integer     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_integer_to_char     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_char_upcase         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_char_downcase       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_char_ci_list_is_eq    ##called,
-      proc_char_ci_list_is_lt    ##called,
-      proc_char_ci_list_is_gt    ##called,
-      proc_char_ci_list_is_le    ##called,
-      proc_char_ci_list_is_ge    ##called,
+      METHODS proc_char_list_is_eq     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_char_list_is_lt     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_char_list_is_gt     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_char_list_is_le     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_char_list_is_ge     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_string_list_is_eq    ##called,
-      proc_string_list_is_lt    ##called,
-      proc_string_list_is_gt    ##called,
-      proc_string_list_is_le    ##called,
-      proc_string_list_is_ge    ##called,
+      METHODS proc_char_ci_list_is_eq    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_char_ci_list_is_lt    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_char_ci_list_is_gt    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_char_ci_list_is_le    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_char_ci_list_is_ge    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_string_ci_list_is_eq    ##called,
-      proc_string_ci_list_is_lt    ##called,
-      proc_string_ci_list_is_gt    ##called,
-      proc_string_ci_list_is_le    ##called,
-      proc_string_ci_list_is_ge    ##called,
+      METHODS proc_string_list_is_eq     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_list_is_lt     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_list_is_gt     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_list_is_le     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_list_is_ge     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      proc_string                ##called,
-      proc_make_string,          ##called
-      proc_num_to_string,        ##called
-      proc_list_to_string,       ##called
-      proc_symbol_to_string,     ##called
-      proc_string_length,        ##called
-      proc_string_copy,          ##called
-      proc_string_to_num,        ##called
-      proc_string_ref,           ##called
-      proc_string_set,           ##called
-      proc_string_append,        ##called
-      proc_string_to_list,       ##called
-      proc_string_to_symbol,     ##called
+      METHODS proc_string_ci_list_is_eq  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_ci_list_is_lt  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_ci_list_is_gt  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_ci_list_is_le  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_ci_list_is_ge  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-* Turtle library
-      proc_turtle_new,            ##called "turtles
-      proc_turtle_exist,          ##called "turtles?
-      proc_turtle_move,           ##called "move
-      proc_turtle_draw,           ##called "draw
-      proc_turtle_erase,          ##called "erase
-      proc_turtle_move_offset,    ##called "move-offset
-      proc_turtle_draw_offset,    ##called "draw-offset
-      proc_turtle_erase_offset,   ##called "erase-offset
-      proc_turtle_turn_degrees,   ##called "turn
-      proc_turtle_turn_radians,   ##called "turn/radians
-      proc_turtle_set_pen_width,  ##called "set-pen-width
-      proc_turtle_set_pen_color,  ##called "set-pen-color
-      proc_turtle_merge,          ##called
-      proc_turtle_clean,          ##called
-      proc_turtle_width,          ##called
-      proc_turtle_height,         ##called
-      proc_turtle_state,          ##called
-      proc_turtle_pen_width,      ##called
-      proc_turtle_pen_color,      ##called
-      proc_turtle_regular_poly,   ##called
-      proc_turtle_regular_polys,  ##called
+      METHODS proc_string            IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_make_string       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_num_to_string     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_list_to_string    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_symbol_to_string  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_length     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_copy       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_to_num     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_ref        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_set        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_append     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_to_list    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_to_symbol  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-* Continuation
-      proc_call_cc               ##called,
-      proc_dynamic_wind          ##called,
-      proc_call_with_values      ##called,
-* Exceptions
-      proc_error,                  ##called
-      proc_is_error_object,        ##called
-      proc_is_read_error,          ##called
-      proc_is_file_error,          ##called
-      proc_error_object_message,   ##called
-      proc_error_object_irritants, ##called
-      proc_raise,                  ##called
+*     Turtle library
+      METHODS proc_turtle_new            IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_exist          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_move           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_draw           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_erase          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_move_offset    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_draw_offset    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_erase_offset   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_turn_degrees   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_turn_radians   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_set_pen_width  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_set_pen_color  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_merge          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_clean          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_width          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_height         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_state          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_pen_width      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_pen_color      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_regular_poly   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_turtle_regular_polys  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+
+*     Continuation
+      METHODS proc_call_cc IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_dynamic_wind IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_call_with_values IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+*     Exceptions
+      METHODS proc_error IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_raise IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_file_error   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_read_error   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_error_object        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_error_object_message   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_error_object_irritants IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
 * Not in the spec: Just adding it anyway
-      proc_random,       ##called
-      proc_eq,           ##called
-      proc_equal.        ##called
+      METHODS proc_random IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_eq     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_equal  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
 * SQL
-      _proc_meth:
-      proc_sql_prepare     ##called,
-      proc_sql_query       ##called.
+      METHODS proc_sql_prepare IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_sql_query   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
 * Functions for dealing with vectors:
-      _proc_meth:
-      proc_make_vector,    ##called
-      proc_vector,         ##called
-      proc_vector_length,  ##called
-      proc_vector_set,     ##called
-      proc_vector_fill,    ##called
-      proc_vector_ref,     ##called
-      proc_vector_to_list. ##called
+      METHODS proc_make_vector     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_vector          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_vector_length   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_vector_set      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_vector_fill     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_vector_ref      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_vector_to_list  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
-      " bytevectors:
-      _proc_meth:
-      proc_is_bytevector,         ##called
-      proc_make_bytevector,       ##called
-      proc_bytevector,            ##called
-      proc_bytevector_length,     ##called
-      proc_bytevector_u8_set,     ##called
-      proc_bytevector_u8_ref,     ##called
-      proc_bytevector_append,     ##called
-      proc_bytevector_new_copy,   ##called
-      proc_bytevector_copy,       ##called
-      proc_string_to_utf8,        ##called
-      proc_utf8_to_string.        ##called
+* Bytevectors
+      METHODS proc_is_bytevector     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_make_bytevector   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_bytevector        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_bytevector_length IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_bytevector_u8_set IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_bytevector_u8_ref IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_bytevector_append IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_bytevector_new_copy IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_bytevector_copy IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_to_utf8 IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_utf8_to_string IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
 * Functions for dealing with hashes:
-      _proc_meth:
-      proc_make_hash,    ##called "Create new hash
-      proc_hash_get,     ##called "Get an element from a hash
-      proc_hash_insert,  ##called "Insert a new element into a hash
-      proc_hash_remove,  ##called "Delete an item from a hash
-      proc_hash_keys.    ##called "Delete an item from a hash
+      METHODS proc_make_hash    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_hash_get     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_hash_insert  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_hash_remove  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_hash_keys    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
 * Ports
-      _proc_meth:
-      proc_make_parameter         ##called,
-      proc_parameterize           ##called,
-      proc_is_input_port          ##called,
-      proc_is_output_port         ##called,
-      proc_is_textual_port        ##called,
-      proc_is_binary_port         ##called,
-      proc_is_port                ##called,
-      proc_is_eof_object          ##called,
-      proc_is_open_input_port     ##called,
-      proc_is_open_output_port    ##called,
-      proc_eof_object             ##called,
-      proc_close_input_port       ##called,
-      proc_close_output_port      ##called,
-      proc_close_port             ##called,
-      proc_current_input_port     ##called,
-      proc_current_output_port    ##called,
-      proc_current_error_port     ##called,
-      proc_open_output_string     ##called,
-      proc_open_input_string      ##called,
-      proc_get_output_string      ##called.
+      METHODS proc_make_parameter       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_parameterize         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_input_port        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_output_port       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_textual_port      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_binary_port       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_port              IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_eof_object        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_open_input_port   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_is_open_output_port  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_eof_object           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_close_input_port     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_close_output_port    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_close_port           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_current_input_port   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_current_output_port  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_current_error_port   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_open_output_string   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_open_input_string    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_get_output_string    IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
 * Built-in functions for ABAP integration:
-      _proc_meth:
-      proc_abap_data,           ##called
-      proc_abap_function,       ##called
-      proc_abap_function_param, ##called
-      proc_abap_table,          ##called
-      proc_abap_append_row,     ##called
-      proc_abap_delete_row,     ##called
-      proc_abap_get_row,        ##called
-      proc_abap_get_value,      ##called
-      proc_abap_set_value,      ##called
-      proc_abap_set,            ##called
-      proc_abap_get,            ##called
+      METHODS proc_abap_data           IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+
+      "Not in the Cloud
+      METHODS proc_abap_function       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_abap_function_param IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+
+      METHODS proc_abap_table          IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_abap_append_row     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_abap_delete_row     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_abap_get_row        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_abap_get_value      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_abap_set_value      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_abap_set            IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_abap_get            IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+
 * Called internally only:
-      proc_abap_function_call. ##called
+      METHODS proc_abap_function_call  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+
 
       METHODS define_syntax
         IMPORTING element       TYPE REF TO lcl_lisp
@@ -4563,6 +4568,7 @@
 
       METHODS table_of_lists IMPORTING io_head         TYPE REF TO lcl_lisp
                                        environment     TYPE REF TO lcl_lisp_environment
+                                       operation       TYPE string
                              RETURNING VALUE(rt_table) TYPE tt_lisp
                              RAISING   lcx_lisp_exception.
 
@@ -4675,7 +4681,9 @@
 
     METHOD assign_symbol.
       " set! -> reassign a bound symbol
-      _validate: element, element->car.
+      IF element IS NOT BOUND OR element->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( 'set!' ).
+      ENDIF.
       result = element->car.
 
       CASE result->type.
@@ -4694,7 +4702,9 @@
       DATA lo_params TYPE REF TO lcl_lisp.
       " Scheme does not return a value for define; but we are returning the new symbol reference
       DATA(lo_head) = element->car.
-      _validate lo_head.
+      IF lo_head IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ENDIF.
       CASE lo_head->type.
         WHEN type_symbol.
           " call the set method of the current environment using the unevaluated first parameter
@@ -4730,7 +4740,6 @@
     ENDMETHOD.
 
     METHOD define_syntax.
-*
       result = bind_symbol( element = element
                             environment = environment
                             iv_category = tv_category_macro ).
@@ -4928,6 +4937,7 @@
 *       '()
 *       (cons (f (car lst)) (map f (cdr lst)))))
     METHOD expand_map.
+      CONSTANTS operation TYPE string VALUE `map`.
 *     (map proc list1 list2 ... ) The lists should all have the same length.
 *     Proc should accept as many arguments as there are lists and return a single value.
 *     Proc should not mutate any of the lists.
@@ -4942,7 +4952,8 @@
       DATA(lo_proc) = io_list->car.
 
       DATA(lt_list) = table_of_lists( io_head = io_list->cdr         " parameter evaluated lists
-                                      environment = environment ).
+                                      environment = environment
+                                      operation = operation ).
 
       DATA(lv_has_next) = xsdbool( lines( lt_list ) GT 0 ). " map terminates when the shortest list runs out.
 
@@ -4963,19 +4974,23 @@
     ENDMETHOD.
 
     METHOD expand_for_each.
+      CONSTANTS operation TYPE string VALUE `for-each`.
 *     (for-each proc list1 list2 ... ) The lists should all have the same length.
 *     Proc should accept as many arguments as there are lists and return a single value.
 *     Proc should not mutate any of the lists.
 * The for-each procedure applies proc element-wise to the elements of the lists for its side effects, in order from the
 * first elements to the last.
 * Proc is always called in the same dynamic environment as for-each itself. The return values of for-each are unspecified.
-      _validate: io_list, io_list->car.
+      IF io_list IS NOT BOUND OR io_list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ENDIF.
 
       result = nil.
       DATA(lo_proc) = io_list->car.
 
       DATA(lt_list) = table_of_lists( io_head = io_list->cdr
-                                      environment = environment ).
+                                      environment = environment
+                                      operation = operation ).
 
       DATA(lv_has_next) = xsdbool( lines( lt_list ) GT 0 ).  " for-each terminates when the shortest list runs out.
       WHILE lv_has_next EQ abap_true.
@@ -4989,11 +5004,14 @@
     ENDMETHOD.
 
     METHOD eval_do_init.
+      CONSTANTS operation TYPE string VALUE `do`.
 *     <init> expressions are evaluated (in unspecified order), the <variable>s are bound to fresh locations,
 *     the results of the <init> expressions are stored in the bindings of the <variable>s.
 *     A <step> can be omitted, in which case the effect is the same as if (<variable> <init> <variable>)
 *     had been written instead of (<variable> <init>).
-      _validate io_head.
+      IF io_head IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ENDIF.
 
       eo_env = lcl_lisp_env_factory=>clone( io_env ).
       eo_step = nil.
@@ -5579,12 +5597,15 @@
 * eval takes an expression and an environment to a value
 **********************************************************************
     METHOD eval.
+      DATA caller_operation TYPE string.
       DATA(cont) = is_cont.   " partial continuation
 
       DO.
         TRY.
-
-            _validate cont-elem.
+            IF cont-elem IS NOT BOUND.
+              lcl_lisp=>incorrect_input( operation ).
+            ENDIF.
+            caller_operation = operation.
 
             CASE cont-elem.
               WHEN nil OR true OR false.
@@ -5605,8 +5626,9 @@
 *               Evaluate first element of list to determine if it is a native procedure or lambda
                     DATA(lr_head) = cont-elem->car.
                     DATA(lr_tail) = cont-elem->cdr.
+                    operation = lr_head->value.
 
-                    CASE lr_head->value.
+                    CASE operation.
 
                       WHEN c_eval_quote. " Literal expression: Return the argument to quote unevaluated
                         IF lr_tail->cdr NE nil.
@@ -5806,7 +5828,9 @@
 
                       WHEN 'case-lambda'.
                         DATA lt_clauses TYPE tt_lisp.
-                        _validate lr_tail.
+                        IF lr_tail IS NOT BOUND.
+                          lcl_lisp=>incorrect_input( lr_head->value ).
+                        ENDIF.
                         CLEAR lt_clauses.
                         lo_clause = lr_tail.
                         WHILE lo_clause->type = type_pair.
@@ -5835,19 +5859,20 @@
 * When a termination condition is met, the loop exits after evaluating the <expression>s.
                       WHEN 'do'.
                         DATA(lo_head) = lr_tail.
-                        _validate: lo_head, lo_head->cdr, lo_head->cdr->cdr.
-
-*                   Initialization
+                        IF lo_head IS NOT BOUND OR lo_head->cdr IS NOT BOUND OR lo_head->cdr->cdr IS NOT BOUND.
+                          lcl_lisp=>incorrect_input( lr_head->value ).
+                        ENDIF.
+                        " Initialization
                         eval_do_init( EXPORTING io_head = lo_head->car
                                                 io_env = cont-env
                                       IMPORTING eo_step = DATA(lo_steps)
                                                 eo_env = cont-env ).
-*                   Iteration
+                        " Iteration
                         lo_test = lo_head->cdr->car.
                         DATA(lo_command) = lo_head->cdr->cdr.
 
                         DO.
-*                     evaluate <test>;
+                          " evaluate <test>;
                           CASE eval_ast( VALUE #( BASE cont
                                                   elem = lo_test->car ) ).
                             WHEN false.
@@ -5882,13 +5907,17 @@
 *  (else <expression1> <expression2> ... )
 *  or
 *  (else => <expression>).
-                        _validate lr_tail.
+                        IF lr_tail IS NOT BOUND.
+                          lcl_lisp=>incorrect_input( operation ).
+                        ENDIF.
                         result = nil.
 
                         DATA(lo_key) = eval( VALUE #( BASE cont
                                                       elem = lr_tail->car ) ).
                         lr_tail = lr_tail->cdr.
-                        _validate: lr_tail, lr_tail->car, lo_key.
+                        IF lr_tail IS NOT BOUND OR lr_tail->car IS NOT BOUND OR lo_key IS NOT BOUND.
+                          lcl_lisp=>incorrect_input( operation ).
+                        ENDIF.
 
                         IF lr_tail EQ nil.
                           throw( `case: no clause` ).
@@ -5900,7 +5929,9 @@
                           lo_clause = lr_tail->car.
 
                           DATA(lo_datum) = lo_clause->car.
-                          _validate lo_datum.
+                          IF lo_datum IS NOT BOUND.
+                            lcl_lisp=>incorrect_input( lr_head->value ).
+                          ENDIF.
 
                           WHILE lo_datum NE nil.
 
@@ -6180,6 +6211,7 @@
           go_out->write( |=> { result->to_string( ) }| ).
         ENDIF.
 
+        operation = caller_operation.
         RETURN.
 
       ENDDO.
@@ -6574,9 +6606,9 @@
     ENDMETHOD.                    "proc_append_unsafe
 
     DEFINE _validate_pair.
-      IF &1->type NE type_pair.
-        &1->raise( context = &2
-                   message = ` is not a pair` ).
+      IF lo_arg->type NE type_pair.
+        lo_arg->raise( context = &1
+                       message = ` is not a pair` ).
       ENDIF.
     END-OF-DEFINITION.
 
@@ -6584,27 +6616,41 @@
       _validate: list, list->car.
 
       DATA(lo_arg) = list->car.
-      _validate_pair lo_arg `car: `.
+      _validate_pair `car: `.
       result = lo_arg->car.
     ENDMETHOD.                    "proc_car
 
     METHOD proc_set_car.
-      _validate: list, list->cdr.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( `set-car!` ).
+      ENDIF.
 
       DATA(lo_arg) = list->car.
-      _validate_pair lo_arg `set-car!: `.
-      _validate_mutable lo_arg `list in set-car!`.
+      IF lo_arg->type NE type_pair.
+        lo_arg->raise( context = `set-car!: `
+                       message = ` is not a pair` ).
+      ENDIF.
+      IF lo_arg->mutable EQ abap_false.
+        throw( |constant list in set-car! cannot be changed| ) ##NO_TEXT.
+      ENDIF.
 
       lo_arg->car = list->cdr->car.
       result = nil.
     ENDMETHOD.                    "proc_car
 
     METHOD proc_set_cdr.
-      _validate: list, list->cdr.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( `set-cdr!` ).
+      ENDIF.
 
       DATA(lo_arg) = list->car.
-      _validate_pair lo_arg `set-cdr!: `.
-      _validate_mutable lo_arg `list in set-cdr!`.
+      IF lo_arg->type NE type_pair.
+        lo_arg->raise( context = `set-cdr!: `
+                       message = ` is not a pair` ).
+      ENDIF.
+      IF lo_arg->mutable EQ abap_false.
+        throw( |constant list in set-cdr! cannot be changed| ) ##NO_TEXT.
+      ENDIF.
 
       lo_arg->cdr = list->cdr->car.
       result = nil.
@@ -6614,7 +6660,7 @@
       _validate list.
 
       DATA(lo_arg) = list->car.
-      _validate_pair lo_arg `cdr: `.
+      _validate_pair `cdr: `.
       result = lo_arg->cdr.
     ENDMETHOD.                    "proc_cdr
 
@@ -6641,17 +6687,18 @@
 
     DEFINE _validate_cxxr.
       _validate list.
-      _validate_pair list &1.
+      DATA(lo_arg) = list.
+      _validate_pair &1.
 
-      DATA(lo_arg) = list->car.
-      _validate_pair lo_arg &1.
+      lo_arg = list->car.
+      _validate_pair &1.
     END-OF-DEFINITION.
 
     DEFINE _execute_cxxr.
       _validate_cxxr &1.
 
       lo_arg = lo_arg->&2.
-      _validate_pair lo_arg &1.
+      _validate_pair &1.
 
       result = lo_arg->&3.
     END-OF-DEFINITION.
@@ -6676,10 +6723,10 @@
       _validate_cxxr &1.
 
       lo_arg = lo_arg->&2.
-      _validate_pair lo_arg &1.
+      _validate_pair &1.
 
       lo_arg = lo_arg->&3.
-      _validate_pair lo_arg &1.
+      _validate_pair &1.
 
       result = lo_arg->&4.
     END-OF-DEFINITION.
@@ -6720,13 +6767,13 @@
       _validate_cxxr &1.
 
       lo_arg = lo_arg->&2.
-      _validate_pair lo_arg &1.
+      _validate_pair &1.
 
       lo_arg = lo_arg->&3.
-      _validate_pair lo_arg &1.
+      _validate_pair &1.
 
       lo_arg = lo_arg->&4.
-      _validate_pair lo_arg &1.
+      _validate_pair &1.
 
       result = lo_arg->&5.
     END-OF-DEFINITION.
@@ -7032,15 +7079,27 @@
 
     METHOD proc_vector_set.
 *    (vector-set! vector k obj) procedure
-      _validate list.
-      _validate_vector list->car 'vector-set!'.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
+        lcl_lisp=>incorrect_input( 'vector-set!' ).
+      ELSEIF list->car->type NE type_vector.
+        list->car->raise( ` is not a vector in vector-set!` ) ##NO_TEXT.
+      ENDIF.
+
       DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
-
-      _validate: list->cdr.
       DATA(lo_idx) = list->cdr->car.
-      _validate_index lo_idx 'vector-set!'.
 
+      _validate_index lo_idx 'vector-set!'.
       _validate: list->cdr->cdr.
+
+      IF lo_idx IS NOT BOUND OR list->cdr->cdr IS NOT BOUND.
+        lcl_lisp=>incorrect_input( 'vector-set!' ).
+      ENDIF.
+      IF lo_idx->type NE type_integer OR CAST lcl_lisp_integer( lo_idx )->int LT 0.
+        lo_idx->raise( ` must be a non-negative integer in vector-set!` ) ##NO_TEXT.
+      ENDIF.
+      IF list->car->type NE type_vector.
+        list->car->raise( ` is not a vector in vector-set!` ) ##NO_TEXT.
+      ENDIF.
 
       DATA(lo_obj) = list->cdr->cdr.
       IF lo_obj NE nil.
@@ -7610,152 +7669,104 @@
 **********************************************************************
 
     METHOD proc_add.
-      CONSTANTS operation TYPE string VALUE `+`.
       DATA res TYPE ts_result.
       DATA num TYPE REF TO lcl_lisp_number.
-      DATA next TYPE REF TO lcl_lisp.
-      DATA lo_head TYPE REF TO lcl_lisp.
 
+      operation = `+`.
       _validate list.
 
-      DATA(iter) = list->new_iterator( ).
-      if iter->has_next( ).
-        next = iter->next( ).
-
-        _values_get_next next.
-        _validate_number next operation.
-        num ?= next.
-
+      DATA(iter) = list->new_number_iterator( operation ).
+      IF iter->has_next( ).
+        num ?= iter->next( ).
         res = num->get_state( operation ).
+
+        WHILE iter->has_next( ).
+          num ?= iter->next( ).
+          res = num->add_complex( first = res
+                                  second = num->get_state( operation ) ).
+        ENDWHILE.
+
+        result = lcl_lisp_new=>numeric( res ).
       ELSE.
         result = lcl_lisp_number=>zero.
-        RETURN.
       ENDIF.
-
-      WHILE iter->has_next( ).
-        next = iter->next( ).
-
-        _values_get_next next.
-        _validate_number next operation.
-        num = CAST lcl_lisp_number( next ).
-
-        res = num->add_complex( first = res
-                                second = num->get_state( operation ) ).
-      ENDWHILE.
-
-      result = lcl_lisp_new=>numeric( res ).
     ENDMETHOD.
 
     METHOD proc_multiply.
       CONSTANTS operation TYPE string VALUE `*`.
       DATA res TYPE ts_result.
       DATA num TYPE REF TO lcl_lisp_number.
-      DATA next TYPE REF TO lcl_lisp.
-      DATA lo_head TYPE REF TO lcl_lisp.
 
       _validate list.
-      DATA(iter) = list->new_iterator( ).
-      if iter->has_next( ).
-        next = iter->next( ).
-
-        _values_get_next next.
-        _validate_number next operation.
-        num ?= next.
-
+      DATA(iter) = list->new_number_iterator( operation ).
+      IF iter->has_next( ).
+        num ?= iter->next( ).
         res = num->get_state( operation ).
+
+        WHILE iter->has_next( ).
+          num ?= iter->next( ).
+          res = num->product( first = res
+                              second = num->get_state( operation ) ).
+        ENDWHILE.
+        result = lcl_lisp_new=>numeric( res ).
       ELSE.
         result = lcl_lisp_number=>one.
-        RETURN.
       ENDIF.
-
-      WHILE iter->has_next( ).
-        next = iter->next( ).
-
-        _values_get_next next.
-        _validate_number next operation.
-        num ?= next.
-
-        res = num->product( first = res
-                            second = num->get_state( operation ) ).
-      ENDWHILE.
-      result = lcl_lisp_new=>numeric( res ).
     ENDMETHOD.                    "proc_multiply
 
     METHOD proc_subtract.
       CONSTANTS operation TYPE string VALUE `-`.
       DATA res TYPE ts_result.
       DATA num TYPE REF TO lcl_lisp_number.
-      DATA next TYPE REF TO lcl_lisp.
-      DATA lo_head TYPE REF TO lcl_lisp.
       _validate list.
 
-      DATA(iter) = list->new_iterator( ).
+      DATA(iter) = list->new_number_iterator( operation ).
 
-      IF iter->has_next( ) EQ abap_false.
-        throw( |no number in [-]| ).
-      ENDIF.
+      IF iter->has_next( ).
+        num ?= iter->next( ).
 
-      next = iter->next( ).
-      _values_get_next next.
-      _validate_number next operation.
-      num ?= next.
+        IF iter->has_next( ).
+          res = num->get_state( operation ).
 
-      IF iter->has_next( ) EQ abap_false.
-        result = lcl_lisp_number=>zero->substract( num ).
+          WHILE iter->has_next( ).  " Subtract all subsequent numbers from the first
+            num ?= iter->next( ).
+            res = num->add_complex( first = res
+                                    second = num->neg_sign( num->get_state( operation ) ) ).
+          ENDWHILE.
+
+          result = lcl_lisp_new=>numeric( res ).
+        ELSE.
+          result = lcl_lisp_number=>zero->substract( num ).
+        ENDIF.
       ELSE.
-        " Subtract all subsequent numbers from the first
-        res = num->get_state( operation ).
-
-        WHILE iter->has_next( ).
-          next = iter->next( ).
-          _values_get_next next.
-          _validate_number next operation.
-          num ?= next.
-
-          res = num->add_complex( first = res
-                                  second = num->neg_sign( num->get_state( operation ) ) ).
-        ENDWHILE.
-
-        result = lcl_lisp_new=>numeric( res ).
+        throw( |no number in [{ operation }]| ).
       ENDIF.
-
     ENDMETHOD.
 
     METHOD proc_divide.
       CONSTANTS operation TYPE string VALUE `/`.
       DATA num TYPE REF TO lcl_lisp_number.
-      DATA next TYPE REF TO lcl_lisp.
-      DATA lo_head TYPE REF TO lcl_lisp.
       _validate list.
 
-      DATA(iter) = list->new_iterator( ).
+      DATA(iter) = list->new_number_iterator( operation ).
+      IF iter->has_next( ).
+        num ?= iter->next( ).
 
-      IF iter->has_next( ) EQ abap_false.
-        throw( |no number in [/]| ).
-      ENDIF.
+        IF iter->has_next( ).
+          DATA(res) = num->get_state( operation ).
 
-      next = iter->next( ).
-      _values_get_next next.
-      _validate_number next operation.
-      num ?= next.
+          WHILE iter->has_next( ).   " Divide by all subsequent numbers
+            num ?= iter->next( ).
+            res = num->quotient( numerator = res
+                                 denominator = num->get_state( operation ) ).
+          ENDWHILE.
 
-      IF iter->has_next( ) EQ abap_false.
-        result = lcl_lisp_number=>one->divide( num ).
+          result = lcl_lisp_new=>numeric( res ).
+        ELSE.
+          result = lcl_lisp_number=>one->divide( num ).
+        ENDIF.
       ELSE.
-        " Divide by all subsequent numbers
-        DATA(res) = num->get_state( operation ).
-
-        WHILE iter->has_next( ).
-          next = iter->next( ).
-          _values_get_next next.
-          _validate_number next operation.
-          num ?= next.
-
-          res = num->quotient( numerator = res
-                               denominator = num->get_state( operation ) ).
-        ENDWHILE.
-
-        result = lcl_lisp_new=>numeric( res ).
+        throw( |no number in [{ operation }]| ).
       ENDIF.
 
     ENDMETHOD.
@@ -7866,7 +7877,7 @@
 
       DATA(lo_ptr) = list->cdr.
       IF lo_ptr->type NE type_pair.
-        throw( c_error_incorrect_input ).
+        lcl_lisp=>incorrect_input( operation ).
       ENDIF.
 
       WHILE lo_ptr NE nil.
@@ -9337,12 +9348,18 @@
     METHOD proc_string_to_num.
       DATA lv_radix TYPE tv_int VALUE 10.
 
-      _validate list.
-      _validate_string list->car `string->number`.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( `string->number` ).
+      ELSEIF list->car->type NE type_string.
+        list->car->raise( ` is not a string in string->number` ) ##NO_TEXT.
+      ENDIF.
 *     Optional radix
-      _validate list->cdr.
-      IF list->cdr NE nil.
-        _validate_integer list->cdr->car `string->number`.
+      IF list->cdr IS BOUND AND list->cdr NE nil.
+        IF list->cdr->car IS NOT BOUND.
+          lcl_lisp=>incorrect_input( operation ).
+        ELSEIF list->cdr->car->type NE type_integer.
+          list->cdr->car->raise( ` is not an integer in radix of string->number` ) ##NO_TEXT.
+        ENDIF.
         _to_integer list->cdr->car lv_radix.
       ENDIF.
 
@@ -9356,41 +9373,57 @@
     ENDMETHOD.
 
     METHOD proc_write.
-      _validate: list, list->car.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( `write` ).
+      ENDIF.
       result = write( io_elem = list->car
                       io_arg = list->cdr ).
     ENDMETHOD.
 
     METHOD proc_write_string.
-      _validate list.
-      _validate_string list->car `write-string`.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( `write-string` ).
+      ELSEIF list->car->type NE type_string.
+        list->car->raise( ` is not a string in write-string` ) ##NO_TEXT.
+      ENDIF.
       result = write( io_elem = list->car
                       io_arg = list->cdr ).
     ENDMETHOD.
 
     METHOD proc_write_bytevector.
-      _validate list.
-      _validate_bytevector list->car `write-bytevector`.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( `write-bytevector` ).
+      ELSEIF list->car->type NE type_string.
+        list->car->raise( ` is not a bytevector in write-bytevector` ) ##NO_TEXT.
+      ENDIF.
       result = write( io_elem = list->car
                       io_arg = list->cdr ).
     ENDMETHOD.
 
     METHOD proc_write_char.
-      _validate list.
-      _validate_char list->car `write-char`.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( `write-char` ).
+      ELSEIF list->car->type NE type_string.
+        list->car->raise( ` is not a char in write-char` ) ##NO_TEXT.
+      ENDIF.
       result = write( io_elem = list->car
                       io_arg = list->cdr ).
     ENDMETHOD.
 
     METHOD proc_write_u8.
-      _validate list.
-      _validate_bytevector list->car `write-u8`.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( `write-u8` ).
+      ELSEIF list->car->type NE type_string.
+        list->car->raise( ` is not a byte in write-u8` ) ##NO_TEXT.
+      ENDIF.
       result = write_u8( io_elem = list->car
                          io_arg = list->cdr ).
     ENDMETHOD.
 
     METHOD proc_display.
-      _validate: list, list->car.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( `display` ).
+      ENDIF.
       result = display( io_elem = list->car
                         io_arg = list->cdr ).
     ENDMETHOD.
@@ -9590,7 +9623,7 @@
       DATA lv_len TYPE tv_index.
       DATA lv_text TYPE string.
 
-      _validate: list, list->cdr, list->cdr->cdr.
+      _validate: list, list->car, list->cdr, list->cdr->cdr.
       _validate_string list->car 'string-set!'.
       _validate_index list->cdr->car 'string-set!'.
       _validate_char list->cdr->cdr->car 'string-set!'.
@@ -9601,7 +9634,10 @@
       _to_integer list->cdr->car lv_index.
 
       lo_string ?= list->car.
-      _validate_mutable lo_string `in string-set!`.
+      IF lo_string->mutable EQ abap_false.
+        throw( |constant in string-set! cannot be changed| ) ##NO_TEXT.
+      ENDIF.
+
 *     lo_string->value+lv_index(1) = lv_char.  "Not allowed so split in (left, new char, right)
 
 *     left part
@@ -12279,7 +12315,6 @@
     ENDMETHOD.
 
     METHOD is_equivalent. "eqv?
-      _validate io_elem.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
       DATA lo_real TYPE REF TO lcl_lisp_real.
@@ -12287,6 +12322,9 @@
 
       result = abap_false.
 
+      IF io_elem IS NOT BOUND.
+        lcl_lisp=>incorrect_input( 'eqv?' ).
+      ENDIF.
       DATA(b) = io_elem.
 *     Object a and Object b are both #t or both #f or both the empty list.
       IF ( me EQ true AND b EQ true )
@@ -12357,7 +12395,9 @@
 * and the empty list. If two objects are eqv?, they must be equal? as well.
 * In all other cases, equal? may return either #t or #f.
 * Even if its arguments are circular data structures, equal? must always terminate.
-      _validate: io_elem.
+      IF io_elem IS NOT BOUND.
+        lcl_lisp=>incorrect_input( 'equal?' ).
+      ENDIF.
       result = abap_false.
 
       IF comp NE nil.
@@ -12438,6 +12478,11 @@
       ro_iter = NEW lcl_lisp_iterator( me ).
     ENDMETHOD.
 
+    METHOD new_number_iterator.
+      ro_iter = NEW lcl_lisp_number_iterator( io_elem = me
+                                              iv_operation = iv_operation ).
+    ENDMETHOD.
+
     METHOD format_quasiquote.
 *     Quasiquoting output (quasiquote x) is displayed as `x without parenthesis
       ev_skip = abap_false.
@@ -12496,7 +12541,9 @@
       lo_elem = lo_values->head.
 
       WHILE lo_elem IS BOUND AND lo_elem NE nil.
-        _validate lo_elem->car.
+        IF lo_elem->car IS NOT BOUND.
+          lcl_lisp=>incorrect_input( 'values->string' ).
+        ENDIF.
         lv_str = lo_elem->car->to_string( ).
         IF str IS INITIAL.
           str = lv_str.
@@ -12741,6 +12788,12 @@
           area    = area.
     ENDMETHOD.
 
+    METHOD incorrect_input.
+      CONSTANTS c_error_incorrect_input TYPE string VALUE 'Incorrect input' ##NO_TEXT.
+
+      throw( c_error_incorrect_input && ` in ` && operation ).
+    ENDMETHOD.
+
     METHOD radix_throw.
       RAISE EXCEPTION TYPE lcx_lisp_radix
         EXPORTING
@@ -12817,7 +12870,7 @@
           OR type_complex.
           flag = xsdbool( me = lcl_lisp_number=>nan OR me = lcl_lisp_number=>neg_nan ).
         WHEN OTHERS.
-          raise_nan( `nan?` ).
+          raise_nan( operation ).
       ENDCASE.
     ENDMETHOD.
 
@@ -12834,7 +12887,7 @@
     ENDMETHOD.
 
     METHOD has_next.
-*     if the last element in the list is not a cons cell, we cannot append
+      " if the last element in the list is not a cons cell, we cannot append
       rv_flag = xsdbool( elem NE lcl_lisp=>nil AND
                ( first EQ abap_true OR ( elem->cdr IS BOUND AND elem->cdr NE lcl_lisp=>nil ) ) ).
     ENDMETHOD.                    "has_next
@@ -12852,6 +12905,36 @@
     ENDMETHOD.                    "next
 
   ENDCLASS.                    "lcl_lisp_iterator IMPLEMENTATION
+
+  CLASS lcl_lisp_number_iterator IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( io_elem = io_elem ).
+      operation = iv_operation.
+    ENDMETHOD.
+
+    METHOD next.
+      ro_elem = super->next( ).
+
+      IF ro_elem IS BOUND AND ro_elem->type EQ type_values.
+        DATA(lo_head) = CAST lcl_lisp_values( ro_elem )->head.
+
+        IF lo_head IS BOUND AND lo_head NE lcl_lisp=>nil AND lo_head->car IS BOUND.
+          ro_elem = lo_head->car.
+          "lo_head = lo_head->cdr.    " next value?
+        ENDIF.
+      ENDIF.
+
+      IF ro_elem IS BOUND.
+        IF ro_elem->is_number( ) EQ abap_false.
+          ro_elem->raise_nan( operation ) ##NO_TEXT.
+        ENDIF.
+      ELSE.
+        lcl_lisp=>incorrect_input( operation ).
+      ENDIF.
+    ENDMETHOD.                    "next
+
+  ENDCLASS.                    "lcl_lisp_number_iterator IMPLEMENTATION
 
   CLASS lcl_lisp_new IMPLEMENTATION.
 
@@ -13674,8 +13757,9 @@
     ENDMETHOD.
 
     METHOD hash.
-      _validate io_list.
-
+      IF io_list IS NOT BOUND.
+        lcl_lisp=>incorrect_input( 'make-hash' ).
+      ENDIF.
       ro_hash = NEW lcl_lisp_hash( type_hash ).
       ro_hash->fill( io_list->car ).
     ENDMETHOD.
@@ -13711,8 +13795,9 @@
     ENDMETHOD.
 
     METHOD function.
-      _validate: io_list, io_list->car.
-
+      IF io_list IS NOT BOUND OR io_list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( 'ab-funciton' ).
+      ENDIF.
       ro_func = NEW lcl_lisp_abapfunction( type_abap_function ).
 *     Determine the parameters of the function module to populate parameter table
       ro_func->value = ro_func->read_interface( io_list->car->value ).
@@ -15521,7 +15606,9 @@
     ENDMETHOD.
 
     METHOD fill.
-      _validate list.
+      IF list IS NOT BOUND.
+        incorrect_input( 'make-hash' ).
+      ENDIF.
 
       DATA(lo_head) = list.
       CHECK lo_head->type = type_pair.
@@ -15540,7 +15627,9 @@
     ENDMETHOD.                    "new_hash
 
     METHOD get.
-      _validate: list, list->car.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        incorrect_input( 'hash-get' ).
+      ENDIF.
       IF list->car = nil.
         throw( |hash-get requires a key to access an element| ).
       ENDIF.
@@ -15550,8 +15639,10 @@
     ENDMETHOD.                    "get
 
     METHOD insert.
-      _validate: list, list->car, list->cdr.
-
+      IF list IS NOT BOUND OR list->car IS NOT BOUND
+        OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND..
+        incorrect_input( 'hash-insert' ).
+      ENDIF.
 * TODO: Check number and type of parameters
       INSERT VALUE #( key = list->car->value
                       element = list->cdr->car ) INTO TABLE hash.
@@ -15560,7 +15651,9 @@
     ENDMETHOD.                    "insert
 
     METHOD delete.
-      _validate: list, list->car.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        incorrect_input( 'hash-remove' ).
+      ENDIF.
 * TODO: Check number and type of parameters
       DELETE hash WHERE key = list->car->value.
       result = nil.
@@ -15582,7 +15675,9 @@
     ENDMETHOD.                    "get_hash_keys
 
     METHOD from_list.
-      _validate: list, list->car.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        incorrect_input( msg ).
+      ENDIF.
       IF list->car->type NE type_hash.
         throw( |{ msg } only works on hashes| ).
       ENDIF.
@@ -15667,7 +15762,9 @@
     ENDMETHOD.
 
     METHOD set.
-      _validate_mutable me `vector`.
+      IF mutable EQ abap_false.
+        throw( |constant vector cannot be changed in vector-set!| ) ##NO_TEXT.
+      ENDIF.
 
       DATA(lv_start) = index + 1.
 
@@ -15680,7 +15777,9 @@
 
     METHOD fill.
       DATA lv_end TYPE tv_index.
-      _validate_mutable me `vector`.
+      IF mutable EQ abap_false.
+        throw( |constant vector cannot be changed in vector-fill!| ) ##NO_TEXT.
+      ENDIF.
       ro_elem = me.
 
       DATA(lv_start) = from + 1.         " start is Inclusive
@@ -15771,7 +15870,14 @@
 
       DATA(lo_ptr) = io_list.
       WHILE lo_ptr NE nil.
-        _validate_byte lo_ptr->car `bytevector`.
+        " validate byte
+        IF lo_ptr->car IS NOT BOUND.
+          incorrect_input( `bytevector` ).
+        ENDIF.
+        IF lo_ptr->car->type NE type_integer OR CAST lcl_lisp_integer( lo_ptr->car )->int NOT BETWEEN 0 AND 255.
+          lo_ptr->car->raise( ` is not a byte in bytevector` ) ##NO_TEXT.
+        ENDIF.
+
         _to_integer lo_ptr->car lv_int.
         APPEND lv_int TO lt_byte.
         lo_ptr = lo_ptr->cdr.
@@ -15869,7 +15975,9 @@
     ENDMETHOD.
 
     METHOD set.
-      _validate_mutable me `bytevector`.
+      IF mutable EQ abap_false.
+        throw( |constant bytevector cannot be changed in bytevector-u8-set!| ).
+      ENDIF.
 
       DATA(lv_start) = index + 1.
 

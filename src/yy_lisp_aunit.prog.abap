@@ -62,7 +62,8 @@
                                   DEFAULT if_aunit_constants=>critical.
        METHODS invalid_digit IMPORTING digit TYPE tv_char
                              RETURNING VALUE(text) TYPE string.
-       METHODS scheme_incorrect IMPORTING code TYPE string.
+       METHODS scheme_incorrect IMPORTING code TYPE string
+                                          operation TYPE string.
        METHODS code_test_f IMPORTING code     TYPE string
                                      expected TYPE tv_real.
 
@@ -154,7 +155,7 @@
 
      METHOD scheme_incorrect.
        scheme( code = code
-               expected = `Eval: Incorrect input` ).
+               expected = `Eval: Incorrect input in ` && operation ).
      ENDMETHOD.                    "code_test
 
      METHOD code_test_f.
@@ -182,7 +183,8 @@
      ENDMETHOD.                    "stability_1
 
      METHOD stability_2.
-       scheme_incorrect( '(define a)' ).
+       scheme_incorrect( code = '(define a)'
+                         operation = 'define' ).
      ENDMETHOD.                    "stability_2
 
      METHOD basic_define_error.
@@ -868,7 +870,8 @@
                expected = 'Eval: Symbol x is unbound' ).
        scheme( code = '(set! 7 5)'
                expected = 'Eval: 7 is not a bound symbol' ).
-       scheme_incorrect( '(set!)' ).
+       scheme_incorrect( code = '(set!)'
+                         operation = 'set!' ).
      ENDMETHOD.                    "set_2
 
      METHOD set_3.
@@ -1903,15 +1906,19 @@
      ENDMETHOD.                    "output_string_1
 
      METHOD write_1.
-       scheme_incorrect( |(write)| ).
-       scheme_incorrect( |(write (if (= 1 2)))| ).
+       scheme_incorrect( code = |(write)|
+                         operation = 'write' ).
+       scheme_incorrect( code = |(write (if (= 1 2)))|
+                         operation = 'if' ).
        scheme( code = |(write (if (= 1 2) 5))|
                expected = c_undefined && ` ` && c_undefined ).
      ENDMETHOD.                    "write_1
 
      METHOD display_1.
-       scheme_incorrect( |(display)| ).
-       scheme_incorrect( |(display (if (= 1 2)))| ).
+       scheme_incorrect( code = |(display)|
+                         operation = 'display' ).
+       scheme_incorrect( code = |(display (if (= 1 2)))|
+                         operation = 'if' ).
        scheme( code = |(display (if (= 1 2) 5))|
                expected = c_undefined ).  " but output is empty
      ENDMETHOD.                    "display_1
@@ -2030,11 +2037,12 @@
      ENDMETHOD.
 
      METHOD case_no_args.
-       scheme_incorrect( |(case)| ).
+       scheme_incorrect( code = |(case)|  operation = 'case' ).
      ENDMETHOD.                    "case_no_args
 
      METHOD case_no_clauses.
-       scheme_incorrect( |(case (* 2 3))| ).
+       scheme_incorrect( code = |(case (* 2 3))|
+                         operation = 'case' ).
      ENDMETHOD.                    "case_no_clauses
 
      METHOD case_1.
@@ -2634,8 +2642,8 @@
      ENDMETHOD.                    "exact_5
 
      METHOD compare_eq.
-       scheme_incorrect( '(=)' ).
-       scheme_incorrect( '(= 1)' ).
+       scheme_incorrect( code = '(=)'  operation = '=' ).
+       scheme_incorrect( code = '(= 1)'  operation = '=' ).
        scheme( code = '(= 1 2)'
                expected = '#f' ).
        scheme( code = '(= 1 1)'
@@ -2645,8 +2653,8 @@
      ENDMETHOD.
 
      METHOD compare_lt.
-       scheme_incorrect( '(<)' ).
-       scheme_incorrect( '(< 1)' ).
+       scheme_incorrect( code = '(<)'  operation = '<' ).
+       scheme_incorrect( code = '(< 1)'  operation = '<' ).
        scheme( code = '(< 1 2)'
                expected = '#t' ).
        scheme( code = '(< 2 2)'
@@ -2656,8 +2664,8 @@
      ENDMETHOD.
 
      METHOD compare_gt.
-       scheme_incorrect( '(>)' ).
-       scheme_incorrect( '(> 1)' ).
+       scheme_incorrect( code = '(>)'  operation = '>' ).
+       scheme_incorrect( code = '(> 1)' operation = '>' ).
        scheme( code = '(> 1 2)'
                expected = '#f' ).
        scheme( code = '(> 2 2)'
@@ -2667,8 +2675,8 @@
      ENDMETHOD.
 
      METHOD compare_le.
-       scheme_incorrect( '(<=)' ).
-       scheme_incorrect( '(<= 1)' ).
+       scheme_incorrect( code = '(<=)'  operation = '<=' ).
+       scheme_incorrect( code = '(<= 1)'  operation = '<=' ).
        scheme( code = '(<= 1 2)'
                expected = '#t' ).
        scheme( code = '(<= 2 2)'
@@ -2678,8 +2686,8 @@
      ENDMETHOD.
 
      METHOD compare_ge.
-       scheme_incorrect( '(>=)' ).
-       scheme_incorrect( '(>= 1)' ).
+       scheme_incorrect( code = '(>=)'  operation = '>=' ).
+       scheme_incorrect( code = '(>= 1)' operation = '>=' ).
        scheme( code = '(>= 1 2)'
                expected = '#f' ).
        scheme( code = '(>= 2 2)'
@@ -2904,7 +2912,7 @@
                expected = '71' ).
 *       code_test_f( code = '(inexact (+ 144045379/232792560 1/10))'
 *                    expected = '0.7187714031754279432298008149401338' ).
-       scheme( code = '(eqv? (inexact (+ 144045379/232792560 1/10)) 0.7187714031754279432298008149401338'
+       scheme( code = '(eqv? (inexact (+ 144045379/232792560 1/10)) 0.7187714031754279432298008149401338)'
                expected = '#t' ).
      ENDMETHOD.                    "math_addition
 
@@ -4341,7 +4349,7 @@
      ENDMETHOD.                    "list_cons_5
 
      METHOD list_cons_error_1.
-       scheme_incorrect( |(cons)| ).
+       scheme_incorrect( code = |(cons)|  operation = 'cons' ).
      ENDMETHOD.
 
      METHOD list_cons_error_2.
@@ -4641,7 +4649,7 @@
 
      METHOD vector_set_2.
        scheme( code = |(vector-set! '#(0 1 2) 1 "doe")|
-               expected = 'Eval: constant vector cannot be changed' ).
+               expected = 'Eval: constant vector cannot be changed in vector-set!' ).
      ENDMETHOD.                    "vector_set_2
 
      METHOD vector_to_list_1.
