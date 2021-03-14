@@ -124,9 +124,13 @@
     c_plus_sign            TYPE tv_char VALUE `+`,
     c_minus_sign           TYPE tv_char VALUE `-`,
     c_explicit_sign        TYPE string VALUE `+-`,
-    c_imaginary_output     TYPE tv_char VALUE `i`,
+
     c_exponent_marker      TYPE tv_char VALUE `E`,
-    c_exponent_marker_long TYPE string VALUE `eEsSfFdDlL`.
+    c_exponent_marker_long TYPE string VALUE `eEsSfFdDlL`,
+
+    c_imaginary_marker TYPE tv_char VALUE 'I',
+    c_imaginary_output TYPE tv_char VALUE `i`,
+    c_complex_polar    TYPE tv_char VALUE '@'.
 
   CONSTANTS:
     c_lisp_pos_zero TYPE string VALUE '+0.0',
@@ -137,14 +141,6 @@
     c_lisp_neg_nan  TYPE string VALUE '-NAN.0',
     c_lisp_pos_img  TYPE string VALUE '+I',
     c_lisp_neg_img  TYPE string VALUE '-I'.
-
-  CONSTANTS:
-    c_complex_polar TYPE tv_char VALUE '@',
-    c_imaginary_marker  TYPE tv_char VALUE 'I',
-    c_imaginary_pos_inf TYPE string VALUE '+INF.0I',
-    c_imaginary_neg_inf TYPE string VALUE '-INF.0I',
-    c_imaginary_pos_nan TYPE string VALUE '+NAN.0I',
-    c_imaginary_neg_nan TYPE string VALUE '-NAN.0I'.
 
   CONSTANTS:
     c_pattern_radix     TYPE string VALUE 'oObBdDxX',
@@ -419,7 +415,7 @@
       RETURN.
     ENDIF.
     IF other-type EQ type_complex.
-      cell->raise( 'comparison not defined for complex numbers' ).
+      cell->no_complex( 'comparison' ).
     ENDIF.
   END-OF-DEFINITION.
 
@@ -515,7 +511,7 @@
           ENDCASE.
 
         WHEN OTHERS.
-          cell->raise( `Invalid number type in ` && &2 ).
+          cell->raise_invalid_number( &2 ).
 
       ENDCASE.
 
@@ -857,6 +853,9 @@
       METHODS raise_nan IMPORTING operation TYPE string
                         RAISING   lcx_lisp_exception.
 
+      METHODS raise_invalid_number IMPORTING operation TYPE string
+                                   RAISING   lcx_lisp_exception.
+
       METHODS no_complex IMPORTING operation TYPE string
                          RAISING   lcx_lisp_exception.
 
@@ -1020,30 +1019,30 @@
 
       METHODS add_complex IMPORTING first TYPE ts_result
                                     second TYPE ts_result
-                                    operation TYPE string DEFAULT '+'
+                                    operation TYPE string
                           RETURNING VALUE(result) TYPE ts_result
                           RAISING   lcx_lisp_exception.
 
       METHODS add_real IMPORTING self  TYPE ts_number
                                  other TYPE ts_number
-                                 operation TYPE string DEFAULT '+'
+                                 operation TYPE string
                        RETURNING VALUE(number) TYPE ts_number
                        RAISING   lcx_lisp_exception.
 
       METHODS multiply_real IMPORTING self  TYPE ts_number
                                       other TYPE ts_number
-                                      operation TYPE string DEFAULT '*'
+                                      operation TYPE string
                             RETURNING VALUE(number) TYPE ts_number
                             RAISING   lcx_lisp_exception.
       METHODS divide_real IMPORTING self  TYPE ts_number
                                     other TYPE ts_number
-                                    operation TYPE string DEFAULT '/'
+                                    operation TYPE string
                           RETURNING VALUE(number) TYPE ts_number
                           RAISING   lcx_lisp_exception.
 
       METHODS product IMPORTING first TYPE ts_result
                                 second TYPE ts_result
-                                operation TYPE string DEFAULT '*'
+                                operation TYPE string
                       RETURNING VALUE(result) TYPE ts_result
                       RAISING   lcx_lisp_exception.
 
@@ -1053,7 +1052,7 @@
 
       METHODS quotient IMPORTING numerator TYPE ts_result
                                  denominator TYPE ts_result
-                                 operation TYPE string DEFAULT '/'
+                                 operation TYPE string
                        RETURNING VALUE(result) TYPE ts_result
                        RAISING   lcx_lisp_exception.
 
@@ -1076,7 +1075,7 @@
                                             other        TYPE ts_number
                                   RETURNING VALUE(equal) TYPE tv_flag
                                   RAISING   lcx_lisp_exception.
-      METHODS number_is_equal IMPORTING other        TYPE REF TO lcl_lisp_number
+      METHODS number_is_equal IMPORTING number       TYPE REF TO lcl_lisp_number
                                         operation    TYPE string DEFAULT '='
                               RETURNING VALUE(equal) TYPE tv_flag.
       METHODS is_integer RETURNING VALUE(flag) TYPE tv_flag
@@ -1086,12 +1085,10 @@
       METHODS is_infinite RETURNING VALUE(result) TYPE REF TO lcl_lisp
                           RAISING   lcx_lisp_exception.
 
-      CLASS-METHODS is_zero IMPORTING is_number   TYPE ts_number
-                            RETURNING VALUE(null) TYPE tv_flag.
       CLASS-METHODS is_exact_zero IMPORTING is_number   TYPE ts_number
                                   RETURNING VALUE(null) TYPE tv_flag.
-      METHODS number_is_positive IMPORTING is_number       TYPE ts_number
-                                 RETURNING VALUE(positive) TYPE tv_flag.
+      CLASS-METHODS number_sign IMPORTING is_number      TYPE ts_number
+                                RETURNING VALUE(rv_sign) TYPE tv_int.
 
       METHODS negative_infnan RETURNING VALUE(num) TYPE REF TO lcl_lisp_number
                               RAISING   lcx_lisp_exception.
@@ -1147,7 +1144,7 @@
 
       CONSTANTS:
         c_sign_positive TYPE tv_sign VALUE space,
-        c_sign_negative TYPE tv_sign VALUE '-'.
+        c_sign_negative TYPE tv_sign VALUE c_minus_sign.
 
       TYPES tr_bigint TYPE REF TO lcl_lisp_bigint.
       TYPES tt_bigint TYPE STANDARD TABLE OF tr_bigint.
@@ -2432,7 +2429,7 @@
 
       METHODS error_message RETURNING VALUE(rv_message) TYPE string.
     PRIVATE SECTION.
-      CONSTANTS c_error_message TYPE i VALUE 99.
+      CONSTANTS c_subrc_error TYPE i VALUE 99.
 
       DATA parameters_generated TYPE tv_flag.
 
@@ -2976,6 +2973,12 @@
     ENDMETHOD.
 
     METHOD match_number.
+      CONSTANTS:
+        c_imaginary_pos_inf TYPE string VALUE '+INF.0I',
+        c_imaginary_neg_inf TYPE string VALUE '-INF.0I',
+        c_imaginary_pos_nan TYPE string VALUE '+NAN.0I',
+        c_imaginary_neg_nan TYPE string VALUE '-NAN.0I'.
+
       " longest match first
       CLEAR elem.
       IF mi_stream->state-char EQ c_plus_sign.
@@ -4937,7 +4940,6 @@
 *       '()
 *       (cons (f (car lst)) (map f (cdr lst)))))
     METHOD expand_map.
-      CONSTANTS operation TYPE string VALUE `map`.
 *     (map proc list1 list2 ... ) The lists should all have the same length.
 *     Proc should accept as many arguments as there are lists and return a single value.
 *     Proc should not mutate any of the lists.
@@ -4974,7 +4976,6 @@
     ENDMETHOD.
 
     METHOD expand_for_each.
-      CONSTANTS operation TYPE string VALUE `for-each`.
 *     (for-each proc list1 list2 ... ) The lists should all have the same length.
 *     Proc should accept as many arguments as there are lists and return a single value.
 *     Proc should not mutate any of the lists.
@@ -5004,7 +5005,6 @@
     ENDMETHOD.
 
     METHOD eval_do_init.
-      CONSTANTS operation TYPE string VALUE `do`.
 *     <init> expressions are evaluated (in unspecified order), the <variable>s are bound to fresh locations,
 *     the results of the <init> expressions are stored in the bindings of the <variable>s.
 *     A <step> can be omitted, in which case the effect is the same as if (<variable> <init> <variable>)
@@ -5597,7 +5597,7 @@
 * eval takes an expression and an environment to a value
 **********************************************************************
     METHOD eval.
-      DATA caller_operation TYPE string.
+      DATA(caller_operation) = operation.
       DATA(cont) = is_cont.   " partial continuation
 
       DO.
@@ -5605,7 +5605,6 @@
             IF cont-elem IS NOT BOUND.
               lcl_lisp=>incorrect_input( operation ).
             ENDIF.
-            caller_operation = operation.
 
             CASE cont-elem.
               WHEN nil OR true OR false.
@@ -7672,7 +7671,6 @@
       DATA res TYPE ts_result.
       DATA num TYPE REF TO lcl_lisp_number.
 
-      operation = `+`.
       _validate list.
 
       DATA(iter) = list->new_number_iterator( operation ).
@@ -7683,7 +7681,8 @@
         WHILE iter->has_next( ).
           num ?= iter->next( ).
           res = num->add_complex( first = res
-                                  second = num->get_state( operation ) ).
+                                  second = num->get_state( operation )
+                                  operation = operation ).
         ENDWHILE.
 
         result = lcl_lisp_new=>numeric( res ).
@@ -7693,7 +7692,6 @@
     ENDMETHOD.
 
     METHOD proc_multiply.
-      CONSTANTS operation TYPE string VALUE `*`.
       DATA res TYPE ts_result.
       DATA num TYPE REF TO lcl_lisp_number.
 
@@ -7706,7 +7704,8 @@
         WHILE iter->has_next( ).
           num ?= iter->next( ).
           res = num->product( first = res
-                              second = num->get_state( operation ) ).
+                              second = num->get_state( operation )
+                              operation = operation ).
         ENDWHILE.
         result = lcl_lisp_new=>numeric( res ).
       ELSE.
@@ -7715,7 +7714,6 @@
     ENDMETHOD.                    "proc_multiply
 
     METHOD proc_subtract.
-      CONSTANTS operation TYPE string VALUE `-`.
       DATA res TYPE ts_result.
       DATA num TYPE REF TO lcl_lisp_number.
       _validate list.
@@ -7731,7 +7729,8 @@
           WHILE iter->has_next( ).  " Subtract all subsequent numbers from the first
             num ?= iter->next( ).
             res = num->add_complex( first = res
-                                    second = num->neg_sign( num->get_state( operation ) ) ).
+                                    second = num->neg_sign( num->get_state( operation ) )
+                                    operation = operation ).
           ENDWHILE.
 
           result = lcl_lisp_new=>numeric( res ).
@@ -7744,7 +7743,6 @@
     ENDMETHOD.
 
     METHOD proc_divide.
-      CONSTANTS operation TYPE string VALUE `/`.
       DATA num TYPE REF TO lcl_lisp_number.
       _validate list.
 
@@ -7758,7 +7756,8 @@
           WHILE iter->has_next( ).   " Divide by all subsequent numbers
             num ?= iter->next( ).
             res = num->quotient( numerator = res
-                                 denominator = num->get_state( operation ) ).
+                                 denominator = num->get_state( operation )
+                                 operation = operation ).
           ENDWHILE.
 
           result = lcl_lisp_new=>numeric( res ).
@@ -7789,26 +7788,35 @@
     ENDMETHOD.                    "proc_lte
 
     METHOD proc_is_zero.
-      DATA cell TYPE REF TO lcl_lisp.
       DATA num TYPE REF TO lcl_lisp_number.
+      DATA cell TYPE REF TO lcl_lisp.
+      DATA lo_head TYPE REF TO lcl_lisp.
 
       result = false.
-      _validate list.
-      _validate_number list->car '[zero?]'.
-      cell = list->car.
-      "_get
-      num ?= cell.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ENDIF.
 
-      CASE num->type.
-        WHEN type_complex.
-          IF CAST lcl_lisp_complex( num )->is_real( ) AND sign( num->to_real( ) ) EQ 0.
-            result = true.
+      cell = list->car.
+      _values_get_next cell.
+
+      CASE cell->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          num ?= cell.
+          DATA(state) = num->get_state( operation ).
+          IF num->number_sign( state-real_part ) EQ 0.
+            IF state-type EQ type_complex AND num->number_sign( state-imag_part ) NE 0.
+              result = false.
+            ELSE.
+              result = true.
+            ENDIF.
           ENDIF.
 
         WHEN OTHERS.
-          IF sign( num->to_real( ) ) EQ 0.
-            result = true.
-          ENDIF.
+          cell->raise_nan( operation ) ##NO_TEXT.
       ENDCASE.
     ENDMETHOD.
 
@@ -7818,15 +7826,30 @@
       DATA num TYPE REF TO lcl_lisp_number.
 
       result = false.
-      _validate list.
-      _validate_number list->car '[positive?]'.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ENDIF.
+
       cell = list->car.
       _values_get_next cell.
-      num ?= cell.
 
-      IF sign( num->to_real( ) ) EQ 1.
-        result = true.
-      ENDIF.
+     CASE cell->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          num ?= cell.
+          DATA(state) = num->get_state( operation ).
+          IF state-type EQ type_complex AND num->number_sign( state-imag_part ) NE 0.
+            num->no_complex( operation ).
+          ENDIF.
+          IF num->number_sign( state-real_part ) EQ 1.
+            result = true.
+          ENDIF.
+
+        WHEN OTHERS.
+          cell->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_is_negative.
@@ -7835,31 +7858,114 @@
       DATA num TYPE REF TO lcl_lisp_number.
 
       result = false.
-      _validate list.
-      _validate_number list->car '[negative?]'.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ENDIF.
+
       cell = list->car.
       _values_get_next cell.
-      num ?= cell.
 
-      IF sign( num->to_real( ) ) EQ -1.
-        result = true.
-      ENDIF.
+     CASE cell->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          num ?= cell.
+          DATA(state) = num->get_state( operation ).
+          IF state-type EQ type_complex AND num->number_sign( state-imag_part ) NE 0.
+            num->no_complex( operation ).
+          ENDIF.
+          IF num->number_sign( state-real_part ) EQ -1.
+            result = true.
+          ENDIF.
+
+        WHEN OTHERS.
+          cell->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_is_odd.
+      DATA cell TYPE REF TO lcl_lisp.
+      DATA lo_head TYPE REF TO lcl_lisp.
+      DATA num TYPE REF TO lcl_lisp_number.
+
       result = false.
-      _validate list.
-      _validate_integer list->car 'odd?'.
-      CHECK CAST lcl_lisp_integer( list->car )->int MOD 2 NE 0.
-      result = true.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ENDIF.
+
+      cell = list->car.
+      _values_get_next cell.
+
+     CASE cell->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          num ?= cell.
+          DATA(state) = num->get_state( operation ).
+          IF state-type EQ type_complex AND num->number_sign( state-imag_part ) NE 0.
+            num->no_complex( operation ).
+          ENDIF.
+          CASE state-subtype.
+            WHEN type_integer.
+              IF state-int MOD 2 NE 0.
+                result = true.
+              ENDIF.
+            WHEN type_rational.
+              num->raise_invalid_number( operation ) ##NO_TEXT.
+            WHEN type_real.
+              IF state-infnan EQ abap_true OR state-real NE num->scheme_round( state-real ).
+                num->raise_invalid_number( operation ) ##NO_TEXT.
+              ELSEIF num->scheme_round( state-real ) MOD 2 NE 0.
+                result = true.
+              ENDIF.
+          ENDCASE.
+        WHEN OTHERS.
+          cell->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.                    "proc_lte
 
     METHOD proc_is_even.
+      DATA cell TYPE REF TO lcl_lisp.
+      DATA lo_head TYPE REF TO lcl_lisp.
+      DATA num TYPE REF TO lcl_lisp_number.
+
       result = false.
-      _validate list.
-      _validate_integer list->car 'even?'.
-      CHECK CAST lcl_lisp_integer( list->car )->int MOD 2 EQ 0.
-      result = true.
+      IF list IS NOT BOUND OR list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ENDIF.
+
+      cell = list->car.
+      _values_get_next cell.
+
+     CASE cell->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          num ?= cell.
+          DATA(state) = num->get_state( operation ).
+          IF state-type EQ type_complex AND num->number_sign( state-imag_part ) NE 0.
+            num->no_complex( operation ).
+          ENDIF.
+          CASE state-subtype.
+            WHEN type_integer.
+              IF state-int MOD 2 EQ 0.
+                result = true.
+              ENDIF.
+            WHEN type_rational.
+              num->raise_invalid_number( operation ) ##NO_TEXT.
+            WHEN type_real.
+              IF state-infnan EQ abap_true OR state-real NE num->scheme_round( state-real ).
+                num->raise_invalid_number( operation ) ##NO_TEXT.
+              ELSEIF num->scheme_round( state-real ) MOD 2 EQ 0.
+                result = true.
+              ENDIF.
+          ENDCASE.
+        WHEN OTHERS.
+          cell->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.                    "proc_lte
 
 **********************************************************************
@@ -8405,7 +8511,7 @@
       _get_arg0_as_number `abs`.
 
       IF lo_number->type EQ type_complex.
-        lo_number->raise( ` abs is invalid for complex numbers` ).
+        lo_number->no_complex( 'abs' ).
       ELSE.
         TRY.
             result = lo_number->norm( ).
@@ -8715,7 +8821,7 @@
               result = lcl_lisp_new=>real_number( value = base1 ** exp1
                                                   iv_exact = lv_exact ).
             WHEN type_complex.
-              cell->raise( '[expt] not implemented yet for complex numbers'  ).
+              cell->no_complex( 'complex [expt] not implemented yet -' ).
 
             WHEN OTHERS.
               cell->raise_nan( |[expt]| ) ##NO_TEXT.
@@ -11535,7 +11641,7 @@
         PARAMETER-TABLE param_active
         EXCEPTION-TABLE exceptions.
 
-      IF sy-subrc EQ c_error_message.
+      IF sy-subrc EQ c_subrc_error.
         throw( |Call { list->value }: { error_message( ) }| ).
       ENDIF.
 
@@ -11636,7 +11742,7 @@
 
     METHOD create_exceptions.
       exceptions = VALUE #( ( name = 'OTHERS'        value = 10 )
-                            ( name = 'error_message' value = c_error_message ) ).
+                            ( name = 'error_message' value = c_subrc_error ) ).
     ENDMETHOD.
 
   ENDCLASS.                    "lcl_lisp_abapfunction IMPLEMENTATION
@@ -12806,6 +12912,10 @@
 
     METHOD raise_nan.
       raise( | is not a number in [{ operation }]| ).
+    ENDMETHOD.
+
+    METHOD raise_invalid_number.
+      raise( | invalid number in { operation }| ).
     ENDMETHOD.
 
     METHOD no_complex.
@@ -14478,15 +14588,19 @@
 
       IF first-type EQ type_complex OR second-type EQ type_complex.
         term_real = add_real( self = multiply_real( self = first-real_part
-                                                    other = second-real_part )
+                                                    other = second-real_part
+                                                    operation = operation )
                               other = negative( multiply_real( self = first-imag_part
-                                                               other = second-imag_part ) )
+                                                               other = second-imag_part
+                                                               operation = operation ) )
                               operation = operation ).
 
         term_imag = add_real( self = multiply_real( self = first-real_part
-                                                    other = second-imag_part )
+                                                    other = second-imag_part
+                                                    operation = operation )
                               other = multiply_real( self = first-imag_part
-                                                     other = second-real_part )
+                                                     other = second-real_part
+                                                     operation = operation )
                               operation = operation ).
 
         result = VALUE #( type = type_complex
@@ -14495,13 +14609,16 @@
       ELSE.
         result = first.
         result-real_part = multiply_real( self = first-real_part
-                                          other = second-real_part ).    " multiply real parts
+                                          other = second-real_part
+                                          operation = operation ).    " multiply real parts
       ENDIF.
     ENDMETHOD.
 
     METHOD multiply.
-      result = lcl_lisp_new=>numeric( product( first = me->get_state( '*' )
-                                               second = other->get_state( '*' ) ) ).
+      CONSTANTS operation TYPE string VALUE '*'.
+      result = lcl_lisp_new=>numeric( product( first = me->get_state( operation )
+                                               second = other->get_state( operation )
+                                               operation = operation )  ).
     ENDMETHOD.
 
     METHOD divide_real.
@@ -14804,42 +14921,54 @@
 
       IF numerator-type EQ type_complex OR denominator-type EQ type_complex.
         denom = add_real( self = multiply_real( self = denominator-real_part
-                                                other = denominator-real_part )
+                                                other = denominator-real_part
+                                                operation = operation )
                           other = multiply_real( self = denominator-imag_part
-                                                 other = denominator-imag_part )
+                                                 other = denominator-imag_part
+                                                 operation = operation )
                           operation = operation ).
 
         nummer_real = add_real( self = multiply_real( self = numerator-real_part
-                                                      other = denominator-real_part )
+                                                      other = denominator-real_part
+                                                      operation = operation )
                                 other = multiply_real( self = numerator-imag_part
-                                                       other = denominator-imag_part )
+                                                       other = denominator-imag_part
+                                                       operation = operation )
                                 operation = operation ).
 
         nummer_imag = add_real( self = multiply_real( self = denominator-real_part
-                                                      other = numerator-imag_part )
+                                                      other = numerator-imag_part
+                                                      operation = operation )
                                 other = negative( multiply_real( self = numerator-real_part
-                                                                 other = denominator-imag_part ) )
+                                                                 other = denominator-imag_part
+                                                                 operation = operation ) )
                                 operation = operation ).
 
         result-type = type_complex.
         result-real_part = divide_real( self = nummer_real
-                                      other = denom ).
+                                        other = denom
+                                        operation = operation ).
         result-imag_part = divide_real( self = nummer_imag
-                                      other = denom ).
+                                        other = denom
+                                        operation = operation ).
       ELSE.
         result-real_part = divide_real( self = numerator-real_part
-                                        other = denominator-real_part ).    " divide real parts
+                                        other = denominator-real_part
+                                        operation = operation ).    " divide real parts
       ENDIF.
 
     ENDMETHOD.
 
     METHOD divide.
-      result = lcl_lisp_new=>numeric( quotient( numerator = me->get_state( '/' )
-                                                denominator = other->get_state( '/' ) ) ).
+      CONSTANTS operation TYPE string VALUE '/'.
+      result = lcl_lisp_new=>numeric( quotient( numerator = me->get_state( operation )
+                                                denominator = other->get_state( operation )
+                                                operation = operation ) ).
     ENDMETHOD.
 
     METHOD square.
-      DATA(self) = me->get_state( 'square' ).
+      CONSTANTS operation TYPE string VALUE 'square'.
+      DATA(self) = me->get_state( operation ).
 
       CASE type.
         WHEN type_integer.
@@ -14873,14 +15002,16 @@
 
         WHEN type_complex.
           result = lcl_lisp_new=>numeric( product( first = self
-                                                   second = self ) ).
+                                                   second = self
+                                                   operation = operation ) ).
 
         WHEN OTHERS.
-          raise_nan( `square` ).
+          raise_nan( operation ).
       ENDCASE.
     ENDMETHOD.
 
     METHOD get_numerator.
+      CONSTANTS operation TYPE string VALUE 'numerator'.
       CASE type.
         WHEN type_integer.
           result = me.
@@ -14897,14 +15028,14 @@
                 result = lcl_lisp_new=>real_number( value = lv_nummer
                                                     iv_exact = lo_real->exact ).
               ELSE.
-                lo_real->raise( ` is not a rational in numerator` ).
+                lo_real->raise( ` is not a rational in ` && operation ).
               ENDIF.
 
 *              DATA(lv_num) = lo_real->real.
 *              result = lcl_lisp_new=>real_number( lcl_lisp_real=>gcd( n = lv_num
 *                                                                      d = 1 ) * lv_num ).
               _catch_arithmetic_error.
-                lo_real->raise( ` is not a rational in numerator` ).
+                lo_real->raise( ` is not a rational in ` && operation ).
           ENDTRY.
 
         WHEN type_complex.
@@ -14912,15 +15043,16 @@
           IF lo_z->is_real( ).
             result = lo_z->zreal->get_numerator( ).
           ELSE.
-            no_complex( 'numerator' ).
+            no_complex( operation ).
           ENDIF.
 
         WHEN OTHERS.
-          raise_nan( `numerator` ).
+          raise_nan( operation ).
       ENDCASE.
     ENDMETHOD.
 
     METHOD get_denominator.
+      CONSTANTS operation TYPE string VALUE 'denominator'.
       DATA lo_frac TYPE REF TO lcl_lisp_number.
       DATA lv_nummer TYPE tv_int.
       DATA lv_denom TYPE tv_int.
@@ -14965,7 +15097,7 @@
                 lv_error = abap_true.
           ENDTRY.
           IF lv_error EQ abap_true.
-            lo_real->raise( ` is not a rational in denominator` ).
+            lo_real->raise( ` is not a rational in ` && operation ).
           ENDIF.
 
         WHEN type_complex.
@@ -14973,11 +15105,11 @@
           IF lo_z->is_real( ).
             result = lo_z->zreal->get_denominator( ).
           ELSE.
-            no_complex( 'denominator' ).
+            no_complex( operation ).
           ENDIF.
 
         WHEN OTHERS.
-          raise_nan( `denominator` ).
+          raise_nan( operation ).
       ENDCASE.
     ENDMETHOD.
 
@@ -15044,43 +15176,35 @@
       ENDIF.
     ENDMETHOD.
 
-    METHOD is_zero.
-      null = abap_false.
-      CASE is_number-subtype.
-        WHEN type_integer.
-          null = xsdbool( is_number-int EQ 0 ).
-
-        WHEN type_rational.
-          null = xsdbool( is_number-nummer EQ 0 ).
-
-        WHEN type_real.
-          null = xsdbool( is_number-infnan EQ abap_false AND is_number-real EQ 0 ).
-      ENDCASE.
-    ENDMETHOD.
-
     METHOD is_exact_zero.
-      IF is_number-exact EQ abap_true AND is_zero(  is_number ).
+      IF is_number-exact EQ abap_true AND number_sign( is_number ) EQ 0.
         null = abap_true.
       ELSE.
         null = abap_false.
       ENDIF.
     ENDMETHOD.
 
-    METHOD number_is_positive.
+    METHOD number_sign.
       CASE is_number-subtype.
         WHEN type_integer.
-          positive = xsdbool( is_number-int GE 0 ).
+          rv_sign = sign( is_number-int ).
 
         WHEN type_rational.
-          positive = xsdbool( is_number-nummer GE 0 ).
+          rv_sign = sign( is_number-nummer ).
 
         WHEN type_real.
-          " should logic check exactness?
-          positive = xsdbool( ( is_number-infnan EQ abap_false AND is_number-real GE 0 )
-                             OR is_number-ref EQ inf
-                             OR is_number-ref EQ nan ).
+          IF is_number-infnan EQ abap_false.
+            rv_sign = sign( is_number-real ).
+          ELSE.
+            CASE is_number-ref.
+              WHEN inf OR nan.
+                rv_sign = 1.
+              WHEN OTHERS.
+                rv_sign = -1.
+            ENDCASE.
+          ENDIF.
         WHEN OTHERS.
-          throw( `Number type not supported (check positive)` ).
+          throw( `Number type not supported (positive?)` ).
       ENDCASE.
     ENDMETHOD.
 
@@ -15104,46 +15228,40 @@
     ENDMETHOD.
 
     METHOD number_is_equal.
-      equal = abap_false.
-
       DATA(self) = me->get_state( operation ).
-      DATA(number) = other->get_state( operation ).
+      DATA(other) = number->get_state( operation ).
+
+      equal = real_is_equal( self = self-real_part
+                             other = other-real_part ).
+
+      CHECK equal EQ abap_true.
+      " Real parts match, now  check imaginary parts
 
       CASE type.
         WHEN type_integer
           OR type_rational
-          OR type_real.
-
-          IF number-type EQ type_complex AND NOT is_zero( number-imag_part ).
-            RETURN.       " returns false if imaginary part of "other" is not 0
+          OR type_real.      " real = complex ?
+          " returns false if imaginary part of "other" is not 0
+          IF other-type EQ type_complex AND number_sign( other-imag_part ) NE 0.
+            equal = abap_false.
           ENDIF.
-
-          equal = real_is_equal( self = self-real_part
-                                 other = number-real_part ).  " check if real part matches
 
         WHEN type_complex.
 
-          CASE number-type.
+          CASE other-type.
             WHEN type_integer
               OR type_rational
-              OR type_real.
-
-              IF is_zero( self-imag_part )     " returns false if imaginary part of "me" is not 0
-                AND real_is_equal( self = self-real_part
-                                   other = number-real_part ).    " check if real part matches
-                equal = abap_true.
+              OR type_real.     "  complex = real ?
+              " returns false if imaginary part of "me" is not 0
+              IF number_sign( self-imag_part ) NE 0.
+                equal = abap_false.
               ENDIF.
 
-            WHEN type_complex.
-              IF real_is_equal( self = self-real_part
-                                other = number-real_part )         " check if real part matches
-                AND real_is_equal( self = self-imag_part
-                                   other = number-imag_part ).  " check if imag part matches
-                equal = abap_true.
-              ENDIF.
-
+            WHEN type_complex.  " complex = complex ?
+              " check if both imaginary parts match
+              equal = real_is_equal( self = self-imag_part
+                                    other = other-imag_part ).
           ENDCASE.
-
       ENDCASE.
 
     ENDMETHOD.
@@ -15236,11 +15354,8 @@
 
       DATA(num) = get_state( operation ).
 
-      IF num-type EQ type_complex.
-        DATA(zimag) = CAST lcl_lisp_complex( me )->zimag.
-        IF zimag NE zero.
-          throw( `complex number not supported in ` && operation ).
-        ENDIF.
+      IF num-type EQ type_complex AND is_exact_zero( num-imag_part ) EQ abap_false.
+        no_complex( operation ).
       ENDIF.
 
       IF infnan_value IS SUPPLIED.
@@ -15576,21 +15691,7 @@
     ENDMETHOD.
 
     METHOD is_real.
-      flag = abap_false.
-      CHECK zimag->exact EQ abap_true.
-
-      CASE zimag->type.
-        WHEN type_integer.
-          flag = xsdbool( CAST lcl_lisp_integer( zimag )->int EQ 0 ).
-
-        WHEN type_rational.
-          flag = xsdbool( CAST lcl_lisp_rational( zimag )->int EQ 0 ).
-
-        WHEN type_real.
-          flag = xsdbool( CAST lcl_lisp_real( zimag )->real EQ 0 ).
-
-      ENDCASE.
-
+      flag = is_exact_zero( get_state( `real?` )-imag_part ).
     ENDMETHOD.
 
   ENDCLASS.
@@ -15833,14 +15934,12 @@
     ENDMETHOD.
 
     METHOD set_shared_structure.
-      FIELD-SYMBOLS <lo_elem> TYPE REF TO lcl_lisp.
-
       CHECK mv_label IS NOT INITIAL.
 
       CASE type.
         WHEN type_vector.
-          LOOP AT array ASSIGNING <lo_elem> WHERE table_line->type = type_symbol
-                                              AND table_line->value = mv_label.
+          LOOP AT array ASSIGNING FIELD-SYMBOL(<lo_elem>) WHERE table_line->type = type_symbol
+                                                            AND table_line->value = mv_label.
             <lo_elem> = me.
             RETURN.
           ENDLOOP.

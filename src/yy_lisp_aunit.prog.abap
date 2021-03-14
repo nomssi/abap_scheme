@@ -2312,8 +2312,20 @@
                expected = '#f' ).
        scheme( code = '(even? 0)'
                expected = '#t' ).
+       scheme( code = '(even? +0.0)'
+               expected = '#t' ).
+       scheme( code = '(even? +750.0)'
+               expected = '#t' ).
+       scheme( code = '(even? +75.21)'
+               expected = 'Eval: 75.21 invalid number in even?' ).
+       scheme( code = '(even? 4/2)'
+               expected = '#t' ).
+       scheme( code = '(even? 12/5)'
+               expected = 'Eval: 12/5 invalid number in even?' ).
        scheme( code = '(even? +inf.0)'
-               expected = 'Eval: +inf.0 is not an integer in even?' ).
+               expected = 'Eval: +inf.0 invalid number in even?' ).
+       scheme( code = '(even? +nan.0)'
+               expected = 'Eval: +nan.0 invalid number in even?' ).
      ENDMETHOD.                    "is_even
 
      METHOD is_odd.
@@ -2321,8 +2333,16 @@
                expected = '#t' ).
        scheme( code = '(odd? 0)'
                expected = '#f' ).
+       scheme( code = '(odd? -1.0)'
+               expected = '#t' ).
+       scheme( code = '(odd? +7.261)'
+               expected = 'Eval: 7.261 invalid number in odd?' ).
+       scheme( code = '(odd? -11/5)'
+               expected = 'Eval: -11/5 invalid number in odd?' ).
        scheme( code = '(odd? +inf.0)'
-               expected = 'Eval: +inf.0 is not an integer in odd?' ).
+               expected = 'Eval: +inf.0 invalid number in odd?' ).
+       scheme( code = '(odd? -nan.0)'
+               expected = 'Eval: -nan.0 invalid number in odd?' ).
      ENDMETHOD.                    "is_odd
 
      METHOD is_negative.
