@@ -2531,6 +2531,14 @@
      ENDMETHOD.                    "lcm_1
 
      METHOD to_exact_1.
+       scheme( code = '(exact 53)'
+               expected = '53' ).
+       scheme( code = '(exact -3+4i)'
+               expected = '-3+4i' ).
+       scheme( code = '(exact -1/3+4.0i)'
+               expected = '-1/3+4i' ).
+       scheme( code = '(exact #i-1/3i)'
+               expected = '-1/3i' ).
        scheme( code = '(exact 0.5)'
                expected = '1/2' ).
      ENDMETHOD.                    "to_exact_1
@@ -2839,7 +2847,7 @@
        METHODS math_subtract_4 FOR TESTING.
        METHODS math_subtract_5 FOR TESTING.
 
-       METHODS math_division_1 FOR TESTING.
+       METHODS math_division_inverse FOR TESTING.
        METHODS math_division_2 FOR TESTING.
        METHODS math_division_3 FOR TESTING.
        METHODS math_division_4 FOR TESTING.
@@ -3091,15 +3099,28 @@
                expected = '0' ).
      ENDMETHOD.
 
-     METHOD math_division_1.
-*   Test division
-       scheme( code = '(/ 2)'
+     METHOD math_division_inverse.
+       scheme( code = '(/)'
+               expected = 'Eval: no number in [/]' ).
+       scheme( code = '(/ 0)'
+               expected = '+inf.0' ).
+       scheme( code = '-1/0'
+               expected = '-inf.0' ).
+       scheme( code = '(/ 2)'         " Only one argument
                expected = '1/2' ).
+       scheme( code =  '(/ -10)'
+               expected = '-1/10' ).
+       scheme( code =  '(/ -2/3)'     " rational
+               expected = '-3/2' ).
+       scheme( code =  '(/ -0.25)'     " real
+               expected = '-4.0' ).
+       scheme( code =  '(/ -2/3i)'     " complex
+               expected = '+3/2i' ).
      ENDMETHOD.                    "math_division_1
 
      METHOD math_division_2.
-       scheme( code =  '(/ 10)'
-               expected = '1/10' ).
+       scheme( code =  '(* 3/2 (/ 10 -2 0.1 1/4 3i))'
+               expected = '+100.0i' ).
      ENDMETHOD.                    "math_division_2
 
      METHOD math_division_3.
@@ -3115,9 +3136,11 @@
      ENDMETHOD.                    "math_division_4
 
      METHOD math_division_5.
-       scheme( code = '(/)'
-               expected = 'Eval: no number in [/]' ).
-     ENDMETHOD.                    "math_division_5
+       scheme( code =  '(/ 89/11 9 8)'
+               expected = '89/792' ).
+       scheme( code =  '(/ -1/2 +2/3 -3/5)'
+               expected = '5/4' ).
+     ENDMETHOD.
 
      METHOD math_division_6.
        scheme( code = '(/ 1 0)'
@@ -3125,8 +3148,8 @@
      ENDMETHOD.
 
      METHOD math_division_7.
-       scheme( code = '(/ 0)'
-               expected = '+inf.0' ).
+       scheme( code =  '(/ -i/2 1)'
+               expected = 'Eval: Symbol -i/2 is unbound' ).
      ENDMETHOD.
 
      METHOD math_division_8.
@@ -3147,8 +3170,14 @@
      ENDMETHOD.
 
      METHOD math_division_11.
-       scheme( code = '-1/0'
-               expected = '-inf.0' ).
+       scheme( code = '(/ +inf.0 -inf.0)'
+               expected = '-nan.0' ).
+       scheme( code = '(/ -inf.0 +inf.0)'
+               expected = '-nan.0' ).
+       scheme( code = '(/ +inf.0 -inf.0 2.3 +nan.0)'
+               expected = '-nan.0' ).
+       scheme( code = '(/ -3 4/5 10)'
+               expected = '-3/8' ).
      ENDMETHOD.
 
      METHOD math_sin.

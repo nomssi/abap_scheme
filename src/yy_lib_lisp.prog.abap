@@ -216,14 +216,6 @@
     ENDIF.
   END-OF-DEFINITION.
 
-  DEFINE _validate_byte.
-    IF &1 IS NOT BOUND.
-      lcl_lisp=>incorrect_input( operation ).
-    ELSEIF NOT ( &1->type = type_integer AND CAST lcl_lisp_integer( &1 )->int BETWEEN 0 AND 255 ).
-      &1->raise( ` is not a byte in ` && &2 ) ##NO_TEXT.
-    ENDIF.
-  END-OF-DEFINITION.
-
   DEFINE _validate_index.
     _validate_integer &1 &2.
     IF CAST lcl_lisp_integer( &1 )->int LT 0.
@@ -3145,55 +3137,60 @@
       elem = read_real( domain = domain
                         iv_exact_char = iv_exact_char ).
 
-      CHECK mi_stream->state-ready EQ abap_true
-        AND elem->type NE type_complex.
+      CHECK mi_stream->state-ready EQ abap_true.
 
-      CASE to_upper( mi_stream->state-char ).
-        WHEN c_imaginary_marker.
-          DATA(zimag) = elem.
-          elem = lcl_lisp_number=>zero.
-          mi_stream->next_char( ).
+      IF elem->type EQ type_complex.
+        " starts with a number, but is probably an identifier
+        lcl_lisp=>throw_no_number( read_atom( ) ).
+      ELSE.
 
-        WHEN c_complex_polar. " <real R> @ <real R>
-          mi_stream->next_char( ).
-          zimag = read_real( iv_exact_char = iv_exact_char
-                             domain = domain ).
-          IF zimag->type EQ type_complex.
-            throw( c_error_complex_parse ).
-          ENDIF.
+        CASE to_upper( mi_stream->state-char ).
+          WHEN c_imaginary_marker.
+            DATA(zimag) = elem.
+            elem = lcl_lisp_number=>zero.
+            mi_stream->next_char( ).
 
-          elem = lcl_lisp_new=>polar( r = elem
-                                      angle = zimag ).
-          RETURN.
-
-        WHEN OTHERS.
-          "TRY.
-              IF mi_stream->state-char CA mv_delimiters.
-                RETURN.
-              ELSEIF mi_stream->state-char CA c_explicit_sign.
-                zimag = read_real( iv_exact_char = iv_exact_char
-                                   domain = domain ).
-              ELSE. " starts with a number, but is an identifier
-                lcl_lisp=>throw_no_number( read_atom( ) ).
-              ENDIF.
-          "CATCH lcx_lisp_exception cx_sy_conversion_no_number.
-          "  RETURN.  " performance: can we get here without exception?
-          "ENDTRY.
-          IF zimag->type EQ type_complex.
-            lo_z ?= zimag.
-            IF lo_z->zreal NE lcl_lisp_number=>zero.
+          WHEN c_complex_polar. " <real R> @ <real R>
+            mi_stream->next_char( ).
+            zimag = read_real( iv_exact_char = iv_exact_char
+                               domain = domain ).
+            IF zimag->type EQ type_complex.
               throw( c_error_complex_parse ).
             ENDIF.
-            zimag = lo_z->zimag.
-          ELSEIF to_upper( mi_stream->state-char ) NE c_imaginary_marker.
-            throw( c_error_complex_parse ).
-          ELSE.
-            mi_stream->next_char( ).   " Skip Imaginary symbol
-          ENDIF.
-      ENDCASE.
 
-      elem = lcl_lisp_new=>rectangular( real = elem
-                                        imag = zimag ).
+            elem = lcl_lisp_new=>polar( r = elem
+                                        angle = zimag ).
+            RETURN.
+
+          WHEN OTHERS.
+            "TRY.
+            IF mi_stream->state-char CA mv_delimiters.
+              RETURN.
+            ELSEIF mi_stream->state-char CA c_explicit_sign.
+              zimag = read_real( iv_exact_char = iv_exact_char
+                                 domain = domain ).
+            ELSE. " starts with a number, but is an identifier
+              lcl_lisp=>throw_no_number( read_atom( ) ).
+            ENDIF.
+            "CATCH lcx_lisp_exception cx_sy_conversion_no_number.
+            "  RETURN.  " performance: can we get here without exception?
+            "ENDTRY.
+            IF zimag->type EQ type_complex.
+              lo_z ?= zimag.
+              IF lo_z->zreal NE lcl_lisp_number=>zero.
+                throw( c_error_complex_parse ).
+              ENDIF.
+              zimag = lo_z->zimag.
+            ELSEIF to_upper( mi_stream->state-char ) NE c_imaginary_marker.
+              throw( c_error_complex_parse ).
+            ELSE.
+              mi_stream->next_char( ).   " Skip Imaginary symbol
+            ENDIF.
+        ENDCASE.
+
+        elem = lcl_lisp_new=>rectangular( real = elem
+                                          imag = zimag ).
+      ENDIF.
     ENDMETHOD.
 
     METHOD skip_while.
@@ -7211,19 +7208,25 @@
     ENDMETHOD.
 
     METHOD proc_bytevector_u8_set.
-      " (bytevector-u8-set! bytevector k byte)
+      " (bytevector-u8-set! bytevector k byte)  " operation = `bytevector-u8-set!`.
       DATA lo_u8 TYPE REF TO lcl_lisp_bytevector.
       DATA lv_byte TYPE tv_byte.
 
       _validate: list, list->cdr, list->cdr->cdr.
-      _validate_bytevector list->car `bytevector-u8-set!`.
+      _validate_bytevector list->car operation.
       lo_u8 ?= list->car.
 
-      _validate_index list->cdr->car `bytevector-u8-set!`.
+      _validate_index list->cdr->car operation.
       DATA(lv_index) = CAST lcl_lisp_integer( list->cdr->car )->int.
 
       DATA(lo_last) = list->cdr->cdr.
-      _validate_byte lo_last->car `bytevector-u8-set!`.
+      "_validate_byte lo_last->car operation.
+      IF lo_last->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ELSEIF NOT ( lo_last->car->type = type_integer AND CAST lcl_lisp_integer( lo_last->car )->int BETWEEN 0 AND 255 ).
+        lo_last->car->raise( ` is not a byte in ` && operation ) ##NO_TEXT.
+      ENDIF.
+
       lv_byte = CAST lcl_lisp_integer( lo_last->car )->int.
 
       _assert_last_param lo_last.
@@ -7292,7 +7295,13 @@
       _validate_index lo_size `make-bytevector`.
 
       IF list->cdr NE lcl_lisp=>nil.
-        _validate_byte list->cdr->car `make-bytevector`.
+        "_validate_byte list->cdr->car `make-bytevector`.
+        IF list->cdr->car IS NOT BOUND.
+          lcl_lisp=>incorrect_input( operation ).
+        ELSEIF NOT ( list->cdr->car->type = type_integer AND CAST lcl_lisp_integer( list->cdr->car )->int BETWEEN 0 AND 255 ).
+          list->cdr->car->raise( ` is not a byte in ` && operation ) ##NO_TEXT.
+        ENDIF.
+
         lo_fill ?= list->cdr->car.
         lv_fill = lo_fill->int.
         _assert_last_param list->cdr.
@@ -14380,6 +14389,9 @@
             WHEN type_integer.  " Integer * Integer
               TRY.
                   number-int = self-int * other-int.
+                  IF number-int EQ 0 AND ( other-exact EQ abap_true OR self-exact EQ abap_true ).
+                    number-exact = abap_true.
+                  ENDIF.
                 CATCH cx_sy_arithmetic_overflow.
                   number-real = self-int * other-int.
                   number-subtype = type_real.
@@ -14393,6 +14405,9 @@
                                                    d = number-denom ).
                   number-nummer = number-nummer DIV lv_gcd.
                   number-denom = number-denom DIV lv_gcd.
+                  IF number-nummer EQ 0 AND ( other-exact EQ abap_true OR self-exact EQ abap_true ).
+                    number-exact = abap_true.
+                  ENDIF.
                 CATCH cx_sy_arithmetic_overflow.
                   number-real = self-nummer / self-denom *  other-int.
                   number-subtype = type_real.
@@ -14402,6 +14417,9 @@
             WHEN type_real.     " Real * Integer
               IF self-infnan EQ abap_false.
                 number-real = self-real * other-int.
+                IF other-int EQ 0 AND other-exact EQ abap_true.
+                  number-exact = abap_true.
+                ENDIF.
               ELSE.
                 IF other-int EQ 0.
                   CASE self-ref.
@@ -14431,6 +14449,9 @@
                                                     d = number-denom ).
                   number-nummer = number-nummer DIV lv_gcd.
                   number-denom = number-denom DIV lv_gcd.
+                  IF number-nummer = 0 AND ( other-exact EQ abap_true OR self-exact EQ abap_true ).
+                    number-exact = abap_true.
+                  ENDIF.
                 CATCH cx_sy_arithmetic_overflow.
                   number-real = self-int *  other-nummer / other-denom.
                   number-subtype = type_real.
@@ -14445,6 +14466,9 @@
                                                     d = number-denom ).
                   number-nummer = number-nummer DIV lv_gcd.
                   number-denom = number-denom DIV lv_gcd.
+                  IF number-nummer = 0 AND ( other-exact EQ abap_true OR self-exact EQ abap_true ).
+                    number-exact = abap_true.
+                  ENDIF.
                 CATCH cx_sy_arithmetic_overflow.
                   number-real = ( self-nummer / self-denom ) * other-nummer / other-denom.
                   number-subtype = type_real.
@@ -14661,7 +14685,7 @@
                 ENDTRY.
               ENDIF.
 
-            WHEN type_rational. " Integer / Rational
+            WHEN type_rational. " Rational / Integer
               IF other-int EQ 0.
                 IF self-nummer EQ 0.
                   number-ref = nan.     " 0/0
@@ -14689,7 +14713,7 @@
                 ENDTRY.
               ENDIF.
 
-            WHEN type_real. " Real / Integer
+            WHEN type_real.    " Real / Integer
               IF other-int EQ 0.            " division real / integer -> real
                 IF self-real EQ 0.
                   number-ref = nan.     " 0.0/0
@@ -14742,7 +14766,8 @@
                   number-subtype = type_real.
                   number-exact = abap_false.
               ENDTRY.
-            WHEN type_real. " Real / Rational
+
+            WHEN type_real.     " Real / Rational
               IF self-infnan EQ abap_false.
                 number-real = self-real * other-denom / other-nummer.
               ELSE.
@@ -14855,18 +14880,48 @@
                 IF number-infnan = abap_false.
 
                   IF self-real EQ 0.   " 0 / Inf.0 , 0 / -Inf,  0 / Nan
-                    " real 0 or Nan
-                    CASE other-ref.
-                        WHEN inf OR neg_inf.
+                    IF self-exact EQ abap_true.
+                      IF other-ref EQ inf OR other-ref EQ neg_inf.
+                        number-real = 0.
+                        number-ref = zero.
+                      ELSE.
+                        number-ref = other-ref.
+                      ENDIF.
+                    ELSE.
+                      " real 0 or Nan
+                      CASE other-ref.
+                        WHEN inf.
                           number-real = 0.
-                          number-ref = zero.
+                          number-ref = pos_zero.
+                        WHEN neg_inf.
+                          number-real = 0.
+                          number-ref = neg_zero.
                         WHEN nan OR neg_nan.      " 0 / Nan -> NaN
                           number-ref = other-ref.
                           number-infnan = abap_true.
-                    ENDCASE.
+                      ENDCASE.
+                    ENDIF.
 
                   ELSEIF self-nummer LT 0. " -1 / Inf, -1 / NaN
-                    CASE other-ref.
+                    IF self-exact EQ abap_true.
+                      CASE other-ref.
+                        WHEN inf.
+                          number-real = 0.
+                          number-ref = neg_zero.
+
+                        WHEN neg_inf.
+                          number-real = 0.
+                          number-ref = pos_zero.
+
+                        WHEN nan.
+                          number-ref = neg_nan.
+
+                        WHEN neg_nan.
+                          number-ref = nan.
+
+                      ENDCASE.
+                    ELSE.
+                      CASE other-ref.
                         WHEN inf.
                           number-real = 0.
                           number-ref = pos_zero.
@@ -14876,22 +14931,41 @@
                         WHEN nan OR neg_nan.
                           number-ref = other-ref->negative_infnan( ).
                           number-infnan = abap_true.
-                    ENDCASE.
-
+                      ENDCASE.
+                    ENDIF.
                   ELSE. " 1 / Inf, 1 / NaN
                     CASE other-ref.
-                        WHEN inf OR neg_inf.
-                          number-real = 0.
-                          number-ref = pos_zero.
-                        WHEN nan OR neg_nan.
-                          number-ref = other-ref->negative_infnan( ).
-                          number-infnan = abap_true.
+                      WHEN inf OR neg_inf.
+                        number-real = 0.
+                        number-ref = pos_zero.
+                      WHEN nan OR neg_nan.
+                        number-ref = other-ref->negative_infnan( ).
+                        number-infnan = abap_true.
                     ENDCASE.
 
                   ENDIF.
                 ELSE.  " Inf / NaN  div. Inf / Nan
 
-                  number-ref = nan.
+                  CASE self-ref.
+                    WHEN inf OR nan.
+                      CASE other-ref.
+                        WHEN inf OR nan.
+                          number-ref = nan.
+
+                        WHEN neg_inf OR neg_nan.
+                          number-ref = neg_nan.
+                      ENDCASE.
+
+                    WHEN neg_inf OR neg_nan.
+                      CASE other-ref.
+                        WHEN inf OR nan.
+                          number-ref = neg_nan.
+
+                        WHEN neg_inf OR neg_nan.
+                          number-ref = nan.
+                      ENDCASE.
+                  ENDCASE.
+
                   number-infnan = abap_true.
 
                 ENDIF.
@@ -15461,7 +15535,7 @@
 
     METHOD is_integer.
       DATA(res) = get_state( 'integer?' ).
-      CASE type.
+      CASE res-subtype.   " Check real part
         WHEN type_integer.
           flag = abap_true.
 
@@ -15472,23 +15546,22 @@
           " If x is an inexact real number, then (integer? x) is true if and only if (= x (round x)).
           flag = xsdbool( res-infnan EQ abap_false AND scheme_round( res-real ) = res-real ).
 
-        WHEN type_complex.
-          DATA(z) = CAST lcl_lisp_complex( me ).
-          flag = xsdbool( z->zimag->number_is_equal( zero ) AND z->zreal->is_integer( ) ).
-
         WHEN OTHERS.
           raise_nan( `integer?` ).
       ENDCASE.
+      IF flag = abap_true AND res-type EQ type_complex.
+        flag = is_exact_zero( res-imag_part ).  " check imaginary part
+      ENDIF.
     ENDMETHOD.
 
     METHOD is_finite.
       "The finite? procedure returns #t on all real numbers except +inf.0, -inf.0, and +nan.0,
       " and on complex numbers if their real and imaginary parts are both finite.
       " Otherwise it returns #f.
-      IF infnan EQ abap_false.
+      result = false.
+      DATA(state) = get_state( 'infinite?' ).
+      IF state-real_part-infnan EQ abap_false AND state-imag_part-infnan EQ abap_false.
         result = true.
-      ELSE.
-        result = false.
       ENDIF.
     ENDMETHOD.
 
@@ -15496,19 +15569,11 @@
       " The infinite? procedure returns #t on the real numbers +inf.0 and -inf.0, and on complex
       " numbers if their real or imaginary parts or both are infinite. Otherwise it returns #f.
       result = false.
-      CASE type.
-        WHEN type_complex.
-          DATA(state) = get_state( 'infinite?' ).
-          IF state-ref EQ inf OR state-ref EQ neg_inf
-            OR state-imag_part-ref EQ inf OR state-imag_part-ref EQ neg_inf.
-            result = true.
-          ENDIF.
-
-        WHEN OTHERS.
-          IF me EQ inf OR me EQ neg_inf.
-            result = true.
-          ENDIF.
-      ENDCASE.
+      DATA(state) = get_state( 'infinite?' ).
+      IF ( state-real_part-infnan EQ abap_true AND ( state-real_part-ref EQ inf OR state-real_part-ref EQ neg_inf ) )
+        OR ( state-imag_part-infnan EQ abap_true AND ( state-imag_part-ref EQ inf OR state-imag_part-ref EQ neg_inf ) ).
+        result = true.
+      ENDIF.
     ENDMETHOD.
 
   ENDCLASS.
@@ -15560,7 +15625,7 @@
       IF x->number_is_equal( zero ).
         IF x->exact EQ abap_true.
           zreal = zero.
-        ELSEIF x->value GT 0.
+        ELSEIF x->value GE 0.
           zreal = pos_zero.
         ELSE.
           zreal = neg_zero.
@@ -15571,7 +15636,7 @@
       IF y->number_is_equal( zero ).
         IF y->exact EQ abap_true.
           zimag = zero.
-        ELSEIF y->value GT 0.
+        ELSEIF y->value GE 0.
           zimag = pos_zero.
         ELSE.
           zimag = neg_zero.
@@ -15834,7 +15899,7 @@
       IF to IS SUPPLIED.
         lv_end = to.                     " end is Exclusive
       ELSE.
-        lv_end = lines( array ).        " End of vector
+        lv_end = lines( array ).         " End of vector
       ENDIF.
 
       IF lv_end LT 1 OR lv_start GT lv_end.
