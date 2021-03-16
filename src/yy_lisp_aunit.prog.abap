@@ -2350,6 +2350,18 @@
                expected = '#f' ).
        scheme( code = '(negative? 0)'
                expected = '#f' ).
+       scheme( code = '(negative? +inf.0)'
+               expected = '#f' ).
+       scheme( code = '(negative? -nan.0)'
+               expected = '#f' ).
+       scheme( code = '(negative? +nan.0)'
+               expected = '#f' ).
+       scheme( code = '(negative? -inf.0)'
+               expected = '#t' ).
+       scheme( code = '(negative? 1-i)'
+               expected = 'Eval: 1-i complex number not allowed in negative?' ).
+       scheme( code = '(negative? "Not a Number")'
+               expected = 'Eval: "Not a Number" is not a number in negative?' ).
        scheme( code = '(negative? 0.0)'
                expected = '#f' ).
        scheme( code = '(negative? -1/3)'
@@ -2365,6 +2377,14 @@
                expected = '#t' ).
        scheme( code = '(zero? 0)'
                expected = '#t' ).
+       scheme( code = '(zero? 0/2)'
+               expected = '#t' ).
+       scheme( code = '(zero? -2/2)'
+               expected = '#f' ).
+       scheme( code = '(zero? 0+1/2i)'
+               expected = '#f' ).
+       scheme( code = '(zero? 0.0+0.0i)'
+               expected = '#t' ).
      ENDMETHOD.
 
      METHOD is_positive.
@@ -2376,6 +2396,18 @@
                expected = '#f' ).
        scheme( code = '(positive? 0.0)'
                expected = '#f' ).
+       scheme( code = '(positive? +inf.0)'
+               expected = '#t' ).
+       scheme( code = '(positive? -nan.0)'
+               expected = '#f' ).
+       scheme( code = '(positive? +nan.0)'
+               expected = '#f' ).
+       scheme( code = '(positive? -inf.0)'
+               expected = '#f' ).
+       scheme( code = '(positive? 1-i)'
+               expected = 'Eval: 1-i complex number not allowed in positive?' ).
+       scheme( code = '(positive? "Not a Number")'
+               expected = 'Eval: "Not a Number" is not a number in positive?' ).
      ENDMETHOD.
 
      METHOD is_complex.
@@ -2395,7 +2427,7 @@
        scheme( code = '(real? #e31l-1)'
                expected = '#t' ).
        scheme( code = '(number? 2.31f0.3)'
-               expected = '#f' ).
+               expected = 'Eval: Identifier 2.31f0.3 not valid.' ).
      ENDMETHOD.
 
      METHOD is_real.
@@ -2556,8 +2588,8 @@
      ENDMETHOD.
 
      METHOD to_exact_3.
-       scheme( code = '(exact .3)'
-               expected = '3/10' ).
+       scheme( code = '(* 10.0 (exact .3))'
+               expected = '3.0' ).
      ENDMETHOD.
 
      METHOD to_inexact_1.
@@ -2940,7 +2972,7 @@
                expected = '71' ).
 *       code_test_f( code = '(inexact (+ 144045379/232792560 1/10))'
 *                    expected = '0.7187714031754279432298008149401338' ).
-       scheme( code = '(eqv? (inexact (+ 144045379/232792560 1/10)) 0.7187714031754279432298008149401338)'
+       scheme( code = '(= (inexact (+ 144045379/232792560 1/10)) 0.7187714031754279432298008149401338)'
                expected = '#t' ).
      ENDMETHOD.                    "math_addition
 
@@ -3288,7 +3320,7 @@
 
      METHOD math_expt_1.
        scheme( code =  '(exp 2 10)'
-               expected = 'Eval: Only one parameter expected in [exp]' ) ##literal.
+               expected = 'Eval: Only one parameter expected in exp' ) ##literal.
      ENDMETHOD.                    "math_expt_1
 
      METHOD math_sqrt.
@@ -4403,9 +4435,9 @@
 
      METHOD list_cons_error_2.
        scheme( code = |(cons 'a)|
-               expected = `Eval: '() Parameter mismatch` ).
+               expected = `Eval: '() Parameter mismatch in cons` ).
        scheme( code = |(cons 'a 'b 'c)|
-               expected = `Eval: (b c) Parameter mismatch` ).
+               expected = `Eval: (b c) Parameter mismatch in cons` ).
      ENDMETHOD.
 
      METHOD list_make_list.
@@ -4579,20 +4611,17 @@
        METHODS teardown.
 
        METHODS make_vector_0 FOR TESTING.
-       METHODS make_vector_1 FOR TESTING.
-       METHODS make_vector_2 FOR TESTING.
 
        METHODS vector_0 FOR TESTING.
        METHODS vector_1 FOR TESTING.
 
        METHODS vector_length_0 FOR TESTING.
-       METHODS vector_length_1 FOR TESTING.
-       METHODS vector_length_2 FOR TESTING.
-       METHODS vector_length_3 FOR TESTING.
 
        METHODS vector_ref_1 FOR TESTING.
        METHODS vector_ref_2 FOR TESTING.
        METHODS vector_ref_3 FOR TESTING.
+
+       METHODS vector_ref_error FOR TESTING.
 
        METHODS vector_set_1 FOR TESTING.
        METHODS vector_set_2 FOR TESTING.
@@ -4628,17 +4657,11 @@
      METHOD make_vector_0.
        scheme( code = |(make-vector 0)|
                expected = '#()' ).
-     ENDMETHOD.                    "make_vector_0
-
-     METHOD make_vector_1.
        scheme( code = |(make-vector 0 '#(a))|
                expected = '#()' ).
-     ENDMETHOD.                    "make_vector_1
-
-     METHOD make_vector_2.
        scheme( code = |(make-vector 5 '#(a))|
                expected = '#(#(a) #(a) #(a) #(a) #(a))' ).
-     ENDMETHOD.                    "make_vector_2
+     ENDMETHOD.                    "make_vector_0
 
      METHOD vector_0.
        scheme( code = |(vector? '#())|
@@ -4653,22 +4676,13 @@
      METHOD vector_length_0.
        scheme( code = |(vector-length '#())|
                expected = '0' ).
-     ENDMETHOD.                    "vector_length_0
-
-     METHOD vector_length_1.
        scheme( code = |(vector-length '#(a b c))|
                expected = '3' ).
-     ENDMETHOD.                    "vector_length_1
-
-     METHOD vector_length_2.
        scheme( code = |(vector-length (vector 1 '(2) 3 '#(4 5)))|
                expected = '4' ).
-     ENDMETHOD.                    "vector_length_2
-
-     METHOD vector_length_3.
        scheme( code = |(vector-length (make-vector 300))|
                expected = '300' ).
-     ENDMETHOD.                    "vector_length_3
+     ENDMETHOD.                    "vector_length_0
 
      METHOD vector_ref_1.
        scheme( code = |(vector-ref '#(1 1 2 3 5 8 13 21) 5)|
@@ -4688,6 +4702,15 @@
        scheme( code = |(vector-ref vec 0)|
                expected = '1' ).
      ENDMETHOD.                    "vector_ref_3
+
+     METHOD vector_ref_error.
+       scheme( code = |(vector-ref '#(1 1 2 3 5 8 13 21) -1)|
+               expected = 'Eval: -1 must be non-negative in vector-ref' ).
+       scheme( code = |(vector-ref '#(1 1 2) 5)|
+               expected = 'Eval: vector-ref: out-of-bound position 5' ).
+       scheme( code = |(vector-ref '#( ) 1)|
+               expected = 'Eval: vector-ref: out-of-bound position 1' ).
+     ENDMETHOD.
 
      METHOD vector_set_1.
        scheme( code = |(let ((vec (vector 0 '(2 2 2 2) "Anna"))) | &
@@ -5490,6 +5513,12 @@
                expected = '#f' ).
        scheme( code = '(= 2.0 3+i)'
                expected = '#f' ).
+       scheme( code = '(= 3.0+i 3+i)'
+               expected = '#t' ).
+       scheme( code = '(= 3.0+1.0i 3+i)'
+               expected = '#t' ).
+       scheme( code = '(= 3.0+1.0i 3)'
+               expected = '#f' ).
        scheme( code = '(= 2.5i 0.0+5/2i)'
                expected = '#t' ).
        scheme( code = '(= 2.0 2+0.0i)'
@@ -5614,7 +5643,7 @@
        scheme( code = '(define str "A string")'
                expected = 'str' ).
        scheme( code = '(< str "The string")'
-               expected = 'Eval: "A string" is not a number in [<]' ).
+               expected = 'Eval: "A string" is not a number in <' ).
      ENDMETHOD.                    "compa_string
 
      METHOD comp_eqv_1.
