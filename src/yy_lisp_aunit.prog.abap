@@ -60,8 +60,14 @@
                                 expected TYPE any
                                 level    TYPE aunit_level
                                   DEFAULT if_aunit_constants=>critical.
+       METHODS one_parameter IMPORTING code     TYPE string
+                                       operation TYPE string.
+       METHODS parameter_mismatch IMPORTING code     TYPE string
+                                            operation TYPE string.
        METHODS invalid_digit IMPORTING digit TYPE tv_char
                              RETURNING VALUE(text) TYPE string.
+       METHODS scheme_argument  IMPORTING code TYPE string
+                                          operation TYPE string.
        METHODS scheme_incorrect IMPORTING code TYPE string
                                           operation TYPE string.
        METHODS code_test_f IMPORTING code     TYPE string
@@ -149,14 +155,29 @@
                     level = level ).
      ENDMETHOD.                    "code_test
 
+     METHOD one_parameter.
+       scheme( code = code
+               expected = |Eval: { operation } only takes one parameter| ).
+     ENDMETHOD.
+
+     METHOD parameter_mismatch.
+       scheme( code = code
+               expected = |Eval: { operation } has too many parameters| ).
+     ENDMETHOD.
+
      METHOD invalid_digit.
        text = |Eval: The argument 'digit { digit }' cannot be interpreted as a number|.
+     ENDMETHOD.
+
+     METHOD scheme_argument.
+       scheme( code = code
+               expected = `Eval: missing argument in ` && operation ).
      ENDMETHOD.
 
      METHOD scheme_incorrect.
        scheme( code = code
                expected = `Eval: Incorrect input in ` && operation ).
-     ENDMETHOD.                    "code_test
+     ENDMETHOD.
 
      METHOD code_test_f.
        DATA lv_result TYPE tv_real.
@@ -759,7 +780,6 @@
 
        METHODS quine_1 FOR TESTING.
        METHODS quine_2 FOR TESTING.
-       METHODS quine_3 FOR TESTING.
    ENDCLASS.                    "ltc_quote DEFINITION
 
 *----------------------------------------------------------------------*
@@ -1429,7 +1449,7 @@
        scheme( code = `(char=? #\A #\a)`
                expected = '#f' ).
        scheme( code = `(char=? #\A)`
-               expected = 'Eval: char=? missing argument' ).
+               expected = 'Eval: missing argument in char=?' ).
      ENDMETHOD.                    "char_eq
 
      METHOD char_lt.
@@ -1438,7 +1458,7 @@
        scheme( code = `(char<? #\A #\a)`
                expected = '#t' ).
        scheme( code = `(char<?)`
-               expected = 'Eval: char<? missing argument' ).
+               expected = 'Eval: missing argument in char<?' ).
      ENDMETHOD.                    "char_lt
 
      METHOD char_gt.
@@ -1456,7 +1476,7 @@
        scheme( code = `(char<=? #\B #\a)`
                expected = '#t' ).
        scheme( code = `(char<=? #\C)`
-               expected = 'Eval: char<=? missing argument' ).
+               expected = 'Eval: missing argument in char<=?' ).
      ENDMETHOD.                    "char_le
 
      METHOD char_ge.
@@ -1474,7 +1494,7 @@
        scheme( code = `(char-ci=? #\A #\b)`
                expected = '#f' ).
        scheme( code = `(char-ci=? #\A)`
-               expected = 'Eval: char-ci=? missing argument' ).
+               expected = 'Eval: missing argument in char-ci=?' ).
      ENDMETHOD.                    "char_ci_eq
 
      METHOD char_ci_lt.
@@ -1483,7 +1503,7 @@
        scheme( code = `(char-ci<? #\A #\a)`
                expected = '#f' ).
        scheme( code = `(char-ci<?)`
-               expected = 'Eval: char-ci<? missing argument' ).
+               expected = 'Eval: missing argument in char-ci<?' ).
      ENDMETHOD.                    "char_ci_lt
 
      METHOD char_ci_gt.
@@ -1501,7 +1521,7 @@
        scheme( code = `(char-ci<=? #\B #\a)`
                expected = '#f' ).
        scheme( code = `(char-ci<=? #\C)`
-               expected = 'Eval: char-ci<=? missing argument' ).
+               expected = 'Eval: missing argument in char-ci<=?' ).
      ENDMETHOD.                    "char_ci_le
 
      METHOD char_ci_ge.
@@ -1906,8 +1926,8 @@
      ENDMETHOD.                    "output_string_1
 
      METHOD write_1.
-       scheme_incorrect( code = |(write)|
-                         operation = 'write' ).
+       scheme_argument( code = |(write)|
+                        operation = 'write' ).
        scheme_incorrect( code = |(write (if (= 1 2)))|
                          operation = 'if' ).
        scheme( code = |(write (if (= 1 2) 5))|
@@ -1915,8 +1935,8 @@
      ENDMETHOD.                    "write_1
 
      METHOD display_1.
-       scheme_incorrect( code = |(display)|
-                         operation = 'display' ).
+       scheme_argument( code = |(display)|
+                        operation = 'display' ).
        scheme_incorrect( code = |(display (if (= 1 2)))|
                          operation = 'if' ).
        scheme( code = |(display (if (= 1 2) 5))|
@@ -2246,8 +2266,6 @@
        METHODS to_inexact_1 FOR TESTING.
 
        METHODS finite_1 FOR TESTING.
-       METHODS finite_2 FOR TESTING.
-       METHODS finite_3 FOR TESTING.
 
        METHODS infinite_1 FOR TESTING.
        METHODS infinite_2 FOR TESTING.
@@ -2289,7 +2307,7 @@
        METHODS decimal_1 FOR TESTING.
        METHODS octal_1 FOR TESTING.
        METHODS hexadecimal_1 FOR TESTING.
-
+       METHODS radix_exp FOR TESTING.
    ENDCLASS.                    "ltc_numbers DEFINITION
 
 *----------------------------------------------------------------------*
@@ -2451,7 +2469,7 @@
        scheme( code = '(real? #e2.31e-2)'
                expected = '#t' ).
        scheme( code = '(real? 2.31f0.3)'
-               expected = '#f' ).
+               expected = 'Eval: Identifier 2.31f0.3 not valid.' ).
        scheme( code = '(real? +inf.0)'
                expected = '#t' ).
        scheme( code = '(real? +nan.0)'
@@ -2600,14 +2618,8 @@
      METHOD finite_1.
        scheme( code = '(finite? 3)'
                expected = '#t' ).
-     ENDMETHOD.
-
-     METHOD finite_2.
        scheme( code = '(finite? +inf.0)'
                expected = '#f' ).
-     ENDMETHOD.
-
-     METHOD finite_3.
        scheme( code = '(finite? 3.0+inf.0i)'
                expected = '#f' ).
      ENDMETHOD.
@@ -2702,8 +2714,8 @@
      ENDMETHOD.                    "exact_5
 
      METHOD compare_eq.
-       scheme_incorrect( code = '(=)'  operation = '=' ).
-       scheme_incorrect( code = '(= 1)'  operation = '=' ).
+       scheme_argument( code = '(=)'  operation = '=' ).
+       scheme_argument( code = '(= 1)'  operation = '=' ).
        scheme( code = '(= 1 2)'
                expected = '#f' ).
        scheme( code = '(= 1 1)'
@@ -2713,8 +2725,8 @@
      ENDMETHOD.
 
      METHOD compare_lt.
-       scheme_incorrect( code = '(<)'  operation = '<' ).
-       scheme_incorrect( code = '(< 1)'  operation = '<' ).
+       scheme_argument( code = '(<)'  operation = '<' ).
+       scheme_argument( code = '(< 1)'  operation = '<' ).
        scheme( code = '(< 1 2)'
                expected = '#t' ).
        scheme( code = '(< 2 2)'
@@ -2724,8 +2736,8 @@
      ENDMETHOD.
 
      METHOD compare_gt.
-       scheme_incorrect( code = '(>)'  operation = '>' ).
-       scheme_incorrect( code = '(> 1)' operation = '>' ).
+       scheme_argument( code = '(>)'  operation = '>' ).
+       scheme_argument( code = '(> 1)' operation = '>' ).
        scheme( code = '(> 1 2)'
                expected = '#f' ).
        scheme( code = '(> 2 2)'
@@ -2735,8 +2747,8 @@
      ENDMETHOD.
 
      METHOD compare_le.
-       scheme_incorrect( code = '(<=)'  operation = '<=' ).
-       scheme_incorrect( code = '(<= 1)'  operation = '<=' ).
+       scheme_argument( code = '(<=)'  operation = '<=' ).
+       scheme_argument( code = '(<= 1)'  operation = '<=' ).
        scheme( code = '(<= 1 2)'
                expected = '#t' ).
        scheme( code = '(<= 2 2)'
@@ -2746,8 +2758,8 @@
      ENDMETHOD.
 
      METHOD compare_ge.
-       scheme_incorrect( code = '(>=)'  operation = '>=' ).
-       scheme_incorrect( code = '(>= 1)' operation = '>=' ).
+       scheme_argument( code = '(>=)'  operation = '>=' ).
+       scheme_argument( code = '(>= 1)' operation = '>=' ).
        scheme( code = '(>= 1 2)'
                expected = '#f' ).
        scheme( code = '(>= 2 2)'
@@ -2814,6 +2826,13 @@
                expected = '#t' ).
        scheme( code = '(eq? #b11100.01001 #o34.22)' " not allowed in R7RS, DrRacket does it anyway
                expected = '#t' ).
+     ENDMETHOD.
+
+     METHOD radix_exp.
+       scheme( code = '#d31e-3'
+               expected = '0.003' ).
+       scheme( code = '#d2.41e+2'
+               expected = '240.0' ).
        scheme( code = '#b1e10'
                expected = '4.0' ).                  " not allowed in R7RS, DrRacket/ChezScheme do it anyway
      ENDMETHOD.                    "binary_1
@@ -2921,6 +2940,7 @@
        METHODS math_complex_2 FOR TESTING.
        METHODS math_complex_3 FOR TESTING.
        METHODS math_complex_4 FOR TESTING.
+       METHODS math_complex_5 FOR TESTING.
        METHODS math_log FOR TESTING.
        METHODS math_log_1 FOR TESTING.
        METHODS math_log_2 FOR TESTING.
@@ -3122,8 +3142,8 @@
      ENDMETHOD.                    "math_subtract_3
 
      METHOD math_subtract_4.
-       scheme( code = '(-)'
-               expected = 'Eval: no number in [-]' ).
+       scheme_argument( code = '(-)'
+                        operation = '-' ).
      ENDMETHOD.                    "math_subtract_4
 
      METHOD math_subtract_5.
@@ -3132,8 +3152,8 @@
      ENDMETHOD.
 
      METHOD math_division_inverse.
-       scheme( code = '(/)'
-               expected = 'Eval: no number in [/]' ).
+       scheme_argument( code =  '(/)'
+                        operation = '/' ).
        scheme( code = '(/ 0)'
                expected = '+inf.0' ).
        scheme( code = '-1/0'
@@ -3213,31 +3233,55 @@
      ENDMETHOD.
 
      METHOD math_sin.
+       scheme_argument( code =  '(sin)'
+                        operation = 'sin' ).
+       one_parameter( code =  '(sin 0 3)'
+                      operation = 'sin' ).
        scheme( code =  '(sin 0)'
                expected = '0' ).
      ENDMETHOD.                    "math_sin
 
      METHOD math_cos.
+       scheme_argument( code =  '(cos)'
+                        operation = 'cos' ).
+       one_parameter( code =  '(cos 4 3)'
+                      operation = 'cos' ).
        scheme( code =  '(cos 0)'
                expected = '1' ).
      ENDMETHOD.                    "math_cos
 
      METHOD math_tan.
+       scheme_argument( code =  '(tan)'
+                        operation = 'tan' ).
+       one_parameter( code = '(tan 0 3)'
+                      operation = 'tan' ).
        scheme( code =  '(tan 0)'
                expected = '0' ).
      ENDMETHOD.                    "math_tan
 
      METHOD math_sinh.
+       scheme_argument( code =  '(sinh)'
+                        operation = 'sinh' ).
+       one_parameter( code =  '(sinh 0 3)'
+                      operation = 'sinh' ).
        scheme( code =  '(sinh 0)'
                expected = '0' ).
      ENDMETHOD.                    "math_sinh
 
      METHOD math_cosh.
+       scheme_argument( code =  '(cosh)'
+                        operation = 'cosh' ).
+       one_parameter( code =  '(cosh 0 3)'
+                      operation = 'cosh' ).
        scheme( code =  '(cosh 0)'
                expected = '1' ).
      ENDMETHOD.                    "math_cosh
 
      METHOD math_tanh.
+       scheme_argument( code =  '(tanh)'
+                        operation = 'tanh' ).
+       one_parameter( code =  '(tanh 0 3)'
+                      operation = 'tanh' ).
        scheme( code =  '(tanh 0)'
                expected = '0' ).
      ENDMETHOD.                    "math_tanh
@@ -3258,6 +3302,8 @@
      ENDMETHOD.                    "math_tanh_1
 
      METHOD math_asinh.
+       one_parameter( code =  '(asinh 0 3)'
+                      operation = 'asinh' ).
        code_test_f( code =  '(asinh 0)'
                  expected = 0 ).
      ENDMETHOD.                    "math_asinh
@@ -3298,7 +3344,7 @@
        scheme( code =  '(define pi (atan 0 -1))'
                expected = 'pi' ).
        code_test_f( code =  'pi'
-                    expected = '3.141592653589793' ) ##literal.
+                    expected = c_pi ) ##literal.
      ENDMETHOD.                    "math_atan_1
 
      METHOD math_atan_2.
@@ -3312,6 +3358,12 @@
      ENDMETHOD.                    "math_exp
 
      METHOD math_expt.
+       scheme_argument( code =  '(expt)'
+                        operation = 'expt' ).
+       scheme_argument( code =  '(expt 2)'
+                        operation = 'expt' ).
+       parameter_mismatch( code =  '(expt 2 3 4)'
+                           operation = 'expt' ).
        scheme( code =  '(expt 2 10)'
                expected = '1024' ).
        code_test_f( code =  '(expt 2 0.5)'
@@ -3319,11 +3371,15 @@
      ENDMETHOD.                    "math_expt
 
      METHOD math_expt_1.
-       scheme( code =  '(exp 2 10)'
-               expected = 'Eval: Only one parameter expected in exp' ) ##literal.
+       scheme_argument( code =  '(exp)'
+                        operation = 'exp' ).
+       one_parameter( code =  '(exp 2 10)'
+                       operation  = 'exp' ) ##literal.
      ENDMETHOD.                    "math_expt_1
 
      METHOD math_sqrt.
+       scheme_argument( code =  '(sqrt)'
+                        operation = 'sqrt' ).
        code_test_f( code =  '(sqrt 2)'
                     expected = '1.4142135623730950488016887242097' ) ##literal.
        scheme( code =  '(sqrt 9)'
@@ -3336,6 +3392,8 @@
      ENDMETHOD.                    "math_sqrt
 
      METHOD math_int_sqrt.
+       scheme_argument( code =  '(exact-integer-sqrt)'
+                        operation = 'exact-integer-sqrt' ).
        scheme( code =  '(exact-integer-sqrt 17)'
                expected = '4 1' ).
        scheme( code =  '(exact-integer-sqrt 4)'
@@ -3427,6 +3485,28 @@
                expected = '-inf.0+i' ).
        scheme( code =  '(+ 1-inf.0i +nan.0)'
                expected = '+nan.0-inf.0i' ).
+     ENDMETHOD.
+
+     METHOD math_complex_5.
+       scheme( code =  '(imag-part +nan.0)'
+               expected = '0' ).
+       scheme( code =  '(real-part +nan.0)'
+               expected = '+nan.0' ).
+       scheme( code =  '(imag-part +inf.0)'
+               expected = '0' ).
+       scheme( code =  '(real-part -inf.0i)'
+               expected = '0' ).
+       scheme( code =  '(angle +nan.0)'
+               expected = '+nan.0' ).
+       scheme( code =  '(angle +nan.0+inf.0i)'
+               expected = '+nan.0' ).
+       scheme( code =  '(magnitude +nan.0)'
+               expected = '+nan.0' ).
+
+       scheme( code =  '(magnitude +nan.0-nan.0i)'
+               expected = '+nan.0' ).
+       scheme( code =  '(magnitude +nan.0-inf.0i)'
+               expected = '+inf.0' ).
      ENDMETHOD.
 
      METHOD math_log.
@@ -3609,16 +3689,26 @@
      METHOD math_min_0.
        scheme( code =  '(min 0 34)'
                expected = '0' ).
+       scheme( code =  '(min 3 4)'
+               expected = '3' ).
+       scheme( code =  '(min 3.9 4)'
+               expected = '3.9' ).
      ENDMETHOD.                    "math_min_0
 
      METHOD math_min_1.
-       scheme( code =  '(min 3 4)'
-               expected = '3' ).
+       scheme( code =  '(min -3 +nan.0 4)'
+               expected = '+nan.0' ).
+       scheme( code =  '(min -3 +nan.0 -inf.0)'
+               expected = '+nan.0' ).
      ENDMETHOD.                    "math_min_1
 
      METHOD math_min_2.
-       scheme( code =  '(min 3.9 4)'
-               expected = '3.9' ).
+       scheme_argument( code =  '(min)'
+                        operation = 'min' ).
+       scheme( code =  '(min 3 4 5 4 5 7)'
+               expected = '3' ).
+       scheme( code =  '(min 3 4 5 4 5 7 "a")'
+               expected = 'Eval: "a" is not a number in min' ).
      ENDMETHOD.                    "math_min_2
 
      METHOD math_min_3.
@@ -3629,16 +3719,28 @@
      METHOD math_max_0.
        scheme( code =  '(max 0 34)'
                expected = '34' ).
+       scheme( code =  '(max 3 4)'
+               expected = '4' ).
+       scheme( code =  '(max 3.9 4)'
+               expected = '4.0' ).
      ENDMETHOD.                    "math_max_0
 
      METHOD math_max_1.
-       scheme( code =  '(max 3 4)'
-               expected = '4' ).
+       scheme( code =  '(max -3 +nan.0 4)'
+               expected = '+nan.0' ).
+       scheme( code =  '(max -3 +nan.0 -inf.0)'
+               expected = '+nan.0' ).
+       scheme( code =  '(max -3 -nan.0 +inf.0)'
+               expected = '-nan.0' ).
      ENDMETHOD.                    "math_max_1
 
      METHOD math_max_2.
-       scheme( code =  '(max 3.9 4)'
-               expected = '4.0' ).
+       scheme_argument( code =  '(max)'
+                        operation = 'max' ).
+       scheme( code =  '(max 3 4 5 4 5 7)'
+               expected = '7' ).
+       scheme( code =  '(max 3 4 5 4 5 7 "a")'
+               expected = 'Eval: "a" is not a number in max' ).
      ENDMETHOD.                    "math_max_2
 
      METHOD math_max_3.
@@ -6354,22 +6456,22 @@
                expected = '(1 2 3)' ).
      ENDMETHOD.                    "quasiquote_13
 
-     METHOD quine_1.
+*     METHOD quine_3.
        "http://community.schemewiki.org/?quines
-       scheme( code = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))| &
-                      | '(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))))| &
-                      | (lambda (q) `(,q ',q)) '(lambda (q) `(,q ',q)))|
-           expected = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) ,(q qq)))| &
-                      | '(lambda (x) `((lambda (q qq) ,(q x)) ,(q qq)))))| &
-                      | (lambda (q) `(,q ',q)) '(lambda (q) `(,q ',q)))| ).
-     ENDMETHOD.
+*       scheme( code = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))| &
+*                      | '(lambda (x) `((lambda (q qq) ,(q x)) . ,(q qq)))))| &
+*                      | (lambda (q) `(,q ',q)) '(lambda (q) `(,q ',q)))|
+*           expected = |((lambda (q qq) ((lambda (x) `((lambda (q qq) ,(q x)) ,(q qq)))| &
+*                      | '(lambda (x) `((lambda (q qq) ,(q x)) ,(q qq)))))| &
+*                      | (lambda (q) `(,q ',q)) '(lambda (q) `(,q ',q)))| ).
+*     ENDMETHOD.
 
-     METHOD quine_2.
+     METHOD quine_1.
        scheme( code =     |( ( lambda ( x ) `(,( reverse x ) ',x ) ) '(`(,( reverse x ) ',x ) ( x ) lambda) )|
                expected = |((lambda (x) `(,(reverse x) ',x)) '(`(,(reverse x) ',x) (x) lambda))| ).
      ENDMETHOD.
 
-     METHOD quine_3.
+     METHOD quine_2.
        scheme( code =     |((lambda (q) `(,q ',q)) '(lambda (q) `(,q ',q)))|
                expected = |((lambda (q) `(,q ',q)) '(lambda (q) `(,q ',q)))| ).
      ENDMETHOD.

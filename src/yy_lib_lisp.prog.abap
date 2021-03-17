@@ -418,10 +418,17 @@
 
   DEFINE _get_arg0_as_number.
     DATA lo_number TYPE REF TO lcl_lisp_number.
-    IF list IS NOT BOUND.
+    IF list IS NOT BOUND OR list->car IS NOT BOUND.
       lcl_lisp=>incorrect_input( operation ).
     ENDIF.
-    _validate_number list->car.
+    CASE list->car->type.
+      WHEN type_integer
+        OR type_real
+        OR type_rational
+        OR type_complex.
+      WHEN OTHERS.
+        list->car->raise_nan( operation ) ##NO_TEXT.
+    ENDCASE.
     _assert_one_param.
     lo_number ?= list->car.
   END-OF-DEFINITION.
@@ -432,14 +439,6 @@
     ELSEIF &1->type NE type_escape_proc.
       &1->raise( ` is not an escape procedure in ` && &2 ) ##NO_TEXT.
     ENDIF.
-  END-OF-DEFINITION.
-
-  DEFINE _to_integer.
-    &2 = CAST lcl_lisp_integer( &1 )->int.
-  END-OF-DEFINITION.
-
-  DEFINE _to_real.
-    &2 = CAST lcl_lisp_real( &1 )->real.
   END-OF-DEFINITION.
 
   DEFINE _values_get_next.
@@ -467,9 +466,9 @@
     _values_get_next cell.
     CASE cell->type.
       WHEN type_integer.
-        _to_integer cell &1.
+        &1 = CAST lcl_lisp_integer( cell )->int.
       WHEN type_real.
-        _to_real cell &1.
+        &1 = CAST lcl_lisp_real( cell )->real.
       WHEN type_rational.
         lo_rat ?= cell.
         &1 = lo_rat->int / lo_rat->denominator.
@@ -487,10 +486,18 @@
   END-OF-DEFINITION.
 
   DEFINE _get_int.
-    IF &1 IS NOT BOUND.
+    IF &1 IS NOT BOUND OR &1->car IS NOT BOUND.
       lcl_lisp=>incorrect_input( operation ).
     ENDIF.
-    _validate_number &1->car.
+    CASE &1->car->type.
+      WHEN type_integer
+        OR type_real
+        OR type_rational
+        OR type_complex.
+      WHEN OTHERS.
+        &1->car->raise_nan( operation ) ##NO_TEXT.
+    ENDCASE.
+
     error_integer = abap_false.
 
     res = CAST lcl_lisp_number( &1->car )->get_state( operation ).
@@ -508,11 +515,11 @@
            ENDIF.
         WHEN type_real.
            TRY.
-                 IF res-infnan EQ abap_true.
-                   error_integer = abap_true.
-                 ELSE.
-                   &2 = EXACT #( res-real ).
-                 ENDIF.
+               IF res-infnan EQ abap_true.
+                 error_integer = abap_true.
+               ELSE.
+                 &2 = EXACT #( res-real ).
+               ENDIF.
             CATCH cx_sy_conversion_error.
                error_integer = abap_true.
           ENDTRY.
@@ -566,7 +573,18 @@
   DEFINE _next_to_compare.
     cell = lo_ptr->car.
     _values_get_next cell.
-    _validate_number cell.
+    IF cell IS NOT BOUND.
+      lcl_lisp=>incorrect_input( operation ).
+    ENDIF.
+    CASE cell->type.
+      WHEN type_integer
+        OR type_real
+        OR type_rational
+        OR type_complex.
+      WHEN OTHERS.
+        cell->raise_nan( operation ) ##NO_TEXT.
+    ENDCASE.
+
     other = CAST lcl_lisp_number( cell )->get_state( operation ).
 
     IF other-infnan EQ abap_true AND ( other-ref = lcl_lisp_number=>nan OR other-ref = lcl_lisp_number=>neg_nan ).
@@ -603,11 +621,12 @@
       CASE other-type.
         WHEN type_integer.
           CASE self-type.
-            WHEN type_integer.
+
+            WHEN type_integer.  " Integer &1 Integer
               IF self-int &1 other-int.
                 RETURN.
               ENDIF.
-            WHEN type_rational.
+            WHEN type_rational. " Rational &1 Integer
               TRY.
                   IF self-nummer &1 other-int * self-denom.
                     RETURN.
@@ -617,7 +636,7 @@
                     RETURN.
                   ENDIF.
               ENDTRY.
-            WHEN type_real.
+            WHEN type_real.     " Real &1 Integer  (NaNs are already excluded)
               IF self-real &1 other-int.
                 RETURN.
               ENDIF.
@@ -627,15 +646,15 @@
 
         WHEN type_real.
           CASE self-type.
-            WHEN type_integer.
+            WHEN type_integer.   " Integer &1 Real
               IF self-int &1 other-real.
                 RETURN.
               ENDIF.
-            WHEN type_rational.
+            WHEN type_rational.  " Rational &1 Real
               IF self-nummer / self-denom &1 other-real.
                 RETURN.
               ENDIF.
-            WHEN type_real.
+            WHEN type_real.      " Real &1 Real
               IF self-real &1 other-real.
                 RETURN.
               ENDIF.
@@ -645,11 +664,11 @@
 
         WHEN type_rational.
           CASE self-type.
-            WHEN type_integer.
+            WHEN type_integer.   " Integer &1 Rational
               IF self-int * other-denom &1 other-nummer.
                 RETURN.
               ENDIF.
-            WHEN type_rational.
+            WHEN type_rational.  " Rational &1 Rational
               TRY.
                   IF self-nummer * other-denom &1 other-nummer * self-denom.
                     RETURN.
@@ -659,7 +678,7 @@
                     RETURN.
                   ENDIF.
               ENDTRY.
-            WHEN type_real.
+            WHEN type_real.       " Real &1 Rational
               IF self-real &1 other-nummer / other-denom.
                 RETURN.
               ENDIF.
@@ -669,7 +688,6 @@
 
         WHEN OTHERS.
           cell->raise_invalid_number( &2 ).
-
       ENDCASE.
 
       lo_ptr = lo_ptr->cdr.
@@ -1083,6 +1101,12 @@
                      RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
                      RAISING   lcx_lisp_exception.
 
+      CLASS-METHODS complex_log IMPORTING x           TYPE tv_real
+                                          y           TYPE tv_real
+                                          base        TYPE tv_real DEFAULT 1
+                                          iv_exact    TYPE tv_flag DEFAULT abap_false
+                                RETURNING VALUE(ln_z) TYPE REF TO lcl_lisp_number.
+
       METHODS get_numerator RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
                             RAISING   lcx_lisp_exception.
       METHODS get_denominator RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
@@ -1331,6 +1355,8 @@
       METHODS is_nan REDEFINITION.
       METHODS is_real RETURNING VALUE(flag) TYPE tv_flag.
 
+      METHODS complex_atan RETURNING VALUE(result) TYPE REF TO lcl_lisp_number.
+
     PROTECTED SECTION.
       CLASS-METHODS new_rectangular IMPORTING x              TYPE REF TO lcl_lisp_number DEFAULT zero
                                               y              TYPE REF TO lcl_lisp_number DEFAULT zero
@@ -1375,6 +1401,62 @@
                   RETURNING VALUE(result) TYPE REF TO lcl_lisp_values.
     PROTECTED SECTION.
       DATA last TYPE REF TO lcl_lisp.
+  ENDCLASS.
+
+  CLASS lcl_lisp_native DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
+    PUBLIC SECTION.
+      METHODS constructor IMPORTING value     TYPE any
+                                    arity_min TYPE tv_byte OPTIONAL
+                                    arity_max TYPE tv_byte OPTIONAL
+                                    RAISING   lcx_lisp_exception.
+      METHODS check_arity IMPORTING params TYPE REF TO lcl_lisp
+                                    operation TYPE string
+                          RAISING   lcx_lisp_exception.
+    PROTECTED SECTION.
+      DATA arity_min TYPE tv_byte.
+      DATA arity_max TYPE tv_byte.
+  ENDCLASS.
+
+  CLASS lcl_lisp_native IMPLEMENTATION.
+
+    METHOD constructor.
+      super->constructor( type_native ).
+      me->value = value.
+      me->arity_min = arity_min.
+      me->arity_max = arity_max.
+      IF arity_max GT 0 AND arity_max LT arity_min.
+        throw( |Arity error in definition of procedure { value } | ).
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD check_arity.
+      DATA lo_ptr TYPE REF TO lcl_lisp.
+
+      lo_ptr = params.
+      DO arity_min TIMES.
+        IF lo_ptr IS NOT BOUND OR lo_ptr->car IS NOT BOUND.
+          lcl_lisp=>throw( `missing argument in ` && operation ).
+        ENDIF.
+        lo_ptr = lo_ptr->cdr.
+      ENDDO.
+
+      DO arity_max - arity_min TIMES.
+        IF lo_ptr IS NOT BOUND OR lo_ptr->car IS NOT BOUND.
+          RETURN.
+        ENDIF.
+        lo_ptr = lo_ptr->cdr.
+      ENDDO.
+
+      IF arity_max GT 0 AND lo_ptr NE nil.
+        CASE arity_max.
+          WHEN 1.
+            lcl_lisp=>throw( operation && ` only takes one parameter` ).
+          WHEN OTHERS.
+            lcl_lisp=>throw( operation && ` has too many parameters` ).
+        ENDCASE.
+      ENDIF.
+    ENDMETHOD.
+
   ENDCLASS.
 
   CLASS lcl_lisp_lambda DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
@@ -1796,6 +1878,11 @@
                                    iv_separator   TYPE string OPTIONAL
                                    iv_string      TYPE tv_flag DEFAULT abap_false
                          RETURNING VALUE(ro_port) TYPE REF TO lcl_lisp_port.
+
+      CLASS-METHODS native  IMPORTING value     TYPE any
+                                      arity_min TYPE tv_byte
+                                      arity_max TYPE tv_byte
+                         RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
 
       CLASS-METHODS elem IMPORTING type           TYPE tv_type
                                    value          TYPE any OPTIONAL
@@ -2503,7 +2590,8 @@
                      RETURNING VALUE(element) TYPE REF TO lcl_lisp,
         procedure IMPORTING symbol         TYPE string
                             value          TYPE string
-                            arity          TYPE tv_int OPTIONAL
+                            min            TYPE tv_byte OPTIONAL
+                            max            TYPE tv_byte OPTIONAL
                   RETURNING VALUE(element) TYPE REF TO lcl_lisp,
         syntax IMPORTING symbol         TYPE string
                RETURNING VALUE(element) TYPE REF TO lcl_lisp.
@@ -2518,6 +2606,8 @@
       TYPES: BEGIN OF ts_map,
                symbol TYPE string,
                value  TYPE REF TO lcl_lisp,
+               arity_min TYPE tv_byte,
+               arity_max TYPE tv_byte,
              END OF ts_map.
       TYPES tt_map TYPE HASHED TABLE OF ts_map WITH UNIQUE KEY symbol.
 
@@ -4376,6 +4466,7 @@
         RETURNING VALUE(result) TYPE  REF TO lcl_lisp
         RAISING   lcx_lisp_exception.
 
+
       METHODS generate_symbol IMPORTING list          TYPE REF TO lcl_lisp
                               RETURNING VALUE(result) TYPE  REF TO lcl_lisp
                               RAISING   lcx_lisp_exception.
@@ -4465,12 +4556,6 @@
                                                    y TYPE tv_real
                                          RETURNING VALUE(num) TYPE ts_number
                                          RAISING   lcx_lisp_exception.
-
-      METHODS complex_log IMPORTING x           TYPE tv_real
-                                    y           TYPE tv_real
-                                    base        TYPE tv_real DEFAULT 1
-                                    iv_exact    TYPE tv_flag DEFAULT abap_false
-                          RETURNING VALUE(ln_z) TYPE REF TO lcl_lisp_number.
 
       METHODS complex_sqrt IMPORTING x           TYPE numeric
                                      y           TYPE numeric
@@ -6176,11 +6261,14 @@
                             _tail_sequence.
 
                           WHEN type_native.
-*                       Evaluate native function:
+                            "  Evaluate native function:
+                            DATA(proc_parameters) = evaluate_parameters( io_list = lr_tail
+                                                                         environment = cont-env ).
+                            CAST lcl_lisp_native( lo_proc )->check_arity( params = proc_parameters
+                                                                          operation = operation ).
                             CALL METHOD (lo_proc->value)
                               EXPORTING
-                                list   = evaluate_parameters( io_list = lr_tail
-                                                              environment = cont-env )
+                                list   = proc_parameters
                               RECEIVING
                                 result = result.
 
@@ -6252,7 +6340,6 @@
         RETURN.
 
       ENDDO.
-
 
     ENDMETHOD.
 
@@ -6562,16 +6649,10 @@
     ENDMETHOD.
 
     METHOD proc_reverse.
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
-
       result = list_reverse( list->car ).
     ENDMETHOD.                    "proc_reverse
 
     METHOD proc_values.
-      _validate list.
-
       result = lcl_lisp_new=>values( list ).
 
 *      result = lcl_lisp_new=>values( evaluate_parameters( io_list = lr_tail
@@ -7049,7 +7130,7 @@
 
       DATA(lo_count) = list->car.
       _validate_index lo_count 'iota count'.
-      _to_integer lo_count lv_count.
+      lv_count = CAST lcl_lisp_integer( lo_count )->int.
 
       result = nil.
       CHECK lv_count GT 0.
@@ -7058,13 +7139,13 @@
       IF list->cdr NE nil.
         DATA(lo_start) = list->cdr->car.
         _validate_integer lo_start 'iota start'.
-        _to_integer lo_start lv_start.
+        lv_start = CAST lcl_lisp_integer( lo_start )->int.
 
         _validate list->cdr->cdr.
         IF list->cdr->cdr NE nil.
           DATA(lo_step) = list->cdr->cdr->car.
           _validate_integer lo_step 'iota step'.
-          _to_integer lo_step lv_step.
+          lv_step = CAST lcl_lisp_integer( lo_step )->int.
         ENDIF.
       ENDIF.
 
@@ -7197,7 +7278,7 @@
       IF lo_ptr NE nil.
         _validate_index lo_ptr->car 'vector-fill! start'.
         DATA lv_start TYPE tv_int.
-        _to_integer lo_ptr->car lv_start.
+        lv_start = CAST lcl_lisp_integer( lo_ptr->car )->int.
 
         lo_ptr = lo_ptr->cdr.
         _validate lo_ptr.
@@ -7233,7 +7314,7 @@
       IF list->cdr NE nil.
         DATA(lo_start) = list->cdr->car.
         _validate_index lo_start 'vector->list start'.
-        _to_integer lo_start lv_start.
+        lv_start = CAST lcl_lisp_integer( lo_start )->int.
 
         _validate list->cdr->cdr.
         IF list->cdr->cdr NE nil.
@@ -7530,7 +7611,7 @@
 
       lo_ptr = list->cdr.
       _validate_index lo_ptr->car `bytevector-copy! at`.
-      _to_integer lo_ptr->car lv_at.
+      lv_at = CAST lcl_lisp_integer( lo_ptr->car )->int.
       IF lv_at GT lv_length_to.
         lo_ptr->car->raise( ` "at" is greater than the length of "to" in bytevector-copy!` ).
       ENDIF.
@@ -7544,12 +7625,12 @@
       lo_ptr = lo_ptr->cdr.
       IF lo_ptr IS BOUND AND lo_ptr NE nil.
         _validate_index lo_ptr->car `bytevector-copy! start`.
-        _to_integer lo_ptr->car lv_start.
+        lv_start = CAST lcl_lisp_integer( lo_ptr->car )->int.
 
         lo_ptr = lo_ptr->cdr.
         IF lo_ptr IS BOUND AND lo_ptr NE nil.
           _validate_index lo_ptr->car `bytevector-copy! end`.
-          _to_integer lo_ptr->car lv_end.
+          lv_end = CAST lcl_lisp_integer( lo_ptr->car )->int.
 
           _assert_last_param lo_ptr.
         ENDIF.
@@ -7862,7 +7943,7 @@
           result = lcl_lisp_number=>one->divide( num ).
         ENDIF.
       ELSE.
-        throw( |no number in [{ operation }]| ).
+        throw( |no number in { operation }| ).
       ENDIF.
 
     ENDMETHOD.
@@ -7883,6 +7964,176 @@
     METHOD proc_lte.
       _comparison > '<='.
     ENDMETHOD.                    "proc_lte
+
+  DEFINE _next_real.
+    cell = lo_ptr->car.
+    _values_get_next cell.
+    IF cell IS NOT BOUND.
+      lcl_lisp=>incorrect_input( operation ).
+    ENDIF.
+    CASE cell->type.
+      WHEN type_integer
+        OR type_real
+        OR type_rational
+        OR type_complex.
+      WHEN OTHERS.
+        cell->raise_nan( operation ) ##NO_TEXT.
+    ENDCASE.
+    next ?= cell.
+
+    IF next->infnan EQ abap_true AND ( next = lcl_lisp_number=>nan OR next = lcl_lisp_number=>neg_nan ).
+      result = next.
+      RETURN.
+    ENDIF.
+  END-OF-DEFINITION.
+
+    METHOD proc_max.
+      DATA cell TYPE REF TO lcl_lisp.
+      DATA num TYPE REF TO lcl_lisp_number.
+      DATA next TYPE REF TO lcl_lisp_number.
+      DATA lv_max TYPE tv_real.
+
+      DATA cell_exact TYPE tv_flag.
+      DATA lo_head  TYPE REF TO lcl_lisp.
+      DATA lo_ptr TYPE REF TO lcl_lisp.
+
+      IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ENDIF.
+
+      lo_ptr = list.
+      _next_real.
+      cell_exact = next->exact.
+      num = next.
+      lv_max = next->to_real( operation ).
+
+      lo_ptr = list->cdr.
+      WHILE lo_ptr->type EQ type_pair.
+        _next_real.
+
+        IF cell_exact EQ abap_true.
+          cell_exact = next->exact.
+        ENDIF.
+
+        DATA(lv_next) = next->to_real( operation ).
+        IF lv_next GT lv_max.
+          lv_max = lv_next.
+          num = next.
+        ENDIF.
+
+        lo_ptr = lo_ptr->cdr.
+      ENDWHILE.
+
+      IF cell_exact NE num->exact AND cell_exact EQ abap_false.
+        result = num->to_inexact( ).
+      ELSE.
+        result = num.
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD proc_min.
+      DATA cell TYPE REF TO lcl_lisp.
+      DATA num TYPE REF TO lcl_lisp_number.
+      DATA next TYPE REF TO lcl_lisp_number.
+      DATA lv_min TYPE tv_real.
+
+      DATA cell_exact TYPE tv_flag.
+      DATA lo_head  TYPE REF TO lcl_lisp.
+      DATA lo_ptr TYPE REF TO lcl_lisp.
+
+      IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ENDIF.
+
+      lo_ptr = list.
+      _next_real.
+      cell_exact = next->exact.
+      num = next.
+      lv_min = next->to_real( operation ).
+
+      lo_ptr = list->cdr.
+      WHILE lo_ptr->type EQ type_pair.
+        _next_real.
+
+        IF cell_exact EQ abap_true.
+          cell_exact = next->exact.
+        ENDIF.
+
+        DATA(lv_next) = next->to_real( operation ).
+        IF lv_next LT lv_min.
+          lv_min = lv_next.
+          num = next.
+        ENDIF.
+
+        lo_ptr = lo_ptr->cdr.
+      ENDWHILE.
+
+      IF cell_exact NE num->exact AND cell_exact EQ abap_false.
+        result = num->to_inexact( ).
+      ELSE.
+        result = num.
+      ENDIF.
+    ENDMETHOD.
+
+*    METHOD proc_min.
+*      DATA lo_ptr TYPE REF TO lcl_lisp.
+*      DATA cell TYPE REF TO lcl_lisp.
+*      DATA lo_head TYPE REF TO lcl_lisp.
+*      DATA num TYPE REF TO lcl_lisp_number.
+*
+*      DATA carry TYPE tv_real.
+*      DATA lv_min TYPE tv_real.
+*      DATA lv_exact TYPE tv_flag.
+*
+*      IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
+*        lcl_lisp=>incorrect_input( operation ).
+*      ENDIF.
+*
+*      cell = list->car.
+*      _values_get_next cell.
+*      IF cell IS NOT BOUND.
+*        lcl_lisp=>incorrect_input( operation ).
+*      ENDIF.
+*      CASE cell->type.
+*        WHEN type_integer
+*          OR type_real
+*          OR type_rational
+*          OR type_complex.
+*        WHEN OTHERS.
+*          cell->raise_nan( operation ) ##NO_TEXT.
+*      ENDCASE.
+*      num ?= cell.
+*      lv_exact = num->exact.
+*      lv_min = num->to_real( ).
+*
+*      lo_ptr = list->cdr.
+*      WHILE lo_ptr->type EQ type_pair.
+*        cell = lo_ptr->car.
+*        _values_get_next cell.
+*        IF cell IS NOT BOUND.
+*          lcl_lisp=>incorrect_input( operation ).
+*        ENDIF.
+*        CASE cell->type.
+*          WHEN type_integer
+*            OR type_real
+*            OR type_rational
+*            OR type_complex.
+*          WHEN OTHERS.
+*            cell->raise_nan( operation ) ##NO_TEXT.
+*        ENDCASE.
+*        num ?= cell.
+*        IF lv_exact EQ abap_true.
+*          lv_exact = num->exact.
+*        ENDIF.
+*        carry = num->to_real( ).
+*
+*        lv_min = nmin( val1 = carry
+*                       val2 = lv_min ).
+*        lo_ptr = lo_ptr->cdr.
+*      ENDWHILE.
+*      result = lcl_lisp_new=>real_number( value = lv_min
+*                                          iv_exact = lv_exact ).
+*    ENDMETHOD.
 
     METHOD proc_is_zero.
       DATA num TYPE REF TO lcl_lisp_number.
@@ -8617,6 +8868,16 @@
         z ?= lo_number.
         result = lcl_lisp_new=>real_number( value = z->angle
                                             iv_exact = z->exact ).
+      ELSEIF lo_number->type EQ type_real AND lo_number->infnan EQ abap_true.
+        CASE lo_number.
+          WHEN lcl_lisp_number=>inf.
+            result = lo_number->zero.
+          WHEN lcl_lisp_number=>neg_inf.
+            result = lcl_lisp_new=>real_number( value = c_pi
+                                                iv_exact = abap_true ).
+          WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
+            result = lo_number.
+        ENDCASE.
       ELSEIF lo_number->number_sign( lo_number->get_state( operation )-real_part ) GE 0.
         result = lo_number->zero.
       ELSE.
@@ -8702,8 +8963,8 @@
             z ?= complex_sqrt( x = 1 - x * x + y * y
                                y = - 2 * x * y ).
 
-            z ?= complex_log( x = z->zreal->to_real( ) - y
-                              y = z->zimag->to_real( ) + x ).
+            z ?= z->complex_log( x = z->zreal->to_real( ) - y
+                                 y = z->zimag->to_real( ) + x ).
 
             result = lcl_lisp_new=>rectangular( real = z->zimag
                                                 imag = lcl_lisp_new=>real( value = - z->zreal->to_real( )
@@ -8726,8 +8987,8 @@
             z ?= complex_sqrt( x = 1 - x * x + y * y
                                y = - 2 * x * y ).
 
-            z ?= complex_log( x = x - z->zimag->to_real( )
-                              y = y + z->zreal->to_real( ) ).
+            z ?= z->complex_log( x = x - z->zimag->to_real( )
+                                 y = y + z->zreal->to_real( ) ).
 
             result = lcl_lisp_new=>rectangular( real = z->zimag
                                                 imag = lcl_lisp_new=>real( value = - z->zreal->to_real( )
@@ -8748,7 +9009,15 @@
       DATA magnitude TYPE f.
       DATA lo_y TYPE REF TO lcl_lisp_number.
       DATA lo_x TYPE REF TO lcl_lisp_number.
-      _data_local_numeric_cell.
+
+      DATA cell TYPE REF TO lcl_lisp.
+      DATA lo_head TYPE REF TO lcl_lisp.
+      DATA cell_exact TYPE tv_flag.
+
+      DATA lo_rat TYPE REF TO lcl_lisp_rational.
+      DATA lo_int TYPE REF TO lcl_lisp_integer.
+      DATA lo_real TYPE REF TO lcl_lisp_real.
+      DATA lo_z TYPE REF TO lcl_lisp_complex.
 
       result = nil.
       _validate: list, list->car.
@@ -8765,19 +9034,7 @@
           ELSE.
             list->assert_last_param( operation ).
             IF lo_y->type = type_complex.
-              DATA ln_z TYPE REF TO lcl_lisp_complex.
-              DATA i_quotient TYPE REF TO lcl_lisp_complex.
-
-              cell_exact = lo_y->exact.
-
-              DATA(i_minus_z) = lo_y->imaginary->substract( lo_y ).
-              DATA(i_plus_z) = lo_y->imaginary->add( lo_y ).
-              i_quotient ?= i_minus_z->divide( i_plus_z ).
-              ln_z ?= complex_log( x = i_quotient->zreal->to_real( )
-                                   y = i_quotient->zimag->to_real( )
-                                   iv_exact = cell_exact ).
-              DATA(z2i) = lo_z->imaginary->add( lo_z->imaginary ).
-              result = ln_z->divide( z2i ).
+              result = CAST lcl_lisp_complex( lo_y )->complex_atan( ).
               RETURN.
             ELSE.
               _get_real y list->car.
@@ -8934,7 +9191,7 @@
 
           CASE cell->type.
             WHEN type_integer.
-              _to_integer cell exp1.
+              exp1 = CAST lcl_lisp_integer( cell )->int.
               result = lcl_lisp_new=>real_number( value = ipow( base = base1  exp = exp1 )
                                                   iv_exact = lv_exact ).
             WHEN type_real.
@@ -8986,31 +9243,6 @@
       ENDTRY.
     ENDMETHOD.
 
-    METHOD complex_log.
-      DATA arctan TYPE f.
-      DATA lv_tan TYPE f.
-      DATA magnitude TYPE f.
-
-      IF y = 0.
-        IF x = 0.
-          ln_z = lcl_lisp_number=>nan.
-          RETURN.
-        ELSE.
-          arctan = c_pi.
-          magnitude = abs( x ).
-        ENDIF.
-      ELSE.
-        magnitude = sqrt( x * x  + y * y ).
-        lv_tan = y / ( x + magnitude ).
-        arctan = 2 * atan( lv_tan ).
-      ENDIF.
-
-      ln_z = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = log( magnitude ) / base
-                                                                   iv_exact = abap_false )
-                                        imag = lcl_lisp_new=>real( value = arctan / base
-                                                                   iv_exact = abap_false ) ).
-    ENDMETHOD.
-
     METHOD proc_log.
       "(log z1 z2)
       " log 0.0  => -inf.0
@@ -9041,7 +9273,17 @@
             list->cdr->assert_last_param( operation ).
 
             _values_get_next cell.
-            _validate_number cell.
+            IF cell IS NOT BOUND.
+              lcl_lisp=>incorrect_input( operation ).
+            ENDIF.
+            CASE cell->type.
+              WHEN type_integer
+                OR type_real
+                OR type_rational
+                OR type_complex.
+              WHEN OTHERS.
+                cell->raise_nan( operation ) ##NO_TEXT.
+            ENDCASE.
             lo_base ?= cell.
 
             base = log( lo_base->to_real( ) ).
@@ -9051,9 +9293,9 @@
 
           IF lo_number->type EQ type_complex.
             lo_z ?= lo_number.
-            result = complex_log( x = lo_z->zreal->to_real( )
-                                  y = lo_z->zimag->to_real( )
-                                  base = base ).
+            result = lo_z->complex_log( x = lo_z->zreal->to_real( )
+                                        y = lo_z->zimag->to_real( )
+                                        base = base ).
             RETURN.
           ELSE.
             carry = lo_number->to_real( ).
@@ -9064,9 +9306,9 @@
             ENDIF.
 
             IF carry LT 0.
-              result = complex_log( x = carry
-                                    y = 0
-                                    base = base ).
+              result = lcl_lisp_complex=>complex_log( x = carry
+                                                      y = 0
+                                                      base = base ).
               " base
             ELSEIF carry EQ 1 AND base NE 0 AND lo_number->exact EQ abap_true .
               result = lcl_lisp_number=>zero.
@@ -9517,7 +9759,7 @@
       _assert_one_param.
       TRY.
           DATA(lo_rnd) = cl_abap_random=>create( cl_abap_random=>seed( ) ).
-          _to_integer list->car lv_high.
+          lv_high = CAST lcl_lisp_integer( list->car )->int.
           result = lcl_lisp_new=>real_number( value = lo_rnd->intinrange( high = lv_high )
                                               iv_exact = abap_true ).
         CATCH cx_dynamic_check INTO DATA(lx_error).
@@ -9527,31 +9769,29 @@
 
     METHOD proc_is_exact.
       _get_arg0_as_number.
-
-      result = false.
       IF lo_number->exact EQ abap_true.
         result = true.
+      ELSE.
+        result = false.
       ENDIF.
     ENDMETHOD.
 
     METHOD proc_is_inexact.
       _get_arg0_as_number.
-
-      result = false.
       IF lo_number->exact EQ abap_false.
         result = true.
+      ELSE.
+        result = false.
       ENDIF.
     ENDMETHOD.
 
     METHOD proc_to_exact.
       _get_arg0_as_number.
-
       result = CAST lcl_lisp_number( list->car )->to_exact( ).
     ENDMETHOD.
 
     METHOD proc_to_inexact.
       _get_arg0_as_number.
-
       result = CAST lcl_lisp_number( list->car )->to_inexact( ).
     ENDMETHOD.
 
@@ -9564,7 +9804,7 @@
       _validate list->cdr.
       IF list->cdr NE nil.
         _validate_integer list->cdr->car operation.
-        _to_integer list->cdr->car lv_radix.
+        lv_radix = CAST lcl_lisp_integer( list->cdr->car )->int.
       ENDIF.
 
       result = lcl_lisp_new=>string( CAST lcl_lisp_number( list->car )->number_to_string( lv_radix ) ).
@@ -9607,7 +9847,7 @@
         ELSEIF list->cdr->car->type NE type_integer.
           list->cdr->car->raise( ` is not an integer in radix of string->number` ) ##NO_TEXT.
         ENDIF.
-        _to_integer list->cdr->car lv_radix.
+        lv_radix = CAST lcl_lisp_integer( list->cdr->car )->int.
       ENDIF.
 
       result = string_to_number( iv_text = list->car->value
@@ -9749,7 +9989,7 @@
 
       _validate: list.
       _validate_integer list->car 'make-string'.
-      _to_integer list->car lv_len.
+      lv_len = CAST lcl_lisp_integer( list->car )->int.
 
       IF list->cdr NE nil.
         DATA(lo_char) = list->cdr->car.
@@ -9776,12 +10016,12 @@
       _validate: list->cdr.
       IF list->cdr NE nil.
         _validate_integer list->cdr->car 'string->list start'.
-        _to_integer list->cdr->car lv_start.
+        lv_start = CAST lcl_lisp_integer( list->cdr->car )->int.
 
         _validate list->cdr->cdr.
         IF list->cdr->cdr NE nil.
           _validate_integer list->cdr->cdr->car 'string->list end'.
-          _to_integer list->cdr->cdr->car lv_len.
+          lv_len = CAST lcl_lisp_integer( list->cdr->cdr->car )->int.
           lv_len = lv_len - lv_start.
           lv_text = list->car->value+lv_start(lv_len).
         ELSE.
@@ -9829,12 +10069,13 @@
         lv_text = list->car->value.
       ELSE.
         _validate_integer list->cdr->car 'string-copy start'.
-        _to_integer list->cdr->car lv_start.
+        lv_start = CAST lcl_lisp_integer( list->cdr->car )->int.
 
         _validate list->cdr->cdr.
         IF list->cdr->cdr NE nil.
           _validate_integer list->cdr->cdr->car 'string-copy end'.
-          _to_integer list->cdr->cdr->car lv_len.
+          lv_len = CAST lcl_lisp_integer( list->cdr->cdr->car )->int.
+
           lv_len = lv_len - lv_start.
           lv_text = list->car->value+lv_start(lv_len).
         ELSE.
@@ -9854,7 +10095,8 @@
       _validate_string list->car 'string-ref'.
       _validate_index list->cdr->car 'string-ref'.
 
-      _to_integer list->cdr->car lv_index.
+      lv_index = CAST lcl_lisp_integer( list->cdr->car )->int.
+
       lv_char = list->car->value+lv_index(1).
 
       result = lcl_lisp_new=>char( lv_char ).
@@ -9878,7 +10120,7 @@
       lo_char ?= list->cdr->cdr->car.
       lv_char = lo_char->value(1).
 
-      _to_integer list->cdr->car lv_index.
+      lv_index = CAST lcl_lisp_integer( list->cdr->car )->int.
 
       lo_string ?= list->car.
       IF lo_string->mutable EQ abap_false.
@@ -9954,68 +10196,6 @@
       result = lcl_lisp_new=>string( lv_text ).
     ENDMETHOD.
 
-    METHOD proc_max.
-      DATA lo_ptr TYPE REF TO lcl_lisp.
-      _data_local_numeric_cell.
-
-      DATA carry TYPE tv_real.
-      DATA lv_max TYPE tv_real.
-
-      _validate: list, list->cdr.
-      _get_real lv_max list->car.
-      lv_exact = cell_exact.
-
-      lo_ptr = list->cdr.
-      WHILE lo_ptr->type EQ type_pair.
-        _get_real carry lo_ptr->car.
-        IF lv_exact EQ abap_true.
-          lv_exact = cell_exact.
-        ENDIF.
-        lv_max = nmax( val1 = carry val2 = lv_max ).
-        lo_ptr = lo_ptr->cdr.
-      ENDWHILE.
-      result = lcl_lisp_new=>real_number( value = lv_max
-                                          iv_exact = lv_exact ).
-    ENDMETHOD.
-
-    METHOD proc_min.
-      DATA lo_ptr TYPE REF TO lcl_lisp.
-      DATA cell TYPE REF TO lcl_lisp.
-      DATA lo_head TYPE REF TO lcl_lisp.
-      DATA num TYPE REF TO lcl_lisp_number.
-
-      DATA carry TYPE tv_real.
-      DATA lv_min TYPE tv_real.
-      DATA lv_exact TYPE tv_flag.
-
-      _validate: list, list->cdr.
-
-      cell = list->car.
-      _values_get_next cell.
-      _validate_number cell.
-      num ?= cell.
-      lv_exact = num->exact.
-      lv_min = num->to_real( ).
-
-      lo_ptr = list->cdr.
-      WHILE lo_ptr->type EQ type_pair.
-        cell = lo_ptr->car.
-        _values_get_next cell.
-        _validate_number cell.
-        num ?= cell.
-        IF lv_exact EQ abap_true.
-          lv_exact = num->exact.
-        ENDIF.
-        carry = num->to_real( ).
-
-        lv_min = nmin( val1 = carry
-                       val2 = lv_min ).
-        lo_ptr = lo_ptr->cdr.
-      ENDWHILE.
-      result = lcl_lisp_new=>real_number( value = lv_min
-                                          iv_exact = lv_exact ).
-    ENDMETHOD.
-
     METHOD proc_gcd.
 *     non-negative greatest common divisor of the arguments
       DATA lo_ptr TYPE REF TO lcl_lisp.
@@ -10065,6 +10245,10 @@
         WHILE lo_ptr->type EQ type_pair.
           _get_real carry lo_ptr->car.
           IF lv_exact EQ abap_true.
+            IF lv_lcm = 0.
+              lo_ptr = lo_ptr->cdr.
+              CONTINUE.
+            ENDIF.
             lv_exact = cell_exact.
           ENDIF.
           lv_lcm = lv_lcm * carry / lcl_lisp_rational=>gcd( n = carry d = lv_lcm ).
@@ -10643,7 +10827,7 @@
 
       _validate list.
       _validate_integer list->car `integer->char`.
-      _to_integer list->car lv_int.
+      lv_int = CAST lcl_lisp_integer( list->car )->int.
 
       ASSIGN lv_int TO <xint> CASTING.
       ASSIGN lv_char TO <xchar> CASTING.
@@ -11004,9 +11188,9 @@
           WHEN type_string OR type_symbol.
             <target> = lo_source->value.
           WHEN type_integer.
-            _to_integer lo_source <target>.
-          WHEN type_real.
-            _to_real lo_source <target>.
+            <target> = CAST lcl_lisp_integer( lo_source )->int.
+          WHEN type_rational OR type_real.
+            <target> = CAST lcl_lisp_number( lo_source )->to_real( ).
         ENDCASE.
       ELSE.
 *       Complex types will just copy the whole value across
@@ -11157,9 +11341,9 @@
           ASSIGN data TO <field>.
           CASE element->type.
             WHEN type_integer.
-              _to_integer element <field>.
+              <field> = CAST lcl_lisp_integer( element )->int.
             WHEN type_real.
-              _to_real element <field>.
+              <field> = CAST lcl_lisp_number( element )->to_real(  ).
             WHEN OTHERS.
               <field> = element->value.
           ENDCASE.
@@ -11948,10 +12132,11 @@
     ENDMETHOD.
 
     METHOD procedure.
-      "##TO DO: parameters for min., max. number of arguments
-      element = define_value( symbol = symbol
-                              type = type_native
-                              value = value ).
+      element = lcl_lisp_new=>native( value = value
+                                      arity_min = min   " parameters for min., max. number of arguments
+                                      arity_max = max ).
+      set( symbol = symbol
+           element = element ).
     ENDMETHOD.
 
     METHOD set.
@@ -12088,16 +12273,16 @@
       syntax( 'delay' ).
       syntax( 'delay-force' ).
 
-      procedure( symbol = 'force'        value = 'PROC_FORCE' ).
-      procedure( symbol = 'make-promise' value = 'PROC_MAKE_PROMISE' ).
-      procedure( symbol = 'promise?'     value = 'PROC_IS_PROMISE' ).
+      procedure( symbol = 'force'        value = 'PROC_FORCE' min = 1 max = 1 ).
+      procedure( symbol = 'make-promise' value = 'PROC_MAKE_PROMISE' min = 1 max = 1 ).
+      procedure( symbol = 'promise?'     value = 'PROC_IS_PROMISE' min = 1 max = 1 ).
     ENDMETHOD.
 
     METHOD load_list.
 *     Compatibility
       procedure( symbol = 'empty?'  value   = 'PROC_NILP' ).
-      procedure( symbol = 'first'   value   = 'PROC_CAR' ).
-      procedure( symbol = 'rest'    value   = 'PROC_CDR' ).
+      procedure( symbol = 'first'   value   = 'PROC_CAR' min = 1 max = 1 ).
+      procedure( symbol = 'rest'    value   = 'PROC_CDR' min = 1 max = 1 ).
 
       procedure( symbol = 'memq'    value   = 'PROC_MEMQ' ).
       procedure( symbol = 'memv'    value   = 'PROC_MEMV' ).
@@ -12107,53 +12292,53 @@
       procedure( symbol = 'assv'    value   = 'PROC_ASSV' ).
       procedure( symbol = 'assoc'   value   = 'PROC_ASSOC' ).
 
-      procedure( symbol = 'car'     value   = 'PROC_CAR' ).
-      procedure( symbol = 'cdr'     value   = 'PROC_CDR' ).
+      procedure( symbol = 'car'     value   = 'PROC_CAR' min = 1 max = 1 ).
+      procedure( symbol = 'cdr'     value   = 'PROC_CDR' min = 1 max = 1 ).
       procedure( symbol = c_eval_cons    value   = 'PROC_CONS' ).
-      procedure( symbol = 'nil?'    value   = 'PROC_NILP' ).
-      procedure( symbol = 'null?'   value   = 'PROC_NILP' ).
+      procedure( symbol = 'nil?'    value   = 'PROC_NILP' min = 1 max = 1 ).
+      procedure( symbol = 'null?'   value   = 'PROC_NILP' min = 1 max = 1 ).
 
-      procedure( symbol = 'set-car!' value   = 'PROC_SET_CAR' ).
-      procedure( symbol = 'set-cdr!' value   = 'PROC_SET_CDR' ).
+      procedure( symbol = 'set-car!' value   = 'PROC_SET_CAR' min = 2 max = 2 ).
+      procedure( symbol = 'set-cdr!' value   = 'PROC_SET_CDR' min = 2 max = 2 ).
 
       " CxR library
-      procedure( symbol = 'caar'     value   = 'PROC_CAAR' ).
-      procedure( symbol = 'cadr'     value   = 'PROC_CADR' ).
-      procedure( symbol = 'cdar'     value   = 'PROC_CDAR' ).
-      procedure( symbol = 'cddr'     value   = 'PROC_CDDR' ).
-      procedure( symbol = 'caaar'    value   = 'PROC_CAAAR' ).
-      procedure( symbol = 'cdaar'    value   = 'PROC_CDAAR' ).
-      procedure( symbol = 'caadr'    value   = 'PROC_CAADR' ).
-      procedure( symbol = 'cdadr'    value   = 'PROC_CDADR' ).
-      procedure( symbol = 'cadar'    value   = 'PROC_CADAR' ).
-      procedure( symbol = 'cddar'    value   = 'PROC_CDDAR' ).
-      procedure( symbol = 'caddr'    value   = 'PROC_CADDR' ).
-      procedure( symbol = 'cdddr'    value   = 'PROC_CDDDR' ).
+      procedure( symbol = 'caar'     value   = 'PROC_CAAR' min = 1 max = 1 ).
+      procedure( symbol = 'cadr'     value   = 'PROC_CADR' min = 1 max = 1 ).
+      procedure( symbol = 'cdar'     value   = 'PROC_CDAR' min = 1 max = 1 ).
+      procedure( symbol = 'cddr'     value   = 'PROC_CDDR' min = 1 max = 1 ).
+      procedure( symbol = 'caaar'    value   = 'PROC_CAAAR' min = 1 max = 1 ).
+      procedure( symbol = 'cdaar'    value   = 'PROC_CDAAR' min = 1 max = 1 ).
+      procedure( symbol = 'caadr'    value   = 'PROC_CAADR' min = 1 max = 1 ).
+      procedure( symbol = 'cdadr'    value   = 'PROC_CDADR' min = 1 max = 1 ).
+      procedure( symbol = 'cadar'    value   = 'PROC_CADAR' min = 1 max = 1 ).
+      procedure( symbol = 'cddar'    value   = 'PROC_CDDAR' min = 1 max = 1 ).
+      procedure( symbol = 'caddr'    value   = 'PROC_CADDR' min = 1 max = 1 ).
+      procedure( symbol = 'cdddr'    value   = 'PROC_CDDDR' min = 1 max = 1 ).
 
-      procedure( symbol = 'caaaar'    value   = 'PROC_CAAAAR' ).
-      procedure( symbol = 'cdaaar'    value   = 'PROC_CDAAAR' ).
-      procedure( symbol = 'cadaar'    value   = 'PROC_CADAAR' ).
-      procedure( symbol = 'cddaar'    value   = 'PROC_CDDAAR' ).
-      procedure( symbol = 'caaadr'    value   = 'PROC_CAAADR' ).
-      procedure( symbol = 'cdaadr'    value   = 'PROC_CDAADR' ).
-      procedure( symbol = 'cadadr'    value   = 'PROC_CADADR' ).
-      procedure( symbol = 'cddadr'    value   = 'PROC_CDDADR' ).
-      procedure( symbol = 'caadar'    value   = 'PROC_CAADAR' ).
-      procedure( symbol = 'cdadar'    value   = 'PROC_CDADAR' ).
-      procedure( symbol = 'caddar'    value   = 'PROC_CADDAR' ).
-      procedure( symbol = 'cdddar'    value   = 'PROC_CDDDAR' ).
-      procedure( symbol = 'caaddr'    value   = 'PROC_CAADDR' ).
-      procedure( symbol = 'caaddr'    value   = 'PROC_CAADDR' ).
-      procedure( symbol = 'cadddr'    value   = 'PROC_CADDDR' ).
-      procedure( symbol = 'cddddr'    value   = 'PROC_CDDDDR' ).
+      procedure( symbol = 'caaaar'    value   = 'PROC_CAAAAR' min = 1 max = 1 ).
+      procedure( symbol = 'cdaaar'    value   = 'PROC_CDAAAR' min = 1 max = 1 ).
+      procedure( symbol = 'cadaar'    value   = 'PROC_CADAAR' min = 1 max = 1 ).
+      procedure( symbol = 'cddaar'    value   = 'PROC_CDDAAR' min = 1 max = 1 ).
+      procedure( symbol = 'caaadr'    value   = 'PROC_CAAADR' min = 1 max = 1 ).
+      procedure( symbol = 'cdaadr'    value   = 'PROC_CDAADR' min = 1 max = 1 ).
+      procedure( symbol = 'cadadr'    value   = 'PROC_CADADR' min = 1 max = 1 ).
+      procedure( symbol = 'cddadr'    value   = 'PROC_CDDADR' min = 1 max = 1 ).
+      procedure( symbol = 'caadar'    value   = 'PROC_CAADAR' min = 1 max = 1 ).
+      procedure( symbol = 'cdadar'    value   = 'PROC_CDADAR' min = 1 max = 1 ).
+      procedure( symbol = 'caddar'    value   = 'PROC_CADDAR' min = 1 max = 1 ).
+      procedure( symbol = 'cdddar'    value   = 'PROC_CDDDAR' min = 1 max = 1 ).
+      procedure( symbol = 'caaddr'    value   = 'PROC_CAADDR' min = 1 max = 1 ).
+      procedure( symbol = 'caaddr'    value   = 'PROC_CAADDR' min = 1 max = 1 ).
+      procedure( symbol = 'cadddr'    value   = 'PROC_CADDDR' min = 1 max = 1 ).
+      procedure( symbol = 'cddddr'    value   = 'PROC_CDDDDR' min = 1 max = 1 ).
 
       procedure( symbol = 'append!'  value   = 'PROC_APPEND_UNSAFE' ).
       procedure( symbol = 'list'     value   = 'PROC_LIST' ).
-      procedure( symbol = 'length'   value   = 'PROC_LENGTH' ).
-      procedure( symbol = 'reverse'  value   = 'PROC_REVERSE' ).
+      procedure( symbol = 'length'   value   = 'PROC_LENGTH' min = 1 max = 1 ).
+      procedure( symbol = 'reverse'  value   = 'PROC_REVERSE' min = 1 max = 1 ).
 
       procedure( symbol = c_eval_append  value   = 'PROC_APPEND' ).
-      procedure( symbol = 'make-list'    value   = 'PROC_MAKE_LIST' ).
+      procedure( symbol = 'make-list'    value   = 'PROC_MAKE_LIST' min = 1 max = 2 ).
       procedure( symbol = 'list-tail'    value   = 'PROC_LIST_TAIL' ).
       procedure( symbol = 'list-ref'     value   = 'PROC_LIST_REF' ).
       procedure( symbol = 'list-copy'    value   = 'PROC_LIST_COPY' ).
@@ -12162,125 +12347,125 @@
     ENDMETHOD.
 
     METHOD load_numbers.
-      procedure( symbol = 'number?'   value = 'PROC_IS_NUMBER' ).
+      procedure( symbol = 'number?'   value = 'PROC_IS_NUMBER' min = 1 max = 1 ).
 
-      procedure( symbol = 'exact'     value = 'PROC_TO_EXACT' ).
-      procedure( symbol = 'inexact'   value = 'PROC_TO_INEXACT' ).
+      procedure( symbol = 'exact'     value = 'PROC_TO_EXACT' min = 1 max = 1 ).
+      procedure( symbol = 'inexact'   value = 'PROC_TO_INEXACT' min = 1 max = 1 ).
 
-      procedure( symbol = 'floor'     value = 'PROC_FLOOR' ).
-      procedure( symbol = 'floor/'    value = 'PROC_FLOOR_NEW' ).
-      procedure( symbol = 'ceiling'   value = 'PROC_CEILING' ).
-      procedure( symbol = 'truncate'  value = 'PROC_TRUNCATE' ).
-      procedure( symbol = 'truncate/' value = 'PROC_TRUNCATE_NEW' ).
-      procedure( symbol = 'round'     value = 'PROC_ROUND' ).
+      procedure( symbol = 'floor'     value = 'PROC_FLOOR' min = 1 max = 1 ).
+      procedure( symbol = 'floor/'    value = 'PROC_FLOOR_NEW' min = 2 max = 2 ).
+      procedure( symbol = 'ceiling'   value = 'PROC_CEILING' min = 1 max = 1 ).
+      procedure( symbol = 'truncate'  value = 'PROC_TRUNCATE' min = 1 max = 1 ).
+      procedure( symbol = 'truncate/' value = 'PROC_TRUNCATE_NEW' min = 2 max = 2 ).
+      procedure( symbol = 'round'     value = 'PROC_ROUND' min = 1 max = 1 ).
 
-      procedure( symbol = 'numerator'   value = 'PROC_NUMERATOR' ).
-      procedure( symbol = 'denominator' value = 'PROC_DENOMINATOR' ).
-      procedure( symbol = 'remainder' value = 'PROC_REMAINDER' ).
-      procedure( symbol = 'modulo'    value = 'PROC_MODULO' ).
-      procedure( symbol = 'quotient'  value = 'PROC_QUOTIENT' ).
+      procedure( symbol = 'numerator'   value = 'PROC_NUMERATOR' min = 1 max = 1 ).
+      procedure( symbol = 'denominator' value = 'PROC_DENOMINATOR' min = 1 max = 1 ).
+      procedure( symbol = 'remainder' value = 'PROC_REMAINDER' min = 2 max = 2 ).
+      procedure( symbol = 'modulo'    value = 'PROC_MODULO' min = 2 max = 2  ).
+      procedure( symbol = 'quotient'  value = 'PROC_QUOTIENT' min = 2 max = 2 ).
       procedure( symbol = 'random'    value = 'PROC_RANDOM' ).
-      procedure( symbol = 'max'       value = 'PROC_MAX' ).
-      procedure( symbol = 'min'       value = 'PROC_MIN' ).
+      procedure( symbol = 'max'       value = 'PROC_MAX' min = 2 ).
+      procedure( symbol = 'min'       value = 'PROC_MIN' min = 2  ).
       procedure( symbol = 'gcd'       value = 'PROC_GCD' ).
       procedure( symbol = 'lcm'       value = 'PROC_LCM' ).
 
-      procedure( symbol = 'make-rectangular' value = 'PROC_MAKE_RECTANGULAR' ).
-      procedure( symbol = 'make-polar'       value = 'PROC_MAKE_POLAR' ).
-      procedure( symbol = 'real-part'        value = 'PROC_REAL_PART' ).
-      procedure( symbol = 'imag-part'        value = 'PROC_IMAG_PART' ).
-      procedure( symbol = 'magnitude'        value = 'PROC_MAGNITUDE' ).
-      procedure( symbol = 'angle'            value = 'PROC_ANGLE' ).
+      procedure( symbol = 'make-rectangular' value = 'PROC_MAKE_RECTANGULAR' min = 2 max = 2  ).
+      procedure( symbol = 'make-polar'       value = 'PROC_MAKE_POLAR' min = 2 max = 2 ).
+      procedure( symbol = 'real-part'        value = 'PROC_REAL_PART' min = 1 max = 1 ).
+      procedure( symbol = 'imag-part'        value = 'PROC_IMAG_PART' min = 1 max = 1 ).
+      procedure( symbol = 'magnitude'        value = 'PROC_MAGNITUDE' min = 1 max = 1 ).
+      procedure( symbol = 'angle'            value = 'PROC_ANGLE' min = 1 max = 1 ).
     ENDMETHOD.
 
     METHOD load_math.
 *     Math
-      procedure( symbol = 'abs'   value = 'PROC_ABS' ).
+      procedure( symbol = 'abs'   value = 'PROC_ABS' min = 1 max = 1 ).
 
-      procedure( symbol = 'square'             value = 'PROC_SQUARE' ).
-      procedure( symbol = 'exact-integer-sqrt' value = 'PROC_INT_SQRT' ).
-      procedure( symbol = 'floor-quotient'     value = 'PROC_FLOOR_QUOTIENT' ).
-      procedure( symbol = 'floor-remainder'    value = 'PROC_FLOOR_REMAINDER' ).
-      procedure( symbol = 'truncate-remainder' value = 'PROC_TRUNC_REMAINDER' ).
-      procedure( symbol = 'truncate-quotient'  value = 'PROC_TRUNC_QUOTIENT' ).
+      procedure( symbol = 'square'             value = 'PROC_SQUARE' min = 1 max = 1 ).
+      procedure( symbol = 'exact-integer-sqrt' value = 'PROC_INT_SQRT' min = 1 max = 1 ).
+      procedure( symbol = 'floor-quotient'     value = 'PROC_FLOOR_QUOTIENT' min = 2 max = 2 ).
+      procedure( symbol = 'floor-remainder'    value = 'PROC_FLOOR_REMAINDER' min = 2 max = 2 ).
+      procedure( symbol = 'truncate-remainder' value = 'PROC_TRUNC_REMAINDER' min = 2 max = 2 ).
+      procedure( symbol = 'truncate-quotient'  value = 'PROC_TRUNC_QUOTIENT' min = 2 max = 2 ).
 
       " Inexact Library
-      procedure( symbol = 'sin'   value = 'PROC_SIN' ).
-      procedure( symbol = 'cos'   value = 'PROC_COS' ).
-      procedure( symbol = 'tan'   value = 'PROC_TAN' ).
-      procedure( symbol = 'asin'  value = 'PROC_ASIN' ).
-      procedure( symbol = 'acos'  value = 'PROC_ACOS' ).
-      procedure( symbol = 'atan'  value = 'PROC_ATAN' ).
-      procedure( symbol = 'exp'   value = 'PROC_EXP' ).
-      procedure( symbol = 'log'   value = 'PROC_LOG' ).
-      procedure( symbol = 'sqrt'  value = 'PROC_SQRT' ).
-      procedure( symbol = 'nan?'        value = 'PROC_IS_NAN' ).
-      procedure( symbol = 'finite?'     value = 'PROC_IS_FINITE' ).
-      procedure( symbol = 'infinite?'   value = 'PROC_IS_INFINITE' ).
+      procedure( symbol = 'sin'   value = 'PROC_SIN' min = 1 max = 1 ).
+      procedure( symbol = 'cos'   value = 'PROC_COS' min = 1 max = 1 ).
+      procedure( symbol = 'tan'   value = 'PROC_TAN' min = 1 max = 1 ).
+      procedure( symbol = 'asin'  value = 'PROC_ASIN' min = 1 max = 1 ).
+      procedure( symbol = 'acos'  value = 'PROC_ACOS' min = 1 max = 1 ).
+      procedure( symbol = 'atan'  value = 'PROC_ATAN' min = 1 max = 2 ).
+      procedure( symbol = 'exp'   value = 'PROC_EXP' min = 1 max = 1 ).
+      procedure( symbol = 'log'   value = 'PROC_LOG' min = 1 max = 2 ).
+      procedure( symbol = 'sqrt'  value = 'PROC_SQRT' min = 1 max = 1 ).
+      procedure( symbol = 'nan?'        value = 'PROC_IS_NAN' min = 1 max = 1 ).
+      procedure( symbol = 'finite?'     value = 'PROC_IS_FINITE' min = 1 max = 1 ).
+      procedure( symbol = 'infinite?'   value = 'PROC_IS_INFINITE' min = 1 max = 1 ).
 
-      procedure( symbol = 'expt'  value = 'PROC_EXPT' ).
-      procedure( symbol = 'sinh'  value = 'PROC_SINH' ).
-      procedure( symbol = 'cosh'  value = 'PROC_COSH' ).
-      procedure( symbol = 'tanh'  value = 'PROC_TANH' ).
-      procedure( symbol = 'asinh' value = 'PROC_ASINH' ).
-      procedure( symbol = 'acosh' value = 'PROC_ACOSH' ).
-      procedure( symbol = 'atanh' value = 'PROC_ATANH' ).
+      procedure( symbol = 'expt'  value = 'PROC_EXPT' min = 2 max = 2 ).
+      procedure( symbol = 'sinh'  value = 'PROC_SINH' min = 1 max = 1 ).
+      procedure( symbol = 'cosh'  value = 'PROC_COSH' min = 1 max = 1 ).
+      procedure( symbol = 'tanh'  value = 'PROC_TANH' min = 1 max = 1 ).
+      procedure( symbol = 'asinh' value = 'PROC_ASINH' min = 1 max = 1 ).
+      procedure( symbol = 'acosh' value = 'PROC_ACOSH' min = 1 max = 1 ).
+      procedure( symbol = 'atanh' value = 'PROC_ATANH' min = 1 max = 1 ).
     ENDMETHOD.
 
     METHOD load_chars.
       " Char Library
-      procedure( symbol = 'char-alphabetic?'  value   = 'PROC_IS_CHAR_ALPHABETIC' ).
-      procedure( symbol = 'char-numeric?'     value   = 'PROC_IS_CHAR_NUMERIC' ).
-      procedure( symbol = 'char-whitespace?'  value   = 'PROC_IS_CHAR_WHITESPACE' ).
-      procedure( symbol = 'char-upper-case?'  value   = 'PROC_IS_CHAR_UPPER_CASE' ).
-      procedure( symbol = 'char-lower-case?'  value   = 'PROC_IS_CHAR_LOWER_CASE' ).
+      procedure( symbol = 'char-alphabetic?'  value   = 'PROC_IS_CHAR_ALPHABETIC' min = 1 max = 1 ).
+      procedure( symbol = 'char-numeric?'     value   = 'PROC_IS_CHAR_NUMERIC' min = 1 max = 1 ).
+      procedure( symbol = 'char-whitespace?'  value   = 'PROC_IS_CHAR_WHITESPACE' min = 1 max = 1 ).
+      procedure( symbol = 'char-upper-case?'  value   = 'PROC_IS_CHAR_UPPER_CASE' min = 1 max = 1 ).
+      procedure( symbol = 'char-lower-case?'  value   = 'PROC_IS_CHAR_LOWER_CASE' min = 1 max = 1 ).
 
-      procedure( symbol = 'digit-value'       value   = 'PROC_DIGIT_VALUE' ).
-      procedure( symbol = 'char->integer'     value   = 'PROC_CHAR_TO_INTEGER' ).
-      procedure( symbol = 'integer->char'     value   = 'PROC_INTEGER_TO_CHAR' ).
-      procedure( symbol = 'char-upcase'       value   = 'PROC_CHAR_UPCASE' ).
-      procedure( symbol = 'char-downcase'     value   = 'PROC_CHAR_DOWNCASE' ).
+      procedure( symbol = 'digit-value'       value   = 'PROC_DIGIT_VALUE' min = 1 max = 1 ).
+      procedure( symbol = 'char->integer'     value   = 'PROC_CHAR_TO_INTEGER' min = 1 max = 1 ).
+      procedure( symbol = 'integer->char'     value   = 'PROC_INTEGER_TO_CHAR' min = 1 max = 1 ).
+      procedure( symbol = 'char-upcase'       value   = 'PROC_CHAR_UPCASE' min = 1 max = 1 ).
+      procedure( symbol = 'char-downcase'     value   = 'PROC_CHAR_DOWNCASE' min = 1 max = 1 ).
 
-      procedure( symbol = 'char=?'     value   = 'PROC_CHAR_LIST_IS_EQ' ).
-      procedure( symbol = 'char<?'     value   = 'PROC_CHAR_LIST_IS_LT' ).
-      procedure( symbol = 'char>?'     value   = 'PROC_CHAR_LIST_IS_GT' ).
-      procedure( symbol = 'char<=?'    value   = 'PROC_CHAR_LIST_IS_LE' ).
-      procedure( symbol = 'char>=?'    value   = 'PROC_CHAR_LIST_IS_GE' ).
+      procedure( symbol = 'char=?'     value   = 'PROC_CHAR_LIST_IS_EQ' min = 2 ).
+      procedure( symbol = 'char<?'     value   = 'PROC_CHAR_LIST_IS_LT' min = 2 ).
+      procedure( symbol = 'char>?'     value   = 'PROC_CHAR_LIST_IS_GT' min = 2 ).
+      procedure( symbol = 'char<=?'    value   = 'PROC_CHAR_LIST_IS_LE' min = 2 ).
+      procedure( symbol = 'char>=?'    value   = 'PROC_CHAR_LIST_IS_GE' min = 2 ).
 
-      procedure( symbol = 'char-ci=?'     value   = 'PROC_CHAR_CI_LIST_IS_EQ' ).
-      procedure( symbol = 'char-ci<?'     value   = 'PROC_CHAR_CI_LIST_IS_LT' ).
-      procedure( symbol = 'char-ci>?'     value   = 'PROC_CHAR_CI_LIST_IS_GT' ).
-      procedure( symbol = 'char-ci<=?'    value   = 'PROC_CHAR_CI_LIST_IS_LE' ).
-      procedure( symbol = 'char-ci>=?'    value   = 'PROC_CHAR_CI_LIST_IS_GE' ).
+      procedure( symbol = 'char-ci=?'     value   = 'PROC_CHAR_CI_LIST_IS_EQ' min = 2  ).
+      procedure( symbol = 'char-ci<?'     value   = 'PROC_CHAR_CI_LIST_IS_LT' min = 2 ).
+      procedure( symbol = 'char-ci>?'     value   = 'PROC_CHAR_CI_LIST_IS_GT' min = 2 ).
+      procedure( symbol = 'char-ci<=?'    value   = 'PROC_CHAR_CI_LIST_IS_LE' min = 2 ).
+      procedure( symbol = 'char-ci>=?'    value   = 'PROC_CHAR_CI_LIST_IS_GE' min = 2 ).
     ENDMETHOD.
 
     METHOD load_strings.
-      procedure( symbol = 'number->string' value = 'PROC_NUM_TO_STRING' ).
-      procedure( symbol = 'string->number' value = 'PROC_STRING_TO_NUM' ).
-      procedure( symbol = 'make-string'    value = 'PROC_MAKE_STRING' ).
+      procedure( symbol = 'number->string' value = 'PROC_NUM_TO_STRING' min = 1 max = 2 ).
+      procedure( symbol = 'string->number' value = 'PROC_STRING_TO_NUM' min = 1 max = 2 ).
+      procedure( symbol = 'make-string'    value = 'PROC_MAKE_STRING' min = 1 max = 2 ).
       procedure( symbol = 'string'         value = 'PROC_STRING' ).
       procedure( symbol = 'string->list'   value = 'PROC_STRING_TO_LIST' ).
       procedure( symbol = 'list->string'   value = 'PROC_LIST_TO_STRING' ).
       procedure( symbol = 'symbol->string' value = 'PROC_SYMBOL_TO_STRING' ).
       procedure( symbol = 'string->symbol' value = 'PROC_STRING_TO_SYMBOL' ).
       procedure( symbol = 'string-append'  value = 'PROC_STRING_APPEND' ).
-      procedure( symbol = 'string-length'  value = 'PROC_STRING_LENGTH' ).
+      procedure( symbol = 'string-length'  value = 'PROC_STRING_LENGTH' min = 1 max = 1 ).
       procedure( symbol = 'string-copy'    value = 'PROC_STRING_COPY' ).
       procedure( symbol = 'substring'      value = 'PROC_STRING_COPY' ).
-      procedure( symbol = 'string-ref'     value = 'PROC_STRING_REF' ).
-      procedure( symbol = 'string-set!'    value = 'PROC_STRING_SET' ).
+      procedure( symbol = 'string-ref'     value = 'PROC_STRING_REF' min = 2 max = 2 ).
+      procedure( symbol = 'string-set!'    value = 'PROC_STRING_SET' min = 3 max = 3 ).
 
-      procedure( symbol = 'string=?'     value   = 'PROC_STRING_LIST_IS_EQ' ).
-      procedure( symbol = 'string<?'     value   = 'PROC_STRING_LIST_IS_LT' ).
-      procedure( symbol = 'string>?'     value   = 'PROC_STRING_LIST_IS_GT' ).
-      procedure( symbol = 'string<=?'    value   = 'PROC_STRING_LIST_IS_LE' ).
-      procedure( symbol = 'string>=?'    value   = 'PROC_STRING_LIST_IS_GE' ).
+      procedure( symbol = 'string=?'     value   = 'PROC_STRING_LIST_IS_EQ' min = 2 ).
+      procedure( symbol = 'string<?'     value   = 'PROC_STRING_LIST_IS_LT' min = 2 ).
+      procedure( symbol = 'string>?'     value   = 'PROC_STRING_LIST_IS_GT' min = 2 ).
+      procedure( symbol = 'string<=?'    value   = 'PROC_STRING_LIST_IS_LE' min = 2 ).
+      procedure( symbol = 'string>=?'    value   = 'PROC_STRING_LIST_IS_GE' min = 2 ).
 
-      procedure( symbol = 'string-ci=?'   value  = 'PROC_STRING_CI_LIST_IS_EQ' ).
-      procedure( symbol = 'string-ci<?'   value  = 'PROC_STRING_CI_LIST_IS_LT' ).
-      procedure( symbol = 'string-ci>?'   value  = 'PROC_STRING_CI_LIST_IS_GT' ).
-      procedure( symbol = 'string-ci<=?'  value  = 'PROC_STRING_CI_LIST_IS_LE' ).
-      procedure( symbol = 'string-ci>=?'  value  = 'PROC_STRING_CI_LIST_IS_GE' ).
+      procedure( symbol = 'string-ci=?'   value  = 'PROC_STRING_CI_LIST_IS_EQ' min = 2 ).
+      procedure( symbol = 'string-ci<?'   value  = 'PROC_STRING_CI_LIST_IS_LT' min = 2 ).
+      procedure( symbol = 'string-ci>?'   value  = 'PROC_STRING_CI_LIST_IS_GT' min = 2 ).
+      procedure( symbol = 'string-ci<=?'  value  = 'PROC_STRING_CI_LIST_IS_LE' min = 2 ).
+      procedure( symbol = 'string-ci>=?'  value  = 'PROC_STRING_CI_LIST_IS_GE' min = 2 ).
     ENDMETHOD.
 
     METHOD load_turtles.
@@ -12327,116 +12512,116 @@
 
 *     Add native functions to environment
       procedure( symbol = '+'      value = 'PROC_ADD' ).
-      procedure( symbol = '-'      value = 'PROC_SUBTRACT' ).
+      procedure( symbol = '-'      value = 'PROC_SUBTRACT' min = 1 ).
       procedure( symbol = '*'      value = 'PROC_MULTIPLY' ).
-      procedure( symbol = '/'      value = 'PROC_DIVIDE' ).
+      procedure( symbol = '/'      value = 'PROC_DIVIDE' min = 1 ).
 
-      procedure( symbol = 'values' value = 'PROC_VALUES' ).
+      procedure( symbol = 'values' value = 'PROC_VALUES' min = 1 ).
 
-      procedure( symbol = '>'      value = 'PROC_GT' ).
-      procedure( symbol = '>='     value = 'PROC_GTE' ).
-      procedure( symbol = '<'      value = 'PROC_LT' ).
-      procedure( symbol = '<='     value = 'PROC_LTE' ).
-      procedure( symbol = '='      value = 'PROC_EQL' ). "Math equal
-      procedure( symbol = 'eq?'    value = 'PROC_EQ' ).
-      procedure( symbol = 'eqv?'   value = 'PROC_EQV' ).
-      procedure( symbol = 'equal?' value = 'PROC_EQUAL' ).
+      procedure( symbol = '>'      value = 'PROC_GT' min = 2 ).
+      procedure( symbol = '>='     value = 'PROC_GTE' min = 2 ).
+      procedure( symbol = '<'      value = 'PROC_LT' min = 2 ).
+      procedure( symbol = '<='     value = 'PROC_LTE' min = 2 ).
+      procedure( symbol = '='      value = 'PROC_EQL' min = 2 ). "Math equal
+      procedure( symbol = 'eq?'    value = 'PROC_EQ' min = 2 max = 2 ).
+      procedure( symbol = 'eqv?'   value = 'PROC_EQV' min = 2 max = 2 ).
+      procedure( symbol = 'equal?' value = 'PROC_EQUAL' min = 2 max = 2 ).
 
-      procedure( symbol = 'not'    value = 'PROC_NOT' ).
+      procedure( symbol = 'not'    value = 'PROC_NOT' min = 1 max = 1 ).
 
       load_list( ).
 
-      procedure( symbol = 'make-parameter' value = 'PROC_MAKE_PARAMETER' ).
+      procedure( symbol = 'make-parameter' value = 'PROC_MAKE_PARAMETER' min = 1 max = 2 ).
 
       " vector-related functions
       procedure( symbol = 'vector'        value = 'PROC_VECTOR' ).
-      procedure( symbol = 'vector-length' value = 'PROC_VECTOR_LENGTH' ).
-      procedure( symbol = 'vector-set!'   value = 'PROC_VECTOR_SET' ).
+      procedure( symbol = 'vector-length' value = 'PROC_VECTOR_LENGTH' min = 1 max = 1 ).
+      procedure( symbol = 'vector-set!'   value = 'PROC_VECTOR_SET' min = 3 max = 3 ).
       procedure( symbol = 'vector-fill!'  value = 'PROC_VECTOR_FILL' ).
-      procedure( symbol = 'vector-ref'    value = 'PROC_VECTOR_REF' ).
-      procedure( symbol = 'vector->list'  value = 'PROC_VECTOR_TO_LIST' ).
-      procedure( symbol = 'make-vector'   value = 'PROC_MAKE_VECTOR' ).
+      procedure( symbol = 'vector-ref'    value = 'PROC_VECTOR_REF' min = 2 max = 2 ).
+      procedure( symbol = 'vector->list'  value = 'PROC_VECTOR_TO_LIST' min = 1 max = 3 ).
+      procedure( symbol = 'make-vector'   value = 'PROC_MAKE_VECTOR' min = 1 max = 2 ).
 
       " bytevector-related functions
       procedure( symbol = 'bytevector'         value = 'PROC_BYTEVECTOR' ).
-      procedure( symbol = 'bytevector-length'  value = 'PROC_BYTEVECTOR_LENGTH' ).
-      procedure( symbol = 'bytevector-u8-set!' value = 'PROC_BYTEVECTOR_U8_SET' ).
-      procedure( symbol = 'bytevector-u8-ref'  value = 'PROC_BYTEVECTOR_U8_REF' ).
+      procedure( symbol = 'bytevector-length'  value = 'PROC_BYTEVECTOR_LENGTH' min = 1 max = 1 ).
+      procedure( symbol = 'bytevector-u8-set!' value = 'PROC_BYTEVECTOR_U8_SET' min = 3 max = 3 ).
+      procedure( symbol = 'bytevector-u8-ref'  value = 'PROC_BYTEVECTOR_U8_REF' min = 2 max = 2 ).
       procedure( symbol = 'bytevector-append'  value = 'PROC_BYTEVECTOR_APPEND' ).
-      procedure( symbol = 'bytevector-copy'    value = 'PROC_BYTEVECTOR_NEW_COPY' ).
-      procedure( symbol = 'bytevector-copy!'   value = 'PROC_BYTEVECTOR_COPY' ).
-      procedure( symbol = 'utf8->string'       value = 'PROC_UTF8_TO_STRING' ).
-      procedure( symbol = 'string->utf8'       value = 'PROC_STRING_TO_UTF8' ).
-      procedure( symbol = 'make-bytevector'    value = 'PROC_MAKE_BYTEVECTOR' ).
+      procedure( symbol = 'bytevector-copy'    value = 'PROC_BYTEVECTOR_NEW_COPY' min = 1 max = 3 ).
+      procedure( symbol = 'bytevector-copy!'   value = 'PROC_BYTEVECTOR_COPY' min = 3 max = 5 ).
+      procedure( symbol = 'utf8->string'       value = 'PROC_UTF8_TO_STRING' min = 1 max = 3 ).
+      procedure( symbol = 'string->utf8'       value = 'PROC_STRING_TO_UTF8' min = 1 max = 3 ).
+      procedure( symbol = 'make-bytevector'    value = 'PROC_MAKE_BYTEVECTOR' min = 1 max = 2 ).
 
 *     Hash-related functions
-      procedure( symbol = 'make-hash'   value   = 'PROC_MAKE_HASH' ).
-      procedure( symbol = 'hash-get'    value   = 'PROC_HASH_GET' ).
-      procedure( symbol = 'hash-insert' value   = 'PROC_HASH_INSERT' ).
-      procedure( symbol = 'hash-remove' value   = 'PROC_HASH_REMOVE' ).
-      procedure( symbol = 'hash-keys'   value   = 'PROC_HASH_KEYS' ).
+      procedure( symbol = 'make-hash'   value = 'PROC_MAKE_HASH' ).
+      procedure( symbol = 'hash-get'    value = 'PROC_HASH_GET' ).
+      procedure( symbol = 'hash-insert' value = 'PROC_HASH_INSERT' ).
+      procedure( symbol = 'hash-remove' value = 'PROC_HASH_REMOVE' ).
+      procedure( symbol = 'hash-keys'   value = 'PROC_HASH_KEYS' ).
 *     Functions for type:
-      procedure( symbol = 'string?'     value = 'PROC_IS_STRING' ).
-      procedure( symbol = 'char?'       value = 'PROC_IS_CHAR' ).
-      procedure( symbol = 'hash?'       value = 'PROC_IS_HASH' ).
+      procedure( symbol = 'string?'     value = 'PROC_IS_STRING' min = 1 max = 1 ).
+      procedure( symbol = 'char?'       value = 'PROC_IS_CHAR' min = 1 max = 1 ).
+      procedure( symbol = 'hash?'       value = 'PROC_IS_HASH' min = 1 max = 1 ).
 
-      procedure( symbol = 'exact-integer?' value = 'PROC_IS_EXACT_INTEGER' ).
+      procedure( symbol = 'exact-integer?' value = 'PROC_IS_EXACT_INTEGER' min = 1 max = 1 ).
 
-      procedure( symbol = 'integer?'    value = 'PROC_IS_INTEGER' ).
-      procedure( symbol = 'complex?'    value = 'PROC_IS_COMPLEX' ).
-      procedure( symbol = 'real?'       value = 'PROC_IS_REAL' ).
-      procedure( symbol = 'rational?'   value = 'PROC_IS_RATIONAL' ).
-      procedure( symbol = 'list?'       value = 'PROC_IS_LIST' ).
-      procedure( symbol = 'pair?'       value = 'PROC_IS_PAIR' ).
-      procedure( symbol = 'vector?'     value = 'PROC_IS_VECTOR' ).
-      procedure( symbol = 'bytevector?' value = 'PROC_IS_BYTEVECTOR' ).
-      procedure( symbol = 'boolean?'    value = 'PROC_IS_BOOLEAN' ).
-      procedure( symbol = 'alist?'      value = 'PROC_IS_ALIST' ).
-      procedure( symbol = 'procedure?'  value = 'PROC_IS_PROCEDURE' ).
-      procedure( symbol = 'symbol?'     value = 'PROC_IS_SYMBOL' ).
-      procedure( symbol = 'symbol=?'    value = 'PROC_SYMBOL_LIST_IS_EQUAL' ).
-      procedure( symbol = 'port?'       value = 'PROC_IS_PORT' ).
-      procedure( symbol = 'boolean=?'   value = 'PROC_BOOLEAN_LIST_IS_EQUAL' ).
-      procedure( symbol = 'exact?'      value = 'PROC_IS_EXACT' ).
-      procedure( symbol = 'inexact?'    value = 'PROC_IS_INEXACT' ).
+      procedure( symbol = 'integer?'    value = 'PROC_IS_INTEGER' min = 1 max = 1 ).
+      procedure( symbol = 'complex?'    value = 'PROC_IS_COMPLEX' min = 1 max = 1 ).
+      procedure( symbol = 'real?'       value = 'PROC_IS_REAL' min = 1 max = 1 ).
+      procedure( symbol = 'rational?'   value = 'PROC_IS_RATIONAL' min = 1 max = 1 ).
+      procedure( symbol = 'list?'       value = 'PROC_IS_LIST' min = 1 max = 1 ).
+      procedure( symbol = 'pair?'       value = 'PROC_IS_PAIR' min = 1 max = 1 ).
+      procedure( symbol = 'vector?'     value = 'PROC_IS_VECTOR' min = 1 max = 1 ).
+      procedure( symbol = 'bytevector?' value = 'PROC_IS_BYTEVECTOR' min = 1 max = 1 ).
+      procedure( symbol = 'boolean?'    value = 'PROC_IS_BOOLEAN' min = 1 max = 1 ).
+      procedure( symbol = 'alist?'      value = 'PROC_IS_ALIST' min = 1 max = 1 ).
+      procedure( symbol = 'procedure?'  value = 'PROC_IS_PROCEDURE' min = 1 max = 1 ).
+      procedure( symbol = 'symbol?'     value = 'PROC_IS_SYMBOL' min = 1 max = 1 ).
+      procedure( symbol = 'symbol=?'    value = 'PROC_SYMBOL_LIST_IS_EQUAL' min = 1 ).
+      procedure( symbol = 'port?'       value = 'PROC_IS_PORT' min = 1 max = 1 ).
+      procedure( symbol = 'boolean=?'   value = 'PROC_BOOLEAN_LIST_IS_EQUAL' min = 1 ).
+      procedure( symbol = 'exact?'      value = 'PROC_IS_EXACT' min = 1 max = 1 ).
+      procedure( symbol = 'inexact?'    value = 'PROC_IS_INEXACT' min = 1 max = 1 ).
 
 *     Format
-      procedure( symbol = 'newline'     value = 'PROC_NEWLINE' ).
-      procedure( symbol = 'display'     value = 'PROC_DISPLAY' ).
+      procedure( symbol = 'newline'     value = 'PROC_NEWLINE' max = 1 ).
+      procedure( symbol = 'display'     value = 'PROC_DISPLAY' min = 1 max = 2 ).
 
-      procedure( symbol = 'read'         value = 'PROC_READ' ).
-      procedure( symbol = 'read-char'    value = 'PROC_READ_CHAR' ).
-      procedure( symbol = 'read-line'    value = 'PROC_READ_LINE' ).
-      procedure( symbol = 'read-string'  value = 'PROC_READ_STRING' ).
+      procedure( symbol = 'read'         value = 'PROC_READ' max = 1 ).
+      procedure( symbol = 'read-char'    value = 'PROC_READ_CHAR' max = 1 ).
+      procedure( symbol = 'read-line'    value = 'PROC_READ_LINE' max = 1 ).
+      procedure( symbol = 'read-string'  value = 'PROC_READ_STRING' min = 1 max = 2 ).
 
-      procedure( symbol = 'read-u8'      value = 'PROC_READ_U8' ).
+      procedure( symbol = 'read-u8'      value = 'PROC_READ_U8' max = 1 ).
 
-      procedure( symbol = 'peek-char'    value = 'PROC_PEEK_CHAR' ).
-      procedure( symbol = 'peek-u8'      value = 'PROC_PEEK_U8' ).
+      procedure( symbol = 'peek-char'    value = 'PROC_PEEK_CHAR' max = 1 ).
+      procedure( symbol = 'peek-u8'      value = 'PROC_PEEK_U8' max = 1 ).
 
-      procedure( symbol = 'write'        value = 'PROC_WRITE' ).
-      procedure( symbol = 'write-char'   value = 'PROC_WRITE_CHAR' ).
-      procedure( symbol = 'write-u8'     value = 'PROC_WRITE_U8' ).
-      procedure( symbol = 'write-string' value = 'PROC_WRITE_STRING' ).
+      procedure( symbol = 'write'        value = 'PROC_WRITE' min = 1 max = 2 ).
+      procedure( symbol = 'write-char'   value = 'PROC_WRITE_CHAR' min = 1 max = 2 ).
+      procedure( symbol = 'write-u8'     value = 'PROC_WRITE_U8' min = 1 max = 2 ).
+      procedure( symbol = 'write-string' value = 'PROC_WRITE_STRING' min = 1 max = 4 ).
 
-      procedure( symbol = 'write-bytevector' value = 'PROC_WRITE_BYTEVECTOR' ).
+      procedure( symbol = 'write-bytevector' value = 'PROC_WRITE_BYTEVECTOR' min = 1 max = 4 ).
       procedure( symbol = 'read-bytevector'  value = 'PROC_READ_BYTEVECTOR' ).
 
-      procedure( symbol = 'char-ready?'  value = 'PROC_IS_CHAR_READY' ).
-      procedure( symbol = 'u8-ready?'    value = 'PROC_IS_U8_READY' ).
+      procedure( symbol = 'char-ready?'  value = 'PROC_IS_CHAR_READY' max = 1 ).
+      procedure( symbol = 'u8-ready?'    value = 'PROC_IS_U8_READY' max = 1 ).
 
       load_strings( ).
       load_numbers( ).
       load_math( ).
 
       " not implemented yet
-      procedure( symbol = 'rationalize' value = 'PROC_RATIONALIZE' ).
+      procedure( symbol = 'rationalize' value = 'PROC_RATIONALIZE' min = 2 max = 2 ).
 
-      procedure( symbol = 'zero?'     value = 'PROC_IS_ZERO' ).
-      procedure( symbol = 'positive?' value = 'PROC_IS_POSITIVE' ).
-      procedure( symbol = 'negative?' value = 'PROC_IS_NEGATIVE' ).
-      procedure( symbol = 'odd?'      value = 'PROC_IS_ODD' ).
-      procedure( symbol = 'even?'     value = 'PROC_IS_EVEN' ).
+      procedure( symbol = 'zero?'     value = 'PROC_IS_ZERO' min = 1 max = 1 ).
+      procedure( symbol = 'positive?' value = 'PROC_IS_POSITIVE' min = 1 max = 1 ).
+      procedure( symbol = 'negative?' value = 'PROC_IS_NEGATIVE' min = 1 max = 1 ).
+      procedure( symbol = 'odd?'      value = 'PROC_IS_ODD' min = 1 max = 1 ).
+      procedure( symbol = 'even?'     value = 'PROC_IS_EVEN' min = 1 max = 1 ).
 *     Continuation
       procedure( symbol = 'dynamic-wind'     value = 'PROC_DYNAMIC_WIND' ).
       procedure( symbol = 'call-with-values' value = 'PROC_CALL_WITH_VALUES' ).
@@ -12464,22 +12649,22 @@
       procedure( symbol = 'current-output-port' value = 'PROC_CURRENT_OUTPUT_PORT' ).
       procedure( symbol = 'current-error-port'  value = 'PROC_CURRENT_ERROR_PORT' ).
 
-      procedure( symbol = 'close-input-port'    value = 'PROC_CLOSE_INPUT_PORT' ).
-      procedure( symbol = 'close-output-port'   value = 'PROC_CLOSE_OUTPUT_PORT' ).
-      procedure( symbol = 'close-port'          value = 'PROC_CLOSE_PORT' ).
+      procedure( symbol = 'close-input-port'    value = 'PROC_CLOSE_INPUT_PORT' min = 1 max = 1 ).
+      procedure( symbol = 'close-output-port'   value = 'PROC_CLOSE_OUTPUT_PORT' min = 1 max = 1 ).
+      procedure( symbol = 'close-port'          value = 'PROC_CLOSE_PORT' min = 1 max = 1 ).
 
-      procedure( symbol = 'input-port?'         value = 'PROC_IS_INPUT_PORT' ).
-      procedure( symbol = 'output-port?'        value = 'PROC_IS_OUTPUT_PORT' ).
-      procedure( symbol = 'textual-port?'       value = 'PROC_IS_TEXTUAL_PORT' ).
-      procedure( symbol = 'binary-port?'        value = 'PROC_IS_BINARY_PORT' ).
-      procedure( symbol = 'input-port-open?'    value = 'PROC_IS_OPEN_INPUT_PORT' ).
-      procedure( symbol = 'output-port-open?'   value = 'PROC_IS_OPEN_OUTPUT_PORT' ).
+      procedure( symbol = 'input-port?'         value = 'PROC_IS_INPUT_PORT' min = 1 max = 1  ).
+      procedure( symbol = 'output-port?'        value = 'PROC_IS_OUTPUT_PORT' min = 1 max = 1 ).
+      procedure( symbol = 'textual-port?'       value = 'PROC_IS_TEXTUAL_PORT' min = 1 max = 1  ).
+      procedure( symbol = 'binary-port?'        value = 'PROC_IS_BINARY_PORT' min = 1 max = 1  ).
+      procedure( symbol = 'input-port-open?'    value = 'PROC_IS_OPEN_INPUT_PORT'  min = 1 max = 1 ).
+      procedure( symbol = 'output-port-open?'   value = 'PROC_IS_OPEN_OUTPUT_PORT'  min = 1 max = 1 ).
 
       procedure( symbol = 'open-output-string'  value = 'PROC_OPEN_OUTPUT_STRING' ).
       procedure( symbol = 'open-input-string'   value = 'PROC_OPEN_INPUT_STRING' ).
       procedure( symbol = 'get-output-string'   value = 'PROC_GET_OUTPUT_STRING' ).
       procedure( symbol = 'eof-object'          value = 'PROC_EOF_OBJECT' ).
-      procedure( symbol = 'eof-object?'         value = 'PROC_IS_EOF_OBJECT' ).
+      procedure( symbol = 'eof-object?'         value = 'PROC_IS_EOF_OBJECT' min = 1 max = 1 ).
 
       load_chars( ).
 
@@ -13139,7 +13324,7 @@
     METHOD has_next.
       " if the last element in the list is not a cons cell, we cannot append
       rv_flag = xsdbool( elem NE lcl_lisp=>nil AND
-               ( first EQ abap_true OR ( elem->cdr IS BOUND AND elem->cdr NE lcl_lisp=>nil ) ) ).
+               ( first EQ abap_true OR ( elem->cdr IS BOUND AND elem->cdr->type EQ type_pair ) ) ).
     ENDMETHOD.                    "has_next
 
     METHOD next.
@@ -13164,23 +13349,29 @@
     ENDMETHOD.
 
     METHOD next.
-      ro_elem = super->next( ).
+      IF first EQ abap_true.
+        first = abap_false.
+      ELSE.
+        IF elem->cdr->type NE type_pair.
+          elem->raise( | is not a proper list| ).
+        ENDIF.
+        elem = elem->cdr.
+      ENDIF.
+      ro_elem = elem->car.
 
+      " handle values
       IF ro_elem IS BOUND AND ro_elem->type EQ type_values.
         DATA(lo_head) = CAST lcl_lisp_values( ro_elem )->head.
 
         IF lo_head IS BOUND AND lo_head NE lcl_lisp=>nil AND lo_head->car IS BOUND.
           ro_elem = lo_head->car.
-          "lo_head = lo_head->cdr.    " next value?
         ENDIF.
       ENDIF.
 
-      IF ro_elem IS BOUND.
-        IF ro_elem->is_number( ) EQ abap_false.
-          ro_elem->raise_nan( operation ) ##NO_TEXT.
-        ENDIF.
-      ELSE.
-        lcl_lisp=>incorrect_input( operation ).
+      IF ro_elem IS NOT BOUND.
+        lcl_lisp=>throw( |no number in { operation }| ).
+      ELSEIF ro_elem->is_number( ) EQ abap_false.
+        ro_elem->raise_nan( operation ) ##NO_TEXT.
       ENDIF.
     ENDMETHOD.                    "next
 
@@ -13219,6 +13410,12 @@
           ro_elem->value = value.
 
       ENDCASE.
+    ENDMETHOD.
+
+    METHOD native.
+      ro_elem = NEW lcl_lisp_native( value = value
+                                     arity_min = arity_min
+                                     arity_max = arity_max ).
     ENDMETHOD.
 
     METHOD string.
@@ -15582,6 +15779,31 @@
 
     ENDMETHOD.
 
+    METHOD complex_log.
+      DATA arctan TYPE f.
+      DATA lv_tan TYPE f.
+      DATA magnitude TYPE f.
+
+      IF y = 0.
+        IF x = 0.
+          ln_z = nan.
+          RETURN.
+        ELSE.
+          arctan = c_pi.
+          magnitude = abs( x ).
+        ENDIF.
+      ELSE.
+        magnitude = sqrt( x * x  + y * y ).
+        lv_tan = y / ( x + magnitude ).
+        arctan = 2 * atan( lv_tan ).
+      ENDIF.
+
+      ln_z = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = log( magnitude ) / base
+                                                                   iv_exact = abap_false )
+                                        imag = lcl_lisp_new=>real( value = arctan / base
+                                                                   iv_exact = abap_false ) ).
+    ENDMETHOD.
+
     METHOD number_to_string.
       " A numerical constant can be specified to be either exact or inexact by a prefix #e for exact and #i for inexact.
       " An exactness prefix can appear before or after any radix prefix that is used.
@@ -15911,6 +16133,20 @@
       flag = is_exact_zero( get_state( `real?` )-imag_part ).
     ENDMETHOD.
 
+    METHOD complex_atan.
+      DATA i_quotient TYPE REF TO lcl_lisp_complex.
+      DATA ln_z TYPE REF TO lcl_lisp_complex.
+
+      DATA(i_minus_z) = imaginary->substract( me ).
+      DATA(i_plus_z) = imaginary->add( me ).
+      i_quotient ?= i_minus_z->divide( i_plus_z ).
+      ln_z ?= complex_log( x = i_quotient->zreal->to_real( )
+                           y = i_quotient->zimag->to_real( )
+                           iv_exact = me->exact ).
+      DATA(z2i) = imaginary->add( imaginary ).
+      result = ln_z->divide( z2i ).
+    ENDMETHOD.
+
   ENDCLASS.
 
 *----------------------------------------------------------------------*
@@ -16194,7 +16430,7 @@
           lo_ptr->car->raise( ` is not a byte in bytevector` ) ##NO_TEXT.
         ENDIF.
 
-        _to_integer lo_ptr->car lv_int.
+        lv_int = CAST lcl_lisp_integer( lo_ptr->car )->int.
         APPEND lv_int TO lt_byte.
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
