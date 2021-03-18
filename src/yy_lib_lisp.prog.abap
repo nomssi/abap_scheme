@@ -416,23 +416,6 @@
     ENDCASE.
   END-OF-DEFINITION.
 
-  DEFINE _get_arg0_as_number.
-    DATA lo_number TYPE REF TO lcl_lisp_number.
-    IF list IS NOT BOUND OR list->car IS NOT BOUND.
-      lcl_lisp=>incorrect_input( operation ).
-    ENDIF.
-    CASE list->car->type.
-      WHEN type_integer
-        OR type_real
-        OR type_rational
-        OR type_complex.
-      WHEN OTHERS.
-        list->car->raise_nan( operation ) ##NO_TEXT.
-    ENDCASE.
-    _assert_one_param.
-    lo_number ?= list->car.
-  END-OF-DEFINITION.
-
   DEFINE _validate_escape.
     IF &1 IS NOT BOUND.
       lcl_lisp=>incorrect_input( operation ).
@@ -704,18 +687,6 @@
   DEFINE _assert_last_param.
     IF &1->cdr NE nil.
       &1->raise( | Parameter mismatch| ).
-    ENDIF.
-  END-OF-DEFINITION.
-
-  DEFINE _arg_is_type. " argument in list->car
-    _validate: list, list->car.
-    IF list IS NOT BOUND OR list->car IS NOT BOUND.
-      lcl_lisp=>incorrect_input( operation ).
-    ENDIF.
-    _assert_one_param.
-    result = false.
-    IF list->car->type EQ type_&1.
-      result = true.
     ENDIF.
   END-OF-DEFINITION.
 
@@ -1452,7 +1423,7 @@
           WHEN 1.
             lcl_lisp=>throw( operation && ` only takes one parameter` ).
           WHEN OTHERS.
-            lcl_lisp=>throw( operation && ` has too many parameters` ).
+            lcl_lisp=>throw( ` too many arguments in ` && operation ).
         ENDCASE.
       ENDIF.
     ENDMETHOD.
@@ -6635,8 +6606,6 @@
     ENDMETHOD.
 
     METHOD list_reverse.
-      _validate io_list.
-
       result = nil.
       DATA(lo_ptr) = io_list.
 
@@ -6706,8 +6675,6 @@
 *     be of any type. Appends the second param to the first.
 
 *     But if the last element in the list is not a cons cell, we cannot append
-      _validate: list, list->car, list->cdr.
-
       IF list->car EQ nil.
         result = list->cdr->car.
       ELSE.
@@ -6741,18 +6708,12 @@
     END-OF-DEFINITION.
 
     METHOD proc_car.
-      _validate: list, list->car.
-
       DATA(lo_arg) = list->car.
       _validate_pair `car: `.
       result = lo_arg->car.
     ENDMETHOD.                    "proc_car
 
     METHOD proc_set_car.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( `set-car!` ).
-      ENDIF.
-
       DATA(lo_arg) = list->car.
       IF lo_arg->type NE type_pair.
         lo_arg->raise( context = `set-car!: `
@@ -6767,10 +6728,6 @@
     ENDMETHOD.                    "proc_car
 
     METHOD proc_set_cdr.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( `set-cdr!` ).
-      ENDIF.
-
       DATA(lo_arg) = list->car.
       IF lo_arg->type NE type_pair.
         lo_arg->raise( context = `set-cdr!: `
@@ -6796,20 +6753,11 @@
 
     METHOD proc_cons.
 *     Create new cell and prepend it to second parameter
-      _validate: list, list->car, list->cdr.
-
-      list->cdr->assert_last_param( operation ).
-
       result = lcl_lisp_new=>cons( io_car = list->car
                                    io_cdr = list->cdr->car ).
     ENDMETHOD.                    "proc_cons
 
     METHOD proc_not.
-*     Create new cell and prepend it to second parameter
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
-
       IF list->car EQ false.
         result = true.
       ELSE.
@@ -6817,19 +6765,12 @@
       ENDIF.
     ENDMETHOD.                    "proc_cons
 
-    DEFINE _validate_cxxr.
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
+    DEFINE _execute_cxxr.
       DATA(lo_arg) = list.
       _validate_pair &1.
 
       lo_arg = list->car.
       _validate_pair &1.
-    END-OF-DEFINITION.
-
-    DEFINE _execute_cxxr.
-      _validate_cxxr &1.
 
       lo_arg = lo_arg->&2.
       _validate_pair &1.
@@ -6854,7 +6795,11 @@
     ENDMETHOD.                    "proc_cddr
 
     DEFINE _execute_cx3r.
-      _validate_cxxr &1.
+      DATA(lo_arg) = list.
+      _validate_pair &1.
+
+      lo_arg = list->car.
+      _validate_pair &1.
 
       lo_arg = lo_arg->&2.
       _validate_pair &1.
@@ -6898,7 +6843,11 @@
     ENDMETHOD.
 
     DEFINE _execute_cx4r.
-      _validate_cxxr &1.
+      DATA(lo_arg) = list.
+      _validate_pair &1.
+
+      lo_arg = list->car.
+      _validate_pair &1.
 
       lo_arg = lo_arg->&2.
       _validate_pair &1.
@@ -7354,11 +7303,7 @@
     ENDMETHOD.
 
     METHOD proc_bytevector_length.
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
       _validate_bytevector list->car operation.
-      _assert_one_param.
 
       result = CAST lcl_lisp_bytevector( list->car )->length( ).
     ENDMETHOD.
@@ -7368,7 +7313,6 @@
       DATA lo_u8 TYPE REF TO lcl_lisp_bytevector.
       DATA lv_byte TYPE tv_byte.
 
-      _validate: list, list->cdr, list->cdr->cdr.
       _validate_bytevector list->car operation.
       lo_u8 ?= list->car.
 
@@ -7438,7 +7382,11 @@
     ENDMETHOD.
 
     METHOD proc_is_bytevector.
-      _arg_is_type bytevector.
+      IF list->car->type EQ type_bytevector.
+        result = true.
+      ELSE.
+        result = false.
+      ENDIF.
     ENDMETHOD.
 
     METHOD proc_make_bytevector.
@@ -8543,22 +8491,30 @@
     ENDMETHOD.                    "proc_hash_keys
 
     METHOD proc_is_string.
-      _arg_is_type string.
+      IF list->car->type EQ type_string.
+        result = true.
+      ELSE.
+        result = false.
+      ENDIF.
     ENDMETHOD.                    "proc_is_string
 
     METHOD proc_is_char.
-      _arg_is_type char.
+      IF list->car->type EQ type_char.
+        result = true.
+      ELSE.
+        result = false.
+      ENDIF.
     ENDMETHOD.                    "proc_is_char
 
     METHOD proc_is_hash.
-      _arg_is_type hash.
+      IF list->car->type EQ type_hash.
+        result = true.
+      ELSE.
+        result = false.
+      ENDIF.
     ENDMETHOD.                    "proc_is_hash
 
     METHOD proc_is_nan. " argument in list->car
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
-      _assert_one_param.
       IF list->car->is_nan( ).
         result = true.
       ELSE.
@@ -8567,31 +8523,42 @@
     ENDMETHOD.
 
     METHOD proc_is_finite. " argument in list->car
-      _get_arg0_as_number.
-
-      result = lo_number->is_finite( ).
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          result = CAST lcl_lisp_number( list->car )->is_finite( ).
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_is_infinite. " argument in list->car
-      _get_arg0_as_number.
-
-      result = lo_number->is_infinite( ).
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          result = CAST lcl_lisp_number( list->car )->is_infinite( ).
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_is_number. " argument in list->car
-      _validate: list, list->car.
-      _assert_one_param.
-      result = false.
       IF list->car->is_number( ).
         result = true.
+      ELSE.
+        result = false.
       ENDIF.
     ENDMETHOD.                    "proc_is_number
 
     METHOD proc_is_complex.
-      _validate: list, list->car.
-      _assert_one_param.
       IF list->car->is_number( ).
         result = true.
+      ELSE.
+        result = false.
       ENDIF.
     ENDMETHOD.
 
@@ -8674,7 +8641,11 @@
     ENDMETHOD.                    "proc_is_integer
 
     METHOD proc_is_symbol.
-      _arg_is_type symbol.
+      IF list->car->type EQ type_symbol.
+        result = true.
+      ELSE.
+        result = false.
+      ENDIF.
     ENDMETHOD.
 
     METHOD proc_symbol_list_is_equal.
@@ -8715,15 +8686,27 @@
     ENDMETHOD.
 
     METHOD proc_is_pair. " argument in list->car
-      _arg_is_type pair.
+      IF list->car->type EQ type_pair.
+        result = true.
+      ELSE.
+        result = false.
+      ENDIF.
     ENDMETHOD.                    "proc_is_pair
 
     METHOD proc_is_boolean. " argument in list->car
-      _arg_is_type boolean.
+      IF list->car->type EQ type_boolean.
+        result = true.
+      ELSE.
+        result = false.
+      ENDIF.
     ENDMETHOD.
 
     METHOD proc_is_vector.  " argument in list->car
-      _arg_is_type vector.
+      IF list->car->type EQ type_vector.
+        result = true.
+      ELSE.
+        result = false.
+      ENDIF.
     ENDMETHOD.
 
     METHOD proc_is_list.  " argument in list->car
@@ -8835,69 +8818,109 @@
     ENDMETHOD.
 
     METHOD proc_real_part.
-      _get_arg0_as_number.
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational.
+          result = list->car.
 
-      IF lo_number->type EQ type_complex.
-        result = CAST lcl_lisp_complex( lo_number )->zreal.
-      ELSE.
-        result = lo_number.
-      ENDIF.
+        WHEN type_complex.
+          result = CAST lcl_lisp_complex( list->car )->zreal.
+
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_imag_part.
-      _get_arg0_as_number.
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational.
+          result = lcl_lisp_number=>zero.
 
-      IF lo_number->type EQ type_complex.
-        result = CAST lcl_lisp_complex( lo_number )->zimag.
-      ELSE.
-        result = lcl_lisp_number=>zero.
-      ENDIF.
+        WHEN type_complex.
+          result = CAST lcl_lisp_complex( list->car )->zimag.
+
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_magnitude.
-      _get_arg0_as_number.
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          result = CAST lcl_lisp_number( list->car )->norm( operation ).
 
-      result = lo_number->norm( operation ).
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_angle.
       DATA z TYPE REF TO lcl_lisp_complex.
-      _get_arg0_as_number.
+      DATA lo_number TYPE REF TO lcl_lisp_number.
 
-      IF lo_number->type EQ type_complex.
-        z ?= lo_number.
-        result = lcl_lisp_new=>real_number( value = z->angle
-                                            iv_exact = z->exact ).
-      ELSEIF lo_number->type EQ type_real AND lo_number->infnan EQ abap_true.
-        CASE lo_number.
-          WHEN lcl_lisp_number=>inf.
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_rational.
+          lo_number ?= list->car.
+          IF lo_number->number_sign( lo_number->get_state( operation )-real_part ) GE 0.
             result = lo_number->zero.
-          WHEN lcl_lisp_number=>neg_inf.
+          ELSE.
             result = lcl_lisp_new=>real_number( value = c_pi
                                                 iv_exact = abap_true ).
-          WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
-            result = lo_number.
-        ENDCASE.
-      ELSEIF lo_number->number_sign( lo_number->get_state( operation )-real_part ) GE 0.
-        result = lo_number->zero.
-      ELSE.
-        result = lcl_lisp_new=>real_number( value = c_pi
-                                            iv_exact = abap_true ).
-      ENDIF.
+          ENDIF.
+
+        WHEN type_real.
+          lo_number ?= list->car.
+          IF lo_number->infnan EQ abap_true.
+            CASE lo_number.
+              WHEN lcl_lisp_number=>inf.
+                result = lo_number->zero.
+              WHEN lcl_lisp_number=>neg_inf.
+                result = lcl_lisp_new=>real_number( value = c_pi
+                                                    iv_exact = abap_true ).
+              WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
+                result = lo_number.
+            ENDCASE.
+          ELSEIF lo_number->number_sign( lo_number->get_state( operation )-real_part ) GE 0.
+            result = lo_number->zero.
+          ELSE.
+            result = lcl_lisp_new=>real_number( value = c_pi
+                                                iv_exact = abap_true ).
+          ENDIF.
+
+        WHEN type_complex.
+          z ?= list->car.
+          result = lcl_lisp_new=>real_number( value = z->angle
+                                              iv_exact = z->exact ).
+
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_abs.
-      _get_arg0_as_number.
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational.
+          TRY.
+              result = CAST lcl_lisp_number( list->car )->norm( operation ).
+            CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
+              throw( lx_error->get_text( ) ).
+          ENDTRY.
 
-      IF lo_number->type EQ type_complex.
-        lo_number->no_complex( operation ).
-      ELSE.
-        TRY.
-            result = lo_number->norm( operation ).
-          CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
-            throw( lx_error->get_text( ) ).
-        ENDTRY.
-      ENDIF.
+        WHEN type_complex.
+          list->car->no_complex( operation ).
+
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.                    "proc_abs
 
     METHOD proc_sin.
@@ -9645,15 +9668,27 @@
     ENDMETHOD.                    "proc_round
 
     METHOD proc_numerator.
-      _get_arg0_as_number.
-
-      result = lo_number->get_numerator( ).
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          result = CAST lcl_lisp_number( list->car )->get_numerator( ).
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_denominator.
-      _get_arg0_as_number.
-
-      result = lo_number->get_denominator( ).
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          result = CAST lcl_lisp_number( list->car )->get_denominator( ).
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_remainder.
@@ -9768,31 +9803,61 @@
     ENDMETHOD.                    "proc_random
 
     METHOD proc_is_exact.
-      _get_arg0_as_number.
-      IF lo_number->exact EQ abap_true.
-        result = true.
-      ELSE.
-        result = false.
-      ENDIF.
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          IF CAST lcl_lisp_number( list->car )->exact EQ abap_true.
+            result = true.
+          ELSE.
+            result = false.
+          ENDIF.
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_is_inexact.
-      _get_arg0_as_number.
-      IF lo_number->exact EQ abap_false.
-        result = true.
-      ELSE.
-        result = false.
-      ENDIF.
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          IF CAST lcl_lisp_number( list->car )->exact EQ abap_false.
+            result = true.
+          ELSE.
+            result = false.
+          ENDIF.
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_to_exact.
-      _get_arg0_as_number.
-      result = CAST lcl_lisp_number( list->car )->to_exact( ).
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          result = CAST lcl_lisp_number( list->car )->to_exact( ).
+
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_to_inexact.
-      _get_arg0_as_number.
-      result = CAST lcl_lisp_number( list->car )->to_inexact( ).
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          result = CAST lcl_lisp_number( list->car )->to_inexact( ).
+
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
     ENDMETHOD.
 
     METHOD proc_num_to_string.
@@ -12294,7 +12359,7 @@
 
       procedure( symbol = 'car'     value   = 'PROC_CAR' min = 1 max = 1 ).
       procedure( symbol = 'cdr'     value   = 'PROC_CDR' min = 1 max = 1 ).
-      procedure( symbol = c_eval_cons    value   = 'PROC_CONS' ).
+      procedure( symbol = c_eval_cons    value   = 'PROC_CONS' min = 2 max = 2 ).
       procedure( symbol = 'nil?'    value   = 'PROC_NILP' min = 1 max = 1 ).
       procedure( symbol = 'null?'   value   = 'PROC_NILP' min = 1 max = 1 ).
 
@@ -12332,7 +12397,7 @@
       procedure( symbol = 'cadddr'    value   = 'PROC_CADDDR' min = 1 max = 1 ).
       procedure( symbol = 'cddddr'    value   = 'PROC_CDDDDR' min = 1 max = 1 ).
 
-      procedure( symbol = 'append!'  value   = 'PROC_APPEND_UNSAFE' ).
+      procedure( symbol = 'append!'  value   = 'PROC_APPEND_UNSAFE' min = 2 max = 2 ).
       procedure( symbol = 'list'     value   = 'PROC_LIST' ).
       procedure( symbol = 'length'   value   = 'PROC_LENGTH' min = 1 max = 1 ).
       procedure( symbol = 'reverse'  value   = 'PROC_REVERSE' min = 1 max = 1 ).

@@ -2830,9 +2830,9 @@
 
      METHOD radix_exp.
        scheme( code = '#d31e-3'
-               expected = '0.003' ).
+               expected = '0.031' ).
        scheme( code = '#d2.41e+2'
-               expected = '240.0' ).
+               expected = '241.0' ).
        scheme( code = '#b1e10'
                expected = '4.0' ).                  " not allowed in R7RS, DrRacket/ChezScheme do it anyway
      ENDMETHOD.                    "binary_1
@@ -4532,14 +4532,15 @@
      ENDMETHOD.                    "list_cons_5
 
      METHOD list_cons_error_1.
-       scheme_incorrect( code = |(cons)|  operation = 'cons' ).
+       scheme_argument( code = |(cons)|
+                        operation = 'cons' ).
      ENDMETHOD.
 
      METHOD list_cons_error_2.
-       scheme( code = |(cons 'a)|
-               expected = `Eval: '() Parameter mismatch in cons` ).
+       scheme_argument( code = |(cons 'a)|
+                        operation = 'cons' ).
        scheme( code = |(cons 'a 'b 'c)|
-               expected = `Eval: (b c) Parameter mismatch in cons` ).
+               expected = `Eval: (b c) too many parameter in cons` ).
      ENDMETHOD.
 
      METHOD list_make_list.
