@@ -162,7 +162,7 @@
 
      METHOD parameter_mismatch.
        scheme( code = code
-               expected = |Eval: { operation } has too many parameters| ).
+               expected = |Eval: too many arguments in { operation }| ).
      ENDMETHOD.
 
      METHOD invalid_digit.
@@ -4539,8 +4539,8 @@
      METHOD list_cons_error_2.
        scheme_argument( code = |(cons 'a)|
                         operation = 'cons' ).
-       scheme( code = |(cons 'a 'b 'c)|
-               expected = `Eval: (b c) too many parameter in cons` ).
+       parameter_mismatch( code = |(cons 'a 'b 'c)|
+                           operation = `cons` ).
      ENDMETHOD.
 
      METHOD list_make_list.
@@ -5614,6 +5614,10 @@
 *      Test =
        scheme( code = '(= 2 3)'
                expected = '#f' ).
+       scheme( code = '(= 1/3 1/3)'
+               expected = '#t' ).
+       scheme( code = '(= 1 19/20)'
+               expected = '#f' ).
        scheme( code = '(= 2.0 3+i)'
                expected = '#f' ).
        scheme( code = '(= 3.0+i 3+i)'
@@ -5634,6 +5638,10 @@
 
      METHOD compa_eq_2.
        scheme( code = '(= 2.0 2)'
+               expected = '#t' ).
+       scheme( code = '(= 0.5 0.5)'
+               expected = '#t' ).
+       scheme( code = '(= #e0.4 #e0.4)'
                expected = '#t' ).
        scheme( code = '(= 2.0 2 +nan.0)'
                expected = '#f' ).

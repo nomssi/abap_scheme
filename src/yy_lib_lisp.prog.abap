@@ -45,6 +45,7 @@
 
   TYPES tv_type TYPE tv_char.
   TYPES tv_category TYPE tv_char.
+  TYPES tv_sign TYPE tv_char2.
 
   TYPES: BEGIN OF ENUM tv_port_type BASE TYPE tv_char,
            textual VALUE IS INITIAL,
@@ -141,6 +142,13 @@
     c_complex_polar    TYPE tv_char VALUE '@'.
 
   CONSTANTS:
+    c_sign_zero TYPE tv_sign VALUE space,
+    c_sign_positive TYPE tv_sign VALUE c_plus_sign,
+    c_sign_negative TYPE tv_sign VALUE c_minus_sign,
+    c_sign_pos_nan TYPE tv_sign VALUE '?+',
+    c_sign_neg_nan TYPE tv_sign VALUE '?-'.
+
+  CONSTANTS:
     c_lisp_pos_zero TYPE string VALUE '+0.0',
     c_lisp_neg_zero TYPE string VALUE '-0.0',
     c_lisp_pos_inf  TYPE string VALUE '+INF.0',
@@ -168,6 +176,9 @@
 
   CONSTANTS
     c_pi TYPE tv_real VALUE '3.141592653589793238462643383279502884197169'.
+
+  CONSTANTS
+    c_display_rational_digits TYPE i VALUE 5.    " arbitrary cut-off limit for display
 
   CONSTANTS:
     tv_category_standard TYPE tv_category VALUE space,
@@ -229,6 +240,7 @@
            denom   TYPE tv_int,
            infnan  TYPE tv_flag,
            exact   TYPE tv_flag,
+           sign    TYPE tv_sign,
            ref     TYPE REF TO lcl_lisp_number,
          END OF ts_number.
 
@@ -379,27 +391,27 @@
   END-OF-DEFINITION.
 
   DEFINE _validate_char.
-    _validate_type &1 &2 char `char`.
-  END-OF-DEFINITION.
-
-  DEFINE _validate_string.
-    _validate_type &1 &2 string `string`.
-  END-OF-DEFINITION.
-
-  DEFINE _validate_vector.
-    _validate_type &1 &2 vector `vector`.
-  END-OF-DEFINITION.
-
-  DEFINE _validate_bytevector.
-    _validate_type &1 &2 bytevector `bytevector`.
+    IF &1 IS NOT BOUND.
+      lcl_lisp=>incorrect_input( operation ).
+    ELSEIF &1->type NE type_char.
+      &1->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+    ENDIF.
   END-OF-DEFINITION.
 
   DEFINE _validate_port.
-    _validate_type &1 &2 port `port`.
+    IF &1 IS NOT BOUND.
+      lcl_lisp=>incorrect_input( operation ).
+    ELSEIF &1->type NE type_port.
+      &1->raise( ` is not a port in ` && &2 ) ##NO_TEXT.
+    ENDIF.
   END-OF-DEFINITION.
 
   DEFINE _validate_turtle.
-    _validate_type &1 &2 abap_turtle `turtle`.
+    IF &1 IS NOT BOUND.
+      lcl_lisp=>incorrect_input( operation ).
+    ELSEIF &1->type NE type_abap_turtle.
+      &1->raise( ` is not a turtle in ` && &2 ) ##NO_TEXT.
+    ENDIF.
   END-OF-DEFINITION.
 
   DEFINE _validate_number.
@@ -1002,6 +1014,9 @@
       METHODS get_number_info IMPORTING operation TYPE string
                               RETURNING VALUE(rs_info) TYPE ts_number
                               RAISING   lcx_lisp_exception.
+      METHODS to_sign IMPORTING value TYPE numeric
+                      RETURNING VALUE(rv_sign) TYPE tv_sign.
+
       METHODS get_state IMPORTING operation TYPE string OPTIONAL
                         RETURNING VALUE(state) TYPE ts_result
                         RAISING   lcx_lisp_exception.
@@ -1105,8 +1120,6 @@
 
       CLASS-METHODS is_exact_zero IMPORTING is_number   TYPE ts_number
                                   RETURNING VALUE(null) TYPE tv_flag.
-      CLASS-METHODS number_sign IMPORTING is_number      TYPE ts_number
-                                RETURNING VALUE(rv_sign) TYPE tv_int.
 
       METHODS negative_infnan RETURNING VALUE(num) TYPE REF TO lcl_lisp_number
                               RAISING   lcx_lisp_exception.
@@ -1154,15 +1167,10 @@
   CLASS lcl_lisp_bigint DEFINITION INHERITING FROM lcl_lisp_integer CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
       TYPES tv_order TYPE i.
-      TYPES tv_sign TYPE tv_char.
       CONSTANTS:
         c_order_smaller TYPE tv_order VALUE -1,
         c_order_equal   TYPE tv_order VALUE 0,
         c_order_larger  TYPE tv_order VALUE +1.
-
-      CONSTANTS:
-        c_sign_positive TYPE tv_sign VALUE space,
-        c_sign_negative TYPE tv_sign VALUE c_minus_sign.
 
       TYPES tr_bigint TYPE REF TO lcl_lisp_bigint.
       TYPES tt_bigint TYPE STANDARD TABLE OF tr_bigint.
@@ -1377,14 +1385,14 @@
   CLASS lcl_lisp_native DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
       METHODS constructor IMPORTING value     TYPE any
-                                    arity_min TYPE tv_byte OPTIONAL
+                                    arity_min TYPE tv_int OPTIONAL
                                     arity_max TYPE tv_byte OPTIONAL
                                     RAISING   lcx_lisp_exception.
       METHODS check_arity IMPORTING params TYPE REF TO lcl_lisp
                                     operation TYPE string
                           RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
-      DATA arity_min TYPE tv_byte.
+      DATA arity_min TYPE tv_int.
       DATA arity_max TYPE tv_byte.
   ENDCLASS.
 
@@ -1403,7 +1411,17 @@
     METHOD check_arity.
       DATA lo_ptr TYPE REF TO lcl_lisp.
 
-      lo_ptr = params.
+      IF params IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ELSE.
+        lo_ptr = params.
+      ENDIF.
+
+
+      IF arity_min LT 0 AND lo_ptr->type EQ type_pair.
+         lcl_lisp=>throw( `No arguments allowed in ` && operation ).
+      ENDIF.
+
       DO arity_min TIMES.
         IF lo_ptr IS NOT BOUND OR lo_ptr->car IS NOT BOUND.
           lcl_lisp=>throw( `missing argument in ` && operation ).
@@ -1423,7 +1441,7 @@
           WHEN 1.
             lcl_lisp=>throw( operation && ` only takes one parameter` ).
           WHEN OTHERS.
-            lcl_lisp=>throw( ` too many arguments in ` && operation ).
+            lcl_lisp=>throw( `too many arguments in ` && operation ).
         ENDCASE.
       ENDIF.
     ENDMETHOD.
@@ -1851,7 +1869,7 @@
                          RETURNING VALUE(ro_port) TYPE REF TO lcl_lisp_port.
 
       CLASS-METHODS native  IMPORTING value     TYPE any
-                                      arity_min TYPE tv_byte
+                                      arity_min TYPE tv_int
                                       arity_max TYPE tv_byte
                          RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
 
@@ -2561,7 +2579,7 @@
                      RETURNING VALUE(element) TYPE REF TO lcl_lisp,
         procedure IMPORTING symbol         TYPE string
                             value          TYPE string
-                            min            TYPE tv_byte OPTIONAL
+                            min            TYPE tv_int OPTIONAL
                             max            TYPE tv_byte OPTIONAL
                   RETURNING VALUE(element) TYPE REF TO lcl_lisp,
         syntax IMPORTING symbol         TYPE string
@@ -4105,6 +4123,7 @@
 
       METHODS proc_list_tail      IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
       METHODS proc_list_ref       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_list_set       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
       METHODS proc_list_to_vector IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
 
       METHODS proc_length         IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
@@ -4278,6 +4297,8 @@
       METHODS proc_symbol_to_string  IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
       METHODS proc_string_length     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
       METHODS proc_string_copy       IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_copy_set   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
+      METHODS proc_string_fill_set   IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
       METHODS proc_string_to_num     IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
       METHODS proc_string_ref        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
       METHODS proc_string_set        IMPORTING list TYPE REF TO lcl_lisp RETURNING VALUE(result) TYPE REF TO lcl_lisp RAISING lcx_lisp_exception ##called.
@@ -6351,7 +6372,7 @@
 
     METHOD write_u8.
       _optional_binary_port io_arg output `write-u8`.
-      _validate_char io_elem `write-u8`.
+      _validate_char io_elem.
       li_port->write_u8( CAST lcl_lisp_char( io_elem ) ).
       result = io_elem.
     ENDMETHOD.
@@ -6537,9 +6558,6 @@
     METHOD proc_append.
 *     Creates a new list appending all parameters
 *     All parameters except the last must be lists, the last must be a cons cell.
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
 
 *     No arguments: return nil
       result = list.
@@ -7106,6 +7124,10 @@
       ENDDO.
     ENDMETHOD.
 
+    METHOD proc_list_set.
+      throw( `list-set! not implemented yet` ).
+    ENDMETHOD.
+
 *(car list-tail list k)
     METHOD proc_list_ref.
 *    (list-ref list k) procedure
@@ -7148,20 +7170,18 @@
     ENDMETHOD.
 
     METHOD proc_vector_length.
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
+      IF list->car->type NE type_vector.
+        list->car->raise( ` is not a vector in ` && operation ) ##NO_TEXT.
       ENDIF.
-      _validate_vector list->car 'vector-length'.
 
       result = CAST lcl_lisp_vector( list->car )->length( ).
     ENDMETHOD.
 
     METHOD proc_vector_ref.
 *    (vector-ref vector k) procedure
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
+      IF list->car->type NE type_vector.
+        list->car->raise( ` is not a vector in ` && operation ) ##NO_TEXT.
       ENDIF.
-      _validate_vector list->car 'vector-ref'.
       DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
 
       _validate list->cdr.
@@ -7174,10 +7194,8 @@
 
     METHOD proc_vector_set.
 *    (vector-set! vector k obj) procedure
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
-        lcl_lisp=>incorrect_input( 'vector-set!' ).
-      ELSEIF list->car->type NE type_vector.
-        list->car->raise( ` is not a vector in vector-set!` ) ##NO_TEXT.
+      IF list->car->type NE type_vector.
+        list->car->raise( ` is not a vector in ` && operation ) ##NO_TEXT.
       ENDIF.
 
       DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
@@ -7212,17 +7230,13 @@
 * (vector-fill! vector fill start) procedure
 * (vector-fill! vector fill start end) procedure
 *The vector-fill! procedure stores fill in the elements of vector between start and end.
-      _validate list.
-      DATA(lo_ptr) = list.
+      IF list->car->type NE type_vector.
+        list->car->raise( ` is not a vector in ` && operation ) ##NO_TEXT.
+      ENDIF.
+      DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
+      DATA(lo_fill) = list->cdr->car.
 
-      _validate_vector lo_ptr->car 'vector-fill!'.
-      DATA(lo_vec) = CAST lcl_lisp_vector( lo_ptr->car ).
-
-      lo_ptr = lo_ptr->cdr.
-      _validate: lo_ptr, lo_ptr->car.
-      DATA(lo_fill) = lo_ptr->car.
-
-      lo_ptr = lo_ptr->cdr.
+      DATA(lo_ptr) = list->cdr->cdr.
       _validate lo_ptr.
       IF lo_ptr NE nil.
         _validate_index lo_ptr->car 'vector-fill! start'.
@@ -7254,8 +7268,10 @@
       "   (vector->list vector start end) procedure
 * The vector->list procedure returns a newly allocated list of the objects contained
 * in the elements of vector between start and end. Order is preserved.
-      _validate list.
-      _validate_vector list->car 'vector->list'.
+      IF list->car->type NE type_vector.
+        list->car->raise( ` is not a vector in ` && operation ) ##NO_TEXT.
+      ENDIF.
+
       DATA lv_start TYPE tv_int.
       DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
 
@@ -7285,25 +7301,19 @@
       "   (list->vector list)
 * The list->vector procedure returns a newly created vector initialized
 * to the elements of the list list. Order is preserved.
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
-
       result = lcl_lisp_vector=>from_list( list->car ).
     ENDMETHOD.
 
     METHOD proc_bytevector.
       "(bytevector 1 3 5 1 3 5) => #u8(1 3 5 1 3 5)
       "(bytevector) => #u8()
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
-
       result = lcl_lisp_bytevector=>from_list( list ).
     ENDMETHOD.
 
     METHOD proc_bytevector_length.
-      _validate_bytevector list->car operation.
+      IF list->car->type NE type_bytevector.
+        list->car->raise( ` is not a bytevector in ` && operation ) ##NO_TEXT.
+      ENDIF.
 
       result = CAST lcl_lisp_bytevector( list->car )->length( ).
     ENDMETHOD.
@@ -7313,7 +7323,9 @@
       DATA lo_u8 TYPE REF TO lcl_lisp_bytevector.
       DATA lv_byte TYPE tv_byte.
 
-      _validate_bytevector list->car operation.
+      IF list->car->type NE type_bytevector.
+        list->car->raise( ` is not a bytevector in ` && operation ) ##NO_TEXT.
+      ENDIF.
       lo_u8 ?= list->car.
 
       _validate_index list->cdr->car operation.
@@ -7341,8 +7353,9 @@
       DATA lo_u8 TYPE REF TO lcl_lisp_bytevector.
       DATA lv_index TYPE tv_int.
 
-      _validate: list, list->cdr.
-      _validate_bytevector list->car `bytevector-u8-ref`.
+      IF list->car->type NE type_bytevector.
+        list->car->raise( ` is not a bytevector in ` && operation ) ##NO_TEXT.
+      ENDIF.
       lo_u8 ?= list->car.
 
       DATA(lo_last) = list->cdr.
@@ -7429,8 +7442,9 @@
       DATA lv_start TYPE tv_index.
       DATA lv_end TYPE tv_index.
 
-      _validate list.
-      _validate_bytevector list->car `utf8->string`.
+      IF list->car->type NE type_bytevector.
+        list->car->raise( ` is not a bytevector in ` && operation ) ##NO_TEXT.
+      ENDIF.
       lo_u8 ?= list->car.
 
       lv_start = 0.
@@ -7466,8 +7480,10 @@
       DATA lv_start TYPE tv_index.
       DATA lv_end TYPE tv_index.
 
-      _validate list.
-      _validate_string list->car `string->utf8`.
+      IF list->car->type NE type_string.
+        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+      ENDIF.
+
       lo_string ?= list->car.
 
       lv_start = 0.
@@ -7506,10 +7522,9 @@
       DATA lv_start TYPE tv_index.
       DATA lv_end TYPE tv_index.
 
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
+      IF list->car->type NE type_bytevector.
+        list->car->raise( ` is not a bytevector in ` && operation ) ##NO_TEXT.
       ENDIF.
-      _validate_bytevector list->car `bytevector-copy`.
       lo_u8 ?= list->car.
 
       lv_start = 0.
@@ -7552,8 +7567,9 @@
       DATA lv_length_to TYPE tv_index.
       DATA lo_ptr TYPE REF TO lcl_lisp.
 
-      _validate: list, list->cdr, list->cdr->cdr.
-      _validate_bytevector list->car `bytevector-copy! to`.
+      IF list->car->type NE type_bytevector.
+        list->car->raise( ` is not a bytevector in ` && operation ) ##NO_TEXT.
+      ENDIF.
       lo_u8_to ?= list->car.
       lv_length_to = lines( lo_u8_to->bytes ).
 
@@ -7565,7 +7581,11 @@
       ENDIF.
 
       lo_ptr = lo_ptr->cdr.
-      _validate_bytevector lo_ptr->car `bytevector-copy! from`.
+      IF lo_ptr->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ELSEIF lo_ptr->car->type NE type_bytevector.
+        lo_ptr->car->raise( ` is not a bytevector in bytevector-copy! from` ) ##NO_TEXT.
+      ENDIF.
       lo_u8_from ?= lo_ptr->car.
 
       lv_start = 0.
@@ -7643,8 +7663,6 @@
     ENDMETHOD.
 
     METHOD proc_memv.
-      _validate: list, list->car, list->cdr.
-
       result = false.
 
       DATA(lo_sublist) = list->cdr->car.
@@ -7716,8 +7734,6 @@
 * Assq uses eq? to compare obj with the car fields of the pairs in alist, while
 * assv uses eqv? and assoc uses equal?
     METHOD proc_assq.
-      _validate: list, list->car, list->cdr.
-
       result = false.
 
       CHECK list->cdr NE nil.
@@ -7762,10 +7778,6 @@
     ENDMETHOD.
 
     METHOD proc_assv.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND OR list->cdr IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
-
       result = false.
 
       DATA(lo_sublist) = list->cdr->car.
@@ -7787,10 +7799,6 @@
     METHOD proc_add.
       DATA res TYPE ts_result.
       DATA num TYPE REF TO lcl_lisp_number.
-
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
 
       DATA(iter) = list->new_number_iterator( operation ).
       IF iter->has_next( ).
@@ -7814,10 +7822,6 @@
       DATA res TYPE ts_result.
       DATA num TYPE REF TO lcl_lisp_number.
 
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
-.
       DATA(iter) = list->new_number_iterator( operation ).
       IF iter->has_next( ).
         num ?= iter->next( ).
@@ -7838,9 +7842,6 @@
     METHOD proc_subtract.
       DATA res TYPE ts_result.
       DATA num TYPE REF TO lcl_lisp_number.
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
 
       DATA(iter) = list->new_number_iterator( operation ).
 
@@ -7868,9 +7869,6 @@
 
     METHOD proc_divide.
       DATA num TYPE REF TO lcl_lisp_number.
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
 
       DATA(iter) = list->new_number_iterator( operation ).
       IF iter->has_next( ).
@@ -8103,12 +8101,8 @@
           OR type_complex.
           num ?= cell.
           DATA(state) = num->get_state( operation ).
-          IF num->number_sign( state-real_part ) EQ 0.
-            IF state-type EQ type_complex AND num->number_sign( state-imag_part ) NE 0.
-              result = false.
-            ELSE.
-              result = true.
-            ENDIF.
+          IF state-real_part-sign EQ c_sign_zero  AND state-imag_part-sign EQ c_sign_zero.
+            result = true.
           ENDIF.
 
         WHEN OTHERS.
@@ -8145,11 +8139,11 @@
                 ENDCASE.
               ENDIF.
             when type_complex.
-              IF num->number_sign( state-imag_part ) NE 0.
+              IF NOT num->is_exact_zero( state-imag_part ).
                 num->no_complex( operation ).
               ENDIF.
           ENDCASE.
-          IF num->number_sign( state-real_part ) EQ 1.
+          IF state-real_part-sign EQ c_sign_positive.
             result = true.
           ENDIF.
 
@@ -8187,11 +8181,11 @@
                 ENDCASE.
               ENDIF.
             when type_complex.
-              IF num->number_sign( state-imag_part ) NE 0.
+              IF NOT num->is_exact_zero( state-imag_part ).
                 num->no_complex( operation ).
               ENDIF.
           ENDCASE.
-          IF num->number_sign( state-real_part ) EQ -1.
+          IF state-real_part-sign EQ c_sign_negative.
             result = true.
           ENDIF.
 
@@ -8220,7 +8214,7 @@
           OR type_complex.
           num ?= cell.
           DATA(state) = num->get_state( operation ).
-          IF state-type EQ type_complex AND num->number_sign( state-imag_part ) NE 0.
+          IF state-type EQ type_complex AND NOT num->is_exact_zero( state-imag_part ).
             num->no_complex( operation ).
           ENDIF.
           CASE state-subtype.
@@ -8262,7 +8256,7 @@
           OR type_complex.
           num ?= cell.
           DATA(state) = num->get_state( operation ).
-          IF state-type EQ type_complex AND num->number_sign( state-imag_part ) NE 0.
+          IF state-type EQ type_complex AND NOT num->is_exact_zero( state-imag_part ).
             num->no_complex( operation ).
           ENDIF.
           CASE state-subtype.
@@ -8866,17 +8860,10 @@
 
       CASE list->car->type.
         WHEN type_integer
-          OR type_rational.
+          OR type_rational
+          OR type_real.
           lo_number ?= list->car.
-          IF lo_number->number_sign( lo_number->get_state( operation )-real_part ) GE 0.
-            result = lo_number->zero.
-          ELSE.
-            result = lcl_lisp_new=>real_number( value = c_pi
-                                                iv_exact = abap_true ).
-          ENDIF.
-
-        WHEN type_real.
-          lo_number ?= list->car.
+          DATA(state) = lo_number->get_state( operation ).
           IF lo_number->infnan EQ abap_true.
             CASE lo_number.
               WHEN lcl_lisp_number=>inf.
@@ -8887,11 +8874,16 @@
               WHEN lcl_lisp_number=>nan OR lcl_lisp_number=>neg_nan.
                 result = lo_number.
             ENDCASE.
-          ELSEIF lo_number->number_sign( lo_number->get_state( operation )-real_part ) GE 0.
-            result = lo_number->zero.
           ELSE.
-            result = lcl_lisp_new=>real_number( value = c_pi
-                                                iv_exact = abap_true ).
+            CASE state-real_part-sign.
+              WHEN c_sign_negative.
+                result = lcl_lisp_new=>real_number( value = c_pi
+                                                    iv_exact = abap_true ).
+              WHEN c_sign_zero OR c_sign_positive.
+                result = lo_number->zero.
+              WHEN OTHERS.
+                result = lo_number->nan.
+            ENDCASE.
           ENDIF.
 
         WHEN type_complex.
@@ -10052,13 +10044,12 @@
       DATA lv_char TYPE tv_char.
       DATA lv_text TYPE string.
 
-      _validate: list.
       _validate_integer list->car 'make-string'.
       lv_len = CAST lcl_lisp_integer( list->car )->int.
 
       IF list->cdr NE nil.
         DATA(lo_char) = list->cdr->car.
-        _validate_char lo_char 'make-string'.
+        _validate_char lo_char.
         lv_char = lo_char->value+0(1).
       ENDIF.
 
@@ -10112,8 +10103,9 @@
     ENDMETHOD.
 
     METHOD proc_string_length.
-      _validate: list.
-      _validate_string list->car 'string-length'.
+      IF list->car->type NE type_string.
+        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+      ENDIF.
 
       result = lcl_lisp_new=>integer( strlen( list->car->value ) ).
     ENDMETHOD.
@@ -10125,8 +10117,9 @@
       DATA lv_text TYPE string.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
 
-      _validate list.
-      _validate_string list->car 'string-copy'.
+      IF list->car->type NE type_string.
+        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+      ENDIF.
       _validate list->cdr.
 
 *     lv_text = substring( val = list->car->value off = lv_start len = lv_len ).
@@ -10151,14 +10144,23 @@
       result = lcl_lisp_new=>string( lv_text ).
     ENDMETHOD.
 
+    METHOD proc_string_copy_set.
+      throw( `string-copy! not implemented yet` ).
+    ENDMETHOD.
+
+    METHOD proc_string_fill_set.
+      throw( `string-fill! not implemented yet` ).
+    ENDMETHOD.
+
     METHOD proc_string_ref.
       DATA lv_index TYPE tv_index.
       DATA lv_char TYPE tv_char.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
 
-      _validate: list, list->cdr.
-      _validate_string list->car 'string-ref'.
-      _validate_index list->cdr->car 'string-ref'.
+      IF list->car->type NE type_string.
+        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+      ENDIF.
+      _validate_index list->cdr->car operation.
 
       lv_index = CAST lcl_lisp_integer( list->cdr->car )->int.
 
@@ -10177,10 +10179,11 @@
       DATA lv_len TYPE tv_index.
       DATA lv_text TYPE string.
 
-      _validate: list, list->car, list->cdr, list->cdr->cdr.
-      _validate_string list->car 'string-set!'.
+      IF list->car->type NE type_string.
+        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+      ENDIF.
       _validate_index list->cdr->car 'string-set!'.
-      _validate_char list->cdr->cdr->car 'string-set!'.
+      _validate_char list->cdr->cdr->car.
 
       lo_char ?= list->cdr->cdr->car.
       lv_char = lo_char->value(1).
@@ -10327,7 +10330,6 @@
     METHOD proc_is_textual_port.
       DATA lo_port TYPE REF TO lcl_lisp_port.
 
-      _validate: list, list->car.
       result = false.
       CHECK list->car->type EQ type_port.
       lo_port ?= list->car.
@@ -10338,7 +10340,6 @@
     METHOD proc_is_binary_port.
       DATA lo_port TYPE REF TO lcl_lisp_port.
 
-      _validate: list, list->car.
       result = false.
       CHECK list->car->type EQ type_port.
       lo_port ?= list->car.
@@ -10347,7 +10348,6 @@
     ENDMETHOD.
 
     METHOD proc_is_port.
-      _validate: list, list->car.
       result = false.
       CHECK list->car->type EQ type_port.
       result = true.
@@ -10356,7 +10356,6 @@
     METHOD proc_is_input_port.
       DATA lo_port TYPE REF TO lcl_lisp_port.
 
-      _validate: list, list->car.
       result = false.
       CHECK list->car->type EQ type_port.
       lo_port ?= list->car.
@@ -10367,7 +10366,6 @@
     METHOD proc_is_output_port.
       DATA lo_port TYPE REF TO lcl_lisp_port.
 
-      _validate: list, list->car.
       result = false.
       CHECK list->car->type EQ type_port.
       lo_port ?= list->car.
@@ -10404,8 +10402,8 @@
 
     METHOD proc_close_output_port.
       DATA lo_port TYPE REF TO lcl_lisp_port.
-      _validate list.
-      _validate_port list->car `close-output-port`.
+
+      _validate_port list->car operation.
       lo_port ?= list->car.
       lo_port->close_output( ).
       result = nil.
@@ -10413,8 +10411,8 @@
 
     METHOD proc_close_input_port.
       DATA lo_port TYPE REF TO lcl_lisp_port.
-      _validate list.
-      _validate_port list->car `close-input-port`.
+
+      _validate_port list->car operation.
       lo_port ?= list->car.
       lo_port->close_input( ).
       result = nil.
@@ -10422,8 +10420,8 @@
 
     METHOD proc_close_port.
       DATA lo_port TYPE REF TO lcl_lisp_port.
-      _validate list.
-      _validate_port list->car `close-port`.
+
+      _validate_port list->car operation.
       lo_port ?= list->car.
       lo_port->close( ).
       result = nil.
@@ -10439,8 +10437,10 @@
 
     METHOD proc_open_input_string.
       DATA lo_port TYPE REF TO lcl_lisp_port.
-      _validate list.
-      _validate_string list->car `open-input-string`.
+
+      IF list->car->type NE type_string.
+        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+      ENDIF.
 
       lo_port = lcl_lisp_new=>port( iv_port_type = textual
                                     iv_output = abap_false
@@ -10537,8 +10537,11 @@
 
     METHOD proc_is_char_alphabetic.
       DATA lv_char TYPE tv_char.
-      _validate list.
-      _validate_char list->car `char-alphabetic?`.
+
+      IF list->car->type NE type_char.
+        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+      ENDIF.
+
       result = false.
       lv_char = list->car->value.
       CHECK lv_char NE space AND to_upper( lv_char ) CO c_abcde.
@@ -10548,8 +10551,10 @@
     METHOD proc_is_char_numeric.
       DATA lv_char TYPE tv_char.
 
-      _validate list.
-      _validate_char list->car `char-numeric?`.
+      IF list->car->type NE type_char.
+        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+      ENDIF.
+
       lv_char = list->car->value.
 
       IF unicode_to_digit( lv_char ) BETWEEN 0 AND 9.
@@ -10606,8 +10611,11 @@
       DATA lv_char TYPE tv_char.
       DATA lv_int TYPE tv_int.
 
-      _validate list.
-      _validate_char list->car `digit-value`.
+      IF list->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ELSEIF list->car->type NE type_char.
+        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+      ENDIF.
       lv_char = list->car->value.
 
       lv_int = unicode_to_digit( lv_char ).
@@ -10688,8 +10696,9 @@
     ENDMETHOD.
 
     METHOD proc_is_char_whitespace.
-      _validate list.
-      _validate_char list->car `char-whitespace?`.
+      IF list->car->type NE type_char.
+        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+      ENDIF.
 
       CASE list->car.
         WHEN lcl_lisp=>char_space OR lcl_lisp=>char_tab OR lcl_lisp=>char_linefeed.
@@ -10700,16 +10709,20 @@
     ENDMETHOD.
 
     METHOD proc_is_char_upper_case.
-      _validate list.
-      _validate_char list->car `char-upper-case?`.
+      IF list->car->type NE type_char.
+        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+      ENDIF.
+
       result = false.
       CHECK list->car->value NE to_lower( list->car->value ).
       result = true.
     ENDMETHOD.
 
     METHOD proc_is_char_lower_case.
-      _validate list.
-      _validate_char list->car `char-lower-case?`.
+      IF list->car->type NE type_char.
+        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+      ENDIF.
+
       result = false.
       CHECK list->car->value NE to_upper( list->car->value ).
       result = true.
@@ -10878,8 +10891,10 @@
 *--- End string
 
     METHOD proc_char_to_integer.
-      _validate list.
-      _validate_char list->car `char->integer`.
+      IF list->car->type NE type_char.
+        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+      ENDIF.
+
       result = lcl_lisp_new=>integer( char_to_integer( list->car ) ).
     ENDMETHOD.
 
@@ -10890,7 +10905,6 @@
       DATA lv_int TYPE int2.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
 
-      _validate list.
       _validate_integer list->car `integer->char`.
       lv_int = CAST lcl_lisp_integer( list->car )->int.
 
@@ -10902,14 +10916,18 @@
     ENDMETHOD.
 
     METHOD proc_char_upcase.
-      _validate list.
-      _validate_char list->car `char-upcase`.
+      IF list->car->type NE type_char.
+        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+      ENDIF.
+
       result = lcl_lisp_new=>char( to_upper( list->car->value ) ).
     ENDMETHOD.
 
     METHOD proc_char_downcase.
-      _validate list.
-      _validate_char list->car `char-downcase`.
+      IF list->car->type NE type_char.
+        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+      ENDIF.
+
       result = lcl_lisp_new=>char( to_lower( list->car->value ) ).
     ENDMETHOD.
 
@@ -10923,8 +10941,6 @@
     ENDMETHOD.
 
     METHOD proc_is_error_object.
-      _validate list.
-      _validate list->car.
       throw( 'error-object? is not implemented yet' ).
     ENDMETHOD.
 
@@ -11848,7 +11864,12 @@
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
 
-      _validate_string list->cdr->car `set-pen-color`.
+      IF list->cdr->car IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ELSEIF list->cdr->car->type NE type_string.
+        list->cdr->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+      ENDIF.
+
       DATA lo_color TYPE REF TO lcl_lisp_string.
       lo_color ?= list->cdr->car.
 
@@ -12349,13 +12370,13 @@
       procedure( symbol = 'first'   value   = 'PROC_CAR' min = 1 max = 1 ).
       procedure( symbol = 'rest'    value   = 'PROC_CDR' min = 1 max = 1 ).
 
-      procedure( symbol = 'memq'    value   = 'PROC_MEMQ' ).
-      procedure( symbol = 'memv'    value   = 'PROC_MEMV' ).
-      procedure( symbol = 'member'  value   = 'PROC_MEMBER' ).
+      procedure( symbol = 'memq'    value   = 'PROC_MEMQ' min = 2 max = 2 ).
+      procedure( symbol = 'memv'    value   = 'PROC_MEMV' min = 2 max = 2 ).
+      procedure( symbol = 'member'  value   = 'PROC_MEMBER' min = 2 max = 3 ).
 
-      procedure( symbol = 'assq'    value   = 'PROC_ASSQ' ).
-      procedure( symbol = 'assv'    value   = 'PROC_ASSV' ).
-      procedure( symbol = 'assoc'   value   = 'PROC_ASSOC' ).
+      procedure( symbol = 'assq'    value   = 'PROC_ASSQ' min = 2 max = 2 ).
+      procedure( symbol = 'assv'    value   = 'PROC_ASSV' min = 2 max = 2 ).
+      procedure( symbol = 'assoc'   value   = 'PROC_ASSOC' min = 2 max = 3 ).
 
       procedure( symbol = 'car'     value   = 'PROC_CAR' min = 1 max = 1 ).
       procedure( symbol = 'cdr'     value   = 'PROC_CDR' min = 1 max = 1 ).
@@ -12404,10 +12425,11 @@
 
       procedure( symbol = c_eval_append  value   = 'PROC_APPEND' ).
       procedure( symbol = 'make-list'    value   = 'PROC_MAKE_LIST' min = 1 max = 2 ).
-      procedure( symbol = 'list-tail'    value   = 'PROC_LIST_TAIL' ).
-      procedure( symbol = 'list-ref'     value   = 'PROC_LIST_REF' ).
+      procedure( symbol = 'list-tail'    value   = 'PROC_LIST_TAIL' min = 2 max = 2 ).
+      procedure( symbol = 'list-ref'     value   = 'PROC_LIST_REF' min = 2 max = 2 ).
+      procedure( symbol = 'list-set!'    value   = 'PROC_LIST_SET' min = 3 max = 3 ).
       procedure( symbol = 'list-copy'    value   = 'PROC_LIST_COPY' ).
-      procedure( symbol = 'list->vector' value   = 'PROC_LIST_TO_VECTOR' ).
+      procedure( symbol = 'list->vector' value   = 'PROC_LIST_TO_VECTOR' min = 1 max = 1 ).
       procedure( symbol = 'iota'         value   = 'PROC_IOTA' ).
     ENDMETHOD.
 
@@ -12515,10 +12537,12 @@
       procedure( symbol = 'string->symbol' value = 'PROC_STRING_TO_SYMBOL' ).
       procedure( symbol = 'string-append'  value = 'PROC_STRING_APPEND' ).
       procedure( symbol = 'string-length'  value = 'PROC_STRING_LENGTH' min = 1 max = 1 ).
-      procedure( symbol = 'string-copy'    value = 'PROC_STRING_COPY' ).
-      procedure( symbol = 'substring'      value = 'PROC_STRING_COPY' ).
+      procedure( symbol = 'string-copy'    value = 'PROC_STRING_COPY' min = 1 max = 3 ).
+      procedure( symbol = 'string-copy!'   value = 'PROC_STRING_COPY_SET' min = 3 max = 5 ).
+      procedure( symbol = 'substring'      value = 'PROC_STRING_COPY' min = 3 max = 3 ).
       procedure( symbol = 'string-ref'     value = 'PROC_STRING_REF' min = 2 max = 2 ).
       procedure( symbol = 'string-set!'    value = 'PROC_STRING_SET' min = 3 max = 3 ).
+      procedure( symbol = 'string-fill!'   value = 'PROC_STRING_FILL_SET' min = 2 max = 4 ).
 
       procedure( symbol = 'string=?'     value   = 'PROC_STRING_LIST_IS_EQ' min = 2 ).
       procedure( symbol = 'string<?'     value   = 'PROC_STRING_LIST_IS_LT' min = 2 ).
@@ -12602,7 +12626,7 @@
       procedure( symbol = 'vector'        value = 'PROC_VECTOR' ).
       procedure( symbol = 'vector-length' value = 'PROC_VECTOR_LENGTH' min = 1 max = 1 ).
       procedure( symbol = 'vector-set!'   value = 'PROC_VECTOR_SET' min = 3 max = 3 ).
-      procedure( symbol = 'vector-fill!'  value = 'PROC_VECTOR_FILL' ).
+      procedure( symbol = 'vector-fill!'  value = 'PROC_VECTOR_FILL' min = 2 max = 4 ).
       procedure( symbol = 'vector-ref'    value = 'PROC_VECTOR_REF' min = 2 max = 2 ).
       procedure( symbol = 'vector->list'  value = 'PROC_VECTOR_TO_LIST' min = 1 max = 3 ).
       procedure( symbol = 'make-vector'   value = 'PROC_MAKE_VECTOR' min = 1 max = 2 ).
@@ -12708,6 +12732,7 @@
 *     Errors
       procedure( symbol = 'raise'  value = 'PROC_RAISE' ).
       procedure( symbol = 'error'  value = 'PROC_ERROR' ).
+      procedure( symbol = 'error-object?'  value = 'PROC_IS_ERROR_OBJECT' min = 1 max = 1 ).
 
 *     Ports
       procedure( symbol = 'current-input-port'  value = 'PROC_CURRENT_INPUT_PORT' ).
@@ -12725,10 +12750,10 @@
       procedure( symbol = 'input-port-open?'    value = 'PROC_IS_OPEN_INPUT_PORT'  min = 1 max = 1 ).
       procedure( symbol = 'output-port-open?'   value = 'PROC_IS_OPEN_OUTPUT_PORT'  min = 1 max = 1 ).
 
-      procedure( symbol = 'open-output-string'  value = 'PROC_OPEN_OUTPUT_STRING' ).
-      procedure( symbol = 'open-input-string'   value = 'PROC_OPEN_INPUT_STRING' ).
-      procedure( symbol = 'get-output-string'   value = 'PROC_GET_OUTPUT_STRING' ).
-      procedure( symbol = 'eof-object'          value = 'PROC_EOF_OBJECT' ).
+      procedure( symbol = 'open-output-string'  value = 'PROC_OPEN_OUTPUT_STRING' min = -1 ).
+      procedure( symbol = 'open-input-string'   value = 'PROC_OPEN_INPUT_STRING' min = 1 max = 1 ).
+      procedure( symbol = 'get-output-string'   value = 'PROC_GET_OUTPUT_STRING' min = 1 max = 1 ).
+      procedure( symbol = 'eof-object'          value = 'PROC_EOF_OBJECT' min = -1 ).
       procedure( symbol = 'eof-object?'         value = 'PROC_IS_EOF_OBJECT' min = 1 max = 1 ).
 
       load_chars( ).
@@ -14521,23 +14546,49 @@
 
     ENDMETHOD.
 
+    METHOD to_sign.
+      IF value EQ 0.
+        rv_sign = c_sign_zero.
+      ELSEIF value LT 0.
+        rv_sign = c_sign_negative.
+      ELSE.
+        rv_sign = c_sign_positive.
+      ENDIF.
+    ENDMETHOD.
+
     METHOD get_number_info.
       rs_info = VALUE #( subtype = me->type
                          exact = me->exact ).
       CASE type.
         WHEN type_integer.
           rs_info-int = CAST lcl_lisp_integer( me )->int.
+          rs_info-sign = to_sign( sign( rs_info-int ) ).
 
         WHEN type_rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( me ).
           rs_info-nummer = lo_rat->int.
           rs_info-denom = lo_rat->denominator.
+          rs_info-sign = to_sign( sign( rs_info-nummer ) ).
 
         WHEN type_real.
           DATA(lo_real) = CAST lcl_lisp_real( me ).
           rs_info-ref = lo_real.
           rs_info-infnan = lo_real->infnan.
           rs_info-real = lo_real->real.
+          IF rs_info-infnan EQ abap_true.
+            CASE rs_info-ref.
+              WHEN inf.
+                rs_info-sign = c_sign_positive.
+              WHEN neg_inf.
+                rs_info-sign = c_sign_negative.
+              WHEN neg_nan.
+                rs_info-sign = c_sign_neg_nan.
+              WHEN OTHERS.
+                rs_info-sign = c_sign_pos_nan.
+            ENDCASE.
+          ELSE.
+            rs_info-sign = to_sign( sign( rs_info-real ) ).
+          ENDIF.
 
         WHEN type_complex.
           no_complex( operation ).
@@ -14558,8 +14609,10 @@
                                real_part-subtype = type_integer
                                real_part-denom = 1
                                real_part-exact = abap_true
+                               real_part-sign = c_sign_zero
                                imag_part-subtype = type_integer
                                imag_part-exact = abap_true
+                               imag_part-sign = c_sign_zero
                                operation = operation ).
       CASE type.
         WHEN type_real
@@ -14801,8 +14854,12 @@
       DATA lv_gcd TYPE tv_int.
 
       number = self.
-      IF other-exact EQ abap_false.
-        number-exact = abap_false.
+      IF other-exact NE self-exact.
+        IF is_exact_zero( other ) OR is_exact_zero( self ).
+          number-exact = abap_true.
+        ELSE.
+          number-exact = abap_false.
+        ENDIF.
       ENDIF.
 
       CASE other-subtype.
@@ -14811,9 +14868,6 @@
             WHEN type_integer.  " Integer * Integer
               TRY.
                   number-int = self-int * other-int.
-                  IF number-int EQ 0 AND ( other-exact EQ abap_true OR self-exact EQ abap_true ).
-                    number-exact = abap_true.
-                  ENDIF.
                 CATCH cx_sy_arithmetic_overflow.
                   number-real = self-int * other-int.
                   number-subtype = type_real.
@@ -14827,9 +14881,6 @@
                                                    d = number-denom ).
                   number-nummer = number-nummer DIV lv_gcd.
                   number-denom = number-denom DIV lv_gcd.
-                  IF number-nummer EQ 0 AND ( other-exact EQ abap_true OR self-exact EQ abap_true ).
-                    number-exact = abap_true.
-                  ENDIF.
                 CATCH cx_sy_arithmetic_overflow.
                   number-real = self-nummer / self-denom *  other-int.
                   number-subtype = type_real.
@@ -14839,16 +14890,15 @@
             WHEN type_real.     " Real * Integer
               IF self-infnan EQ abap_false.
                 number-real = self-real * other-int.
-                IF other-int EQ 0 AND other-exact EQ abap_true.
-                  number-exact = abap_true.
-                ENDIF.
               ELSE.
                 IF other-int EQ 0.
                   CASE self-ref.
                     WHEN inf.                " (* +Inf.0 0)
                       number-ref = nan.
+                      number-exact = abap_false.
                     WHEN neg_inf.            " (* -Inf.0 0)
                       number-ref = neg_nan.
+                      number-exact = abap_false.
                     "WHEN OTHERS.            " (* +nan.0 0)  " (* -nan.0 0)
                   ENDCASE.
                 ELSEIF other-int LT 0.
@@ -14871,9 +14921,6 @@
                                                     d = number-denom ).
                   number-nummer = number-nummer DIV lv_gcd.
                   number-denom = number-denom DIV lv_gcd.
-                  IF number-nummer = 0 AND ( other-exact EQ abap_true OR self-exact EQ abap_true ).
-                    number-exact = abap_true.
-                  ENDIF.
                 CATCH cx_sy_arithmetic_overflow.
                   number-real = self-int *  other-nummer / other-denom.
                   number-subtype = type_real.
@@ -14888,9 +14935,6 @@
                                                     d = number-denom ).
                   number-nummer = number-nummer DIV lv_gcd.
                   number-denom = number-denom DIV lv_gcd.
-                  IF number-nummer = 0 AND ( other-exact EQ abap_true OR self-exact EQ abap_true ).
-                    number-exact = abap_true.
-                  ENDIF.
                 CATCH cx_sy_arithmetic_overflow.
                   number-real = ( self-nummer / self-denom ) * other-nummer / other-denom.
                   number-subtype = type_real.
@@ -14904,8 +14948,10 @@
                 " Sonderfall (* +Inf.0 0/1)
                 IF other-nummer EQ 0 AND ( self-ref = inf OR self-ref EQ neg_inf ).
                   number-ref = nan.
+                  number-exact = abap_false.
                 ELSEIF other-nummer LT 0.
                   number-ref = self-ref->negative_infnan( ).
+                  number-exact = abap_false.
                 ENDIF.
               ENDIF.
 
@@ -14921,8 +14967,10 @@
                 IF self-int EQ 0.
                   IF other-ref = inf.
                     number-ref = nan.
+                    number-exact = abap_false.
                   ELSEIF other-ref = neg_inf.
                     number-ref = neg_nan.
+                    number-exact = abap_false.
                   ENDIF.
                 ELSEIF self-int LT 0.
                   number-ref = other-ref->negative_infnan( ).
@@ -14937,8 +14985,10 @@
                 IF self-nummer EQ 0.     " should not happen, as the rational would be coerced to an integer
                   IF other-ref = inf.
                     number-ref = nan.
+                    number-exact = abap_false.
                   ELSEIF other-ref = neg_inf.
                     number-ref = neg_nan.
+                    number-exact = abap_false.
                   ENDIF.
                 ELSEIF self-nummer LT 0.
                   number-ref = other-ref->negative_infnan( ).
@@ -14958,14 +15008,18 @@
                      WHEN inf OR nan.
                        IF other-ref EQ neg_zero.   " (* +Inf.0 -0.0)  (* +NaN.0 -0.0)
                          number-ref = neg_nan.
+                         number-exact = abap_false.
                        ELSE.
                          number-ref = nan.         " (* +Inf.0 +0.0)  (* +NaN.0 +0.0)
+                         number-exact = abap_false.
                        ENDIF.
                      WHEN neg_inf OR neg_nan.
                        IF other-ref EQ neg_zero.   " (* -Inf.0 -0.0)  (* -NaN.0 -0.0)
                          number-ref = nan.
+                         number-exact = abap_false.
                        ELSE.
                          number-ref = neg_nan.     " (* -Inf.0 +0.0)  (* -NaN.0 +0.0)
+                         number-exact = abap_false.
                        ENDIF.
                      WHEN OTHERS.
                        raise( `Invalid InfNan in ` && operation ).
@@ -14981,14 +15035,18 @@
                      WHEN inf OR nan.
                        IF self-ref EQ neg_zero.      " (* -0.0  +Inf.0 )  (* -0.0 +NaN.0 )
                          number-ref = neg_nan.
+                         number-exact = abap_false.
                        ELSE.
                          number-ref = nan.           " (* +0.0  +Inf.0 )  (* +0.0 +NaN.0 )
+                         number-exact = abap_false.
                        ENDIF.
                      WHEN neg_inf OR neg_nan.
                        IF self-ref EQ neg_zero.      " (* -0.0  -Inf.0 )  (* -0.0 -NaN.0 )
                          number-ref = nan.
+                         number-exact = abap_false.
                        ELSE.
                          number-ref = neg_nan.       " (* +0.0  -Inf.0 )  (* +0.0 -NaN.0 )
+                         number-exact = abap_false.
                        ENDIF.
                      WHEN OTHERS.
                        raise( `Invalid InfNan in ` && operation ).
@@ -15025,7 +15083,6 @@
         WHEN OTHERS.
           raise_nan( operation ).  "assert violation - Real part of other is Not a Number
       ENDCASE.
-
     ENDMETHOD.
 
     METHOD product.
@@ -15674,35 +15731,7 @@
     ENDMETHOD.
 
     METHOD is_exact_zero.
-      IF is_number-exact EQ abap_true AND number_sign( is_number ) EQ 0.
-        null = abap_true.
-      ELSE.
-        null = abap_false.
-      ENDIF.
-    ENDMETHOD.
-
-    METHOD number_sign.
-      CASE is_number-subtype.
-        WHEN type_integer.
-          rv_sign = sign( is_number-int ).
-
-        WHEN type_rational.
-          rv_sign = sign( is_number-nummer ).
-
-        WHEN type_real.
-          IF is_number-infnan EQ abap_false.
-            rv_sign = sign( is_number-real ).
-          ELSE.
-            CASE is_number-ref.
-              WHEN inf OR nan.
-                rv_sign = 1.
-              WHEN OTHERS.
-                rv_sign = -1.
-            ENDCASE.
-          ENDIF.
-        WHEN OTHERS.
-          throw( `invalid number type in sign?` ).
-      ENDCASE.
+      null = xsdbool( is_number-exact EQ abap_true AND is_number-sign EQ c_sign_zero ).
     ENDMETHOD.
 
     METHOD negative_infnan.
@@ -15739,7 +15768,7 @@
           OR type_rational
           OR type_real.      " real = complex ?
           " returns false if imaginary part of "other" is not 0
-          IF other-type EQ type_complex AND number_sign( other-imag_part ) NE 0.
+          IF other-type EQ type_complex AND other-imag_part-sign NE c_sign_zero.
             equal = abap_false.
           ENDIF.
 
@@ -15750,7 +15779,7 @@
               OR type_rational
               OR type_real.     "  complex = real ?
               " returns false if imaginary part of "me" is not 0
-              IF number_sign( self-imag_part ) NE 0.
+              IF self-imag_part-sign NE c_sign_zero.
                 equal = abap_false.
               ENDIF.
 
@@ -15927,7 +15956,7 @@
             str = lv_real.
             str = condense( str ).
 
-            IF strlen( str ) GT 5.    " arbitrary cut-off limit for display
+            IF strlen( str ) GT c_display_rational_digits.
               str = |#i{ lo_rat->int }/{ lo_rat->denominator }|.
             ELSEIF frac( lv_real ) EQ 0 AND str NA c_pattern_inexact.
               str &&= `.0`.
