@@ -53,9 +53,6 @@ ENDCLASS.
 
 CLASS lcl_turtle_convert DEFINITION.
   PUBLIC SECTION.
-    CONSTANTS pi TYPE tv_real
-      VALUE '3.1415926535897932384626433832795'.
-
     CLASS-METHODS degrees_to_radians
       IMPORTING degrees        TYPE tv_real
       RETURNING VALUE(radians) TYPE tv_real.
@@ -68,11 +65,11 @@ ENDCLASS.
 CLASS lcl_turtle_convert IMPLEMENTATION.
 
   METHOD degrees_to_radians.
-    radians = degrees * pi / 180.
+    radians = degrees * c_pi / 180.
   ENDMETHOD.
 
   METHOD radians_to_degrees.
-    degrees = radians * 180 / pi.
+    degrees = radians * 180 / c_pi.
   ENDMETHOD.
 ENDCLASS.
 

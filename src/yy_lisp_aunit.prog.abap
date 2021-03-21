@@ -157,7 +157,7 @@
 
      METHOD one_parameter.
        scheme( code = code
-               expected = |Eval: { operation } only takes one parameter| ).
+               expected = |Eval: { operation } expects only one argument| ).
      ENDMETHOD.
 
      METHOD parameter_mismatch.
@@ -3305,7 +3305,7 @@
        one_parameter( code =  '(asinh 0 3)'
                       operation = 'asinh' ).
        code_test_f( code =  '(asinh 0)'
-                 expected = 0 ).
+                    expected = 0 ).
      ENDMETHOD.                    "math_asinh
 
      METHOD math_acosh.
@@ -3663,8 +3663,8 @@
                expected = '0' ).
        scheme( code =  '(begin (define a (random 1)) (or (= a 0) (= a 1)) )'
                expected = '#t' ).
-       scheme( code =  '(random -5 4)'
-               expected = 'Eval: Only one parameter expected in random' ).
+       one_parameter( code =  '(random -5 4)'
+                      operation = 'random' ).
      ENDMETHOD.
 
      METHOD math_random_invalid.
@@ -4808,7 +4808,7 @@
 
      METHOD vector_ref_error.
        scheme( code = |(vector-ref '#(1 1 2 3 5 8 13 21) -1)|
-               expected = 'Eval: -1 must be non-negative in vector-ref' ).
+               expected = 'Eval: -1 must be a non-negative integer in vector-ref' ).
        scheme( code = |(vector-ref '#(1 1 2) 5)|
                expected = 'Eval: vector-ref: out-of-bound position 5' ).
        scheme( code = |(vector-ref '#( ) 1)|
@@ -6676,7 +6676,7 @@
 
      METHOD turtle_turn_radian.
        new_turtle( ).
-       scheme( code = |(turn/radians 3.1415926535897932384626433832795 t) |
+       scheme( code = |(turn/radians { c_pi } t) |
                expected = c_abap_turtle ).
        scheme( code = |(turtle-state t)|
                expected = '(#(300 200 270.0))' ).

@@ -229,7 +229,10 @@
 
   CLASS lcl_lisp_iterator DEFINITION DEFERRED.
   CLASS lcl_lisp_new DEFINITION DEFERRED.
+
+  CLASS lcl_lisp_number_iterator DEFINITION DEFERRED.
   CLASS lcl_lisp_number DEFINITION DEFERRED.
+
   CLASS lcl_lisp_interpreter DEFINITION DEFERRED.
 
   TYPES: BEGIN OF ts_number,
@@ -384,9 +387,20 @@
   END-OF-DEFINITION.
 
   DEFINE _validate_index.
-    _validate_integer &1 &2.
-    IF CAST lcl_lisp_integer( &1 )->int LT 0.
-      &1->raise( ` must be non-negative in ` && &2 ) ##NO_TEXT.
+    IF &1 IS NOT BOUND.
+      lcl_lisp=>incorrect_input( operation ).
+    ELSEIF &1->type NE type_integer OR CAST lcl_lisp_integer( &1 )->int LT 0.
+      &1->raise( ` must be a non-negative integer in ` && &2 ) ##NO_TEXT.
+    ENDIF.
+  END-OF-DEFINITION.
+
+  DEFINE _validate_byte.
+    IF &1 IS NOT BOUND.
+      lcl_lisp=>incorrect_input( operation ).
+    ELSEIF &1->type NE type_integer.
+      &1->raise( ` is not an integer in ` && &2 ) ##NO_TEXT.
+    ELSEIF CAST lcl_lisp_integer( &1 )->exact EQ abap_false OR NOT ( CAST lcl_lisp_integer( &1 )->int BETWEEN 0 AND 256 ).
+      &1->raise( ` must be exact, non-negative and less than 256 in ` && operation ) ##NO_TEXT.
     ENDIF.
   END-OF-DEFINITION.
 
@@ -550,19 +564,16 @@
     carry = n1 / n2.    " first convert to float, or 3 = trunc( 5 / 2 ) coercion happens with ABAP rules
   END-OF-DEFINITION.
 
-  DEFINE _data_local_numeric.
-    DATA lo_rat TYPE REF TO lcl_lisp_rational.
-    DATA lo_int TYPE REF TO lcl_lisp_integer.
-    DATA lo_real TYPE REF TO lcl_lisp_real.
-    DATA lo_z TYPE REF TO lcl_lisp_complex.
-  END-OF-DEFINITION.
-
   DEFINE _data_local_numeric_cell.
     DATA cell TYPE REF TO lcl_lisp.
     DATA lo_head TYPE REF TO lcl_lisp.
     DATA cell_exact TYPE tv_flag.
     DATA lv_exact TYPE tv_flag.
-    _data_local_numeric.
+
+    DATA lo_rat TYPE REF TO lcl_lisp_rational.
+    DATA lo_int TYPE REF TO lcl_lisp_integer.
+    DATA lo_real TYPE REF TO lcl_lisp_real.
+    DATA lo_z TYPE REF TO lcl_lisp_complex.
   END-OF-DEFINITION.
 
   DEFINE _next_to_compare.
@@ -601,9 +612,6 @@
     DATA lo_head TYPE REF TO lcl_lisp.
 
     result = false.
-    IF list IS NOT BOUND OR list->cdr IS NOT BOUND OR list->cdr->type NE type_pair.
-      lcl_lisp=>incorrect_input( operation ).
-    ENDIF.
 
     DATA(lo_ptr) = list.
     _next_to_compare.
@@ -690,48 +698,29 @@
     result = true.
   END-OF-DEFINITION.
 
-  DEFINE _assert_one_param.
-    IF list->cdr NE nil.
-      throw( |Only one parameter expected in { operation }| ).
-    ENDIF.
-  END-OF-DEFINITION.
-
-  DEFINE _assert_last_param.
-    IF &1->cdr NE nil.
-      &1->raise( | Parameter mismatch| ).
-    ENDIF.
-  END-OF-DEFINITION.
-
 * Macro that implements the logic for call of ABAP math statements
   DEFINE _math_to_int.
-    DATA carry TYPE tv_real.
-    _data_local_numeric_cell.
+    DATA lo_number TYPE REF TO lcl_lisp_number.
 
-    result = nil.
-    IF list IS NOT BOUND OR list->car IS NOT BOUND.
-      lcl_lisp=>incorrect_input( operation ).
-    ENDIF.
     CASE list->car->type.
       WHEN type_integer
         OR type_real
         OR type_rational
         OR type_complex.
+        lo_number ?= list->car.
       WHEN OTHERS.
         list->car->raise_nan( operation ) ##NO_TEXT.
     ENDCASE.
-    IF CAST lcl_lisp_number( list->car )->infnan EQ abap_true.
+    IF lo_number->infnan EQ abap_true.
       result = list->car.
-      RETURN.
+    ELSE.
+      TRY.
+          result = lcl_lisp_new=>integer( value = &1( lo_number->to_real( operation ) )
+                                          iv_exact = lo_number->exact ).
+        CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
+          throw( lx_error->get_text( ) ).
+      ENDTRY.
     ENDIF.
-    TRY.
-        _get_real carry list->car.
-        _assert_one_param.
-
-        result = lcl_lisp_new=>integer( value = &1( carry )
-                                        iv_exact = cell_exact ).
-      CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
-        throw( lx_error->get_text( ) ).
-    ENDTRY.
   END-OF-DEFINITION.
 
   DEFINE _trigonometric_header.
@@ -746,12 +735,7 @@
     DATA res TYPE ts_result.
 
     result = nil.
-    IF list IS NOT BOUND OR list->car IS NOT BOUND.
-      lcl_lisp=>incorrect_input( operation ).
-    ENDIF.
     TRY.
-        _assert_one_param.
-
         cell = list->car.
         _values_get_next cell.
 
@@ -768,10 +752,10 @@
         DATA(number) =  lo_number->get_state( operation ).
         cell_exact = lo_number->exact.
 
-        x = lcl_lisp_number=>get_real( self = number-real_part
-                                       operation = operation ).
-        y = lcl_lisp_number=>get_real( self = number-imag_part
-                                       operation = operation ).
+        x = lo_number->get_real( self = number-real_part
+                                 operation = operation ).
+        y = lo_number->get_real( self = number-imag_part
+                                 operation = operation ).
         a = x.
         b = y.
   END-OF-DEFINITION.
@@ -835,7 +819,7 @@
                       RAISING   lcx_lisp_exception.
 
       METHODS new_number_iterator IMPORTING iv_operation TYPE string OPTIONAL
-                                  RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_iterator
+                                  RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_number_iterator
                                   RAISING   lcx_lisp_exception.
 
       METHODS new_iterator RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_iterator
@@ -1014,8 +998,7 @@
       METHODS get_number_info IMPORTING operation TYPE string
                               RETURNING VALUE(rs_info) TYPE ts_number
                               RAISING   lcx_lisp_exception.
-      METHODS to_sign IMPORTING value TYPE numeric
-                      RETURNING VALUE(rv_sign) TYPE tv_sign.
+      CLASS-METHODS set_sign CHANGING cs_info TYPE ts_number.
 
       METHODS get_state IMPORTING operation TYPE string OPTIONAL
                         RETURNING VALUE(state) TYPE ts_result
@@ -1033,6 +1016,10 @@
       METHODS add IMPORTING other         TYPE REF TO lcl_lisp_number
                   RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
                   RAISING   lcx_lisp_exception.
+
+      METHODS divide IMPORTING other        TYPE REF TO lcl_lisp_number
+                     RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
+                     RAISING   lcx_lisp_exception.
 
       METHODS substract IMPORTING other        TYPE REF TO lcl_lisp_number
                         RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
@@ -1073,19 +1060,11 @@
                       RETURNING VALUE(result) TYPE ts_result
                       RAISING   lcx_lisp_exception.
 
-      METHODS multiply IMPORTING other         TYPE REF TO lcl_lisp_number
-                       RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
-                       RAISING   lcx_lisp_exception.
-
       METHODS quotient IMPORTING numerator TYPE ts_result
                                  denominator TYPE ts_result
                                  operation TYPE string
                        RETURNING VALUE(result) TYPE ts_result
                        RAISING   lcx_lisp_exception.
-
-      METHODS divide IMPORTING other        TYPE REF TO lcl_lisp_number
-                     RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
-                     RAISING   lcx_lisp_exception.
 
       CLASS-METHODS complex_log IMPORTING x           TYPE tv_real
                                           y           TYPE tv_real
@@ -1430,16 +1409,23 @@
       ENDDO.
 
       DO arity_max - arity_min TIMES.
-        IF lo_ptr IS NOT BOUND OR lo_ptr->car IS NOT BOUND.
-          RETURN.
-        ENDIF.
-        lo_ptr = lo_ptr->cdr.
+        CASE lo_ptr->type.
+          WHEN type_null.
+            RETURN.
+          WHEN type_pair.
+            IF lo_ptr->car IS BOUND.
+              lo_ptr = lo_ptr->cdr.
+              CONTINUE.
+            ENDIF.
+          WHEN OTHERS.
+        ENDCASE.
+        lcl_lisp=>incorrect_input( operation ).
       ENDDO.
 
       IF arity_max GT 0 AND lo_ptr NE nil.
         CASE arity_max.
           WHEN 1.
-            lcl_lisp=>throw( operation && ` only takes one parameter` ).
+            lcl_lisp=>throw( operation && ` expects only one argument` ).
           WHEN OTHERS.
             lcl_lisp=>throw( `too many arguments in ` && operation ).
         ENDCASE.
@@ -1617,15 +1603,15 @@
   INTERFACE lif_binary_input_port.
     METHODS read_xstring IMPORTING k TYPE tv_index
                          RETURNING VALUE(rv_input) TYPE xstring.
-    METHODS peek_u8 RETURNING VALUE(rv_char) TYPE tv_char.
-    METHODS read_u8 RETURNING VALUE(rv_char) TYPE tv_char.
+    METHODS peek_u8 RETURNING VALUE(rv_int) TYPE tv_int.
+    METHODS read_u8 RETURNING VALUE(rv_int) TYPE tv_int.
     METHODS is_u8_ready RETURNING VALUE(rv_flag) TYPE tv_flag.
     METHODS put IMPORTING iv_bin TYPE xstring.
   ENDINTERFACE.
 
   INTERFACE lif_binary_output_port.
     METHODS write_xstring IMPORTING iv_xstring TYPE xstring.
-    METHODS write_u8 IMPORTING elem TYPE REF TO lcl_lisp_char.
+    METHODS write_u8 IMPORTING elem TYPE REF TO lcl_lisp_integer.
   ENDINTERFACE.
 
   CLASS lcl_input_port_to_stream DEFINITION.
@@ -1726,7 +1712,7 @@
       DATA last_xlen TYPE tv_index.
       DATA last_xinput TYPE xstring.  " Binary buffer
 
-      METHODS xblock_read RETURNING VALUE(rv_char) TYPE tv_char.
+      METHODS xblock_read RETURNING VALUE(rv_int) TYPE tv_int.
 
   ENDCLASS.
 
@@ -2123,7 +2109,7 @@
         last_xinput = read_stream( ).
         last_xlen = strlen( last_input ).
       ENDIF.
-      rv_char = last_input+0(1).
+      rv_int = last_input+0(1).
     ENDMETHOD.
 
     METHOD lif_input_port~peek_char.
@@ -2173,9 +2159,9 @@
       CHECK input EQ abap_true
         AND port_type EQ binary.
       IF last_xindex < last_xlen.
-        rv_char = last_xinput+last_xindex(1).
+        rv_int = last_xinput+last_xindex(1).
       ELSE.
-        rv_char = xblock_read( ).
+        rv_int = xblock_read( ).
       ENDIF.
     ENDMETHOD.
 
@@ -2191,9 +2177,9 @@
       CHECK input EQ abap_true
         AND port_type EQ binary.
       IF last_xindex < last_xlen.
-        rv_char = last_xinput+last_xindex(1).
+        rv_int = last_xinput+last_xindex(1).
       ELSE.
-        rv_char = xblock_read( ).
+        rv_int = xblock_read( ).
       ENDIF.
       ADD 1 TO last_xindex.
     ENDMETHOD.
@@ -2209,6 +2195,9 @@
         throw( `Error: Output on closed binary port` ).
       ENDIF.
       CHECK port_type EQ binary.
+      IF elem->exact EQ abap_false OR NOT ( elem->int BETWEEN 0 AND 256 ).
+        elem->raise( ` must be exact non-negative and less than 256 in write-u8` ) ##NO_TEXT.
+      ENDIF.
       throw( `write u8 not implemented yet` ).
     ENDMETHOD.
 
@@ -2324,6 +2313,14 @@
   CLASS lcl_lisp_number_iterator DEFINITION INHERITING FROM lcl_lisp_iterator FRIENDS lcl_lisp.
     PUBLIC SECTION.
       METHODS next REDEFINITION.
+      METHODS sum RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
+                  RAISING cx_dynamic_check.
+      METHODS diff RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
+                   RAISING cx_dynamic_check.
+      METHODS product RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
+                      RAISING cx_dynamic_check.
+      METHODS quotient RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
+                       RAISING cx_dynamic_check.
     PROTECTED SECTION.
       DATA operation TYPE string.
 
@@ -3059,11 +3056,11 @@
                                     IMPORTING power = lv_power
                                               value = lv_int ).
         IF lv_power NE 1.
-          throw( `Radix not supported in exponent` ).
           " convert the exponential part to decimal
           lv_real = lv_int * lv_power.
           uInt = lv_real.
           condense uInt.
+          throw( `Radix not supported in exponent` ).
         ENDIF.
         str &&= uInt.
       ENDIF.
@@ -3273,7 +3270,6 @@
             RETURN.
 
           WHEN OTHERS.
-            "TRY.
             IF mi_stream->state-char CA mv_delimiters.
               RETURN.
             ELSEIF mi_stream->state-char CA c_explicit_sign.
@@ -3282,9 +3278,7 @@
             ELSE. " starts with a number, but is an identifier
               lcl_lisp=>throw_no_number( read_atom( ) ).
             ENDIF.
-            "CATCH lcx_lisp_exception cx_sy_conversion_no_number.
-            "  RETURN.  " performance: can we get here without exception?
-            "ENDTRY.
+
             IF zimag->type EQ type_complex.
               lo_z ?= zimag.
               IF lo_z->zreal NE lcl_lisp_number=>zero.
@@ -6371,9 +6365,25 @@
     ENDMETHOD.
 
     METHOD write_u8.
-      _optional_binary_port io_arg output `write-u8`.
-      _validate_char io_elem.
-      li_port->write_u8( CAST lcl_lisp_char( io_elem ) ).
+      DATA li_port TYPE REF TO lif_binary_output_port.
+      TRY.
+          IF io_arg->type EQ type_pair.
+            _validate_port io_arg->car `write-u8`.
+            li_port ?= io_arg->car.
+          ELSE.
+            li_port ?= proc_current_output_port( nil ).
+          ENDIF.
+      CATCH cx_root INTO DATA(lx_error).
+        throw( lx_error->get_text( ) ).
+      ENDTRY.
+
+      IF io_elem IS NOT BOUND.
+        lcl_lisp=>incorrect_input( operation ).
+      ELSEIF io_elem->type NE type_integer.
+        io_elem->raise( ` is not a byte in ` && operation ) ##NO_TEXT.
+      ELSE.
+        li_port->write_u8( CAST lcl_lisp_integer( io_elem ) ).
+      ENDIF.
       result = io_elem.
     ENDMETHOD.
 
@@ -6409,7 +6419,7 @@
     METHOD read_u8.
       _optional_binary_port io_arg input `read-u8`.
 
-      result = lcl_lisp_new=>char( li_port->read_u8( ) ).
+      result = lcl_lisp_new=>integer( li_port->read_u8( ) ).
     ENDMETHOD.
 
     METHOD read_line.
@@ -6760,12 +6770,11 @@
     ENDMETHOD.
 
     METHOD proc_cdr.
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
-
       DATA(lo_arg) = list->car.
-      _validate_pair `cdr: `.
+      IF lo_arg->type NE type_pair.
+        lo_arg->raise( context = `cdr: `
+                       message = ` is not a pair` ).
+      ENDIF.
       result = lo_arg->cdr.
     ENDMETHOD.                    "proc_cdr
 
@@ -6973,11 +6982,6 @@
     ENDMETHOD.
 
     METHOD proc_length.
-      _validate: list, list->car, list->cdr.
-      IF list->cdr NE nil.
-        throw( |length takes only one argument| ).
-      ENDIF.
-
       result = lcl_lisp_new=>integer( list_length( list->car ) ).
     ENDMETHOD.                    "proc_length
 
@@ -6986,12 +6990,6 @@
       DATA lo_ptr TYPE REF TO lcl_lisp.
       DATA lo_new TYPE REF TO lcl_lisp.
 
-      _validate: list, list->cdr.
-      IF list->cdr NE nil.
-        throw( |list-copy takes only one argument| ).
-      ENDIF.
-
-      _validate list->car.
       result = list->car.
       CHECK result->type EQ type_pair.
 
@@ -7010,7 +7008,7 @@
         throw( |list-copy: circular list| ).
       ENDWHILE.
       lo_new->cdr = lo_ptr.
-    ENDMETHOD.                    "proc_length
+    ENDMETHOD.
 
     METHOD proc_list.
 *     The items given to us are already in a list and evaluated; we just need to return the head
@@ -7018,16 +7016,12 @@
     ENDMETHOD.                    "proc_list
 
     METHOD proc_nilp.
-      _validate: list, list->car.
       result = COND #( WHEN list->car = nil THEN true ELSE false ).
     ENDMETHOD.                    "proc_nilp
 
     METHOD proc_make_list.
       DATA k TYPE tv_int.
 *     returns a list of length k and every atom is the default fill value supplied or the empty list
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
       _validate_index list->car 'make-list'.
 
       result = lcl_lisp=>nil.
@@ -7050,7 +7044,6 @@
     ENDMETHOD.
 
     METHOD proc_list_tail.
-      _validate: list, list->cdr.
       _validate_index list->cdr->car 'list-tail'.
 
       result = list_tail( list = list->car
@@ -7090,10 +7083,6 @@
       DATA lv_start TYPE tv_int VALUE 0.
       DATA lv_step TYPE tv_int VALUE 1.
       DATA lo_ptr TYPE REF TO lcl_lisp.
-
-      IF list IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
 
       DATA(lo_count) = list->car.
       _validate_index lo_count 'iota count'.
@@ -7137,7 +7126,6 @@
 *    The implementation must check that list is a chain of pairs whose length is at least k + 1.
 *    It should not check that it is a list of pairs beyond this length.
 
-      _validate: list, list->cdr.
       _validate_index list->cdr->car 'list-ref'.
 
       result = list_tail( list = list->car
@@ -7148,7 +7136,6 @@
 
     METHOD proc_make_vector.
       DATA lo_fill TYPE REF TO lcl_lisp.
-      _validate: list, list->cdr.
 
       DATA(lo_size) = list->car.
 
@@ -7333,15 +7320,10 @@
 
       DATA(lo_last) = list->cdr->cdr.
       "_validate_byte lo_last->car operation.
-      IF lo_last->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ELSEIF NOT ( lo_last->car->type = type_integer AND CAST lcl_lisp_integer( lo_last->car )->int BETWEEN 0 AND 255 ).
+      IF NOT ( lo_last->car->type = type_integer AND CAST lcl_lisp_integer( lo_last->car )->int BETWEEN 0 AND 255 ).
         lo_last->car->raise( ` is not a byte in ` && operation ) ##NO_TEXT.
       ENDIF.
-
       lv_byte = CAST lcl_lisp_integer( lo_last->car )->int.
-
-      _assert_last_param lo_last.
 
       lo_u8->set( index = lv_index
                   iv_byte = lv_byte ).
@@ -7362,8 +7344,6 @@
       _validate_index lo_last->car `bytevector-u8-ref`.
       lv_index = CAST lcl_lisp_integer( lo_last->car )->int.
 
-      _assert_last_param lo_last.
-
       result = lcl_lisp_new=>integer( value = lo_u8->get( index = lv_index )
                                       iv_exact = abap_true ).
     ENDMETHOD.
@@ -7375,7 +7355,6 @@
       DATA lo_ptr TYPE REF TO lcl_lisp.
       DATA lo_bytes TYPE REF TO lcl_lisp_bytevector.
       DATA lv_mutable TYPE tv_flag.
-      _validate list.
 
       lo_ptr = list.
       lv_mutable = abap_true.
@@ -7404,27 +7383,21 @@
 
     METHOD proc_make_bytevector.
       DATA lo_fill TYPE REF TO lcl_lisp_integer.
-      DATA lv_fill TYPE tv_byte.
-      _validate: list, list->cdr.
+      DATA lv_fill TYPE tv_byte VALUE 0.
 
       DATA(lo_size) = list->car.
+      IF lo_size->type NE type_integer OR CAST lcl_lisp_integer( lo_size )->int LT 0.
+        lo_size->raise( ` must be a non-negative integer in ` && operation ) ##NO_TEXT.
+      ENDIF.
 
-      _validate_index lo_size operation.
-
-      IF list->cdr NE lcl_lisp=>nil.
-        "_validate_byte list->cdr->car `make-bytevector`.
-        IF list->cdr->car IS NOT BOUND.
-          lcl_lisp=>incorrect_input( operation ).
-        ELSEIF NOT ( list->cdr->car->type = type_integer AND CAST lcl_lisp_integer( list->cdr->car )->int BETWEEN 0 AND 255 ).
+      IF list->cdr NE lcl_lisp=>nil.  "_validate_byte list->cdr->car `make-bytevector`.
+        IF NOT ( list->cdr->car->type = type_integer
+          AND CAST lcl_lisp_integer( list->cdr->car )->int BETWEEN 0 AND 255 ).
           list->cdr->car->raise( ` is not a byte in ` && operation ) ##NO_TEXT.
         ENDIF.
 
         lo_fill ?= list->cdr->car.
         lv_fill = lo_fill->int.
-        _assert_last_param list->cdr.
-      ELSE.
-        lv_fill = 0.
-        _assert_last_param list.
       ENDIF.
 
       result = lcl_lisp_bytevector=>init( size = CAST lcl_lisp_integer( lo_size )->int
@@ -7459,8 +7432,6 @@
           IF lo_last NE nil.
             _validate_index lo_last->car `utf8->string end`.
             lv_end = CAST lcl_lisp_integer( lo_last->car )->int.
-
-            _assert_last_param lo_last.
           ENDIF.
         ENDIF.
 
@@ -7498,11 +7469,8 @@
           IF lo_last NE nil.
             _validate_index lo_last->car `string->utf8 end`.
             lv_end = CAST lcl_lisp_integer( lo_last->car )->int.
-
-            _assert_last_param lo_last.
           ENDIF.
         ENDIF.
-
       ENDIF.
 
       result = lcl_lisp_bytevector=>utf8_from_string( iv_text = lo_string->value
@@ -7539,11 +7507,8 @@
           IF lo_last NE nil.
             _validate_index lo_last->car `bytevector-copy end`.
             lv_end = CAST lcl_lisp_integer( lo_last->car )->int.
-
-            _assert_last_param lo_last.
           ENDIF.
         ENDIF.
-
       ENDIF.
 
       result = lo_u8->copy_new( from = lv_start
@@ -7599,8 +7564,6 @@
         IF lo_ptr IS BOUND AND lo_ptr NE nil.
           _validate_index lo_ptr->car `bytevector-copy! end`.
           lv_end = CAST lcl_lisp_integer( lo_ptr->car )->int.
-
-          _assert_last_param lo_ptr.
         ENDIF.
       ENDIF.
 
@@ -7623,8 +7586,6 @@
 * If obj does not occur in list, then #f (not the empty list) is returned.
 * Memq uses eq? to compare obj with the elements of list
     METHOD proc_memq.
-      _validate: list, list->car, list->cdr.
-
       result = false.
 
       CHECK list->cdr NE nil.
@@ -7708,7 +7669,6 @@
     ENDMETHOD.
 
     METHOD proc_assoc.
-
       result = false.
       get_equal_params( EXPORTING io_list = list
                         IMPORTING eo_sublist = DATA(lo_sublist)
@@ -7797,101 +7757,19 @@
 **********************************************************************
 
     METHOD proc_add.
-      DATA res TYPE ts_result.
-      DATA num TYPE REF TO lcl_lisp_number.
-
-      DATA(iter) = list->new_number_iterator( operation ).
-      IF iter->has_next( ).
-        num ?= iter->next( ).
-        res = num->get_state( operation ).
-
-        WHILE iter->has_next( ).
-          num ?= iter->next( ).
-          res = num->add_complex( first = res
-                                  second = num->get_state( operation )
-                                  operation = operation ).
-        ENDWHILE.
-
-        result = lcl_lisp_new=>numeric( res ).
-      ELSE.
-        result = lcl_lisp_number=>zero.
-      ENDIF.
+      result = list->new_number_iterator( operation )->sum( ).
     ENDMETHOD.
 
     METHOD proc_multiply.
-      DATA res TYPE ts_result.
-      DATA num TYPE REF TO lcl_lisp_number.
-
-      DATA(iter) = list->new_number_iterator( operation ).
-      IF iter->has_next( ).
-        num ?= iter->next( ).
-        res = num->get_state( operation ).
-
-        WHILE iter->has_next( ).
-          num ?= iter->next( ).
-          res = num->product( first = res
-                              second = num->get_state( operation )
-                              operation = operation ).
-        ENDWHILE.
-        result = lcl_lisp_new=>numeric( res ).
-      ELSE.
-        result = lcl_lisp_number=>one.
-      ENDIF.
+      result = list->new_number_iterator( operation )->product( ).
     ENDMETHOD.                    "proc_multiply
 
     METHOD proc_subtract.
-      DATA res TYPE ts_result.
-      DATA num TYPE REF TO lcl_lisp_number.
-
-      DATA(iter) = list->new_number_iterator( operation ).
-
-      IF iter->has_next( ).
-        num ?= iter->next( ).
-
-        IF iter->has_next( ).
-          res = num->get_state( operation ).
-
-          WHILE iter->has_next( ).  " Subtract all subsequent numbers from the first
-            num ?= iter->next( ).
-            res = num->add_complex( first = res
-                                    second = num->neg_sign( num->get_state( operation ) )
-                                    operation = operation ).
-          ENDWHILE.
-
-          result = lcl_lisp_new=>numeric( res ).
-        ELSE.
-          result = lcl_lisp_number=>zero->substract( num ).
-        ENDIF.
-      ELSE.
-        throw( |no number in [{ operation }]| ).
-      ENDIF.
+      result = list->new_number_iterator( operation )->diff( ).
     ENDMETHOD.
 
     METHOD proc_divide.
-      DATA num TYPE REF TO lcl_lisp_number.
-
-      DATA(iter) = list->new_number_iterator( operation ).
-      IF iter->has_next( ).
-        num ?= iter->next( ).
-
-        IF iter->has_next( ).
-          DATA(res) = num->get_state( operation ).
-
-          WHILE iter->has_next( ).   " Divide by all subsequent numbers
-            num ?= iter->next( ).
-            res = num->quotient( numerator = res
-                                 denominator = num->get_state( operation )
-                                 operation = operation ).
-          ENDWHILE.
-
-          result = lcl_lisp_new=>numeric( res ).
-        ELSE.
-          result = lcl_lisp_number=>one->divide( num ).
-        ENDIF.
-      ELSE.
-        throw( |no number in { operation }| ).
-      ENDIF.
-
+      result = list->new_number_iterator( operation )->quotient( ).
     ENDMETHOD.
 
 **********************************************************************
@@ -7943,10 +7821,6 @@
       DATA lo_head  TYPE REF TO lcl_lisp.
       DATA lo_ptr TYPE REF TO lcl_lisp.
 
-      IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
-
       lo_ptr = list.
       _next_real.
       cell_exact = next->exact.
@@ -7956,7 +7830,6 @@
       lo_ptr = list->cdr.
       WHILE lo_ptr->type EQ type_pair.
         _next_real.
-
         IF cell_exact EQ abap_true.
           cell_exact = next->exact.
         ENDIF.
@@ -7987,10 +7860,6 @@
       DATA lo_head  TYPE REF TO lcl_lisp.
       DATA lo_ptr TYPE REF TO lcl_lisp.
 
-      IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
-
       lo_ptr = list.
       _next_real.
       cell_exact = next->exact.
@@ -8000,7 +7869,6 @@
       lo_ptr = list->cdr.
       WHILE lo_ptr->type EQ type_pair.
         _next_real.
-
         IF cell_exact EQ abap_true.
           cell_exact = next->exact.
         ENDIF.
@@ -8021,75 +7889,12 @@
       ENDIF.
     ENDMETHOD.
 
-*    METHOD proc_min.
-*      DATA lo_ptr TYPE REF TO lcl_lisp.
-*      DATA cell TYPE REF TO lcl_lisp.
-*      DATA lo_head TYPE REF TO lcl_lisp.
-*      DATA num TYPE REF TO lcl_lisp_number.
-*
-*      DATA carry TYPE tv_real.
-*      DATA lv_min TYPE tv_real.
-*      DATA lv_exact TYPE tv_flag.
-*
-*      IF list IS NOT BOUND OR list->cdr IS NOT BOUND.
-*        lcl_lisp=>incorrect_input( operation ).
-*      ENDIF.
-*
-*      cell = list->car.
-*      _values_get_next cell.
-*      IF cell IS NOT BOUND.
-*        lcl_lisp=>incorrect_input( operation ).
-*      ENDIF.
-*      CASE cell->type.
-*        WHEN type_integer
-*          OR type_real
-*          OR type_rational
-*          OR type_complex.
-*        WHEN OTHERS.
-*          cell->raise_nan( operation ) ##NO_TEXT.
-*      ENDCASE.
-*      num ?= cell.
-*      lv_exact = num->exact.
-*      lv_min = num->to_real( ).
-*
-*      lo_ptr = list->cdr.
-*      WHILE lo_ptr->type EQ type_pair.
-*        cell = lo_ptr->car.
-*        _values_get_next cell.
-*        IF cell IS NOT BOUND.
-*          lcl_lisp=>incorrect_input( operation ).
-*        ENDIF.
-*        CASE cell->type.
-*          WHEN type_integer
-*            OR type_real
-*            OR type_rational
-*            OR type_complex.
-*          WHEN OTHERS.
-*            cell->raise_nan( operation ) ##NO_TEXT.
-*        ENDCASE.
-*        num ?= cell.
-*        IF lv_exact EQ abap_true.
-*          lv_exact = num->exact.
-*        ENDIF.
-*        carry = num->to_real( ).
-*
-*        lv_min = nmin( val1 = carry
-*                       val2 = lv_min ).
-*        lo_ptr = lo_ptr->cdr.
-*      ENDWHILE.
-*      result = lcl_lisp_new=>real_number( value = lv_min
-*                                          iv_exact = lv_exact ).
-*    ENDMETHOD.
-
     METHOD proc_is_zero.
       DATA num TYPE REF TO lcl_lisp_number.
       DATA cell TYPE REF TO lcl_lisp.
       DATA lo_head TYPE REF TO lcl_lisp.
 
       result = false.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
 
       cell = list->car.
       _values_get_next cell.
@@ -8116,9 +7921,6 @@
       DATA num TYPE REF TO lcl_lisp_number.
 
       result = false.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
 
       cell = list->car.
       _values_get_next cell.
@@ -8158,9 +7960,6 @@
       DATA num TYPE REF TO lcl_lisp_number.
 
       result = false.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
 
       cell = list->car.
       _values_get_next cell.
@@ -8200,9 +7999,6 @@
       DATA num TYPE REF TO lcl_lisp_number.
 
       result = false.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
 
       cell = list->car.
       _values_get_next cell.
@@ -8242,9 +8038,6 @@
       DATA num TYPE REF TO lcl_lisp_number.
 
       result = false.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
 
       cell = list->car.
       _values_get_next cell.
@@ -8558,10 +8351,6 @@
 
     METHOD proc_is_real.
 *     If z is a complex number, then (real? z) is true if and only if (zero? (imag-part z)) is true.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
-      _assert_one_param.
       result = false.
       CASE list->car->type.
         WHEN type_real
@@ -8577,10 +8366,6 @@
 
     METHOD proc_is_rational.
       DATA lo_real TYPE REF TO lcl_lisp_real.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
-      _assert_one_param.
       result = false.
       CASE list->car->type.
         WHEN type_rational
@@ -8597,10 +8382,6 @@
     ENDMETHOD.
 
     METHOD proc_is_exact_integer.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
-      _assert_one_param.
 *     Returns #t if z is both exact and an integer; otherwise returns #f.
       result = false.
       CASE list->car->type.
@@ -8616,12 +8397,7 @@
     ENDMETHOD.
 
     METHOD proc_is_integer.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
-      _assert_one_param.
 *     If x is an inexact real number, then (integer? x) is true if and only if (= x (round x)).
-
       result = false.
       CASE list->car->type.
         WHEN type_integer
@@ -8704,9 +8480,6 @@
     ENDMETHOD.
 
     METHOD proc_is_list.  " argument in list->car
-      _validate: list, list->car, list->cdr.
-      _assert_one_param.
-
       result = false.
 
       DATA(lo_ptr) = list->car.
@@ -8917,15 +8690,41 @@
 
     METHOD proc_sin.
       " sin(x + iy) = sin(x) cosh(y) + i cos(x) sinh(y)
-      _trigonometric_header.
-          IF y = 0.
+      DATA lo_number TYPE REF TO lcl_lisp_number.
+      DATA lo_head TYPE REF TO lcl_lisp.
+      DATA cell TYPE REF TO lcl_lisp.
+      DATA a TYPE f.
+      DATA b TYPE f.
+
+      result = nil.
+      TRY.
+          cell = list->car.
+          _values_get_next cell.
+
+          CASE cell->type.
+            WHEN type_integer
+              OR type_real
+              OR type_rational
+              OR type_complex.
+              lo_number ?= cell.
+              DATA(number) = lo_number->get_state( operation ).
+            WHEN OTHERS.
+              cell->raise_nan( operation ) ##NO_TEXT.
+          ENDCASE.
+
+          a = lo_number->get_real( self = number-real_part
+                                   operation = operation ).
+
+          IF number-imag_part-sign = c_sign_zero.
             result = lcl_lisp_new=>real( value = sin( a )
-                                         iv_exact = cell_exact ).
+                                         iv_exact = lo_number->exact ).
           ELSE.
+            b = lo_number->get_real( self = number-imag_part
+                                     operation = operation ).
             result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = sin( a ) * cosh( b )
-                                                                           iv_exact = cell_exact )
+                                                                           iv_exact = lo_number->exact )
                                                 imag = lcl_lisp_new=>real( value = cos( a ) * sinh( b )
-                                                                           iv_exact = cell_exact ) ) .
+                                                                           iv_exact = lo_number->exact ) ) .
           ENDIF.
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
@@ -8934,15 +8733,41 @@
 
     METHOD proc_cos.
       " cos(x + iy) = cos(x) cosh(y) - i sin(x) sinh(y)
-      _trigonometric_header.
-          IF y = 0.
+      DATA lo_number TYPE REF TO lcl_lisp_number.
+      DATA lo_head TYPE REF TO lcl_lisp.
+      DATA cell TYPE REF TO lcl_lisp.
+      DATA a TYPE f.
+      DATA b TYPE f.
+
+      result = nil.
+      TRY.
+          cell = list->car.
+          _values_get_next cell.
+
+          CASE cell->type.
+            WHEN type_integer
+              OR type_real
+              OR type_rational
+              OR type_complex.
+              lo_number ?= cell.
+              DATA(number) = lo_number->get_state( operation ).
+            WHEN OTHERS.
+              cell->raise_nan( operation ) ##NO_TEXT.
+          ENDCASE.
+
+          a = lo_number->get_real( self = number-real_part
+                                   operation = operation ).
+
+          IF number-imag_part-sign = c_sign_zero.
             result = lcl_lisp_new=>real( value = cos( a )
-                                         iv_exact = cell_exact ).
+                                         iv_exact = lo_number->exact ).
           ELSE.
+            b = lo_number->get_real( self = number-imag_part
+                                     operation = operation ).
             result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = cos( a ) * cosh( b )
-                                                                           iv_exact = cell_exact )
+                                                                           iv_exact = lo_number->exact )
                                                 imag = lcl_lisp_new=>real( value = - sin( a ) * sinh( b )
-                                                                           iv_exact = cell_exact ) ) .
+                                                                           iv_exact = lo_number->exact ) ) .
           ENDIF.
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
@@ -9035,7 +8860,6 @@
       DATA lo_z TYPE REF TO lcl_lisp_complex.
 
       result = nil.
-      _validate: list, list->car.
       TRY.
           lo_y ?= list->car.
 
@@ -9189,15 +9013,12 @@
       _data_local_numeric_cell.
 
       result = nil.
-      _validate: list, list->cdr.
-      _assert_last_param list->cdr.
 
       _get_real base1 list->car.
       lv_exact = cell_exact.
 
       TRY.
 *          _get_real exp1 list->cdr->car '[expt]'.
-          _validate list->cdr->car.
           cell = list->cdr->car.
           _values_get_next cell.
           IF lv_exact EQ abap_true.
@@ -9276,7 +9097,6 @@
 
       result = nil.
 
-      _validate list.
       _validate_number list->car.
       TRY.
           cell = list->car.
@@ -9378,10 +9198,15 @@
       DATA lo_number TYPE REF TO lcl_lisp_number.
 
       result = nil.
-      _validate list.
-      _validate_number list->car.
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
       TRY.
-           _assert_one_param.
            cell ?= list->car.
            _values_get_next cell.
            lo_number ?= cell.
@@ -9404,7 +9229,6 @@
 
       result = nil.
       TRY.
-          _validate list->cdr.
           _get_int list lv_int.
 
           IF res-exact EQ abap_false.
@@ -9613,15 +9437,28 @@
       DATA num TYPE REF TO lcl_lisp_number.
       DATA delta TYPE REF TO lcl_lisp_number.
 
-      _validate: list, list->cdr.
-      _validate_number list->car.
-      num ?= list->car.            " x
-      _validate_number list->cdr->car.
-      delta ?= list->cdr->car.     " e
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          num ?= list->car.            " x
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
+
+      CASE list->cdr->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          delta ?= list->cdr->car.     " e
+        WHEN OTHERS.
+          list->cdr->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
 " https://small.r7rs.org/wiki/RationalizeDefinition/
 " This implementation of rationalize is taken from the IEEE Scheme standard, which is not freely available.
 " The code is by Alan Bawden, and the theory is from Hardy and Wright's Introduction to the Theory of Numbers, 5th edition (1979).
-
       result = simplest_rational( low = num->substract( delta )   " x - e
                                   high = num->add( delta )        " x + e
                                   iv_exact = num->exact ).
@@ -9640,23 +9477,27 @@
     ENDMETHOD.                    "proc_truncate
 
     METHOD proc_round.
-      DATA carry TYPE tv_real.
-      _data_local_numeric_cell.
+      DATA num TYPE REF TO lcl_lisp_number.
 
-      result = nil.
-      _validate_number list->car.
-      IF CAST lcl_lisp_number( list->car )->infnan EQ abap_true.
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          num ?= list->car.
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
+      IF num->infnan EQ abap_true.
         result = list->car.
-        RETURN.
+      ELSE.
+        TRY.
+            result = lcl_lisp_new=>real_number( value = num->scheme_round( num->to_real( operation ) )
+                                                iv_exact = num->exact ).
+          CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
+            throw( lx_error->get_text( ) ).
+        ENDTRY.
       ENDIF.
-      _get_real carry list->car.
-      _assert_one_param.
-      TRY.
-          result = lcl_lisp_new=>real_number( value = lcl_lisp_number=>scheme_round( carry )
-                                              iv_exact = cell_exact ).
-        CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
-          throw( lx_error->get_text( ) ).
-      ENDTRY.
     ENDMETHOD.                    "proc_round
 
     METHOD proc_numerator.
@@ -9690,20 +9531,31 @@
       DATA lv_exact TYPE tv_flag.
 
       result = nil.
-      _validate: list, list->cdr.
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          num ?= list->car.
+          numerator = num->to_real( operation ).
+          lv_exact = num->exact.
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
 
-      _validate_number list->car.
-      num ?= list->car.
-      numerator = num->to_real( operation ).
-      lv_exact = num->exact.
-
-      _validate_number list->cdr->car.
-      num ?= list->cdr->car.
-      denominator = num->to_real( operation ).
-      IF lv_exact EQ abap_true.
-        lv_exact = num->exact.
-      ENDIF.
-      _assert_last_param list->cdr.
+      CASE list->cdr->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          num ?= list->cdr->car.
+          denominator = num->to_real( operation ).
+          IF lv_exact EQ abap_true.
+            lv_exact = num->exact.
+          ENDIF.
+        WHEN OTHERS.
+          list->cdr->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
 
       TRY.
           result = lcl_lisp_new=>real_number( value = numerator - denominator * trunc( numerator / denominator )
@@ -9720,20 +9572,32 @@
       DATA lv_exact TYPE tv_flag.
 
       result = nil.
-      _validate: list, list->cdr.
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          num ?= list->car.
+          numerator = num->to_real( operation ).
+          lv_exact = num->exact.
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
 
-      _validate_number list->car.
-      num ?= list->car.
-      numerator = num->to_real( operation ).
-      lv_exact = num->exact.
+      CASE list->cdr->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          num ?= list->cdr->car.
+          denominator = num->to_real( operation ).
+          IF lv_exact EQ abap_true.
+            lv_exact = num->exact.
+          ENDIF.
+        WHEN OTHERS.
+          list->cdr->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
 
-      _validate_number list->cdr->car.
-      num ?= list->cdr->car.
-      denominator = num->to_real( operation ).
-      IF lv_exact EQ abap_true.
-        lv_exact = num->exact.
-      ENDIF.
-      _assert_last_param list->cdr.
       TRY.
           result = lcl_lisp_new=>real_number( value = trunc( numerator / denominator )
                                               iv_exact = lv_exact ).
@@ -9750,21 +9614,32 @@
       DATA lv_exact TYPE tv_flag.
 
       result = nil.
-      _validate: list, list->cdr.
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          num ?= list->car.
+          numerator = num->to_real( operation ).
+          lv_exact = num->exact.
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
 
-      _validate_number list->car.
-      num ?= list->car.
-      numerator = num->to_real( operation ).
-      lv_exact = num->exact.
+      CASE list->cdr->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          num ?= list->cdr->car.
+          base = num->to_real( operation ).
+          IF lv_exact EQ abap_true.
+            lv_exact = num->exact.
+          ENDIF.
+        WHEN OTHERS.
+          list->cdr->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
 
-      _validate_number list->cdr->car.
-      num ?= list->cdr->car.
-      base = num->to_real( operation ).
-      IF lv_exact EQ abap_true.
-        lv_exact = num->exact.
-      ENDIF.
-
-      _assert_last_param list->cdr.
       TRY.
           mod = numerator MOD base.
           IF sign( base ) LE 0 AND mod NE 0.
@@ -9781,9 +9656,9 @@
       DATA lv_high TYPE i.
 
       result = nil.
-      _validate list.
-      _validate_integer list->car operation.
-      _assert_one_param.
+      IF list->car->type NE type_integer.
+        list->car->raise( ` is not an integer in ` && operation ) ##NO_TEXT.
+      ENDIF.
       TRY.
           DATA(lo_rnd) = cl_abap_random=>create( cl_abap_random=>seed( ) ).
           lv_high = CAST lcl_lisp_integer( list->car )->int.
@@ -9854,9 +9729,17 @@
 
     METHOD proc_num_to_string.
       DATA lv_radix TYPE tv_int VALUE 10.
+      DATA num TYPE REF TO lcl_lisp_number.
 
-      _validate list.
-      _validate_number list->car.
+      CASE list->car->type.
+        WHEN type_integer
+          OR type_real
+          OR type_rational
+          OR type_complex.
+          num ?= list->car.
+        WHEN OTHERS.
+          list->car->raise_nan( operation ) ##NO_TEXT.
+      ENDCASE.
       " Optional radix
       _validate list->cdr.
       IF list->cdr NE nil.
@@ -9864,7 +9747,7 @@
         lv_radix = CAST lcl_lisp_integer( list->cdr->car )->int.
       ENDIF.
 
-      result = lcl_lisp_new=>string( CAST lcl_lisp_number( list->car )->number_to_string( lv_radix ) ).
+      result = lcl_lisp_new=>string( num->number_to_string( lv_radix ) ).
     ENDMETHOD.
 
     METHOD string_to_number.
@@ -9892,10 +9775,8 @@
     METHOD proc_string_to_num.
       DATA lv_radix TYPE tv_int VALUE 10.
 
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ELSEIF list->car->type NE type_string.
-        list->car->raise( ` is not a string in string->number` ) ##NO_TEXT.
+      IF list->car->type NE type_string.
+        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
       ENDIF.
 *     Optional radix
       IF list->cdr IS BOUND AND list->cdr NE nil.
@@ -9917,17 +9798,12 @@
     ENDMETHOD.
 
     METHOD proc_write.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ENDIF.
       result = write( io_elem = list->car
                       io_arg = list->cdr ).
     ENDMETHOD.
 
     METHOD proc_write_string.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ELSEIF list->car->type NE type_string.
+      IF list->car->type NE type_string.
         list->car->raise( ` is not a string in write-string` ) ##NO_TEXT.
       ENDIF.
       result = write( io_elem = list->car
@@ -9935,29 +9811,28 @@
     ENDMETHOD.
 
     METHOD proc_write_bytevector.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( `write-bytevector` ).
-      ELSEIF list->car->type NE type_string.
-        list->car->raise( ` is not a bytevector in write-bytevector` ) ##NO_TEXT.
+      " (write-bytevector bytevector)
+      " (write-bytevector bytevector port)
+      " (write-bytevector bytevector port start)
+      " (write-bytevector bytevector port start end)
+      IF list->car->type NE type_bytevector.
+        list->car->raise( ` is not a bytevector in ` && operation ) ##NO_TEXT.
       ENDIF.
+      throw( `write-bytevector not implemented yet` ).
       result = write( io_elem = list->car
                       io_arg = list->cdr ).
     ENDMETHOD.
 
     METHOD proc_write_char.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( `write-char` ).
-      ELSEIF list->car->type NE type_string.
-        list->car->raise( ` is not a char in write-char` ) ##NO_TEXT.
+      IF list->car->type NE type_char.
+        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
       ENDIF.
       result = write( io_elem = list->car
                       io_arg = list->cdr ).
     ENDMETHOD.
 
     METHOD proc_write_u8.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( `write-u8` ).
-      ELSEIF list->car->type NE type_string.
+      IF list->car->type NE type_string.
         list->car->raise( ` is not a byte in write-u8` ) ##NO_TEXT.
       ENDIF.
       result = write_u8( io_elem = list->car
@@ -9965,9 +9840,6 @@
     ENDMETHOD.
 
     METHOD proc_display.
-      IF list IS NOT BOUND OR list->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( `display` ).
-      ENDIF.
       result = display( io_elem = list->car
                         io_arg = list->cdr ).
     ENDMETHOD.
@@ -10009,24 +9881,43 @@
     METHOD proc_is_u8_ready.
       _optional_binary_port list input `u8-ready?`.
 
-      result = false.
-      CHECK li_port->is_u8_ready( ).
-      result = true.
+      IF li_port->is_u8_ready( ).
+        result = true.
+      ELSE.
+        result = false.
+      ENDIF.
     ENDMETHOD.
 
     METHOD proc_is_char_ready.
-      _optional_port list input `char-ready?`.
+      DATA li_port TYPE REF TO lif_input_port.
 
-      result = false.
-      CHECK li_port->is_char_ready( ).
-      result = true.
+      TRY.
+          IF list->type EQ type_pair.
+            "_validate_port list->car operation.
+            IF list->car IS NOT BOUND.
+              lcl_lisp=>incorrect_input( operation ).
+            ELSEIF list->car->type NE type_port.
+              list->car->raise( ` is not a port in ` && operation ) ##NO_TEXT.
+            ENDIF.
+            li_port ?= list->car.
+          ELSE.
+            li_port ?= proc_current_input_port( nil ).
+          ENDIF.
+      CATCH cx_root INTO DATA(lx_error).
+        throw( lx_error->get_text( ) ).
+      ENDTRY.
+
+      IF li_port->is_char_ready( ).
+        result = true.
+      ELSE.
+        result = false.
+      ENDIF.
     ENDMETHOD.
 
     METHOD proc_string.
       DATA lo_ptr TYPE REF TO lcl_lisp.
       DATA lv_text TYPE string.
 
-      _validate list.
       lo_ptr = list.
       WHILE lo_ptr->type EQ type_pair AND lo_ptr->car->type EQ type_char.
         lv_text &&= lo_ptr->car->value+0(1).
@@ -10044,12 +9935,19 @@
       DATA lv_char TYPE tv_char.
       DATA lv_text TYPE string.
 
-      _validate_integer list->car 'make-string'.
+      IF list->car->type NE type_integer.
+        list->car->raise( ` is not an integer in ` && operation ) ##NO_TEXT.
+      ENDIF.
       lv_len = CAST lcl_lisp_integer( list->car )->int.
 
       IF list->cdr NE nil.
         DATA(lo_char) = list->cdr->car.
-        _validate_char lo_char.
+        "_validate_char lo_char.
+        IF lo_char IS NOT BOUND.
+          lcl_lisp=>incorrect_input( operation ).
+        ELSEIF lo_char->type NE type_char.
+          lo_char->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+        ENDIF.
         lv_char = lo_char->value+0(1).
       ENDIF.
 
@@ -10067,9 +9965,10 @@
       DATA lv_text TYPE string.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
 
-      _validate: list, list->car.
+      IF list->car->type NE type_string.
+        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+      ENDIF.
 
-      _validate: list->cdr.
       IF list->cdr NE nil.
         _validate_integer list->cdr->car 'string->list start'.
         lv_start = CAST lcl_lisp_integer( list->cdr->car )->int.
@@ -10170,27 +10069,27 @@
     ENDMETHOD.
 
     METHOD proc_string_set.
-      DATA lv_index TYPE tv_index.
-      DATA lv_char TYPE tv_char.
       DATA lo_int TYPE REF TO lcl_lisp_integer.
       DATA lo_char TYPE REF TO lcl_lisp_char.
       DATA lo_string TYPE REF TO lcl_lisp_string.
 
       DATA lv_len TYPE tv_index.
       DATA lv_text TYPE string.
+      DATA lv_index TYPE tv_index.
+      DATA lv_char TYPE tv_char.
 
       IF list->car->type NE type_string.
         list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
       ENDIF.
-      _validate_index list->cdr->car 'string-set!'.
-      _validate_char list->cdr->cdr->car.
+      lo_string ?= list->car.
 
+      _validate_index list->cdr->car operation.
+      lv_index = CAST lcl_lisp_integer( list->cdr->car )->int.
+
+      _validate_char list->cdr->cdr->car.
       lo_char ?= list->cdr->cdr->car.
       lv_char = lo_char->value(1).
 
-      lv_index = CAST lcl_lisp_integer( list->cdr->car )->int.
-
-      lo_string ?= list->car.
       IF lo_string->mutable EQ abap_false.
         throw( |constant in string-set! cannot be changed| ) ##NO_TEXT.
       ENDIF.
@@ -10214,22 +10113,18 @@
       DATA lv_text TYPE string.
       DATA lo_ptr TYPE REF TO lcl_lisp.
 
-      _validate: list, list->car.
-
       lo_ptr = list->car.
       WHILE lo_ptr->type = type_pair AND lo_ptr->car->type EQ type_char.
         lv_text &&= lo_ptr->car->value+0(1).
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
       IF lo_ptr NE nil.
-        lo_ptr->raise( | is not a list of char| ).
+        lo_ptr->raise( | is not a list of char in { operation }| ).
       ENDIF.
       result = lcl_lisp_new=>string( lv_text ).
     ENDMETHOD.
 
     METHOD proc_symbol_to_string.
-      _validate: list, list->car.
-
       IF list->car->type = type_symbol.
         result = lcl_lisp_new=>string( value = list->car->value
                                        iv_mutable = abap_false ).
@@ -10239,19 +10134,16 @@
     ENDMETHOD.
 
     METHOD proc_string_to_symbol.
-      _validate: list, list->car.
-
       IF list->car->type = type_string.
         result = lcl_lisp_new=>symbol( list->car->value ).
       ELSE.
-        list->car->raise( | is not a string| ).
+        list->car->raise( | is not a string in { operation }| ).
       ENDIF.
     ENDMETHOD.
 
     METHOD proc_string_append.
       DATA lv_text TYPE string.
       DATA lo_ptr TYPE REF TO lcl_lisp.
-      _validate list.
 
       lo_ptr = list.
       WHILE lo_ptr->type = type_pair AND lo_ptr->car->type EQ type_string.
@@ -10259,7 +10151,7 @@
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
       IF lo_ptr NE nil.
-        lo_ptr->car->raise( | is not a string| ).
+        lo_ptr->car->raise( | is not a string in { operation }| ).
       ENDIF.
       result = lcl_lisp_new=>string( lv_text ).
     ENDMETHOD.
@@ -10273,7 +10165,6 @@
       DATA lv_gcd TYPE tv_real VALUE 0.
       lv_exact = abap_true.
 
-      _validate list.
       IF list NE nil.
 
         _get_real lv_gcd list->car.
@@ -11576,9 +11467,8 @@
       DATA lo_init_x TYPE REF TO lcl_lisp_integer.
       DATA lo_init_y TYPE REF TO lcl_lisp_integer.
       DATA lo_init_angle TYPE REF TO lcl_lisp_real.
-      _data_local_numeric_cell.
+      DATA lo_number TYPE REF TO lcl_lisp_number.
 
-      _validate: list, list->cdr.
       _validate_integer list->car `turtles`.
       lo_width ?= list->car.
       _validate_integer list->cdr->car `turtles`.
@@ -11597,11 +11487,10 @@
 
               lo_next = lo_next->cdr.
               IF lo_next->car IS BOUND.
-                DATA lv_real TYPE tv_real.
+                lo_number ?= lo_next->car.
 
-                _get_real lv_real lo_next->car.
-                lo_init_angle = lcl_lisp_new=>real( value = lv_real
-                                                    iv_exact = cell_exact ).
+                lo_init_angle = lcl_lisp_new=>real( value = lo_number->to_real( operation )
+                                                    iv_exact = lo_number->exact ).
               ENDIF.
             ENDIF.
           ENDIF.
@@ -11634,15 +11523,16 @@
       DATA lo_init_x TYPE REF TO lcl_lisp_integer.
       DATA lo_init_y TYPE REF TO lcl_lisp_integer.
       DATA lo_init_angle TYPE REF TO lcl_lisp_real.
-      _validate: list, list->cdr.
 *    (merge turtles1 turtles2) → turtles?
 *      turtles1 : turtles?
 *      turtles2 : turtles?
-      _validate_turtle list->car `merge`.
       DATA lo_turtle1 TYPE REF TO lcl_lisp_turtle.
-      lo_turtle1 ?= list->car.
-      _validate_turtle list->cdr->car `merge`.
       DATA lo_turtle2 TYPE REF TO lcl_lisp_turtle.
+
+      _validate_turtle list->car operation.
+      lo_turtle1 ?= list->car.
+
+      _validate_turtle list->cdr->car operation.
       lo_turtle2 ?= list->cdr->car.
 
       DATA(lo_turtles) = lcl_turtle=>compose( VALUE #( ( lo_turtle1->turtle ) ( lo_turtle2->turtle ) ) ).
@@ -11664,7 +11554,6 @@
     ENDMETHOD.
 
     METHOD proc_turtle_exist. "turtles?
-      _validate: list, list->car.
       "(turtles? v) → boolean?
       IF list->car->type EQ type_abap_turtle.
         result = true.
@@ -11674,7 +11563,6 @@
     ENDMETHOD.
 
     METHOD proc_turtle_move. "move
-      _validate: list, list->cdr.
 *    (move n turtles) → turtles?
 *      n : real?  (integer)
 *      turtles : turtles?
@@ -11690,7 +11578,6 @@
     ENDMETHOD.
 
     METHOD proc_turtle_draw. "draw
-      _validate: list, list->cdr.
 *    (draw n turtles) → turtles?
 *      n : real? (integer)
 *      turtles : turtles?
@@ -11708,7 +11595,6 @@
     ENDMETHOD.
 
     METHOD proc_turtle_erase.
-      _validate: list, list->cdr.
 *    (erase n turtles) → turtles?
 *
 *      n : real?
@@ -11727,7 +11613,6 @@
     ENDMETHOD.
 
     METHOD proc_turtle_move_offset.
-      _validate: list, list->cdr, list->cdr->cdr.
 *    (move-offset h v turtles) → turtles?
 *      h : real? (integer)
 *      v : real? (integer)
@@ -11750,7 +11635,6 @@
     ENDMETHOD.
 
     METHOD proc_turtle_draw_offset.
-      _validate: list, list->cdr, list->cdr->cdr.
 *    (draw-offset h v turtles) → turtles?
 *      h : real? (integer)
 *      v : real? (integer)
@@ -11760,7 +11644,7 @@
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
 
       _validate_integer list->car `turtles draw-offset h`.
-      _validate_integer list->cdr->car `turtles move-offset v`.
+      _validate_integer list->cdr->car `turtles draw-offset v`.
       _validate_turtle list->cdr->cdr->car `draw-offset`.
       lo_off_h ?= list->car.
       lo_off_v ?= list->cdr->car.
@@ -11772,7 +11656,6 @@
     ENDMETHOD.
 
     METHOD proc_turtle_erase_offset.
-      _validate: list, list->cdr, list->cdr->cdr.
 *    (erase-offset n turtles) → turtles?
 *      n : real?
 *      turtles : turtles?
@@ -11796,14 +11679,13 @@
       DATA theta TYPE tv_real.
       _data_local_numeric_cell.
 
-      _validate: list, list->cdr.
 *      (turn theta turtles) → turtles?
 *        theta : real?
 *        turtles : turtles?
       _validate_number list->car.
       _get_real theta list->car.
 
-      _validate_turtle list->cdr->car `turn`.
+      _validate_turtle list->cdr->car operation.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->cdr->car.
 
@@ -11818,13 +11700,12 @@
       DATA theta TYPE tv_real.
       _data_local_numeric_cell.
 
-      _validate: list, list->cdr.
 *      (turn/radians theta turtles) → turtles?
 *        theta : real?
 *        turtles : turtles?
       _get_real theta list->car.
 
-      _validate_turtle list->cdr->car `turn/radians`.
+      _validate_turtle list->cdr->car operation.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->cdr->car.
 
@@ -11838,15 +11719,14 @@
     ENDMETHOD.
 
     METHOD proc_turtle_set_pen_width. "set-pen-width
-      _validate: list, list->cdr.
 *      (set-pen-width turtles width) → turtles?
 *        turtles : turtles?
 *        width : (real-in 0 255)
-      _validate_turtle list->car `set-pen-width`.
+      _validate_turtle list->car operation.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
 
-      _validate_index list->cdr->car `set-pen-width`.
+      _validate_index list->cdr->car operation.
       DATA lo_width TYPE REF TO lcl_lisp_integer.
       lo_width ?= list->cdr->car.
 
@@ -11856,17 +11736,14 @@
     ENDMETHOD.
 
     METHOD proc_turtle_set_pen_color. "set-pen-color
-      _validate: list, list->cdr.
 *    (set-pen-color turtles color) → turtles?
 *      turtles : turtles?
 *      color : (or/c string? (is-a?/c color%))
-      _validate_turtle list->car `set-pen-color`.
+      _validate_turtle list->car operation.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
 
-      IF list->cdr->car IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
-      ELSEIF list->cdr->car->type NE type_string.
+      IF list->cdr->car->type NE type_string.
         list->cdr->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
       ENDIF.
 
@@ -11879,9 +11756,8 @@
     ENDMETHOD.
 
     METHOD proc_turtle_state.
-      _validate list.
 *    (turtle-state turtles) → (listof (vector/c real? real? real?)
-      _validate_turtle list->car `turtle-state`.
+      _validate_turtle list->car operation.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
       DATA(position) = lo_turtles->turtle->get_position( ).
@@ -11895,10 +11771,9 @@
     ENDMETHOD.
 
     METHOD proc_turtle_clean.
-      _validate list.
 *    (clean turtles) → turtles?
 *      turtles : turtles?
-      _validate_turtle list->car `clean`.
+      _validate_turtle list->car operation.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
       throw( `turtle clean not implemented yet` ).
@@ -11908,8 +11783,7 @@
     METHOD proc_turtle_width.
 *    (turtles-width turtles) → (and/c real? positive?)
 *      turtles : turtles?
-      _validate list.
-      _validate_turtle list->car `turtles-width`.
+      _validate_turtle list->car operation.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
 
@@ -11919,8 +11793,7 @@
     METHOD proc_turtle_height.
 *    (turtles-height turtles) → (and/c real? positive?)
 *      turtles : turtles?
-      _validate list.
-      _validate_turtle list->car `turtles-height`.
+      _validate_turtle list->car operation.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
 
@@ -11930,8 +11803,7 @@
     METHOD proc_turtle_pen_width.
 *      (turtles-pen-width turtles) → (real-in 0 255)
 *        turtles : turtles?
-      _validate list.
-      _validate_turtle list->car `turtles-pen-width`.
+      _validate_turtle list->car operation.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
 
@@ -11941,8 +11813,7 @@
     METHOD proc_turtle_pen_color.
 *     (turtles-pen-color turtles) → (is-a?/c color%)
 *       turtles : turtles?
-      _validate list.
-      _validate_turtle list->car `turtles-pen-color`.
+      _validate_turtle list->car operation.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
 
@@ -11950,7 +11821,6 @@
     ENDMETHOD.
 
     METHOD proc_turtle_regular_poly.
-      _validate: list, list->cdr, list->cdr->cdr.
 *      (regular-poly sides radius turtles) → turtles?
 *        sides : exact-nonnegative-integer?
 *        radius : real?
@@ -11973,7 +11843,6 @@
     ENDMETHOD.
 
     METHOD proc_turtle_regular_polys.
-      _validate: list, list->cdr, list->cdr->cdr.
 *      Draws n regular polys each with n sides centered at the turtle.
 *      (regular-polys n s turtles) → turtles?
 *        n : exact-nonnegative-integer?
@@ -12430,7 +12299,7 @@
       procedure( symbol = 'list-set!'    value   = 'PROC_LIST_SET' min = 3 max = 3 ).
       procedure( symbol = 'list-copy'    value   = 'PROC_LIST_COPY' ).
       procedure( symbol = 'list->vector' value   = 'PROC_LIST_TO_VECTOR' min = 1 max = 1 ).
-      procedure( symbol = 'iota'         value   = 'PROC_IOTA' ).
+      procedure( symbol = 'iota'         value   = 'PROC_IOTA' min = 1 max = 3 ).  " not in R7RS standard
     ENDMETHOD.
 
     METHOD load_numbers.
@@ -12451,9 +12320,9 @@
       procedure( symbol = 'remainder' value = 'PROC_REMAINDER' min = 2 max = 2 ).
       procedure( symbol = 'modulo'    value = 'PROC_MODULO' min = 2 max = 2  ).
       procedure( symbol = 'quotient'  value = 'PROC_QUOTIENT' min = 2 max = 2 ).
-      procedure( symbol = 'random'    value = 'PROC_RANDOM' ).
-      procedure( symbol = 'max'       value = 'PROC_MAX' min = 2 ).
-      procedure( symbol = 'min'       value = 'PROC_MIN' min = 2  ).
+      procedure( symbol = 'random'    value = 'PROC_RANDOM' min = 1 max = 1 ).   " not in R7RS standard
+      procedure( symbol = 'max'       value = 'PROC_MAX' min = 1 ).
+      procedure( symbol = 'min'       value = 'PROC_MIN' min = 1 ).
       procedure( symbol = 'gcd'       value = 'PROC_GCD' ).
       procedure( symbol = 'lcm'       value = 'PROC_LCM' ).
 
@@ -12531,10 +12400,10 @@
       procedure( symbol = 'string->number' value = 'PROC_STRING_TO_NUM' min = 1 max = 2 ).
       procedure( symbol = 'make-string'    value = 'PROC_MAKE_STRING' min = 1 max = 2 ).
       procedure( symbol = 'string'         value = 'PROC_STRING' ).
-      procedure( symbol = 'string->list'   value = 'PROC_STRING_TO_LIST' ).
-      procedure( symbol = 'list->string'   value = 'PROC_LIST_TO_STRING' ).
-      procedure( symbol = 'symbol->string' value = 'PROC_SYMBOL_TO_STRING' ).
-      procedure( symbol = 'string->symbol' value = 'PROC_STRING_TO_SYMBOL' ).
+      procedure( symbol = 'string->list'   value = 'PROC_STRING_TO_LIST' min = 1 max = 3 ).
+      procedure( symbol = 'list->string'   value = 'PROC_LIST_TO_STRING' min = 1 max = 1 ).
+      procedure( symbol = 'symbol->string' value = 'PROC_SYMBOL_TO_STRING' min = 1 max = 1 ).
+      procedure( symbol = 'string->symbol' value = 'PROC_STRING_TO_SYMBOL' min = 1 max = 1 ).
       procedure( symbol = 'string-append'  value = 'PROC_STRING_APPEND' ).
       procedure( symbol = 'string-length'  value = 'PROC_STRING_LENGTH' min = 1 max = 1 ).
       procedure( symbol = 'string-copy'    value = 'PROC_STRING_COPY' min = 1 max = 3 ).
@@ -12558,28 +12427,28 @@
     ENDMETHOD.
 
     METHOD load_turtles.
-      procedure( symbol = 'turtles'       value   = 'PROC_TURTLE_NEW' ).
-      procedure( symbol = 'turtles?'      value   = 'PROC_TURTLE_EXIST' ).
-      procedure( symbol = 'move'          value   = 'PROC_TURTLE_MOVE' ).
-      procedure( symbol = 'draw'          value   = 'PROC_TURTLE_DRAW' ).
-      procedure( symbol = 'erase'         value   = 'PROC_TURTLE_ERASE' ).
-      procedure( symbol = 'move-offset'   value   = 'PROC_TURTLE_MOVE_OFFSET' ).
-      procedure( symbol = 'draw-offset'   value   = 'PROC_TURTLE_DRAW_OFFSET' ).
-      procedure( symbol = 'erase-offset'  value   = 'PROC_TURTLE_ERASE_OFFSET' ).
-      procedure( symbol = 'turn'          value   = 'PROC_TURTLE_TURN_DEGREES' ).
-      procedure( symbol = 'turn/radians'  value   = 'PROC_TURTLE_TURN_RADIANS' ).
-      procedure( symbol = 'set-pen-width' value   = 'PROC_TURTLE_SET_PEN_WIDTH' ).
-      procedure( symbol = 'set-pen-color' value   = 'PROC_TURTLE_SET_PEN_COLOR' ).
+      procedure( symbol = 'turtles'       value   = 'PROC_TURTLE_NEW' min = 2 max = 5 ).
+      procedure( symbol = 'turtles?'      value   = 'PROC_TURTLE_EXIST' min = 1 max = 1 ).
+      procedure( symbol = 'move'          value   = 'PROC_TURTLE_MOVE' min = 2 max = 2 ).
+      procedure( symbol = 'draw'          value   = 'PROC_TURTLE_DRAW' min = 2 max = 2 ).
+      procedure( symbol = 'erase'         value   = 'PROC_TURTLE_ERASE' min = 2 max = 2 ).
+      procedure( symbol = 'move-offset'   value   = 'PROC_TURTLE_MOVE_OFFSET' min = 3 max = 3 ).
+      procedure( symbol = 'draw-offset'   value   = 'PROC_TURTLE_DRAW_OFFSET' min = 3 max = 3 ).
+      procedure( symbol = 'erase-offset'  value   = 'PROC_TURTLE_ERASE_OFFSET' min = 2 max = 2 ).
+      procedure( symbol = 'turn'          value   = 'PROC_TURTLE_TURN_DEGREES' min = 2 max = 2 ).
+      procedure( symbol = 'turn/radians'  value   = 'PROC_TURTLE_TURN_RADIANS' min = 2 max = 2 ).
+      procedure( symbol = 'set-pen-width' value   = 'PROC_TURTLE_SET_PEN_WIDTH' min = 2 max = 2 ).
+      procedure( symbol = 'set-pen-color' value   = 'PROC_TURTLE_SET_PEN_COLOR' min = 2 max = 2 ).
 
-      procedure( symbol = 'merge'             value = 'PROC_TURTLE_MERGE' ).
-      procedure( symbol = 'clean'             value = 'PROC_TURTLE_CLEAN' ).
-      procedure( symbol = 'turtle-state'      value = 'PROC_TURTLE_STATE' ).
-      procedure( symbol = 'turtles-height'    value = 'PROC_TURTLE_HEIGHT' ).
-      procedure( symbol = 'turtles-width'     value = 'PROC_TURTLE_WIDTH' ).
-      procedure( symbol = 'turtles-pen-color' value = 'PROC_TURTLE_PEN_COLOR' ).
-      procedure( symbol = 'turtles-pen-width' value = 'PROC_TURTLE_PEN_WIDTH' ).
-      procedure( symbol = 'regular-poly'      value = 'PROC_TURTLE_REGULAR_POLY' ).
-      procedure( symbol = 'regular-polys'     value = 'PROC_TURTLE_REGULAR_POLYS' ).
+      procedure( symbol = 'merge'             value = 'PROC_TURTLE_MERGE' min = 2 max = 2 ).
+      procedure( symbol = 'clean'             value = 'PROC_TURTLE_CLEAN' min = 1 max = 1 ).
+      procedure( symbol = 'turtle-state'      value = 'PROC_TURTLE_STATE' min = 1 max = 1 ).
+      procedure( symbol = 'turtles-height'    value = 'PROC_TURTLE_HEIGHT' min = 1 max = 1 ).
+      procedure( symbol = 'turtles-width'     value = 'PROC_TURTLE_WIDTH' min = 1 max = 1 ).
+      procedure( symbol = 'turtles-pen-color' value = 'PROC_TURTLE_PEN_COLOR' min = 1 max = 1 ).
+      procedure( symbol = 'turtles-pen-width' value = 'PROC_TURTLE_PEN_WIDTH' min = 1 max = 1 ).
+      procedure( symbol = 'regular-poly'      value = 'PROC_TURTLE_REGULAR_POLY' min = 3 max = 3 ).
+      procedure( symbol = 'regular-polys'     value = 'PROC_TURTLE_REGULAR_POLYS' min = 3 max = 3 ).
     ENDMETHOD.
 
     METHOD prepare.
@@ -13464,6 +13333,88 @@
         ro_elem->raise_nan( operation ) ##NO_TEXT.
       ENDIF.
     ENDMETHOD.                    "next
+
+    METHOD diff.
+      DATA res TYPE ts_result.
+      DATA num TYPE REF TO lcl_lisp_number.
+
+      num ?= next( ).   " expects at least one argument
+
+      IF has_next( ).
+        res = num->get_state( operation ).
+
+        WHILE has_next( ).  " Subtract all subsequent numbers from the first
+          num ?= next( ).
+          res = num->add_complex( first = res
+                                  second = num->neg_sign( num->get_state( operation ) )
+                                  operation = operation ).
+        ENDWHILE.
+
+        result = lcl_lisp_new=>numeric( res ).
+      ELSE.
+        result = lcl_lisp_number=>zero->substract( num ).
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD product.
+      DATA res TYPE ts_result.
+      DATA num TYPE REF TO lcl_lisp_number.
+
+      IF has_next( ).
+        num ?= next( ).
+        res = num->get_state( operation ).
+
+        WHILE has_next( ).
+          num ?= next( ).
+          res = num->product( first = res
+                              second = num->get_state( operation )
+                              operation = operation ).
+        ENDWHILE.
+        result = lcl_lisp_new=>numeric( res ).
+      ELSE.
+        result = lcl_lisp_number=>one.
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD quotient.
+      DATA res TYPE ts_result.
+      DATA num TYPE REF TO lcl_lisp_number.
+
+      num ?= next( ).    " expects at least one argument
+      IF has_next( ).
+        res = num->get_state( operation ).
+
+        WHILE has_next( ).   " Divide by all subsequent numbers
+          num ?= next( ).
+          res = num->quotient( numerator = res
+                               denominator = num->get_state( operation )
+                               operation = operation ).
+        ENDWHILE.
+        result = lcl_lisp_new=>numeric( res ).
+      ELSE.
+        result = lcl_lisp_number=>one->divide( num ).
+      ENDIF.
+    ENDMETHOD.
+
+    METHOD sum.
+      DATA res TYPE ts_result.
+      DATA num TYPE REF TO lcl_lisp_number.
+
+      IF has_next( ).
+        num ?= next( ).
+        res = num->get_state( operation ).
+
+        WHILE has_next( ).
+          num ?= next( ).
+          res = num->add_complex( first = res
+                                  second = num->get_state( operation )
+                                  operation = operation ).
+        ENDWHILE.
+        result = lcl_lisp_new=>numeric( res ).
+      ELSE.
+        result = lcl_lisp_number=>zero.
+      ENDIF.
+    ENDMETHOD.
 
   ENDCLASS.                    "lcl_lisp_number_iterator IMPLEMENTATION
 
@@ -14546,13 +14497,45 @@
 
     ENDMETHOD.
 
-    METHOD to_sign.
+    METHOD set_sign.
+      DATA value TYPE tv_int.
+
+      CASE cs_info-subtype.
+        WHEN type_integer.
+          value = sign( cs_info-int ).
+
+        WHEN type_rational.
+          value = sign( cs_info-nummer ).
+
+        WHEN type_real.
+          IF cs_info-infnan EQ abap_true.
+            CASE cs_info-ref.
+              WHEN inf.
+                cs_info-sign = c_sign_positive.
+              WHEN neg_inf.
+                cs_info-sign = c_sign_negative.
+              WHEN neg_nan.
+                cs_info-sign = c_sign_neg_nan.
+              WHEN OTHERS.
+                cs_info-sign = c_sign_pos_nan.
+            ENDCASE.
+            RETURN.
+          ELSE.
+            value = sign( cs_info-real ).
+          ENDIF.
+
+        WHEN OTHERS.
+          " not supported - throw( )? for now quiet NaN
+          cs_info-sign = c_sign_pos_nan.
+          RETURN.
+      ENDCASE.
+
       IF value EQ 0.
-        rv_sign = c_sign_zero.
+        cs_info-sign = c_sign_zero.
       ELSEIF value LT 0.
-        rv_sign = c_sign_negative.
+        cs_info-sign = c_sign_negative.
       ELSE.
-        rv_sign = c_sign_positive.
+        cs_info-sign = c_sign_positive.
       ENDIF.
     ENDMETHOD.
 
@@ -14562,33 +14545,17 @@
       CASE type.
         WHEN type_integer.
           rs_info-int = CAST lcl_lisp_integer( me )->int.
-          rs_info-sign = to_sign( sign( rs_info-int ) ).
 
         WHEN type_rational.
           DATA(lo_rat) = CAST lcl_lisp_rational( me ).
           rs_info-nummer = lo_rat->int.
           rs_info-denom = lo_rat->denominator.
-          rs_info-sign = to_sign( sign( rs_info-nummer ) ).
 
         WHEN type_real.
           DATA(lo_real) = CAST lcl_lisp_real( me ).
           rs_info-ref = lo_real.
           rs_info-infnan = lo_real->infnan.
           rs_info-real = lo_real->real.
-          IF rs_info-infnan EQ abap_true.
-            CASE rs_info-ref.
-              WHEN inf.
-                rs_info-sign = c_sign_positive.
-              WHEN neg_inf.
-                rs_info-sign = c_sign_negative.
-              WHEN neg_nan.
-                rs_info-sign = c_sign_neg_nan.
-              WHEN OTHERS.
-                rs_info-sign = c_sign_pos_nan.
-            ENDCASE.
-          ELSE.
-            rs_info-sign = to_sign( sign( rs_info-real ) ).
-          ENDIF.
 
         WHEN type_complex.
           no_complex( operation ).
@@ -14596,6 +14563,7 @@
         WHEN OTHERS.
           raise_nan( operation ).
       ENDCASE.
+      set_sign( CHANGING cs_info = rs_info ).
     ENDMETHOD.
 
     METHOD get_state.
@@ -14804,6 +14772,7 @@
           raise_nan( operation ).  "assert violation - Real part of other is Not a Number
       ENDCASE.
 
+      set_sign( CHANGING cs_info = number ).
     ENDMETHOD.
 
     METHOD add_complex.
@@ -14855,11 +14824,7 @@
 
       number = self.
       IF other-exact NE self-exact.
-        IF is_exact_zero( other ) OR is_exact_zero( self ).
-          number-exact = abap_true.
-        ELSE.
-          number-exact = abap_false.
-        ENDIF.
+        number-exact = xsdbool( is_exact_zero( other ) OR is_exact_zero( self ) ).
       ENDIF.
 
       CASE other-subtype.
@@ -14891,19 +14856,21 @@
               IF self-infnan EQ abap_false.
                 number-real = self-real * other-int.
               ELSE.
-                IF other-int EQ 0.
-                  CASE self-ref.
-                    WHEN inf.                " (* +Inf.0 0)
-                      number-ref = nan.
-                      number-exact = abap_false.
-                    WHEN neg_inf.            " (* -Inf.0 0)
-                      number-ref = neg_nan.
-                      number-exact = abap_false.
-                    "WHEN OTHERS.            " (* +nan.0 0)  " (* -nan.0 0)
-                  ENDCASE.
-                ELSEIF other-int LT 0.
-                  number-ref = self-ref->negative_infnan( ).
-                ENDIF.
+                CASE other-sign.
+                  WHEN c_sign_zero.
+                    CASE self-ref.
+                      WHEN inf.                " (* +Inf.0 0)
+                        number-ref = nan.
+                        number-exact = abap_false.
+                      WHEN neg_inf.            " (* -Inf.0 0)
+                        number-ref = neg_nan.
+                        number-exact = abap_false.
+                        "WHEN OTHERS.            " (* +nan.0 0)  " (* -nan.0 0)
+                    ENDCASE.
+                  WHEN c_sign_negative.
+                    number-ref = self-ref->negative_infnan( ).
+                  WHEN OTHERS.
+                ENDCASE.
               ENDIF.
 
             WHEN OTHERS.
@@ -14982,17 +14949,18 @@
             WHEN type_rational.  " Rational * Real
               IF other-infnan EQ abap_true.
                 number = other.
-                IF self-nummer EQ 0.     " should not happen, as the rational would be coerced to an integer
-                  IF other-ref = inf.
-                    number-ref = nan.
-                    number-exact = abap_false.
-                  ELSEIF other-ref = neg_inf.
-                    number-ref = neg_nan.
-                    number-exact = abap_false.
-                  ENDIF.
-                ELSEIF self-nummer LT 0.
-                  number-ref = other-ref->negative_infnan( ).
-                ENDIF.
+                CASE self-sign.
+                  WHEN c_sign_zero.     " should not happen, as the rational would be coerced to an integer
+                    IF other-ref = inf.
+                      number-ref = nan.
+                      number-exact = abap_false.
+                    ELSEIF other-ref = neg_inf.
+                      number-ref = neg_nan.
+                      number-exact = abap_false.
+                    ENDIF.
+                  WHEN c_sign_negative.
+                    number-ref = other-ref->negative_infnan( ).
+                ENDCASE.
               ELSE.
                 number-real = self-nummer / self-denom * other-real.
               ENDIF.
@@ -15001,59 +14969,61 @@
               IF self-infnan EQ abap_false AND other-infnan EQ abap_false.
                 number-real = self-real * other-real.
               ELSEIF self-infnan EQ abap_true AND other-infnan EQ abap_false.
-                 number = self.
-                 IF other-real GT 0.
-                 ELSEIF other-real EQ 0.
-                   CASE self-ref.
-                     WHEN inf OR nan.
-                       IF other-ref EQ neg_zero.   " (* +Inf.0 -0.0)  (* +NaN.0 -0.0)
-                         number-ref = neg_nan.
-                         number-exact = abap_false.
-                       ELSE.
-                         number-ref = nan.         " (* +Inf.0 +0.0)  (* +NaN.0 +0.0)
-                         number-exact = abap_false.
-                       ENDIF.
-                     WHEN neg_inf OR neg_nan.
-                       IF other-ref EQ neg_zero.   " (* -Inf.0 -0.0)  (* -NaN.0 -0.0)
-                         number-ref = nan.
-                         number-exact = abap_false.
-                       ELSE.
-                         number-ref = neg_nan.     " (* -Inf.0 +0.0)  (* -NaN.0 +0.0)
-                         number-exact = abap_false.
-                       ENDIF.
-                     WHEN OTHERS.
-                       raise( `Invalid InfNan in ` && operation ).
-                   ENDCASE.
-                 ELSE.  " other-real LT 0.
-                   number = negative( self ).
-                 ENDIF.
+                number = self.
+                CASE other-sign.
+                  WHEN c_sign_positive.
+                  WHEN c_sign_zero.
+                    CASE self-ref.
+                      WHEN inf OR nan.
+                        IF other-ref EQ neg_zero.   " (* +Inf.0 -0.0)  (* +NaN.0 -0.0)
+                          number-ref = neg_nan.
+                          number-exact = abap_false.
+                        ELSE.
+                          number-ref = nan.         " (* +Inf.0 +0.0)  (* +NaN.0 +0.0)
+                          number-exact = abap_false.
+                        ENDIF.
+                      WHEN neg_inf OR neg_nan.
+                        IF other-ref EQ neg_zero.   " (* -Inf.0 -0.0)  (* -NaN.0 -0.0)
+                          number-ref = nan.
+                          number-exact = abap_false.
+                        ELSE.
+                          number-ref = neg_nan.     " (* -Inf.0 +0.0)  (* -NaN.0 +0.0)
+                          number-exact = abap_false.
+                        ENDIF.
+                      WHEN OTHERS.
+                        raise( `Invalid InfNan in ` && operation ).
+                    ENDCASE.
+                  WHEN c_sign_negative.
+                    number = negative( self ).
+                ENDCASE.
               ELSEIF self-infnan EQ abap_false AND other-infnan EQ abap_true.
-                 number = other.
-                 IF self-real GT 0.
-                 ELSEIF self-real EQ 0.
-                   CASE other-ref.
-                     WHEN inf OR nan.
-                       IF self-ref EQ neg_zero.      " (* -0.0  +Inf.0 )  (* -0.0 +NaN.0 )
-                         number-ref = neg_nan.
-                         number-exact = abap_false.
-                       ELSE.
-                         number-ref = nan.           " (* +0.0  +Inf.0 )  (* +0.0 +NaN.0 )
-                         number-exact = abap_false.
-                       ENDIF.
-                     WHEN neg_inf OR neg_nan.
-                       IF self-ref EQ neg_zero.      " (* -0.0  -Inf.0 )  (* -0.0 -NaN.0 )
-                         number-ref = nan.
-                         number-exact = abap_false.
-                       ELSE.
-                         number-ref = neg_nan.       " (* +0.0  -Inf.0 )  (* +0.0 -NaN.0 )
-                         number-exact = abap_false.
-                       ENDIF.
-                     WHEN OTHERS.
-                       raise( `Invalid InfNan in ` && operation ).
-                   ENDCASE.
-                 ELSE.  " self-real LT 0.
-                   number = negative( other ).
-                 ENDIF.
+                number = other.
+                CASE self-sign.
+                  WHEN c_sign_positive.
+                  WHEN c_sign_zero.
+                    CASE other-ref.
+                      WHEN inf OR nan.
+                        IF self-ref EQ neg_zero.      " (* -0.0  +Inf.0 )  (* -0.0 +NaN.0 )
+                          number-ref = neg_nan.
+                          number-exact = abap_false.
+                        ELSE.
+                          number-ref = nan.           " (* +0.0  +Inf.0 )  (* +0.0 +NaN.0 )
+                          number-exact = abap_false.
+                        ENDIF.
+                      WHEN neg_inf OR neg_nan.
+                        IF self-ref EQ neg_zero.      " (* -0.0  -Inf.0 )  (* -0.0 -NaN.0 )
+                          number-ref = nan.
+                          number-exact = abap_false.
+                        ELSE.
+                          number-ref = neg_nan.       " (* +0.0  -Inf.0 )  (* +0.0 -NaN.0 )
+                          number-exact = abap_false.
+                        ENDIF.
+                      WHEN OTHERS.
+                        raise( `Invalid InfNan in ` && operation ).
+                    ENDCASE.
+                  WHEN c_sign_negative.
+                    number = negative( other ).
+                ENDCASE..
               ELSE. " self-infnan EQ abap_true AND other-infnan EQ abap_true.
                 " Inf / NaN *  Inf / NaN
                 number = self.
@@ -15083,6 +15053,8 @@
         WHEN OTHERS.
           raise_nan( operation ).  "assert violation - Real part of other is Not a Number
       ENDCASE.
+
+      set_sign( CHANGING cs_info = number ).
     ENDMETHOD.
 
     METHOD product.
@@ -15115,13 +15087,6 @@
                                           other = second-real_part
                                           operation = operation ).    " multiply real parts
       ENDIF.
-    ENDMETHOD.
-
-    METHOD multiply.
-      CONSTANTS operation TYPE string VALUE '*'.
-      result = lcl_lisp_new=>numeric( product( first = me->get_state( operation )
-                                               second = other->get_state( operation )
-                                               operation = operation )  ).
     ENDMETHOD.
 
     METHOD divide_real.
@@ -15315,7 +15280,7 @@
               IF other-infnan EQ abap_true.
                 number-infnan = abap_false.
 
-                IF self-nummer EQ 0.   " 0 / Inf.0 , 0 / -Inf,  0 / Nan
+                IF self-nummer EQ 0.   " 0 / Inf.0 , 0 / -Inf,  0 / +Nan, 0 / Nan
                   " real 0 or Nan
                   CASE other-ref.
                     WHEN inf OR neg_inf.
@@ -15464,6 +15429,7 @@
           raise_nan( operation ).  "assert violation - Real part of other is Not a Number
       ENDCASE.
 
+      set_sign( CHANGING cs_info = number ).
     ENDMETHOD.
 
     METHOD quotient.
