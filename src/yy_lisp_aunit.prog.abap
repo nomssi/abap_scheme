@@ -221,7 +221,9 @@
      ENDMETHOD.                    "basic_define_a_23
 
      METHOD error_1.
-       scheme( code = '(error)'
+       scheme_argument( code = '(error)'
+                        operation = 'error' ).
+       scheme( code = |(error "{ c_error_message }")|
                expected = |Eval: { c_error_message }| ).
      ENDMETHOD.
 
