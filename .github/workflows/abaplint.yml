@@ -27,6 +27,6 @@ jobs:
 
       # Runs a command using the runners shell
       - name: abaplint
-        uses: abaplint/actions-abaplint@master
+        uses: abaplint/actions-abaplint@main
         env: 
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
