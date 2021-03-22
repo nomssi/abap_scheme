@@ -6,7 +6,7 @@ CONSTANTS:
   c_lisp_untitled   TYPE programm VALUE 'Untitled',
 * enable if you uploaded LISP config files or also change c_source_type to 'LISP'
 * check: https://github.com/nomssi/abap_scheme/blob/master/editor/README.md
-  c_new_abap_editor TYPE flag VALUE abap_true,
+  c_new_abap_editor TYPE flag VALUE abap_false,
   c_source_type     TYPE string VALUE 'LISP'.
 
 CONSTANTS:
@@ -1283,12 +1283,10 @@ CLASS lcl_configuration IMPLEMENTATION.
 *                     ' ' - ?? private attributes?
 *                     'I' - ?? Integer?
     DEFINE _add_attr.
-      CLEAR ls_attr.
-      GET REFERENCE OF &1 INTO ls_attr-ref.
-      ls_attr-text = &2.
-      ls_attr-kind = &3.
-      ls_attr-button_group = &4.
-      INSERT ls_attr INTO TABLE rt_attr.
+      INSERT VALUE #( ref = REF #( &1 )
+                      text = &2
+                      kind = &3
+                      button_group = &4 ) INTO TABLE rt_attr.
     END-OF-DEFINITION.
 
     _add_attr: gs_cfg-skip_dialog      'Remember my settings'(c00)     'C' space,
