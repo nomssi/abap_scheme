@@ -13039,7 +13039,7 @@
       IF io_elem->car->type EQ type_symbol OR io_elem->car->type EQ type_syntax.
         CASE io_elem->car->value.
           WHEN c_eval_quote OR c_lisp_quote.
-            ev_str = ev_str && c_lisp_quote..
+            ev_str = ev_str && c_lisp_quote.
             ev_skip = abap_true.
 
           WHEN c_eval_quasiquote OR c_lisp_backquote.
@@ -15191,7 +15191,7 @@
                     ENDCASE.
                   WHEN c_sign_negative.
                     number = negative( other ).
-                ENDCASE..
+                ENDCASE.
               ELSE. " self-infnan EQ abap_true AND other-infnan EQ abap_true.
                 " Inf / NaN *  Inf / NaN
                 number = self.
@@ -16413,7 +16413,7 @@
 
     METHOD insert.
       IF list IS NOT BOUND OR list->car IS NOT BOUND
-        OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND..
+        OR list->cdr IS NOT BOUND OR list->cdr->car IS NOT BOUND.
         incorrect_input( 'hash-insert' ).
       ENDIF.
 * TODO: Check number and type of parameters
