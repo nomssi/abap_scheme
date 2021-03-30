@@ -58,8 +58,7 @@
 
        METHODS scheme IMPORTING code     TYPE string
                                 expected TYPE any
-                                level    TYPE aunit_level
-                                  DEFAULT if_aunit_constants=>critical.
+                                level    TYPE int1 DEFAULT if_abap_unit_constant=>severity-high.
        METHODS one_parameter IMPORTING code     TYPE string
                                        operation TYPE string.
        METHODS parameter_mismatch IMPORTING code     TYPE string
@@ -2608,8 +2607,10 @@
      ENDMETHOD.
 
      METHOD to_exact_3.
-       scheme( code = '(* 10.0 (exact .3))'
-               expected = '3.0' ).
+       scheme( code = '(define _3 (* 10 (exact .3)))'
+               expected = '_3' ).
+       scheme( code = '(eq? (* 10.0 (exact .3)) _3)'
+               expected = '#t' ).
      ENDMETHOD.
 
      METHOD to_inexact_1.
