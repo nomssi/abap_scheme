@@ -21,7 +21,7 @@ To check your installation, execute this <i>guess my number</i> game...
                (guess 0)   
                (answer (+ 1 (random 100))) )
           (quit)
-          (set! guess (read))
+          (begin (set! guess (read)) (display guess) )
           (cond ((and (number? guess) (< guess answer)) (display "\nToo low. Please guess again: ") )
                 ((and (number? guess) (> guess answer)) (display "\nToo high. Please guess again: ") )
                 (else (set! quit #t) (if (number? guess) (display "\nCorrect!")
