@@ -7730,7 +7730,7 @@
         IF next->infnan EQ abap_true AND ( next = lcl_lisp_number=>nan OR next = lcl_lisp_number=>neg_nan ).
           result = next.
           RETURN.
-        ENDIF..
+        ENDIF.
         IF cell_exact EQ abap_true.
           cell_exact = next->exact.
         ENDIF.
@@ -7873,7 +7873,7 @@
         ENDIF.
         IF lo_ptr->car->type CN c_number_types.
           lo_ptr->car->raise_nan( operation ) ##NO_TEXT.
-        ENDIF..
+        ENDIF.
 
         lo_next ?= lo_ptr->car.
 
@@ -11201,7 +11201,7 @@
 
         WHEN OTHERS.
           throw( |ab-get: First parameter must be ABAP data or table or a function| ).
-      ENDCASE..
+      ENDCASE.
     ENDMETHOD. "proc_abap_get
 
     METHOD proc_abap_set.
@@ -15365,84 +15365,58 @@
         number-exact = abap_false.
       ENDIF.
 
+      IF other-sign EQ c_sign_zero.
+        CASE self-sign.
+          WHEN c_sign_positive.
+            number-ref = inf.         " 1/0
+          WHEN c_sign_negative.
+            number-ref = neg_inf.     " -1/0
+          WHEN c_sign_zero.
+            number-ref = nan.
+        ENDCASE.
+        number-infnan = abap_true.
+        number-subtype = type_real.
+        number-exact = abap_false.
+
+*      ELSEIF self-sign EQ c_sign_zero.
+*        CASE other-sign.
+*
+*          WHEN OTHERS.
+*
+*        ENDCASE.
+*
+     ELSE.
+
       CASE other-subtype.
         WHEN type_integer.
           CASE self-subtype.
             WHEN type_integer.  " Integer / Integer
-              IF other-int EQ 0.
-                IF self-int EQ 0.
-                  number-ref = nan.     " 0/0
-                ELSEIF self-int GT 0.
-                  number-ref = inf.     " cell->raise( ' is invalid in [/]' ).
-                ELSE.
-                  number-ref = neg_inf.
-                ENDIF.
-                number-infnan = abap_true.
-                number-subtype = type_real.
-                number-exact = abap_false.
-              ELSE.
                 TRY.
                     number-nummer = self-int.
                     number-denom = other-int.
-                    lv_gcd = lcl_lisp_rational=>gcd( n = number-nummer
-                                                     d = number-denom ).
-                    number-nummer = number-nummer DIV lv_gcd.
-                    number-denom = number-denom DIV lv_gcd.
                     number-subtype = type_rational.
                   CATCH cx_sy_arithmetic_overflow.
                     number-real = self-int / other-int.
                     number-subtype = type_real.
                     number-exact = abap_false.
                 ENDTRY.
-              ENDIF.
 
             WHEN type_rational. " Rational / Integer
-              IF other-int EQ 0.
-                IF self-nummer EQ 0.
-                  number-ref = nan.     " 0/0
-                ELSEIF ( self-nummer GT 0 AND self-denom GT 0 )
-                  OR ( self-nummer LT 0 AND self-denom LT 0 ).
-                  number-ref = inf.     " cell->raise( ' is invalid in [/]' ).
-                ELSE.
-                  number-ref = neg_inf.
-                ENDIF.
-                number-infnan = abap_true.
-                number-subtype = type_real.
-                number-exact = abap_false.
-              ELSE.
                 TRY.
                     number-denom = self-denom * other-int.
-                    lv_gcd = lcl_lisp_rational=>gcd( n = number-nummer
-                                                     d = number-denom ).
-                    number-nummer = number-nummer DIV lv_gcd.
-                    number-denom = number-denom DIV lv_gcd.
                     number-subtype = type_rational.
                   CATCH cx_sy_arithmetic_overflow.
                     number-real = self-nummer / self-denom / other-int.
                     number-subtype = type_real.
                     number-exact = abap_false.
                 ENDTRY.
-              ENDIF.
 
             WHEN type_real.    " Real / Integer
-              IF other-int EQ 0.            " division real / integer -> real
-                IF self-real EQ 0.
-                  number-ref = nan.     " 0.0/0
-                ELSEIF number-real GT 0.
-                  number-ref = inf.
-                ELSE.
-                  number-ref = neg_inf.
-                ENDIF.
-                number-infnan = abap_true.
-                number-exact = abap_false.
-              ELSE.
                 IF self-infnan EQ abap_false.
                   number-real = self-real / other-int.
                 ELSEIF other-int LT 0.
                   number-ref = self-ref->negative_infnan( ).
                 ENDIF.
-              ENDIF.
-
           ENDCASE.
 
         WHEN type_rational.
@@ -15451,10 +15425,6 @@
               TRY.
                   number-nummer = self-int * other-denom.
                   number-denom = other-nummer.
-                  lv_gcd = lcl_lisp_rational=>gcd(  n = number-nummer
-                                                    d = number-denom ).
-                  number-nummer = number-nummer DIV lv_gcd.
-                  number-denom = number-denom DIV lv_gcd.
                   number-subtype = type_rational.
                 CATCH cx_sy_arithmetic_overflow.
                   number-real = self-int / other-nummer * other-denom.
@@ -15466,10 +15436,6 @@
               TRY.
                   number-nummer = self-nummer * other-denom.
                   number-denom = self-denom * other-nummer.
-                  lv_gcd = lcl_lisp_rational=>gcd(  n = number-nummer
-                                                    d = number-denom ).
-                  number-nummer = number-nummer DIV lv_gcd.
-                  number-denom = number-denom DIV lv_gcd.
                 CATCH cx_sy_arithmetic_overflow.
                   number-real = self-nummer / self-denom * other-denom / other-nummer.
                   number-subtype = type_real.
@@ -15488,14 +15454,26 @@
                 ENDIF.
               ENDIF.
               number-subtype = type_real.
-
           ENDCASE.
 
         WHEN type_real.
-          CASE number-subtype.
+*          CASE self-sign.
+*            WHEN c_sign_zero.     " number <-- self = 0
+*            WHEN c_sign_negative.
+*
+*            WHEN c_sign_positive.
+*
+*            WHEN c_sign_pos_nan.  " number <- self = +NaN.0.
+*
+*            WHEN c_sign_neg_nan.  " number <- self = -NaN.0.
+*
+*          ENDCASE.
+
+          CASE self-subtype.
             WHEN type_integer.  " Integer / Real
               IF other-infnan EQ abap_true.
                 number-infnan = abap_false.
+
 
                 IF self-int EQ 0.   " 0 / Inf.0 , 0 / -Inf,  0 / Nan
                   " real 0 or Nan
@@ -15687,6 +15665,14 @@
           number-subtype = type_real.
 
       ENDCASE.
+      ENDIF.
+
+      IF number-subtype = type_rational.
+        lv_gcd = lcl_lisp_rational=>gcd( n = number-nummer
+                                         d = number-denom ).
+        number-nummer = number-nummer DIV lv_gcd.
+        number-denom = number-denom DIV lv_gcd.
+      ENDIF.
 
       set_sign( CHANGING cs_info = number ).
     ENDMETHOD.
