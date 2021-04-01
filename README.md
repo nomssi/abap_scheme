@@ -29,8 +29,8 @@ To check your installation, execute this <i>guess my number</i> game...
 ```
 
 Scheme syntax is based upon nested parenthesization. The [wiki pages](https://github.com/nomssi/abap_scheme/wiki) are a good place to start.
-I suggest you check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) and understand [Lists](https://www.gnu.org/software/mit-scheme/documentation/mit-scheme-ref/Lists.html#Lists).
 
+* I suggest you check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) and understand [Lists](https://www.gnu.org/software/mit-scheme/documentation/mit-scheme-ref/Lists.html#Lists).
 * For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
 * How to [enable the new editor](/editor)
 
