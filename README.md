@@ -28,7 +28,7 @@ To check your installation, execute this <i>guess my number</i> game...
                                                          (display "\nGood bye...") ) ) ) ) )
 ```
 
-To get used to the language, the [wiki pages](https://github.com/nomssi/abap_scheme/wiki) are a good place to start.
+Scheme syntax is based upon nested parenthesization. The [wiki pages](https://github.com/nomssi/abap_scheme/wiki) are a good place to start.
 I suggest you check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Scheme) and understand [Lists](https://www.gnu.org/software/mit-scheme/documentation/mit-scheme-ref/Lists.html#Lists).
 
 * For questions/comments/bugs/feature requests/wishes please create an [issue](https://github.com/nomssi/abap_scheme/issues)
@@ -41,7 +41,7 @@ I suggest you check the [syntax](https://github.com/nomssi/abap_scheme/wiki/Lear
 
 - Scheme's uses *symbolic expressions* (S-exps) to represent code *and* data. Expressions are then [evaluated](https://docs.racket-lang.org/reference/eval-model.html). Those  concepts cannot be expressed in ABAP, except by first implementing a Lisp interpreter in ABAP ([Greenspun 10th rule](http://www.paulgraham.com/quotes.html) ).
 
-- My initial plan was to write a Lisp workbench for [Martin's Lisp interpreter](https://github.com/mydoghasworms/abap-lisp). I changed the target language after reading the *Revised <sup>7</sup> Report on the Algorithmic Language Scheme* aka [R7RS](http://www.r7rs.org/) that offers a lot of examples to verify the interpreter. With this I can aim at compatibility with open source Scheme code.
+- My initial plan was to write a Lisp workbench for [Martin's Lisp interpreter](https://github.com/mydoghasworms/abap-lisp). I changed the target language after reading the *Revised <sup>7</sup> Report on the Algorithmic Language Scheme* aka [R7RS small](http://www.r7rs.org/) that offers a lot of examples to verify the interpreter. With this I can aim at compatibility with open source Scheme code.
 
 - In constrast to ABAP, Scheme has a very small number of rules for forming expressions that can be composed without restrictions. Scheme is lexically scoped and requires proper tail call optimization. Scheme is apt at [symbolic processing](https://github.com/nomssi/abap_scheme/wiki/Learn-Try-Symbolic-Derivation).
 
