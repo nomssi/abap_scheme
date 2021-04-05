@@ -151,8 +151,7 @@
     c_sign_positive TYPE tv_sign VALUE c_plus_sign,
     c_sign_negative TYPE tv_sign VALUE c_minus_sign,
     c_sign_pos_nan TYPE tv_sign VALUE '?+',
-    c_sign_neg_nan TYPE tv_sign VALUE '?-',
-    c_sign_nan TYPE tv_char VALUE '?'.
+    c_sign_neg_nan TYPE tv_sign VALUE '?-'.
 
   CONSTANTS:
     c_lisp_pos_zero TYPE string VALUE '+0.0',
@@ -404,72 +403,48 @@
       IF other-sign EQ c_sign_pos_nan OR other-sign EQ c_sign_neg_nan.
         RETURN.
       ENDIF.
+      lo_ptr = lo_ptr->cdr.
 
       CASE other-type.
         WHEN type_integer.
           CASE self-type.
-
             WHEN type_integer.  " Integer &1 Integer
-              IF self-int &1 other-int.
-                RETURN.
-              ENDIF.
+              CHECK self-int &1 other-int.
             WHEN type_rational. " Rational &1 Integer
               TRY.
-                  IF self-nummer &1 other-int * self-denom.
-                    RETURN.
-                  ENDIF.
+                  CHECK self-nummer &1 other-int * self-denom.
                 CATCH cx_sy_arithmetic_overflow.
-                  IF self-nummer / self-denom &1 other-int.
-                    RETURN.
-                  ENDIF.
+                  CHECK self-nummer / self-denom &1 other-int.
               ENDTRY.
             WHEN type_real.     " Real &1 Integer  (NaNs are already excluded)
-              IF self-real &1 other-int.
-                RETURN.
-              ENDIF.
+              CHECK self-real &1 other-int.
           ENDCASE.
 
         WHEN type_real.
           CASE self-type.
             WHEN type_integer.   " Integer &1 Real
-              IF self-int &1 other-real.
-                RETURN.
-              ENDIF.
+              CHECK self-int &1 other-real.
             WHEN type_rational.  " Rational &1 Real
-              IF self-nummer / self-denom &1 other-real.
-                RETURN.
-              ENDIF.
+              CHECK self-nummer / self-denom &1 other-real.
             WHEN type_real.      " Real &1 Real
-              IF self-real &1 other-real.
-                RETURN.
-              ENDIF.
+              CHECK self-real &1 other-real.
           ENDCASE.
 
         WHEN type_rational.
           CASE self-type.
             WHEN type_integer.   " Integer &1 Rational
-              IF self-int * other-denom &1 other-nummer.
-                RETURN.
-              ENDIF.
+              CHECK self-int * other-denom &1 other-nummer.
             WHEN type_rational.  " Rational &1 Rational
               TRY.
-                  IF self-nummer * other-denom &1 other-nummer * self-denom.
-                    RETURN.
-                  ENDIF.
+                  CHECK self-nummer * other-denom &1 other-nummer * self-denom.
                 CATCH cx_sy_arithmetic_overflow.
-                  IF self-nummer / self-denom &1 ( other-nummer / other-denom ).
-                    RETURN.
-                  ENDIF.
+                  CHECK self-nummer / self-denom &1 ( other-nummer / other-denom ).
               ENDTRY.
             WHEN type_real.       " Real &1 Rational
-              IF self-real &1 other-nummer / other-denom.
-                RETURN.
-              ENDIF.
+              CHECK self-real &1 other-nummer / other-denom.
           ENDCASE.
-
       ENDCASE.
-
-      lo_ptr = lo_ptr->cdr.
+      RETURN.
     ENDWHILE.
     result = true.
   END-OF-DEFINITION.
@@ -534,6 +509,10 @@
       METHODS to_number IMPORTING operation TYPE string
                         RETURNING VALUE(number) TYPE REF TO lcl_lisp_number
                         RAISING   lcx_lisp_exception.
+      METHODS get_integer IMPORTING operation  TYPE string
+                          EXPORTING ev_int TYPE tv_int
+                                    ev_exact TYPE tv_flag
+                          RAISING   lcx_lisp_exception.
 
       METHODS new_number_iterator IMPORTING iv_operation TYPE string OPTIONAL
                                   RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_number_iterator
@@ -707,10 +686,7 @@
                            RETURNING VALUE(rv_real) TYPE tv_real
                            RAISING   lcx_lisp_exception.
 
-      METHODS get_integer IMPORTING operation  TYPE string OPTIONAL
-                          EXPORTING ev_int TYPE tv_int
-                                    ev_exact TYPE tv_flag
-                          RAISING   lcx_lisp_exception.
+      METHODS get_integer REDEFINITION.
 
       METHODS complex_to_real IMPORTING operation      TYPE string OPTIONAL
                               EXPORTING ev_real TYPE tv_real
@@ -3462,7 +3438,6 @@
                   element = lcl_lisp_bytevector=>from_list( io_list = parse_pair( )
                                                             iv_mutable = abap_false ).
                 ELSE.
-
                   " Referencing other literal data #<n>= #<n>#
                   DATA lv_label TYPE string.
                   IF match_label( EXPORTING iv_limit = c_lisp_hash
@@ -3477,7 +3452,6 @@
                   ELSE.
                     element = match_token( ).       " Others <identifier> | <boolean> | <number>
                   ENDIF.
-
                 ENDIF.
 
             ENDCASE.
@@ -8885,72 +8859,63 @@
 
     METHOD proc_expt.
       DATA base1 TYPE tv_real.
-      DATA exp1 TYPE tv_real.
-
       DATA lv_exact TYPE tv_flag.
-
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_base TYPE REF TO lcl_lisp_real.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
-      DATA lo_z TYPE REF TO lcl_lisp_complex.
 
       result = nil.
 
-      DATA(lo_number) = list->car->to_number( operation ).
-
-      CASE lo_number->type.
-        WHEN type_complex.
-          lo_number->no_complex( operation ).
-        WHEN type_integer.
-          base1 = CAST lcl_lisp_integer( lo_number )->int.
-        WHEN type_real.
-          lo_base ?= lo_number.
-          IF lo_base->infnan EQ abap_true.
-            IF lo_base->is_nan( ) OR lo_base EQ lcl_lisp_number=>inf.
-              result = lo_base.
-            ELSE.
-              "##TO DO  -inf.0 ** x
-              result = lcl_lisp_number=>nan.
-            ENDIF.
-            RETURN.
-          ENDIF.
-          base1 = lo_base->real.
-        WHEN type_rational.
-          lo_rat ?= lo_number.
-          base1 = lo_rat->int / lo_rat->denominator.
-      ENDCASE.
-      lv_exact = lo_number->exact.
-
       TRY.
 *          _get_real exp1 list->cdr->car '[expt]'.
-          lo_number = list->cdr->car->to_number( operation ).
-          IF lv_exact EQ abap_true.
-            lv_exact = lo_number->exact.
+          DATA(lo_z2) = list->cdr->car->to_number( operation ).
+          DATA(expt) = lo_z2->get_state( operation ).
+          DATA(exp1) = lo_z2->to_real( operation ).
+
+          lv_exact = lo_z2->exact.
+
+          DATA(lo_z1) = list->car->to_number( operation ).
+          DATA(num) = lo_z1->get_state( operation ).
+          IF lv_exact = abap_true.
+            lv_exact = lo_z1->exact.
+          ENDIF.
+          base1 = lo_z1->to_real( operation ).
+
+          IF num-type EQ type_complex AND lo_z1->is_exact_zero( num-imag_part ) EQ abap_false.
+            lo_z1->no_complex( operation ).
+            " To Do
           ENDIF.
 
-          CASE lo_number->type.
-            WHEN type_integer.
-              exp1 = CAST lcl_lisp_integer( lo_number )->int.
-              result = lcl_lisp_new=>real_number( value = ipow( base = base1  exp = exp1 )
-                                                  iv_exact = lv_exact ).
-            WHEN type_real.
-              lo_real ?= lo_number.
-              IF lo_real->infnan EQ abap_false.
-                exp1 = lo_real->real.
-                result = lcl_lisp_new=>real_number( value = base1 ** exp1
-                                                    iv_exact = lv_exact ).
+          CASE num-sign.
+            WHEN c_sign_pos_nan OR c_sign_neg_nan.
+              result = lo_z1.
+            WHEN c_sign_zero.
+              CASE expt-sign.
+                WHEN c_sign_zero.
+                  result = lcl_lisp_number=>one.
+                WHEN c_sign_positive.
+                  result = lcl_lisp_number=>zero.
+                WHEN OTHERS.
+                  lo_z2->raise( | invalid power in { operation }| ).
+              ENDCASE.
+            WHEN OTHERS.
+              IF num-infnan EQ abap_true.
+                result = lo_z1.
               ELSE.
-                result = lo_real.
+                CASE expt-sign.
+                  WHEN c_sign_zero.
+                    result = lcl_lisp_number=>one.
+                  WHEN c_sign_positive OR c_sign_negative.
+                    CASE lo_z2.
+                      WHEN lcl_lisp_number=>inf OR lcl_lisp_number=>neg_inf.
+                        result = lo_z2.
+                      WHEN OTHERS.
+                        result = lcl_lisp_new=>real_number( value = base1 ** exp1
+                                                            iv_exact = lv_exact ).
+                    ENDCASE.
+                  WHEN c_sign_pos_nan OR c_sign_neg_nan.
+                    result = lo_z2.
+                ENDCASE.
               ENDIF.
-            WHEN type_rational.
-              lo_rat ?= lo_number.
-              exp1 = lo_rat->int / lo_rat->denominator.
-              result = lcl_lisp_new=>real_number( value = base1 ** exp1
-                                                  iv_exact = lv_exact ).
-            WHEN type_complex.
-              lo_number->no_complex( 'complex [expt] not implemented yet -' ).
-
           ENDCASE.
+
 
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
@@ -8960,6 +8925,7 @@
     METHOD proc_exp.
       DATA x TYPE tv_real.
       DATA exp_real TYPE tv_real.
+      DATA lv_exact TYPE tv_flag.
 
       result = nil.
       TRY.
@@ -8968,10 +8934,11 @@
 
             x = lo_number->get_real( self = number-real_part
                                      operation = operation ).
+            lv_exact = lo_number->exact.
             exp_real = exp( x ).
             IF number-imag_part-sign = c_sign_zero.
               result = lcl_lisp_new=>real_number( value = exp_real
-                                                  iv_exact = lo_number->exact ).
+                                                  iv_exact = lv_exact ).
             ELSE.
               DATA siny TYPE f.
               DATA cosy TYPE f.
@@ -8982,9 +8949,9 @@
               siny = sin( b ).
               cosy = cos( b ).
               result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real_number( value = exp_real * cosy
-                                                                                    iv_exact = lo_number->exact )
+                                                                                    iv_exact = lv_exact )
                                                   imag = lcl_lisp_new=>real_number( value = exp_real * siny
-                                                                                   iv_exact = lo_number->exact ) ).
+                                                                                   iv_exact = lv_exact ) ).
             ENDIF.
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
@@ -9036,7 +9003,7 @@
               result = lcl_lisp_number=>zero.
             ELSE.
               result = lcl_lisp_new=>real_number( value = log( carry ) / base
-                                                  iv_exact = lo_number->exact ).
+                                                  iv_exact = abap_false ).  " lo_number->exact ).
             ENDIF.
           ENDIF.
 
@@ -9110,12 +9077,9 @@
 
       result = nil.
       TRY.
-          IF list->car->type CN c_number_types.
-            list->car->raise_nan( operation ) ##NO_TEXT.
-          ENDIF.
-          CAST lcl_lisp_number( list->car )->get_integer( EXPORTING operation = operation
-                                                          IMPORTING ev_int = lv_int
-                                                                    ev_exact = lv_exact ).
+           list->car->get_integer( EXPORTING operation = operation
+                                   IMPORTING ev_int = lv_int
+                                             ev_exact = lv_exact ).
           IF lv_exact EQ abap_false OR lv_int LT 0.
             list->car->raise_index( operation ).
           ELSEIF lv_int GT 1.
@@ -9141,24 +9105,15 @@
       " (floor/ n1 n2) implements number-theoretic (integer) division; It is an error if n2 is zero.
       DATA nr TYPE tv_int.  " remainder
       DATA nq TYPE tv_int.  " quotient
-      DATA n1 TYPE tv_int.
-      DATA n2 TYPE tv_int.
       DATA carry TYPE tv_real.
-      DATA lv_exact TYPE tv_flag.
       DATA lv_exact2 TYPE tv_flag.
       TRY.
-          IF list->car->type CN c_number_types.
-            list->car->raise_nan( operation ) ##NO_TEXT.
-          ENDIF.
-          CAST lcl_lisp_number( list->car )->get_integer( EXPORTING operation = operation
-                                                          IMPORTING ev_int = n1
-                                                                    ev_exact = lv_exact ).
-          IF list->cdr->car->type CN c_number_types.
-            list->cdr->car->raise_nan( operation ) ##NO_TEXT.
-          ENDIF.
-          CAST lcl_lisp_number( list->cdr->car )->get_integer( EXPORTING operation = operation
-                                                               IMPORTING ev_int = n2
-                                                                         ev_exact = lv_exact2 ).
+          list->car->get_integer( EXPORTING operation = operation
+                                  IMPORTING ev_int = DATA(n1)
+                                            ev_exact = DATA(lv_exact) ).
+          list->cdr->car->get_integer( EXPORTING operation = operation
+                                       IMPORTING ev_int = DATA(n2)
+                                                 ev_exact = lv_exact2 ).
           IF n2 EQ 0.
             list->cdr->car->raise_invalid_number( operation ).
           ENDIF.
@@ -9184,26 +9139,18 @@
 
     METHOD proc_floor_quotient.
       " (floor-quotient n1 n2) implements integer division and returns one integer nq; It is an error if n2 is zero.
-      DATA n1 TYPE tv_int.
-      DATA n2 TYPE tv_int.
       DATA carry TYPE tv_real.
 
       DATA nq TYPE tv_int.  " quotient
       DATA lv_exact TYPE tv_flag.
       DATA lv_exact2 TYPE tv_flag.
       TRY.
-          IF list->car->type CN c_number_types.
-            list->car->raise_nan( operation ) ##NO_TEXT.
-          ENDIF.
-          IF list->cdr->car->type CN c_number_types.
-            list->cdr->car->raise_nan( operation ) ##NO_TEXT.
-          ENDIF.
-          CAST lcl_lisp_number( list->car )->get_integer( EXPORTING operation = operation
-                                                          IMPORTING ev_int = n1
-                                                                    ev_exact = lv_exact ).
-          CAST lcl_lisp_number( list->cdr->car )->get_integer( EXPORTING operation = operation
-                                                               IMPORTING ev_int = n2
-                                                                         ev_exact = lv_exact2 ).
+          list->car->get_integer( EXPORTING operation = operation
+                                  IMPORTING ev_int = DATA(n1)
+                                            ev_exact = lv_exact ).
+          list->cdr->car->get_integer( EXPORTING operation = operation
+                                       IMPORTING ev_int = DATA(n2)
+                                                 ev_exact = lv_exact2 ).
           IF n2 EQ 0.
             list->cdr->car->raise_invalid_number( operation ).
           ENDIF.
@@ -9225,25 +9172,17 @@
       " NaN is returned in remainder x % y when x is an infinity or y is zero.
       " (floor-remainder n1 n2) -- equivalent to (modulo n1 n2)
       DATA nr TYPE tv_int.  " remainder
-      DATA n1 TYPE tv_int.
-      DATA n2 TYPE tv_int.
       DATA carry TYPE tv_real.
       DATA nq TYPE tv_int.  " quotient
       DATA lv_exact TYPE tv_flag.
       DATA lv_exact2 TYPE tv_flag.
       TRY.
-          IF list->car->type CN c_number_types.
-            list->car->raise_nan( operation ) ##NO_TEXT.
-          ENDIF.
-          IF list->cdr->car->type CN c_number_types.
-            list->cdr->car->raise_nan( operation ) ##NO_TEXT.
-          ENDIF.
-          CAST lcl_lisp_number( list->car )->get_integer( EXPORTING operation = operation
-                                                          IMPORTING ev_int = n1
-                                                                    ev_exact = lv_exact ).
-          CAST lcl_lisp_number( list->cdr->car )->get_integer( EXPORTING operation = operation
-                                                               IMPORTING ev_int = n2
-                                                                         ev_exact = lv_exact2 ).
+          list->car->get_integer( EXPORTING operation = operation
+                                  IMPORTING ev_int = DATA(n1)
+                                            ev_exact = lv_exact ).
+          list->cdr->car->get_integer( EXPORTING operation = operation
+                                       IMPORTING ev_int = DATA(n2)
+                                                 ev_exact = lv_exact2 ).
           IF n2 EQ 0.
             list->cdr->car->raise_invalid_number( operation ).
           ENDIF.
@@ -9263,25 +9202,17 @@
 
     METHOD proc_truncate_new.
       DATA nr TYPE tv_int.  " remainder
-      DATA n1 TYPE tv_int.
-      DATA n2 TYPE tv_int.
       DATA carry TYPE tv_real.
       DATA nq TYPE tv_int.  " quotient
       DATA lv_exact TYPE tv_flag.
       DATA lv_exact2 TYPE tv_flag.
       TRY.
-          IF list->car->type CN c_number_types.
-            list->car->raise_nan( operation ) ##NO_TEXT.
-          ENDIF.
-          IF list->cdr->car->type CN c_number_types.
-            list->cdr->car->raise_nan( operation ) ##NO_TEXT.
-          ENDIF.
-          CAST lcl_lisp_number( list->car )->get_integer( EXPORTING operation = operation
-                                                          IMPORTING ev_int = n1
-                                                                    ev_exact = lv_exact ).
-          CAST lcl_lisp_number( list->cdr->car )->get_integer( EXPORTING operation = operation
-                                                               IMPORTING ev_int = n2
-                                                                         ev_exact = lv_exact2 ).
+          list->car->get_integer( EXPORTING operation = operation
+                                  IMPORTING ev_int = DATA(n1)
+                                            ev_exact = lv_exact ).
+          list->cdr->car->get_integer( EXPORTING operation = operation
+                                       IMPORTING ev_int = DATA(n2)
+                                                 ev_exact = lv_exact2 ).
           IF n2 EQ 0.
             list->cdr->car->raise_invalid_number( operation ).
           ENDIF.
@@ -9305,25 +9236,17 @@
 
     METHOD proc_trunc_quotient.
       " (truncate-quotient n1 n2) -- equivalent to (quotient n1 n2)
-      DATA n1 TYPE tv_int.
-      DATA n2 TYPE tv_int.
       DATA carry TYPE tv_real.
       DATA nq TYPE tv_int.  " quotient
       DATA lv_exact TYPE tv_flag.
       DATA lv_exact2 TYPE tv_flag.
       TRY.
-          IF list->car->type CN c_number_types.
-            list->car->raise_nan( operation ) ##NO_TEXT.
-          ENDIF.
-          IF list->cdr->car->type CN c_number_types.
-            list->cdr->car->raise_nan( operation ) ##NO_TEXT.
-          ENDIF.
-          CAST lcl_lisp_number( list->car )->get_integer( EXPORTING operation = operation
-                                                          IMPORTING ev_int = n1
-                                                                    ev_exact = lv_exact ).
-          CAST lcl_lisp_number( list->cdr->car )->get_integer( EXPORTING operation = operation
-                                                               IMPORTING ev_int = n2
-                                                                         ev_exact = lv_exact2 ).
+          list->car->get_integer( EXPORTING operation = operation
+                                  IMPORTING ev_int = DATA(n1)
+                                            ev_exact = lv_exact ).
+          list->cdr->car->get_integer( EXPORTING operation = operation
+                                       IMPORTING ev_int = DATA(n2)
+                                                 ev_exact = lv_exact2 ).
           IF n2 EQ 0.
             list->cdr->car->raise_invalid_number( operation ).
           ENDIF.
@@ -9342,25 +9265,17 @@
     METHOD proc_trunc_remainder.
       " (truncate-remainder n1 n2) -- equivalent to (remainder n1 n2)
       DATA nr TYPE tv_int.  " remainder
-      DATA n1 TYPE tv_int.
-      DATA n2 TYPE tv_int.
       DATA carry TYPE tv_real.
       DATA nq TYPE tv_int.  " quotient
       DATA lv_exact TYPE tv_flag.
       DATA lv_exact2 TYPE tv_flag.
       TRY.
-          IF list->car->type CN c_number_types.
-            list->car->raise_nan( operation ) ##NO_TEXT.
-          ENDIF.
-          IF list->cdr->car->type CN c_number_types.
-            list->cdr->car->raise_nan( operation ) ##NO_TEXT.
-          ENDIF.
-          CAST lcl_lisp_number( list->car )->get_integer( EXPORTING operation = operation
-                                                          IMPORTING ev_int = n1
-                                                                    ev_exact = lv_exact ).
-          CAST lcl_lisp_number( list->cdr->car )->get_integer( EXPORTING operation = operation
-                                                               IMPORTING ev_int = n2
-                                                                         ev_exact = lv_exact2 ).
+          list->car->get_integer( EXPORTING operation = operation
+                                  IMPORTING ev_int = DATA(n1)
+                                            ev_exact = lv_exact ).
+          list->cdr->car->get_integer( EXPORTING operation = operation
+                                       IMPORTING ev_int = DATA(n2)
+                                                 ev_exact = lv_exact2 ).
           IF n2 EQ 0.
             list->cdr->car->raise_invalid_number( operation ).
           ENDIF.
@@ -13366,6 +13281,15 @@
       number ?= cell.
     ENDMETHOD.
 
+    METHOD get_integer.
+      IF type CN c_number_types.
+        raise_nan( operation ) ##NO_TEXT.
+      ENDIF.
+      CAST lcl_lisp_number( me )->get_integer( EXPORTING operation = operation
+                                               IMPORTING ev_int = ev_int
+                                                         ev_exact = ev_exact ).
+    ENDMETHOD.
+
     METHOD throw.
       RAISE EXCEPTION TYPE lcx_lisp_exception
         EXPORTING
@@ -16124,6 +16048,7 @@
     ENDMETHOD.
 
     METHOD number_to_string.
+      CONSTANTS operation TYPE string VALUE 'number->string'.
       " A numerical constant can be specified to be either exact or inexact by a prefix #e for exact and #i for inexact.
       " An exactness prefix can appear before or after any radix prefix that is used.
       " If the written representation of a number has no exactness prefix, the constant is inexact if it contains a
@@ -16204,7 +16129,7 @@
           str = to_lower( str ).
 
         WHEN OTHERS.
-          raise_nan( `number->string` ).
+          raise_nan( operation ).
       ENDCASE.
       str = condense( str ).
       IF lv_radix_error EQ abap_true.
@@ -16214,7 +16139,8 @@
     ENDMETHOD.
 
     METHOD is_integer.
-      DATA(res) = get_state( 'integer?' ).
+      CONSTANTS operation TYPE string VALUE 'integer?'.
+      DATA(res) = get_state( operation ).
       CASE res-subtype.   " Check real part
         WHEN type_integer.
           flag = abap_true.
@@ -16227,7 +16153,7 @@
           flag = xsdbool( res-infnan EQ abap_false AND scheme_round( res-real ) = res-real ).
 
         WHEN OTHERS.
-          raise_nan( `integer?` ).
+          raise_nan( operation ).
       ENDCASE.
       IF flag = abap_true AND res-type EQ type_complex.
         flag = is_exact_zero( res-imag_part ).  " check imaginary part
@@ -16235,21 +16161,23 @@
     ENDMETHOD.
 
     METHOD is_finite.
+      CONSTANTS operation TYPE string VALUE 'finite?'.
       "The finite? procedure returns #t on all real numbers except +inf.0, -inf.0, and +nan.0,
       " and on complex numbers if their real and imaginary parts are both finite.
       " Otherwise it returns #f.
       result = false.
-      DATA(state) = get_state( 'infinite?' ).
+      DATA(state) = get_state( operation ).
       IF state-real_part-infnan EQ abap_false AND state-imag_part-infnan EQ abap_false.
         result = true.
       ENDIF.
     ENDMETHOD.
 
     METHOD is_infinite.
+      CONSTANTS operation TYPE string VALUE 'infinite?'.
       " The infinite? procedure returns #t on the real numbers +inf.0 and -inf.0, and on complex
       " numbers if their real or imaginary parts or both are infinite. Otherwise it returns #f.
       result = false.
-      DATA(state) = get_state( 'infinite?' ).
+      DATA(state) = get_state( operation ).
       IF ( state-real_part-infnan EQ abap_true AND ( state-real_part-ref EQ inf OR state-real_part-ref EQ neg_inf ) )
         OR ( state-imag_part-infnan EQ abap_true AND ( state-imag_part-ref EQ inf OR state-imag_part-ref EQ neg_inf ) ).
         result = true.
