@@ -3683,10 +3683,16 @@
      ENDMETHOD.                    "math_modulo
 
      METHOD math_random_too_large.
-       scheme( code =  '(random 100000000000000)'
-               expected = |Eval: { NEW cx_sy_conversion_overflow( textid = '5E429A39EE412B43E10000000A11447B'
-                                                                  value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
-
+       DATA lv_int TYPE tv_int.
+       TRY.
+           lv_int = 100000000000000.
+           scheme( code =  '(random 100000000000000)'
+                   expected = |Eval: { NEW cx_sy_conversion_overflow( textid = '5E429A39EE412B43E10000000A11447B'
+                                                                      value = '100000000000000' )->get_text( ) }| ). "Overflow converting from &
+         CATCH cx_root INTO DATA(lx_error).
+           scheme( code =  '(random 100000000000000)'
+                   expected = |Eval: 100000000000000 is not an integer in random| ).
+       ENDTRY.
      ENDMETHOD.                    "math_modulo
 
      METHOD math_min_0.

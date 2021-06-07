@@ -33,19 +33,12 @@ CLASS lcl_stack DEFINITION FRIENDS lif_unit_test.
     METHODS next RETURNING VALUE(rv_data) TYPE tv_data.
 
     METHODS push IMPORTING iv_key TYPE tv_data.
-    "METHODS pop RETURNING VALUE(rv_data) TYPE tv_data.
-    "METHODS empty RETURNING VALUE(rv_flag) TYPE xsdboolean.
 
     METHODS serialize RETURNING VALUE(rt_string) TYPE string_table.
     METHODS deserialize IMPORTING it_string      TYPE string_table.
   PROTECTED SECTION.
-    TYPES: BEGIN OF ts_node,
-             data TYPE tv_data,
-             next TYPE REF TO data,
-             prev TYPE REF TO data,
-           END OF ts_node.
-
-    DATA mr_top TYPE REF TO ts_node.
+    DATA mt_stack TYPE string_table.
+    DATA mv_index TYPE i.
 ENDCLASS.
 
 *----------------------------------------------------------------------*
@@ -129,64 +122,31 @@ ENDCLASS.
 CLASS lcl_stack IMPLEMENTATION.
 
   METHOD push.
-    DATA lr_new TYPE REF TO ts_node.
-
-    CREATE DATA lr_new.
-    lr_new->data = iv_key.
-
-    IF mr_top IS BOUND.
-      lr_new->prev = mr_top.
-      IF mr_top->next IS BOUND.
-        lr_new->next = mr_top->next.
-      ENDIF.
-      mr_top->next = lr_new.
-    ENDIF.
-    mr_top = lr_new.
+    APPEND iv_key TO mt_stack.
+    mv_index = lines( mt_stack ).
   ENDMETHOD.
 
   METHOD previous.
-    CLEAR rv_data.
-    CHECK mr_top IS BOUND.
-    IF mr_top->prev IS BOUND.
-      mr_top ?= mr_top->prev.
+    IF mv_index GT 1.
+      mv_index = mv_index - 1.
     ENDIF.
-    rv_data = mr_top->data.
+    rv_data = VALUE #( mt_stack[ mv_index ] OPTIONAL ).
   ENDMETHOD.
 
   METHOD next.
-    CLEAR rv_data.
-    CHECK mr_top IS BOUND.
-    IF mr_top->next IS BOUND.
-      mr_top ?= mr_top->next.
+    IF mv_index LT lines( mt_stack ).
+      mv_index = mv_index + 1.
     ENDIF.
-    rv_data = mr_top->data.
+   rv_data = VALUE #( mt_stack[ mv_index ] OPTIONAL ).
   ENDMETHOD.
 
-*  METHOD empty.
-*    rv_flag = xsdbool( mr_top IS NOT BOUND ).
-*  ENDMETHOD.
-
   METHOD deserialize.
-    DATA lv_string TYPE string.
-    LOOP AT it_string INTO lv_string.
-      push( lv_string ).
-    ENDLOOP.
+    mt_stack = it_string.
+    mv_index = lines( mt_stack ).
   ENDMETHOD.
 
   METHOD serialize.
-    DATA lr_node TYPE REF TO ts_node.
-
-    CLEAR rt_string.
-    lr_node = mr_top.
-*   Find first entry
-    WHILE lr_node IS BOUND AND lr_node->prev IS BOUND.
-      lr_node ?= lr_node->prev.
-    ENDWHILE.
-
-    WHILE lr_node IS BOUND.
-      APPEND lr_node->data TO rt_string.
-      lr_node ?= lr_node->next.
-    ENDWHILE.
+    rt_string = mt_stack.
   ENDMETHOD.
 
 ENDCLASS.
@@ -461,8 +421,8 @@ CLASS lcl_ide IMPLEMENTATION.
 
   METHOD read_settings.
     DATA params TYPE REF TO zcl_lisp_shm_root.
-    DATA: handle TYPE REF TO zcl_lisp_area,
-          exc    TYPE REF TO cx_root.
+    DATA handle TYPE REF TO zcl_lisp_area.
+    DATA exc TYPE REF TO cx_root.
 
     TRY.
 
@@ -587,15 +547,15 @@ CLASS lcl_ide IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD graphics.
-    DATA lx_root TYPE REF TO cx_root.
     DATA code TYPE string.
+    DATA lx_root TYPE REF TO cx_root.
     TRY.
         code = mi_source->to_string( ).
         CHECK code IS NOT INITIAL.
 
         sexpr_viewer( mo_int->parse( code ) ).
 
-      CATCH cx_root INTO lx_root.
+      CATCH cx_root INTO lx_root. "#EC NEED_CX_ROOT
         mi_source->update_status( lx_root->get_text( ) ).
     ENDTRY.
   ENDMETHOD.
@@ -1304,9 +1264,9 @@ CLASS lcl_configuration IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD to_radiobutton.
-    mv_mode_url = boolc( gs_cfg-output_mode EQ c_mode_url ).
-    mv_mode_exe = boolc( gs_cfg-output_mode EQ c_mode_exe ).
-    mv_mode_txt = boolc( gs_cfg-output_mode EQ c_mode_txt ).
+    mv_mode_url = xsdbool( gs_cfg-output_mode EQ c_mode_url ).
+    mv_mode_exe = xsdbool( gs_cfg-output_mode EQ c_mode_exe ).
+    mv_mode_txt = xsdbool( gs_cfg-output_mode EQ c_mode_txt ).
   ENDMETHOD.
 
   METHOD from_radiobutton.
@@ -1487,7 +1447,7 @@ CLASS lcl_dot_diagram IMPLEMENTATION.
     CASE elem->type.
       WHEN type_pair.
 
-        IF elem->cdr NE lcl_lisp=>nil.
+        IF elem->cdr NE lcl_lisp=>null.
           add( |if ({ print( elem ) }) then ({ get_object_id( elem->car ) })\n| ).
           node( elem->car ).
           detach( ).
@@ -1543,7 +1503,8 @@ CLASS lcl_sexpr_diagram IMPLEMENTATION.
         rv_node = 'nil'.
       WHEN type_real
         OR type_integer
-        OR type_rational.
+        OR type_rational
+        OR type_complex.
         rv_node = io_elem->to_text( ).
       WHEN OTHERS.
         rv_node = io_elem->value.
@@ -1557,7 +1518,7 @@ CLASS lcl_sexpr_diagram IMPLEMENTATION.
         DATA(a) = get_object_id( elem ).
         add( | { a } [label="{ print( elem ) }"][shape=box]; \n| ).
 
-        IF elem->cdr NE lcl_lisp=>nil.
+        IF elem->cdr NE lcl_lisp=>null.
           add( | { a } -> { get_object_id( elem->car ) } [label="{ elem->car->type }"]\n| ).
           node( elem->car ).
 
@@ -1609,7 +1570,7 @@ CLASS ltc_stack IMPLEMENTATION.
    ENDMETHOD.
 
    METHOD empty.
-     cl_abap_unit_assert=>assert_not_bound( mo_stack->mr_top ).
+     cl_abap_unit_assert=>assert_initial( mo_stack->mt_stack ).
      cl_abap_unit_assert=>assert_equals( act = mo_stack->next( )
                                          exp = space ).
      cl_abap_unit_assert=>assert_equals( act = mo_stack->previous( )
