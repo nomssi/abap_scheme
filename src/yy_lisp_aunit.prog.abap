@@ -170,7 +170,7 @@
 
      METHOD scheme_argument.
        scheme( code = code
-               expected = `Eval: missing argument in ` && operation ).
+               expected = |Eval: { operation } missing argument| ).
      ENDMETHOD.
 
      METHOD scheme_incorrect.
@@ -890,7 +890,7 @@
        scheme( code = '(set! x 5)'
                expected = 'Eval: Symbol x is unbound' ).
        scheme( code = '(set! 7 5)'
-               expected = 'Eval: 7 is not a bound symbol' ).
+               expected = 'Eval: 7 is not a bound symbol in set!' ).
        scheme_incorrect( code = '(set!)'
                          operation = 'set!' ).
      ENDMETHOD.                    "set_2
@@ -1450,7 +1450,7 @@
        scheme( code = `(char=? #\A #\a)`
                expected = '#f' ).
        scheme( code = `(char=? #\A)`
-               expected = 'Eval: missing argument in char=?' ).
+               expected = 'Eval: char=? missing argument' ).
      ENDMETHOD.                    "char_eq
 
      METHOD char_lt.
@@ -1459,7 +1459,7 @@
        scheme( code = `(char<? #\A #\a)`
                expected = '#t' ).
        scheme( code = `(char<?)`
-               expected = 'Eval: missing argument in char<?' ).
+               expected = 'Eval: char<? missing argument' ).
      ENDMETHOD.                    "char_lt
 
      METHOD char_gt.
@@ -1477,7 +1477,7 @@
        scheme( code = `(char<=? #\B #\a)`
                expected = '#t' ).
        scheme( code = `(char<=? #\C)`
-               expected = 'Eval: missing argument in char<=?' ).
+               expected = 'Eval: char<=? missing argument' ).
      ENDMETHOD.                    "char_le
 
      METHOD char_ge.
@@ -1495,7 +1495,7 @@
        scheme( code = `(char-ci=? #\A #\b)`
                expected = '#f' ).
        scheme( code = `(char-ci=? #\A)`
-               expected = 'Eval: missing argument in char-ci=?' ).
+               expected = 'Eval: char-ci=? missing argument' ).
      ENDMETHOD.                    "char_ci_eq
 
      METHOD char_ci_lt.
@@ -1504,7 +1504,7 @@
        scheme( code = `(char-ci<? #\A #\a)`
                expected = '#f' ).
        scheme( code = `(char-ci<?)`
-               expected = 'Eval: missing argument in char-ci<?' ).
+               expected = 'Eval: char-ci<? missing argument' ).
      ENDMETHOD.                    "char_ci_lt
 
      METHOD char_ci_gt.
@@ -1522,7 +1522,7 @@
        scheme( code = `(char-ci<=? #\B #\a)`
                expected = '#f' ).
        scheme( code = `(char-ci<=? #\C)`
-               expected = 'Eval: missing argument in char-ci<=?' ).
+               expected = 'Eval: char-ci<=? missing argument' ).
      ENDMETHOD.                    "char_ci_le
 
      METHOD char_ci_ge.

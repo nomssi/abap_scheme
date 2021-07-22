@@ -350,14 +350,11 @@
 *----------------------------------------------------------------------*
   CLASS lcx_lisp_exception IMPLEMENTATION.
     METHOD constructor.
+      CONSTANTS c_separator TYPE string VALUE `: `.
       super->constructor( ).
-      IF message IS INITIAL.
-        mv_message = c_error_message.
-      ELSE.
-        mv_message = message.
-      ENDIF.
+      mv_message = COND #( WHEN message IS INITIAL THEN c_error_message ELSE message ).
       IF area IS NOT INITIAL.
-        mv_area = area && `: `.
+        mv_area = area && c_separator.
       ENDIF.
     ENDMETHOD.                    "constructor
 
@@ -546,10 +543,18 @@
                                     RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
       METHODS raise_nan IMPORTING operation TYPE string
                         RAISING   lcx_lisp_exception.
+
+      METHODS raise_type IMPORTING expected TYPE string
+                                   operation TYPE string
+                         RAISING   lcx_lisp_exception.
+
       METHODS raise_invalid_number IMPORTING operation TYPE string
                                    RAISING   lcx_lisp_exception.
 
       METHODS no_complex IMPORTING operation TYPE string
+                         RAISING   lcx_lisp_exception.
+
+      METHODS no_integer IMPORTING operation TYPE string
                          RAISING   lcx_lisp_exception.
 
       CLASS-METHODS radix_throw IMPORTING message TYPE string
@@ -1086,7 +1091,7 @@
 
       DO arity_min TIMES.
         IF lo_ptr IS NOT BOUND OR lo_ptr->car IS NOT BOUND.
-          lcl_lisp=>throw( `missing argument in ` && operation ).
+          throw( |{ operation } missing argument| ).
         ENDIF.
         lo_ptr = lo_ptr->cdr.
       ENDDO.
@@ -4442,6 +4447,7 @@
                                   area          TYPE string
                         RETURNING VALUE(result) TYPE REF TO lcl_lisp
                         RAISING   lcx_lisp_exception.
+
   ENDCLASS.                    "lcl_lisp_interpreter DEFINITION
 
 *----------------------------------------------------------------------*
@@ -4523,7 +4529,8 @@
                                                        element = eval( VALUE #( elem = element->cdr->car
                                                                                 env = environment ) ) ).
         WHEN OTHERS.
-          result->raise( | is not a bound symbol| ).
+          result->raise_type( expected = |bound symbol|
+                              operation = operation ).
       ENDCASE.
     ENDMETHOD.
 
@@ -6134,7 +6141,8 @@
       IF io_elem IS NOT BOUND.
         lcl_lisp=>incorrect_input( operation ).
       ELSEIF io_elem->type NE type_integer.
-        io_elem->raise( ` is not a byte in ` && operation ) ##NO_TEXT.
+        io_elem->raise_type( expected = |byte|
+                             operation = operation ).
       ELSE.
         li_port->write_u8( CAST lcl_lisp_integer( io_elem ) ).
       ENDIF.
@@ -6765,7 +6773,7 @@
       ENDWHILE.
       CHECK lo_fast NE nil.
 *     If the last item is not a cons cell, return an error
-      list->error_not_a_list( `list-length` ).
+      list->error_not_a_list( operation ).
     ENDMETHOD.
 
     METHOD proc_length.
@@ -6896,7 +6904,7 @@
         IF lo_start IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF lo_start->type NE type_integer.
-          lo_start->raise( ` is not an integer in iota start` ) ##NO_TEXT.
+          lo_start->no_integer( `iota start` ) ##NO_TEXT.
         ENDIF.
         lv_start = CAST lcl_lisp_integer( lo_start )->int.
 
@@ -6908,7 +6916,7 @@
           IF lo_step IS NOT BOUND.
             lcl_lisp=>incorrect_input( operation ).
           ELSEIF lo_step->type NE type_integer.
-            lo_step->raise( ` is not an integer in iota step` ) ##NO_TEXT.
+            lo_step->no_integer( `iota step` ) ##NO_TEXT.
           ENDIF.
 
           lv_step = CAST lcl_lisp_integer( lo_step )->int.
@@ -6970,7 +6978,8 @@
 
     METHOD proc_vector_length.
       IF list->car->type NE type_vector.
-        list->car->raise( ` is not a vector in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `vector`
+                               operation = operation ).
       ENDIF.
 
       result = CAST lcl_lisp_vector( list->car )->length( ).
@@ -6979,7 +6988,8 @@
     METHOD proc_vector_ref.
 *    (vector-ref vector k) procedure
       IF list->car->type NE type_vector.
-        list->car->raise( ` is not a vector in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `vector`
+                               operation = operation ).
       ENDIF.
       DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
 
@@ -6999,7 +7009,8 @@
     METHOD proc_vector_set.
 *    (vector-set! vector k obj) procedure
       IF list->car->type NE type_vector.
-        list->car->raise( ` is not a vector in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `vector`
+                               operation = operation ).
       ENDIF.
 
       DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
@@ -7012,7 +7023,8 @@
         lo_idx->raise_index( operation ) ##NO_TEXT.
       ENDIF.
       IF list->car->type NE type_vector.
-        list->car->raise( ` is not a vector in vector-set!` ) ##NO_TEXT.
+        list->car->raise_type( expected = `vector`
+                               operation = operation ).
       ENDIF.
 
       DATA(lo_obj) = list->cdr->cdr.
@@ -7032,7 +7044,8 @@
 * (vector-fill! vector fill start end) procedure
 *The vector-fill! procedure stores fill in the elements of vector between start and end.
       IF list->car->type NE type_vector.
-        list->car->raise( ` is not a vector in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `vector`
+                               operation = operation ).
       ENDIF.
       DATA(lo_vec) = CAST lcl_lisp_vector( list->car ).
       DATA(lo_fill) = list->cdr->car.
@@ -7084,7 +7097,8 @@
 * The vector->list procedure returns a newly allocated list of the objects contained
 * in the elements of vector between start and end. Order is preserved.
       IF list->car->type NE type_vector.
-        list->car->raise( ` is not a vector in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `vector`
+                               operation = operation ).
       ENDIF.
 
       DATA lv_start TYPE tv_int.
@@ -7141,7 +7155,8 @@
 
     METHOD proc_bytevector_length.
       IF list->car->type NE type_bytevector.
-        list->car->raise( ` is not a bytevector in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `bytevector`
+                               operation = operation ).
       ENDIF.
 
       result = CAST lcl_lisp_bytevector( list->car )->length( ).
@@ -7153,7 +7168,8 @@
       DATA lv_byte TYPE tv_byte.
 
       IF list->car->type NE type_bytevector.
-        list->car->raise( ` is not a bytevector in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `bytevector`
+                               operation = operation ).
       ENDIF.
       lo_u8 ?= list->car.
 
@@ -7167,7 +7183,8 @@
       DATA(lo_last) = list->cdr->cdr.
       "_validate_byte lo_last->car operation.
       IF NOT ( lo_last->car->type = type_integer AND CAST lcl_lisp_integer( lo_last->car )->int BETWEEN 0 AND 255 ).
-        lo_last->car->raise( ` is not a byte in ` && operation ) ##NO_TEXT.
+        lo_last->car->raise_type( expected = `byte`
+                                  operation = operation ).
       ENDIF.
       lv_byte = CAST lcl_lisp_integer( lo_last->car )->int.
 
@@ -7182,7 +7199,8 @@
       DATA lv_index TYPE tv_int.
 
       IF list->car->type NE type_bytevector.
-        list->car->raise( ` is not a bytevector in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `bytevector`
+                               operation = operation ).
       ENDIF.
       lo_u8 ?= list->car.
 
@@ -7216,7 +7234,8 @@
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
       IF lo_ptr NE nil.
-        lo_ptr->car->raise( ` is not a bytevector in bytevector-append` ).
+        lo_ptr->car->raise_type( expected = `bytevector`
+                                 operation = operation ).
       ENDIF.
       result = lcl_lisp_new=>bytevector( it_byte = lt_byte
                                          iv_mutable = lv_mutable ).
@@ -7242,7 +7261,8 @@
       IF list->cdr NE lcl_lisp=>null.  "_validate_byte list->cdr->car `make-bytevector`.
         IF NOT ( list->cdr->car->type = type_integer
           AND CAST lcl_lisp_integer( list->cdr->car )->int BETWEEN 0 AND 255 ).
-          list->cdr->car->raise( ` is not a byte in ` && operation ) ##NO_TEXT.
+          list->cdr->car->raise_type( expected = `byte`
+                                      operation = operation ).
         ENDIF.
 
         lo_fill ?= list->cdr->car.
@@ -7311,7 +7331,8 @@
       DATA lv_end TYPE tv_index.
 
       IF list->car->type NE type_string.
-        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `string`
+                               operation = operation ).
       ENDIF.
 
       lo_string ?= list->car.
@@ -7360,7 +7381,8 @@
       DATA lv_end TYPE tv_index.
 
       IF list->car->type NE type_bytevector.
-        list->car->raise( ` is not a bytevector in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `bytevector`
+                               operation = operation ).
       ENDIF.
       lo_u8 ?= list->car.
 
@@ -7413,7 +7435,8 @@
       DATA lo_ptr TYPE REF TO lcl_lisp.
 
       IF list->car->type NE type_bytevector.
-        list->car->raise( ` is not a bytevector in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `bytevector`
+                               operation = operation ).
       ENDIF.
       lo_u8_to ?= list->car.
       lv_length_to = lines( lo_u8_to->bytes ).
@@ -8444,8 +8467,12 @@
 
         WHEN type_complex.
           z ?= list->car.
-          result = lcl_lisp_new=>real_number( value = z->angle
-                                              iv_exact = z->exact ).
+          IF z->is_nan( ).
+            result = lcl_lisp_number=>nan.
+          ELSE.
+            result = lcl_lisp_new=>real_number( value = z->angle
+                                                iv_exact = z->exact ).
+          ENDIF.
 
         WHEN OTHERS.
           list->car->raise_nan( operation ) ##NO_TEXT.
@@ -9815,7 +9842,7 @@
 
       result = nil.
       IF list->car->type NE type_integer.
-        list->car->raise( ` is not an integer in ` && operation ) ##NO_TEXT.
+        list->car->no_integer( operation ).
       ENDIF.
       TRY.
           DATA(lo_rnd) = cl_abap_random=>create( cl_abap_random=>seed( ) ).
@@ -9879,7 +9906,7 @@
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF list->cdr->car->type NE type_integer.
-            list->cdr->car->raise( ` is not an integer in iota step` ) ##NO_TEXT.
+            list->cdr->car->no_integer( operation ) ##NO_TEXT.
         ENDIF.
         lv_radix = CAST lcl_lisp_integer( list->cdr->car )->int.
       ENDIF.
@@ -9913,14 +9940,15 @@
       DATA lv_radix TYPE tv_int VALUE 10.
 
       IF list->car->type NE type_string.
-        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `string`
+                               operation = operation ).
       ENDIF.
 *     Optional radix
       IF list->cdr IS BOUND AND list->cdr NE nil.
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF list->cdr->car->type NE type_integer.
-          list->cdr->car->raise( ` is not an integer in radix of string->number` ) ##NO_TEXT.
+          list->cdr->car->no_integer( `radix of string->number` ) ##NO_TEXT.
         ENDIF.
         lv_radix = CAST lcl_lisp_integer( list->cdr->car )->int.
       ENDIF.
@@ -9941,7 +9969,8 @@
 
     METHOD proc_write_string.
       IF list->car->type NE type_string.
-        list->car->raise( ` is not a string in write-string` ) ##NO_TEXT.
+        list->car->raise_type( expected = `string`
+                               operation = operation ).
       ENDIF.
       result = write( io_elem = list->car
                       io_arg = list->cdr ).
@@ -9953,7 +9982,8 @@
       " (write-bytevector bytevector port start)
       " (write-bytevector bytevector port start end)
       IF list->car->type NE type_bytevector.
-        list->car->raise( ` is not a bytevector in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `bytevector`
+                               operation = operation ).
       ENDIF.
       throw( `write-bytevector not implemented yet` ).
       result = write( io_elem = list->car
@@ -9962,7 +9992,8 @@
 
     METHOD proc_write_char.
       IF list->car->type NE type_char.
-        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `char`
+                               operation = operation ).
       ENDIF.
       result = write( io_elem = list->car
                       io_arg = list->cdr ).
@@ -9970,7 +10001,8 @@
 
     METHOD proc_write_u8.
       IF list->car->type NE type_string.
-        list->car->raise( ` is not a byte in write-u8` ) ##NO_TEXT.
+        list->car->raise_type( expected = `byte`
+                               operation = operation ).
       ENDIF.
       result = write_u8( io_elem = list->car
                          io_arg = list->cdr ).
@@ -10143,7 +10175,8 @@
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
       IF lo_ptr NE nil.
-        lo_ptr->raise( | is not a list of char | ).
+        lo_ptr->raise_type( expected = `list of char`
+                            operation = operation ).
       ENDIF.
 
       result = lcl_lisp_new=>string( lv_text ).
@@ -10155,7 +10188,8 @@
       DATA lv_text TYPE string.
 
       IF list->car->type NE type_integer.
-        list->car->raise( ` is not an integer in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `integer`
+                               operation = operation ).
       ENDIF.
       lv_len = CAST lcl_lisp_integer( list->car )->int.
 
@@ -10165,7 +10199,8 @@
         IF lo_char IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF lo_char->type NE type_char.
-          lo_char->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+          lo_char->raise_type( expected = `char`
+                               operation = operation ).
         ENDIF.
         lv_char = lo_char->value+0(1).
       ENDIF.
@@ -10184,14 +10219,15 @@
       DATA lv_text TYPE string.
 
       IF list->car->type NE type_string.
-        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `string`
+                               operation = operation ).
       ENDIF.
 
       IF list->cdr NE nil.
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF list->cdr->car->type NE type_integer.
-          list->cdr->car->raise( ` is not an integer in string->list start` ) ##NO_TEXT.
+          list->cdr->car->no_integer( `string->list start` ) ##NO_TEXT.
         ENDIF.
         lv_start = CAST lcl_lisp_integer( list->cdr->car )->int.
 
@@ -10202,7 +10238,7 @@
           IF list->cdr->cdr->car IS NOT BOUND.
             lcl_lisp=>incorrect_input( operation ).
           ELSEIF list->cdr->cdr->car->type NE type_integer.
-            list->cdr->cdr->car->raise( ` is not an integer in string->list end` ) ##NO_TEXT.
+            list->cdr->cdr->car->no_integer( `string->list end` ) ##NO_TEXT.
           ENDIF.
           lv_len = CAST lcl_lisp_integer( list->cdr->cdr->car )->int.
           lv_len = lv_len - lv_start.
@@ -10231,7 +10267,8 @@
 
     METHOD proc_string_length.
       IF list->car->type NE type_string.
-        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `string`
+                               operation = operation ).
       ENDIF.
       result = lcl_lisp_new=>integer( strlen( list->car->value ) ).
     ENDMETHOD.
@@ -10242,7 +10279,8 @@
       DATA lv_text TYPE string.
 
       IF list->car->type NE type_string.
-        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `string`
+                               operation = operation ).
       ENDIF.
       IF list->cdr IS NOT BOUND.
         lcl_lisp=>incorrect_input( operation ).
@@ -10255,7 +10293,7 @@
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF list->cdr->car->type NE type_integer.
-          list->cdr->car->raise( ` is not an integer in string->copy start` ) ##NO_TEXT.
+          list->cdr->car->no_Integer( `string->copy start` ) ##NO_TEXT.
         ENDIF.
         lv_start = CAST lcl_lisp_integer( list->cdr->car )->int.
 
@@ -10266,7 +10304,7 @@
           IF list->cdr->cdr->car IS NOT BOUND.
             lcl_lisp=>incorrect_input( operation ).
           ELSEIF list->cdr->cdr->car->type NE type_integer.
-            list->cdr->cdr->car->raise( ` is not an integer in string->copy end` ) ##NO_TEXT.
+            list->cdr->cdr->car->no_integer( `string->copy end` ) ##NO_TEXT.
           ENDIF.
           lv_len = CAST lcl_lisp_integer( list->cdr->cdr->car )->int.
 
@@ -10293,7 +10331,8 @@
       DATA lv_char TYPE tv_char.
 
       IF list->car->type NE type_string.
-        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `string`
+                               operation = operation ).
       ENDIF.
       IF list->cdr->car->type NE type_integer OR CAST lcl_lisp_integer( list->cdr->car )->int LT 0.
         list->cdr->car->raise_index( operation ) ##NO_TEXT.
@@ -10316,7 +10355,8 @@
       IF list->car->type EQ type_string.
         lo_string ?= list->car.
       ELSE.
-        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `string`
+                               operation = operation ).
       ENDIF.
       IF list->cdr->car->type EQ type_integer AND CAST lcl_lisp_integer( list->cdr->car )->int GE 0.
         lv_index = CAST lcl_lisp_integer( list->cdr->car )->int.
@@ -10328,7 +10368,8 @@
         lo_char ?= list->cdr->cdr->car.
         lv_char = lo_char->value(1).
       ELSE.
-        list->cdr->cdr->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+        list->cdr->cdr->car->raise_type( expected = `char`
+                                         operation = operation ).
       ENDIF.
 
       IF lo_string->mutable EQ abap_false.
@@ -10360,7 +10401,8 @@
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
       IF lo_ptr NE nil.
-        lo_ptr->raise( | is not a list of char in { operation }| ).
+        lo_ptr->raise_type( expected = `list of char`
+                            operation = operation ).
       ENDIF.
       result = lcl_lisp_new=>string( lv_text ).
     ENDMETHOD.
@@ -10370,7 +10412,8 @@
         result = lcl_lisp_new=>string( value = list->car->value
                                        iv_mutable = abap_false ).
       ELSE.
-        list->car->raise( | is not a symbol| ).
+        list->car->raise_type( expected = `symbol`
+                               operation = operation ).
       ENDIF.
     ENDMETHOD.
 
@@ -10378,7 +10421,8 @@
       IF list->car->type = type_string.
         result = lcl_lisp_new=>symbol( list->car->value ).
       ELSE.
-        list->car->raise( | is not a string in { operation }| ).
+        list->car->raise_type( expected = `string`
+                               operation = operation ).
       ENDIF.
     ENDMETHOD.
 
@@ -10392,7 +10436,8 @@
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
       IF lo_ptr NE nil.
-        lo_ptr->car->raise( | is not a string in { operation }| ).
+        lo_ptr->car->raise_type( expected = `string`
+                                 operation = operation ).
       ENDIF.
       result = lcl_lisp_new=>string( lv_text ).
     ENDMETHOD.
@@ -10588,7 +10633,8 @@
       DATA lo_port TYPE REF TO lcl_lisp_port.
 
       IF list->car->type NE type_string.
-        list->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `string`
+                               operation = operation ).
       ENDIF.
 
       lo_port = lcl_lisp_new=>port( iv_port_type = c_port_textual
@@ -10664,7 +10710,8 @@
 
         lo_converter = lo_ptr->car.
         IF NOT lo_converter->is_procedure( ).
-          lo_converter->raise( | is not a procedure in make-parameter| ).
+          lo_converter->raise_type( expected = `procedure`
+                                    operation = operation ).
         ENDIF.
 
         lo_value = eval( VALUE #( elem = lcl_lisp_new=>box( io_proc = lo_converter
@@ -10687,7 +10734,8 @@
       DATA lv_char TYPE tv_char.
 
       IF list->car->type NE type_char.
-        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `char`
+                               operation = operation ).
       ENDIF.
 
       result = false.
@@ -10700,7 +10748,8 @@
       DATA lv_char TYPE tv_char.
 
       IF list->car->type NE type_char.
-        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `char`
+                               operation = operation ).
       ENDIF.
 
       lv_char = list->car->value.
@@ -10760,7 +10809,8 @@
       DATA lv_int TYPE tv_int.
 
       IF list->car->type NE type_char.
-        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `char`
+                               operation = operation ).
       ENDIF.
       lv_char = list->car->value.
 
@@ -10843,7 +10893,8 @@
 
     METHOD proc_is_char_whitespace.
       IF list->car->type NE type_char.
-        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `char`
+                               operation = operation ).
       ENDIF.
 
       CASE list->car.
@@ -10856,7 +10907,8 @@
 
     METHOD proc_is_char_upper_case.
       IF list->car->type NE type_char.
-        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `char`
+                               operation = operation ).
       ENDIF.
 
       result = false.
@@ -10866,7 +10918,8 @@
 
     METHOD proc_is_char_lower_case.
       IF list->car->type NE type_char.
-        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `char`
+                               operation = operation ).
       ENDIF.
 
       result = false.
@@ -11071,7 +11124,8 @@
       IF list->car->type EQ type_char.
         result = lcl_lisp_new=>integer( char_to_integer( list->car ) ).
       ELSE.
-        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `char`
+                               operation = operation ).
       ENDIF.
     ENDMETHOD.
 
@@ -11094,7 +11148,7 @@
 
         result = lcl_lisp_new=>char( lv_char ).
       ELSE.
-        list->car->raise( ` is not an integer in ` && operation ) ##NO_TEXT.
+        list->car->no_integer( operation ) ##NO_TEXT.
       ENDIF.
     ENDMETHOD.
 
@@ -11102,7 +11156,8 @@
       IF list->car->type EQ type_char.
         result = lcl_lisp_new=>char( to_upper( list->car->value ) ).
       ELSE.
-        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `char`
+                               operation = operation ).
       ENDIF.
     ENDMETHOD.
 
@@ -11110,7 +11165,8 @@
       IF list->car->type EQ type_char.
         result = lcl_lisp_new=>char( to_lower( list->car->value ) ).
       ELSE.
-        list->car->raise( ` is not a char in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `char`
+                               operation = operation ).
       ENDIF.
     ENDMETHOD.
 
@@ -11630,7 +11686,7 @@
       IF identifier IS NOT BOUND.
         lcl_lisp=>incorrect_input( operation ).
       ELSEIF identifier->type NE type_integer.
-        identifier->raise( ` is not an integer in ` && operation ) ##NO_TEXT.
+        identifier->no_integer( operation ) ##NO_TEXT.
       ENDIF.
 
       ASSIGN element->data->* TO <idxtab>.
@@ -11714,7 +11770,8 @@
 *     define-query
       DATA lo_string TYPE REF TO lcl_lisp_string.
       IF list->car->type NE type_string.
-        list->car->raise( ` is not an string in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `string`
+                               operation = operation ).
       ENDIF.
       lo_string ?= list->car.
 
@@ -11726,7 +11783,8 @@
       DATA lo_string TYPE REF TO lcl_lisp_string.
 *     sql-query
       IF list->car->type NE type_string.
-        list->car->raise( ` is not an string in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `string`
+                               operation = operation ).
       ENDIF.
       TRY.
           lo_string ?= list->car.
@@ -11758,11 +11816,11 @@
       DATA lo_number TYPE REF TO lcl_lisp_number.
 
       IF list->car->type NE type_integer.
-        list->car->raise( ` is not an integer in ` && operation ) ##NO_TEXT.
+        list->car->no_integer( operation ) ##NO_TEXT.
       ENDIF.
       lo_width ?= list->car.
       IF list->cdr->car->type NE type_integer.
-        list->cdr->car->raise( ` is not an integer in ` && operation ) ##NO_TEXT.
+        list->cdr->car->no_integer( operation ) ##NO_TEXT.
       ENDIF.
       lo_height ?= list->cdr->car.
 
@@ -11822,12 +11880,14 @@
       DATA lo_turtle2 TYPE REF TO lcl_lisp_turtle.
 
       IF list->car->type NE type_abap_turtle.
-        list->car->raise( ` is not a turtle in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `turtle`
+                               operation = operation ).
       ENDIF.
       lo_turtle1 ?= list->car.
 
       IF list->cdr->car->type NE type_abap_turtle.
-        list->cdr->car->raise( ` is not a turtle in ` && operation ) ##NO_TEXT.
+        list->cdr->car->raise_type( expected = `turtle`
+                                    operation = operation ).
       ENDIF.
 
       lo_turtle2 ?= list->cdr->car.
@@ -11866,10 +11926,11 @@
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
 
       IF list->car->type NE type_integer.
-        list->car->raise( ` is not an integer in turtles move` ) ##NO_TEXT.
+        list->car->no_integer( `turtles move` ) ##NO_TEXT.
       ENDIF.
       IF list->cdr->car->type NE type_abap_turtle.
-        list->cdr->car->raise( ` is not a turtle in turtles move` ) ##NO_TEXT.
+        list->cdr->car->raise_type( expected = `turtle`
+                                    operation = `turtles move` ) ##NO_TEXT.
       ENDIF.
       lo_turtles = CAST lcl_lisp_turtle( list->cdr->car ).
       result = lo_turtles.
@@ -11886,10 +11947,11 @@
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
 
       IF list->car->type NE type_integer.
-        list->car->raise( ` is not an integer in turtles draw` ) ##NO_TEXT.
+        list->car->no_integer( `turtles draw` ) ##NO_TEXT.
       ENDIF.
       IF list->cdr->car->type NE type_abap_turtle.
-        list->cdr->car->raise( ` is not a turtle in turtles draw` ) ##NO_TEXT.
+        list->cdr->car->raise_type( expected = `turtle`
+                                    operation = `turtles draw` ) ##NO_TEXT.
       ENDIF.
       lo_dist_n ?= list->car.
       lo_turtles ?= list->cdr->car.
@@ -11908,10 +11970,11 @@
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
 
       IF list->car->type NE type_integer.
-        list->car->raise( ` is not an integer in turtles erase` ) ##NO_TEXT.
+        list->car->no_integer( `turtles erase` ) ##NO_TEXT.
       ENDIF.
       IF list->cdr->car->type NE type_abap_turtle.
-        list->cdr->car->raise( ` is not a turtle in turtles erase` ) ##NO_TEXT.
+        list->cdr->car->raise_type( expected = ` turtle`
+                                    operation = `turtles erase` ) ##NO_TEXT.
       ENDIF.
       lo_dist_n ?= list->car.
       lo_turtles ?= list->cdr->car.
@@ -11931,13 +11994,14 @@
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
 
       IF list->car->type NE type_integer.
-        list->car->raise( ` is not an integer in turtles move-offset h` ) ##NO_TEXT.
+        list->car->no_integer( `turtles move-offset h` ) ##NO_TEXT.
       ENDIF.
       IF list->cdr->car->type NE type_integer.
-        list->cdr->car->raise( ` is not an integer in turtles move-offset v` ) ##NO_TEXT.
+        list->cdr->car->no_integer( `turtles move-offset v` ) ##NO_TEXT.
       ENDIF.
       IF list->cdr->cdr->car->type NE type_abap_turtle.
-        list->cdr->cdr->car->raise( ` is not a turtle in turtles move-offset` ) ##NO_TEXT.
+        list->cdr->cdr->car->raise_type( expected = `turtle`
+                                         operation = `turtles move-offset` ) ##NO_TEXT.
       ENDIF.
       lo_off_h ?= list->car.
       lo_off_v ?= list->cdr->car.
@@ -11959,13 +12023,14 @@
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
 
       IF list->car->type NE type_integer.
-        list->car->raise( ` is not an integer in turtles draw-offset h` ) ##NO_TEXT.
+        list->car->no_integer( `turtles draw-offset h` ) ##NO_TEXT.
       ENDIF.
       IF list->cdr->car->type NE type_integer.
-        list->cdr->car->raise( ` is not an integer in turtles draw-offset h` ) ##NO_TEXT.
+        list->cdr->car->no_integer( `turtles draw-offset h` ) ##NO_TEXT.
       ENDIF.
       IF list->cdr->cdr->car->type NE type_abap_turtle.
-        list->cdr->cdr->car->raise( ` is not a turtle in turtles draw-offset` ) ##NO_TEXT.
+        list->cdr->cdr->car->raise_type( expected = `turtle`
+                                         operation = `turtles draw-offset` ) ##NO_TEXT.
       ENDIF.
       lo_off_h ?= list->car.
       lo_off_v ?= list->cdr->car.
@@ -11985,13 +12050,14 @@
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
 
       IF list->car->type NE type_integer.
-        list->car->raise( ` is not an integer in turtles erase-offset h` ) ##NO_TEXT.
+        list->car->no_integer( `turtles erase-offset h` ) ##NO_TEXT.
       ENDIF.
       IF list->cdr->car->type NE type_integer.
-        list->cdr->car->raise( ` is not an integer in turtles erase-offset h` ) ##NO_TEXT.
+        list->cdr->car->no_integer( `turtles erase-offset h` ) ##NO_TEXT.
       ENDIF.
       IF list->cdr->cdr->car->type NE type_abap_turtle.
-        list->cdr->cdr->car->raise( ` is not a turtle in turtles erase-offset` ) ##NO_TEXT.
+        list->cdr->cdr->car->raise_type( expected = `turtle`
+                                         operation = `turtles erase-offset` ) ##NO_TEXT.
       ENDIF.
       lo_off_h ?= list->car.
       lo_off_v ?= list->cdr->car.
@@ -12011,7 +12077,8 @@
       theta = list->car->to_number( operation )->get_rational( operation ).
 
           IF list->cdr->car->type NE type_abap_turtle.
-            list->cdr->car->raise( ` is not a turtle in ` && operation ) ##NO_TEXT.
+            list->cdr->car->raise_type( expected = `turtle`
+                                        operation = operation ).
           ENDIF.
           DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
           lo_turtles ?= list->cdr->car.
@@ -12032,7 +12099,8 @@
       theta = list->car->to_number( operation )->get_rational( operation ).
 
       IF list->cdr->car->type NE type_abap_turtle.
-        list->cdr->car->raise( ` is not a turtle in ` && operation ) ##NO_TEXT.
+        list->cdr->car->raise_type( expected = `turtle`
+                                    operation = operation ).
       ENDIF.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->cdr->car.
@@ -12051,7 +12119,8 @@
 *        turtles : turtles?
 *        width : (real-in 0 255)
       IF list->car->type NE type_abap_turtle.
-        list->car->raise( ` is not a turtle in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `turtle`
+                               operation = operation ).
       ENDIF.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
@@ -12074,13 +12143,15 @@
 *      turtles : turtles?
 *      color : (or/c string? (is-a?/c color%))
       IF list->car->type NE type_abap_turtle.
-        list->car->raise( ` is not a turtle in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `turtle`
+                               operation = operation ).
       ENDIF.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
 
       IF list->cdr->car->type NE type_string.
-        list->cdr->car->raise( ` is not a string in ` && operation ) ##NO_TEXT.
+        list->cdr->car->raise_type( expected = `string`
+                                    operation = operation ).
       ENDIF.
       DATA lo_color TYPE REF TO lcl_lisp_string.
       lo_color ?= list->cdr->car.
@@ -12093,7 +12164,8 @@
     METHOD proc_turtle_state.
 *    (turtle-state turtles) → (listof (vector/c real? real? real?)
       IF list->car->type NE type_abap_turtle.
-        list->car->raise( ` is not a turtle in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `turtle`
+                               operation = operation ).
       ENDIF.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
@@ -12111,7 +12183,8 @@
 *    (clean turtles) → turtles?
 *      turtles : turtles?
       IF list->car->type NE type_abap_turtle.
-        list->car->raise( ` is not a turtle in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `turtle`
+                               operation = operation ).
       ENDIF.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
@@ -12123,7 +12196,8 @@
 *    (turtles-width turtles) → (and/c real? positive?)
 *      turtles : turtles?
       IF list->car->type NE type_abap_turtle.
-        list->car->raise( ` is not a turtle in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `turtle`
+                               operation = operation ).
       ENDIF.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
@@ -12135,7 +12209,8 @@
 *    (turtles-height turtles) → (and/c real? positive?)
 *      turtles : turtles?
       IF list->car->type NE type_abap_turtle.
-        list->car->raise( ` is not a turtle in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `turtle`
+                               operation = operation ).
       ENDIF.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
@@ -12147,7 +12222,8 @@
 *      (turtles-pen-width turtles) → (real-in 0 255)
 *        turtles : turtles?
       IF list->car->type NE type_abap_turtle.
-        list->car->raise( ` is not a turtle in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `turtle`
+                               operation = operation ).
       ENDIF.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
@@ -12159,7 +12235,8 @@
 *     (turtles-pen-color turtles) → (is-a?/c color%)
 *       turtles : turtles?
       IF list->car->type NE type_abap_turtle.
-        list->car->raise( ` is not a turtle in ` && operation ) ##NO_TEXT.
+        list->car->raise_type( expected = `turtle`
+                               operation = operation ).
       ENDIF.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->car.
@@ -12174,19 +12251,20 @@
 *        turtles : turtles?
       IF list->car->type NE type_integer OR CAST lcl_lisp_integer( list->car )->int LT 0.
         list->car->raise_index( field = `sides`
-                                operation = operation ) ##NO_TEXT.
+                                operation = operation ).
       ENDIF.
       DATA lo_sides TYPE REF TO lcl_lisp_integer.
       lo_sides ?= list->car.
 
-      IF list->cdr->car->type NE type_integer.
-        list->cdr->car->raise( ` radius is not an integer in regular-poly` ) ##NO_TEXT.
+      IF list->cdr->car->type NE type_integer.   " radius
+        list->cdr->car->no_integer( operation ).
       ENDIF.
       DATA lo_radius TYPE REF TO lcl_lisp_integer.
       lo_radius ?= list->cdr->car.
 
       IF list->cdr->cdr->car->type NE type_abap_turtle.
-        list->cdr->cdr->car->raise( ` is not a turtle in ` && operation ) ##NO_TEXT.
+        list->cdr->cdr->car->raise_type( expected = `turtle`
+                                         operation = operation ).
       ENDIF.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->cdr->cdr->car.
@@ -12202,8 +12280,8 @@
 *        n : exact-nonnegative-integer?
 *        s : any/c
 *        turtles : turtles?
-      IF list->car->type NE type_integer.
-        list->car->raise( ` n is not an integer in regular-polys` ) ##NO_TEXT.
+      IF list->car->type NE type_integer. " n
+        list->car->no_integer( operation ).
       ENDIF.
       DATA lo_n TYPE REF TO lcl_lisp_integer.
       lo_n ?= list->car.
@@ -12216,7 +12294,8 @@
       lo_side ?= list->cdr->car.
 
       IF list->cdr->cdr->car->type NE type_abap_turtle.
-        list->cdr->cdr->car->raise( ` is not a turtle in ` && operation ) ##NO_TEXT.
+        list->cdr->cdr->car->raise_type( expected = `turtle`
+                                         operation = operation ).
       ENDIF.
       DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
       lo_turtles ?= list->cdr->cdr->car.
@@ -12947,7 +13026,6 @@
       load_numbers( ).
       load_math( ).
 
-      " not implemented yet
       procedure( symbol = 'rationalize' value = 'PROC_RATIONALIZE' min = 2 max = 2 ).
 
       procedure( symbol = 'zero?'     value = 'PROC_IS_ZERO' min = 1 max = 1 ).
@@ -13593,6 +13671,10 @@
       throw( context && to_string( ) && message ).
     ENDMETHOD.
 
+    METHOD raise_type.
+      raise( | is not a { expected } in { operation }| ).
+    ENDMETHOD.
+
     METHOD raise_index.
       throw( to_string( ) && ` ` && field && |must be a non-negative integer in { operation }| ).
     ENDMETHOD.
@@ -13602,11 +13684,13 @@
     ENDMETHOD.
 
     METHOD raise_nan.
-      raise( | is not a number in { operation }| ).
+      raise_type( expected = `number`
+                  operation = operation ).
     ENDMETHOD.
 
     METHOD raise_port.
-      raise( | is not a port in { operation }| ).
+      raise_type( expected = `port`
+                  operation = operation ).
     ENDMETHOD.
 
     METHOD raise_pair.
@@ -13615,6 +13699,10 @@
 
     METHOD raise_invalid_number.
       raise( | invalid number in { operation }| ).
+    ENDMETHOD.
+
+    METHOD no_integer.
+      raise( | is not an integer in { operation }| ).
     ENDMETHOD.
 
     METHOD no_complex.
@@ -13715,7 +13803,8 @@
         first = abap_false.
       ELSE.
         IF elem->cdr->type NE type_pair.
-          elem->raise( | is not a proper list| ).
+          elem->raise_type( expected = |proper list|
+                            operation = operation ).
         ENDIF.
         elem = elem->cdr.
       ENDIF.
@@ -15072,7 +15161,7 @@
         ENDCASE.
       ENDIF.
       IF error EQ abap_true.
-        raise( | is not an integer in { operation }| ).
+        no_integer( operation ).
       ENDIF.
     ENDMETHOD.
 
@@ -15168,8 +15257,17 @@
 
             WHEN type_rational. " Rational + Rational
               TRY.
-                  number-nummer = self-nummer * other-denom + other-nummer * self-denom.
-                  number-denom = self-denom * other-denom.
+                  DATA(lv_denom_gcd) = lcl_lisp_rational=>gcd( n = self-denom
+                                                               d = other-denom ).
+                  IF lv_denom_gcd GT 1.
+                    DATA(lv_self_denom) = self-denom div lv_denom_gcd.
+                    number-nummer = self-nummer * other-denom div lv_denom_gcd
+                                  + other-nummer * lv_self_denom.
+                    number-denom = lv_self_denom * other-denom.
+                  ELSE.
+                    number-nummer = self-nummer * other-denom + other-nummer * self-denom.
+                    number-denom = self-denom * other-denom.
+                  ENDIF.
                   lv_gcd = lcl_lisp_rational=>gcd(  n = number-nummer
                                                     d = number-denom ).
                   number-nummer = number-nummer DIV lv_gcd.
@@ -15987,14 +16085,16 @@
                 result = lcl_lisp_new=>real_number( value = lv_nummer
                                                     iv_exact = lo_real->exact ).
               ELSE.
-                lo_real->raise( ` is not a rational in ` && operation ).
+                lo_real->raise_type( expected = |rational|
+                                     operation = operation ).
               ENDIF.
 
 *              DATA(lv_num) = lo_real->real.
 *              result = lcl_lisp_new=>real_number( lcl_lisp_real=>gcd( n = lv_num
 *                                                                      d = 1 ) * lv_num ).
             CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
-              lo_real->raise( ` is not a rational in ` && operation ).
+              lo_real->raise_type( expected = |rational|
+                                   operation = operation ).
           ENDTRY.
 
         WHEN type_complex.
@@ -16057,7 +16157,8 @@
               lv_error = abap_true.
           ENDTRY.
           IF lv_error EQ abap_true.
-            lo_real->raise( ` is not a rational in ` && operation ).
+            lo_real->raise_type( expected = |rational|
+                                 operation = operation ).
           ENDIF.
 
         WHEN type_complex.
@@ -16168,7 +16269,7 @@
         WHEN neg_nan.
           num = nan.
         WHEN OTHERS.
-          throw( `Negative_infnan not correctly called` ).
+          throw( `Negative_infnan not called correctly` ).
       ENDCASE.
     ENDMETHOD.
 
@@ -16299,7 +16400,7 @@
 
       IF y = 0.
         IF x = 0.
-          ln_z = nan.
+          ln_z = lcl_lisp_new=>rectangular( real = neg_inf ).
           RETURN.
         ELSE.
           arctan = c_pi.
@@ -16392,7 +16493,7 @@
             str = lo_z->zreal->number_to_string( iv_radix ).
           ENDIF.
           DATA(str_imag) = lo_z->zimag->number_to_string( iv_radix ).
-          IF str_imag+0(1) NA c_explicit_sign AND  strlen( str_imag ) GT 0.
+          IF str_imag+0(1) NA c_explicit_sign AND strlen( str_imag ) GT 0.
             str_imag = c_plus_sign && str_imag.
           ENDIF.
           str = str && str_imag && c_imaginary_marker.
@@ -16623,14 +16724,17 @@
 
     METHOD complex_atan.
       DATA i_quotient TYPE REF TO lcl_lisp_complex.
+      DATA lo_number TYPE REF TO lcl_lisp_number.
       DATA ln_z TYPE REF TO lcl_lisp_complex.
 
       DATA(i_minus_z) = imaginary->substract( me ).
       DATA(i_plus_z) = imaginary->add( me ).
       i_quotient ?= i_minus_z->divide( i_plus_z ).
-      ln_z ?= complex_log( x = i_quotient->zreal->to_real( )
-                           y = i_quotient->zimag->to_real( )
-                           iv_exact = me->exact ).
+      lo_number = complex_log( x = i_quotient->zreal->to_real( )
+                               y = i_quotient->zimag->to_real( )
+                               iv_exact = me->exact ).
+      ln_z ?= lo_number.
+
       DATA(z2i) = imaginary->add( imaginary ).
       result = ln_z->divide( z2i ).
     ENDMETHOD.
@@ -16879,8 +16983,9 @@
 
       CASE type.
         WHEN type_vector.
-          LOOP AT array ASSIGNING FIELD-SYMBOL(<lo_elem>) WHERE table_line->type = type_symbol
-                                                            AND table_line->value = mv_label.
+          LOOP AT array ASSIGNING FIELD-SYMBOL(<lo_elem>)
+            WHERE table_line->type = type_symbol
+              AND table_line->value = mv_label.
             <lo_elem> = me.
             RETURN.
           ENDLOOP.
@@ -16914,7 +17019,8 @@
         IF lo_ptr->car IS NOT BOUND.
           incorrect_input( `bytevector` ).
         ENDIF.
-        IF lo_ptr->car->type NE type_integer OR CAST lcl_lisp_integer( lo_ptr->car )->int NOT BETWEEN 0 AND 255.
+        IF lo_ptr->car->type NE type_integer OR
+          CAST lcl_lisp_integer( lo_ptr->car )->int NOT BETWEEN 0 AND 255.
           lo_ptr->car->raise( ` is not a byte in bytevector` ) ##NO_TEXT.
         ENDIF.
 
