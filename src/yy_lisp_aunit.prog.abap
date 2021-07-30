@@ -3608,6 +3608,10 @@
                expected = '4' ).
        scheme( code =  '(round 7)'   " exact
                expected = '7' ).
+       scheme( code =  '(round +nan.0)'   " racket
+               expected = '+nan.0' ).
+       scheme( code =  '(round 7923235953495359358934934534234)'   " exact
+               expected = '7923235953495359358934934534234' ).
      ENDMETHOD.                    "math_round
 
      METHOD math_remainder.
@@ -3621,6 +3625,10 @@
                expected = '-1' ).
        scheme( code =  '(remainder -17 -9)'
                expected = '-8' ).
+       scheme( code =  '(remainder +nan.0 4)'   " exact
+               expected = 'Eval: +nan.0 is not an integer in remainder' ).
+       scheme( code =  '(remainder 7923235953459358934934534234 3)'   " exact
+               expected = '0' ).
      ENDMETHOD.                    "math_remainder
 
      METHOD math_numerator.

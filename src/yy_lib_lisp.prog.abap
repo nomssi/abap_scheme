@@ -40,7 +40,14 @@
   TYPES tv_tabix TYPE sytabix.
 
   TYPES tv_real TYPE decfloat34.  " floating point data type
-  TYPES tv_int TYPE int4.         " integer data type int4, use int8 and max_int8 if available
+
+"  TYPES tv_int TYPE int4.         " integer data type int4, use int8 and max_int8 if available
+"  CONSTANTS c_max_int TYPE tv_int VALUE cl_abap_math=>max_int4.          "  cl_abap_math=>max_int8.
+
+  TYPES tv_int TYPE int8.
+  CONSTANTS c_max_int TYPE tv_int VALUE cl_abap_math=>max_int8.
+
+
   TYPES tv_index TYPE tv_int.
   TYPES tv_flag TYPE abap_bool.
 
@@ -58,7 +65,6 @@
     c_port_binary  VALUE 'b'.
 
   CONSTANTS:
-    c_max_int   TYPE tv_int VALUE cl_abap_math=>max_int4,          "  cl_abap_math=>max_int8.
     c_max_float TYPE tv_real VALUE cl_abap_math=>max_decfloat34,
     c_min_float TYPE tv_real VALUE cl_abap_math=>min_decfloat34.
 
@@ -757,9 +763,12 @@
                        RETURNING VALUE(result) TYPE ts_result
                        RAISING   lcx_lisp_exception.
 
+      CLASS-METHODS arc_tan IMPORTING x TYPE tv_real
+                                      y TYPE tv_real
+                            RETURNING VALUE(result) TYPE REF TO lcl_lisp_number.
+
       CLASS-METHODS complex_log IMPORTING x           TYPE tv_real
                                           y           TYPE tv_real
-                                          base        TYPE tv_real DEFAULT 1
                                           iv_exact    TYPE tv_flag DEFAULT abap_false
                                 RETURNING VALUE(ln_z) TYPE REF TO lcl_lisp_number.
 
@@ -897,7 +906,6 @@
   CLASS lcl_lisp_rational IMPLEMENTATION.
 
     METHOD new.
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
       IF denom = 0.
         IF nummer = 0.
           result = lcl_lisp_number=>nan.
@@ -907,9 +915,9 @@
           result = lcl_lisp_number=>neg_inf.
         ENDIF.
       ELSE.
-        lo_rat = NEW #( nummer   = nummer
-                        denom    = denom
-                        iv_exact = iv_exact ).
+        DATA(lo_rat) = NEW lcl_lisp_rational( nummer   = nummer
+                                              denom    = denom
+                                              iv_exact = iv_exact ).
         IF lo_rat->denominator EQ 1.
           result = NEW lcl_lisp_integer( value    = lo_rat->int
                                          iv_exact = iv_exact ).
@@ -2340,7 +2348,7 @@
 
       METHODS unbound_symbol IMPORTING symbol TYPE any
                              RAISING   lcx_lisp_exception.
-      METHODS prepare.
+      METHODS base_environment.
 
     PRIVATE SECTION.
       METHODS load_syntax.
@@ -2353,6 +2361,11 @@
       METHODS load_turtles.
       METHODS load_chars.
       METHODS load_strings.
+
+      METHODS load_vector.
+      METHODS load_bytevector.
+      METHODS load_abap_interface.
+      METHODS load_port.
   ENDCLASS.                    "lcl_lisp_environment DEFINITION
 
   CLASS lcl_lisp_env_factory DEFINITION ABSTRACT.
@@ -2378,7 +2391,7 @@
 
     METHOD make_top_level.
       env = clone( io_outer ).
-      env->prepare( ).
+      env->base_environment( ).
       env->top_level = abap_true.
     ENDMETHOD.
 
@@ -3771,6 +3784,8 @@
       METHODS throw IMPORTING message TYPE string
                     RAISING   lcx_lisp_exception.
 
+      METHODS not_implemented RAISING lcx_lisp_exception.
+
 *     Methods for evaluation
       METHODS:
         eval
@@ -4499,6 +4514,10 @@
 
     METHOD throw.
       lcl_lisp=>throw( message ).
+    ENDMETHOD.
+
+    METHOD not_implemented.
+      throw( operation && ` not implemented yet` ).
     ENDMETHOD.
 
     METHOD constructor.
@@ -5605,7 +5624,7 @@
                     " Syntax: <name> and <pred> are identifiers. The <constructor> is of the form
                     " (<constructor name> <field name> ... ) and each <field> is either of the form
                     " (field name> <accessor name>) or of the form (<field name> <accessor name> <modifier name>)
-                    throw( |define-record-type not implemented yet| ).
+                    not_implemented( ).
 
                   WHEN 'set!'.                        " Re-Assign symbol
                     result = assign_symbol( element     = lr_tail
@@ -5878,7 +5897,7 @@
                     throw( |{ lr_head->value } not valid outside of quasiquote| ).
 
                   WHEN 'guard'.
-                    throw( |guard not implemented yet| ).
+                    not_implemented( ).
 
                   WHEN 'delay'.
                     " (delay <expression>) lazy library syntax
@@ -5907,7 +5926,7 @@
 *               result)))))))
 *    `(,make-promise (lambda () ,exp)))
 
-                    "throw( |delay not implemented yet| ).
+                    "not_implemented( ).
 
                   WHEN 'delay-force'.
                     cont-elem = lr_tail.
@@ -5930,7 +5949,7 @@
 
                     cont-elem = lcl_lisp_new=>cons( io_car = expand_apply( io_list = lo_consumer
                                                                            environment = cont-env ) ).
-                    throw( `call-with-values not implemented yet` ).
+                    not_implemented( ). "  call-with-values not implemented yet
                     _tail_expression cont-elem.
 
                   WHEN 'dynamic-wind'.
@@ -5939,7 +5958,7 @@
                       OR lr_tail->cdr->cdr IS NOT BOUND OR lr_tail->cdr->cdr->car IS NOT BOUND.
                       lcl_lisp=>incorrect_input( operation ).
                     ENDIF.
-                    throw( `dynamic-wind not not implemented yet` ).
+                    not_implemented( ). " dynamic-wind not not implemented yet
                     DATA(before) = lr_tail->car.
                     DATA(thunk) = lr_tail->cdr->car.
                     DATA(after) = lr_tail->cdr->cdr->car.
@@ -6932,7 +6951,7 @@
     ENDMETHOD.
 
     METHOD proc_list_set.
-      throw( `list-set! not implemented yet` ).
+      not_implemented( ).  " list-set! not implemented yet
     ENDMETHOD.
 
 *(car list-tail list k)
@@ -8034,7 +8053,7 @@
       " The make-promise procedure returns a promise which, when forced, will return obj.
       " It is similar to delay, but does not delay its argument: it is a procedure rather than syntax.
       " If obj is already a promise, it is returned.
-      throw( |make-promise not implemented yet| ).
+      not_implemented( ). " make-promise not implemented yet
       "result = lcl_lisp_new=>promise( ).
     ENDMETHOD.
 
@@ -8056,7 +8075,7 @@
       " (promise? obj)
       " The promise? procedure returns #t if its argument is a promise, and #f otherwise.
       " Note that promises are not necessarily disjoint from other Scheme types such as procedures.
-      throw( |promise? not implemented yet| ).
+      not_implemented( ).  " promise? not implemented yet
       result = nil.
     ENDMETHOD.
 
@@ -8660,16 +8679,10 @@
       " (atan y x) cf. table page 38 in r7rs
       DATA y TYPE tv_real.
       DATA x TYPE tv_real.
-      DATA arctan TYPE f.
-      DATA lv_tan TYPE f.
-      DATA magnitude TYPE f.
       DATA lo_y TYPE REF TO lcl_lisp_number.
       DATA lo_x TYPE REF TO lcl_lisp_number.
 
       DATA cell_exact TYPE tv_flag.
-
-      DATA lo_rat TYPE REF TO lcl_lisp_rational.
-      DATA lo_real TYPE REF TO lcl_lisp_real.
 
       result = nil.
       TRY.
@@ -8741,24 +8754,9 @@
               x = 1.
             ENDIF.
           ENDIF.
-          cell_exact = abap_false.
 
-          IF y = 0.
-            IF x = 0.
-              result = lcl_lisp_number=>nan.
-              RETURN.
-            ELSE.
-              arctan = c_pi.
-            ENDIF.
-            arctan = 2 * atan( 1 ).
-          ELSE.
-            magnitude = sqrt( x * x  + y * y ).
-            lv_tan = y / ( x + magnitude ).
-            arctan = 2 * atan( lv_tan ).
-          ENDIF.
-
-          result = lcl_lisp_new=>real( value = arctan
-                                       iv_exact = cell_exact ).
+          result = lcl_lisp_number=>arc_tan( x = x
+                                             y = y ).
 
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
@@ -8784,6 +8782,7 @@
           ELSE.
             b = y = lo_number->get_real( self = number-imag_part
                                          operation = operation ).
+            " sinh (a + bi) = sinh a * cos b + i cosh a * sin b
             throw( `(sinh z) not implemented yet` ).
           ENDIF.
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -8810,6 +8809,7 @@
           ELSE.
             b = y = lo_number->get_real( self = number-imag_part
                                          operation = operation ).
+            " cosh (a + bi) = cosh a * cos b + i sinh a * sin b
             throw( `(cosh z) not implemented yet` ).
           ENDIF.
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -8836,6 +8836,7 @@
           ELSE.
             b = y = lo_number->get_real( self = number-imag_part
                                          operation = operation ).
+            " tanh z = sinh z / cosh z
             throw( `(tanh z) not implemented yet` ).
           ENDIF.
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -8888,6 +8889,7 @@
           ELSE.
             b = y = lo_number->get_real( self = number-imag_part
                                          operation = operation ).
+            "not_implemented( ). for complex numbers
             throw( `(acosh z) not implemented yet` ).
           ENDIF.
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
@@ -9024,8 +9026,11 @@
       " log -0.0 => -inf.0 + pi * i
       DATA lo_base TYPE REF TO lcl_lisp_number.
       DATA lo_z TYPE REF TO lcl_lisp_complex.
+      DATA lo_log TYPE REF TO lcl_lisp_complex.
 
       DATA base TYPE tv_real VALUE 1.
+      DATA base_img TYPE tv_real VALUE 0.
+      DATA lo_log_base TYPE REF TO lcl_lisp_number.
       DATA carry TYPE tv_real.
 
       result = nil.
@@ -9035,7 +9040,17 @@
 
           IF list->cdr IS BOUND AND list->cdr->car IS BOUND.
             lo_base = list->cdr->car->to_number( operation ).
-            base = log( lo_base->to_real( ) ).
+            IF lo_base->type EQ type_complex.
+              lo_z ?= lo_base.
+              base = log( lo_z->zreal->to_real( ) ).
+              base_img = log( lo_z->zimag->to_real( ) ).
+              IF base NE 1 OR base_img NE 0.
+                lo_log_base = lcl_lisp_complex=>complex_log( x = base
+                                                             y = base_img ).
+              ENDIF.
+            ELSE.
+              base = log( lo_base->to_real( ) ).
+            ENDIF.
           ELSE.
             list->assert_last_param( operation ).
           ENDIF.
@@ -9043,8 +9058,11 @@
           IF lo_number->type EQ type_complex.
             lo_z ?= lo_number.
             result = lo_z->complex_log( x = lo_z->zreal->to_real( )
-                                        y = lo_z->zimag->to_real( )
-                                        base = base ).
+                                         y = lo_z->zimag->to_real( ) ).
+            IF base NE 1 OR base_img NE 0.
+              lo_log ?= result.
+              result = lo_log->divide( lo_log_base ).
+            ENDIF.
             RETURN.
           ELSE.
             carry = lo_number->to_real( ).
@@ -9056,8 +9074,11 @@
 
             IF carry LT 0.
               result = lcl_lisp_complex=>complex_log( x = carry
-                                                      y = 0
-                                                      base = base ).
+                                                      y = 0 ).
+              IF base NE 1 OR base_img NE 0.
+                lo_log ?= result.
+                result = lo_log->divide( lo_log_base ).
+              ENDIF.
               " base
             ELSEIF carry EQ 1 AND base NE 0 AND lo_number->exact EQ abap_true .
               result = lcl_lisp_number=>zero.
@@ -9389,20 +9410,20 @@
 
     METHOD proc_balanced_new.
       " (balanced/ n1 n2) implements number-theoretic (integer) division; It is an error if n2 is zero.
-      throw(  `balanced/ not implemented yet` ).
+      not_implemented( ). " balanced/ not implemented yet
     ENDMETHOD.
 
     METHOD proc_balanced_quotient.
       " (balanced-quotient n1 n2) implements integer division and returns one integer nq; It is an error if n2 is zero.
 
-      throw(  `balanced-quotient not implemented yet` ).
+      not_implemented( ). " balanced-quotient not implemented yet
     ENDMETHOD.
 
     METHOD proc_balanced_remainder.
       " (balanced-remainder n1 n2) implements integer division and returns one integer nr; It is an error if n2 is zero.
       " NaN is returned in remainder x % y when x is an infinity or y is zero.
       " (floor-remainder n1 n2) -- equivalent to (modulo n1 n2)
-      throw(  `balanced-remainder not implemented yet` ).
+      not_implemented( ). " balanced-remainder not implemented yet
     ENDMETHOD.
 
     METHOD proc_floor_new.
@@ -9772,11 +9793,17 @@
       DATA(num) = list->car->to_number( operation ).
       numerator = num->to_real( operation ).
       lv_exact = num->exact.
+      IF num->infnan EQ abap_true.
+        num->no_integer( operation ).
+      ENDIF.
 
-      num = list->cdr->car->to_number( operation ).
-      denominator = num->to_real( operation ).
+      DATA(denom) = list->cdr->car->to_number( operation ).
+      denominator = denom->to_real( operation ).
       IF lv_exact EQ abap_true.
-        lv_exact = num->exact.
+        lv_exact = denom->exact.
+      ENDIF.
+      IF denom->infnan EQ abap_true.
+        denom->no_integer( operation ).
       ENDIF.
       TRY.
           result = lcl_lisp_new=>real_number( value = numerator - denominator * trunc( numerator / denominator )
@@ -9795,12 +9822,19 @@
       DATA(num) = list->car->to_number( operation ).
       numerator = num->to_real( operation ).
       lv_exact = num->exact.
-
-      num = list->cdr->car->to_number( operation ).
-      denominator = num->to_real( operation ).
-      IF lv_exact EQ abap_true.
-        lv_exact = num->exact.
+      IF num->infnan EQ abap_true.
+        num->no_integer( operation ).
       ENDIF.
+
+      DATA(denom) = list->cdr->car->to_number( operation ).
+      denominator = denom->to_real( operation ).
+      IF lv_exact EQ abap_true.
+        lv_exact = denom->exact.
+      ENDIF.
+      IF denom->infnan EQ abap_true.
+        denom->no_integer( operation ).
+      ENDIF.
+
       TRY.
           result = lcl_lisp_new=>real_number( value = trunc( numerator / denominator )
                                               iv_exact = lv_exact ).
@@ -9819,11 +9853,17 @@
       DATA(num) = list->car->to_number( operation ).
       numerator = num->to_real( operation ).
       lv_exact = num->exact.
+      IF num->infnan EQ abap_true.
+        num->no_integer( operation ).
+      ENDIF.
 
-      num = list->cdr->car->to_number( operation ).
-      base = num->to_real( operation ).
+      DATA(denom) = list->cdr->car->to_number( operation ).
+      IF denom->infnan EQ abap_true.
+        denom->no_integer( operation ).
+      ENDIF.
+      base = denom->to_real( operation ).
       IF lv_exact EQ abap_true.
-        lv_exact = num->exact.
+        lv_exact = denom->exact.
       ENDIF.
       TRY.
           mod = numerator MOD base.
@@ -9985,7 +10025,7 @@
         list->car->raise_type( expected = `bytevector`
                                operation = operation ).
       ENDIF.
-      throw( `write-bytevector not implemented yet` ).
+      not_implemented( ). " write-bytevector not implemented yet
       result = write( io_elem = list->car
                       io_arg = list->cdr ).
     ENDMETHOD.
@@ -10319,11 +10359,11 @@
     ENDMETHOD.
 
     METHOD proc_string_copy_set.
-      throw( `string-copy! not implemented yet` ).
+      not_implemented( ). " string-copy! not implemented yet
     ENDMETHOD.
 
     METHOD proc_string_fill_set.
-      throw( `string-fill! not implemented yet` ).
+      not_implemented( ). " string-fill! not implemented yet
     ENDMETHOD.
 
     METHOD proc_string_ref.
@@ -11179,23 +11219,23 @@
     ENDMETHOD.
 
     METHOD proc_is_error_object.
-      throw( 'error-object? is not implemented yet' ).
+      not_implemented( ). " error-object? is not implemented yet
     ENDMETHOD.
 
     METHOD proc_is_read_error.
-      throw( 'read-error? is not implemented yet' ).
+      not_implemented( ). " read-error? is not implemented yet
     ENDMETHOD.
 
     METHOD proc_is_file_error.
-      throw( 'file-error? is not implemented yet' ).
+      not_implemented( ). " file-error? is not implemented yet
     ENDMETHOD.
 
     METHOD proc_error_object_message.
-      throw( 'error-object-message is not implemented yet' ).
+      not_implemented( ). " error-object-message is not implemented yet
     ENDMETHOD.
 
     METHOD proc_error_object_irritants.
-      throw( 'error-object-irritants is not implemented yet' ).
+      not_implemented( ). " error-object-irritants is not implemented yet
     ENDMETHOD.
 
     METHOD proc_raise.
@@ -11246,12 +11286,12 @@
     ENDMETHOD.
 
     METHOD proc_dynamic_wind.
-      throw( `dynamic-wind not implemented yet` ).
+      not_implemented( ). " dynamic-wind not implemented yet
     ENDMETHOD.
 
     METHOD proc_call_with_values.
       " expects: producer, consumer
-      throw( `call-with-values not implemented yet` ).
+      not_implemented( ). " call-with-values not implemented yet
     ENDMETHOD.
 
 **********************************************************************
@@ -11330,7 +11370,7 @@
       IF lo_ref->type NE type_abap_table.
         throw( |ab-append-row requires ABAP table as parameter| ).
       ENDIF.
-      throw( `ab-append-row not implemented yet` ).
+      not_implemented( ). " ab-append-row not implemented yet
     ENDMETHOD.                    "proc_abap_append_row
 
     METHOD proc_abap_delete_row.
@@ -11338,7 +11378,7 @@
       IF lo_ref->type NE type_abap_table.
         throw( |ab-delete-row requires ABAP table as parameter| ).
       ENDIF.
-      throw( `ab-delete-row not implemented yet` ).
+      not_implemented( ). " ab-delete-row not implemented yet
     ENDMETHOD.                    "proc_abap_delete_row
 
     METHOD proc_abap_get_row.
@@ -11346,7 +11386,7 @@
       IF lo_ref->type NE type_abap_table.
         throw( |ab-get-row requires ABAP table as parameter| ).
       ENDIF.
-      throw( `ab-get-row not implemented yet` ).
+      not_implemented( ). " ab-get-row not implemented yet
     ENDMETHOD.                    "proc_abap_get_row
 
 **********************************************************************
@@ -12905,7 +12945,72 @@
       procedure( symbol = 'regular-polys'     value = 'PROC_TURTLE_REGULAR_POLYS' min = 3 max = 3 ).
     ENDMETHOD.
 
-    METHOD prepare.
+    METHOD load_vector.
+      " vector-related functions
+      procedure( symbol = 'vector'        value = 'PROC_VECTOR' ).
+      procedure( symbol = 'vector-length' value = 'PROC_VECTOR_LENGTH' min = 1 max = 1 ).
+      procedure( symbol = 'vector-set!'   value = 'PROC_VECTOR_SET' min = 3 max = 3 ).
+      procedure( symbol = 'vector-fill!'  value = 'PROC_VECTOR_FILL' min = 2 max = 4 ).
+      procedure( symbol = 'vector-ref'    value = 'PROC_VECTOR_REF' min = 2 max = 2 ).
+      procedure( symbol = 'vector->list'  value = 'PROC_VECTOR_TO_LIST' min = 1 max = 3 ).
+      procedure( symbol = 'make-vector'   value = 'PROC_MAKE_VECTOR' min = 1 max = 2 ).
+    ENDMETHOD.
+
+    METHOD load_bytevector.
+      " bytevector-related functions
+      procedure( symbol = 'bytevector'         value = 'PROC_BYTEVECTOR' ).
+      procedure( symbol = 'bytevector-length'  value = 'PROC_BYTEVECTOR_LENGTH' min = 1 max = 1 ).
+      procedure( symbol = 'bytevector-u8-set!' value = 'PROC_BYTEVECTOR_U8_SET' min = 3 max = 3 ).
+      procedure( symbol = 'bytevector-u8-ref'  value = 'PROC_BYTEVECTOR_U8_REF' min = 2 max = 2 ).
+      procedure( symbol = 'bytevector-append'  value = 'PROC_BYTEVECTOR_APPEND' ).
+      procedure( symbol = 'bytevector-copy'    value = 'PROC_BYTEVECTOR_NEW_COPY' min = 1 max = 3 ).
+      procedure( symbol = 'bytevector-copy!'   value = 'PROC_BYTEVECTOR_COPY' min = 3 max = 5 ).
+      procedure( symbol = 'utf8->string'       value = 'PROC_UTF8_TO_STRING' min = 1 max = 3 ).
+      procedure( symbol = 'string->utf8'       value = 'PROC_STRING_TO_UTF8' min = 1 max = 3 ).
+      procedure( symbol = 'make-bytevector'    value = 'PROC_MAKE_BYTEVECTOR' min = 1 max = 2 ).
+    ENDMETHOD.
+
+    METHOD load_abap_interface.
+*     Native functions for ABAP integration
+      procedure( symbol = 'ab-data'       value = 'PROC_ABAP_DATA' min = 1 max = 1 ).
+      procedure( symbol = 'ab-function'   value = 'PROC_ABAP_FUNCTION' min = 1 max = 1 ).
+      procedure( symbol = 'ab-func-param' value = 'PROC_ABAP_FUNCTION_PARAM' ).
+      procedure( symbol = 'ab-table'      value = 'PROC_ABAP_TABLE' min = 1 max = 2 ).
+      procedure( symbol = 'ab-append-row' value = 'PROC_ABAP_APPEND_ROW' min = 1 ).
+      procedure( symbol = 'ab-delete-row' value = 'PROC_ABAP_DELETE_ROW' min = 1 ).
+      procedure( symbol = 'ab-get-row'    value = 'PROC_ABAP_GET_ROW' min = 1 ).
+      procedure( symbol = 'ab-get-value'  value = 'PROC_ABAP_GET_VALUE' min = 1 ).
+      procedure( symbol = 'ab-set-value'  value = 'PROC_ABAP_SET_VALUE' min = 2 ).
+
+      procedure( symbol = 'ab-get' value = 'PROC_ABAP_GET' min = 1 ).
+      procedure( symbol = 'ab-set' value = 'PROC_ABAP_SET' min = 2 ).
+    ENDMETHOD.
+
+    METHOD load_port.
+*     Ports
+      procedure( symbol = 'current-input-port'  value = 'PROC_CURRENT_INPUT_PORT' ).
+      procedure( symbol = 'current-output-port' value = 'PROC_CURRENT_OUTPUT_PORT' ).
+      procedure( symbol = 'current-error-port'  value = 'PROC_CURRENT_ERROR_PORT' ).
+
+      procedure( symbol = 'close-input-port'    value = 'PROC_CLOSE_INPUT_PORT' min = 1 max = 1 ).
+      procedure( symbol = 'close-output-port'   value = 'PROC_CLOSE_OUTPUT_PORT' min = 1 max = 1 ).
+      procedure( symbol = 'close-port'          value = 'PROC_CLOSE_PORT' min = 1 max = 1 ).
+
+      procedure( symbol = 'input-port?'         value = 'PROC_IS_INPUT_PORT' min = 1 max = 1  ).
+      procedure( symbol = 'output-port?'        value = 'PROC_IS_OUTPUT_PORT' min = 1 max = 1 ).
+      procedure( symbol = 'textual-port?'       value = 'PROC_IS_TEXTUAL_PORT' min = 1 max = 1  ).
+      procedure( symbol = 'binary-port?'        value = 'PROC_IS_BINARY_PORT' min = 1 max = 1  ).
+      procedure( symbol = 'input-port-open?'    value = 'PROC_IS_OPEN_INPUT_PORT'  min = 1 max = 1 ).
+      procedure( symbol = 'output-port-open?'   value = 'PROC_IS_OPEN_OUTPUT_PORT'  min = 1 max = 1 ).
+
+      procedure( symbol = 'open-output-string'  value = 'PROC_OPEN_OUTPUT_STRING' min = -1 ).
+      procedure( symbol = 'open-input-string'   value = 'PROC_OPEN_INPUT_STRING' min = 1 max = 1 ).
+      procedure( symbol = 'get-output-string'   value = 'PROC_GET_OUTPUT_STRING' min = 1 max = 1 ).
+      procedure( symbol = 'eof-object'          value = 'PROC_EOF_OBJECT' min = -1 ).
+      procedure( symbol = 'eof-object?'         value = 'PROC_IS_EOF_OBJECT' min = 1 max = 1 ).
+    ENDMETHOD.
+
+    METHOD base_environment.
       " Create symbols for nil, true and false values
       set( symbol = 'nil' element = lcl_lisp=>null ).
       set( symbol = '#f'  element = lcl_lisp=>true ).
@@ -12945,26 +13050,9 @@
 
       procedure( symbol = 'make-parameter' value = 'PROC_MAKE_PARAMETER' min = 1 max = 2 ).
 
-      " vector-related functions
-      procedure( symbol = 'vector'        value = 'PROC_VECTOR' ).
-      procedure( symbol = 'vector-length' value = 'PROC_VECTOR_LENGTH' min = 1 max = 1 ).
-      procedure( symbol = 'vector-set!'   value = 'PROC_VECTOR_SET' min = 3 max = 3 ).
-      procedure( symbol = 'vector-fill!'  value = 'PROC_VECTOR_FILL' min = 2 max = 4 ).
-      procedure( symbol = 'vector-ref'    value = 'PROC_VECTOR_REF' min = 2 max = 2 ).
-      procedure( symbol = 'vector->list'  value = 'PROC_VECTOR_TO_LIST' min = 1 max = 3 ).
-      procedure( symbol = 'make-vector'   value = 'PROC_MAKE_VECTOR' min = 1 max = 2 ).
+      load_vector( ).
 
-      " bytevector-related functions
-      procedure( symbol = 'bytevector'         value = 'PROC_BYTEVECTOR' ).
-      procedure( symbol = 'bytevector-length'  value = 'PROC_BYTEVECTOR_LENGTH' min = 1 max = 1 ).
-      procedure( symbol = 'bytevector-u8-set!' value = 'PROC_BYTEVECTOR_U8_SET' min = 3 max = 3 ).
-      procedure( symbol = 'bytevector-u8-ref'  value = 'PROC_BYTEVECTOR_U8_REF' min = 2 max = 2 ).
-      procedure( symbol = 'bytevector-append'  value = 'PROC_BYTEVECTOR_APPEND' ).
-      procedure( symbol = 'bytevector-copy'    value = 'PROC_BYTEVECTOR_NEW_COPY' min = 1 max = 3 ).
-      procedure( symbol = 'bytevector-copy!'   value = 'PROC_BYTEVECTOR_COPY' min = 3 max = 5 ).
-      procedure( symbol = 'utf8->string'       value = 'PROC_UTF8_TO_STRING' min = 1 max = 3 ).
-      procedure( symbol = 'string->utf8'       value = 'PROC_STRING_TO_UTF8' min = 1 max = 3 ).
-      procedure( symbol = 'make-bytevector'    value = 'PROC_MAKE_BYTEVECTOR' min = 1 max = 2 ).
+      load_bytevector( ).
 
 *     Hash-related functions
       procedure( symbol = 'make-hash'   value = 'PROC_MAKE_HASH' ).
@@ -13037,19 +13125,7 @@
       procedure( symbol = 'dynamic-wind'     value = 'PROC_DYNAMIC_WIND' ).
       procedure( symbol = 'call-with-values' value = 'PROC_CALL_WITH_VALUES' min = 2 max = 2 ).
 
-*     Native functions for ABAP integration
-      procedure( symbol = 'ab-data'       value = 'PROC_ABAP_DATA' min = 1 max = 1 ).
-      procedure( symbol = 'ab-function'   value = 'PROC_ABAP_FUNCTION' min = 1 max = 1 ).
-      procedure( symbol = 'ab-func-param' value = 'PROC_ABAP_FUNCTION_PARAM' ).
-      procedure( symbol = 'ab-table'      value = 'PROC_ABAP_TABLE' min = 1 max = 2 ).
-      procedure( symbol = 'ab-append-row' value = 'PROC_ABAP_APPEND_ROW' min = 1 ).
-      procedure( symbol = 'ab-delete-row' value = 'PROC_ABAP_DELETE_ROW' min = 1 ).
-      procedure( symbol = 'ab-get-row'    value = 'PROC_ABAP_GET_ROW' min = 1 ).
-      procedure( symbol = 'ab-get-value'  value = 'PROC_ABAP_GET_VALUE' min = 1 ).
-      procedure( symbol = 'ab-set-value'  value = 'PROC_ABAP_SET_VALUE' min = 2 ).
-
-      procedure( symbol = 'ab-get' value = 'PROC_ABAP_GET' min = 1 ).
-      procedure( symbol = 'ab-set' value = 'PROC_ABAP_SET' min = 2 ).
+      load_abap_interface( ).
 
 *     Errors
       procedure( symbol = 'raise'  value = 'PROC_RAISE' min = 1 max = 1 ).
@@ -13059,27 +13135,8 @@
       procedure( symbol = 'error-object?' value = 'PROC_IS_ERROR_OBJECT' min = 1 max = 1 ).
       procedure( symbol = 'read-error?'   value = 'PROC_IS_READ_ERROR'  min = 1 max = 1 ).
       procedure( symbol = 'file-error?'   value = 'PROC_IS_FILE_ERROR'  min = 1 max = 1 ).
-*     Ports
-      procedure( symbol = 'current-input-port'  value = 'PROC_CURRENT_INPUT_PORT' ).
-      procedure( symbol = 'current-output-port' value = 'PROC_CURRENT_OUTPUT_PORT' ).
-      procedure( symbol = 'current-error-port'  value = 'PROC_CURRENT_ERROR_PORT' ).
 
-      procedure( symbol = 'close-input-port'    value = 'PROC_CLOSE_INPUT_PORT' min = 1 max = 1 ).
-      procedure( symbol = 'close-output-port'   value = 'PROC_CLOSE_OUTPUT_PORT' min = 1 max = 1 ).
-      procedure( symbol = 'close-port'          value = 'PROC_CLOSE_PORT' min = 1 max = 1 ).
-
-      procedure( symbol = 'input-port?'         value = 'PROC_IS_INPUT_PORT' min = 1 max = 1  ).
-      procedure( symbol = 'output-port?'        value = 'PROC_IS_OUTPUT_PORT' min = 1 max = 1 ).
-      procedure( symbol = 'textual-port?'       value = 'PROC_IS_TEXTUAL_PORT' min = 1 max = 1  ).
-      procedure( symbol = 'binary-port?'        value = 'PROC_IS_BINARY_PORT' min = 1 max = 1  ).
-      procedure( symbol = 'input-port-open?'    value = 'PROC_IS_OPEN_INPUT_PORT'  min = 1 max = 1 ).
-      procedure( symbol = 'output-port-open?'   value = 'PROC_IS_OPEN_OUTPUT_PORT'  min = 1 max = 1 ).
-
-      procedure( symbol = 'open-output-string'  value = 'PROC_OPEN_OUTPUT_STRING' min = -1 ).
-      procedure( symbol = 'open-input-string'   value = 'PROC_OPEN_INPUT_STRING' min = 1 max = 1 ).
-      procedure( symbol = 'get-output-string'   value = 'PROC_GET_OUTPUT_STRING' min = 1 max = 1 ).
-      procedure( symbol = 'eof-object'          value = 'PROC_EOF_OBJECT' min = -1 ).
-      procedure( symbol = 'eof-object?'         value = 'PROC_IS_EOF_OBJECT' min = 1 max = 1 ).
+      load_port( ).
 
       load_chars( ).
 
@@ -16393,29 +16450,47 @@
 
     ENDMETHOD.
 
-    METHOD complex_log.
+    METHOD arc_tan.
       DATA arctan TYPE f.
       DATA lv_tan TYPE f.
-      DATA magnitude TYPE f.
 
       IF y = 0.
         IF x = 0.
-          ln_z = lcl_lisp_new=>rectangular( real = neg_inf ).
+          result = lcl_lisp_number=>neg_inf.
           RETURN.
+        ELSEIF x GT 0.
+          arctan = - 0.
         ELSE.
           arctan = c_pi.
-          magnitude = abs( x ).
+        ENDIF.
+      ELSEIF x = 0.
+        IF y > 0.
+          arctan = c_pi / 2.
+        ELSE.
+          arctan = - c_pi / 2.
         ENDIF.
       ELSE.
-        magnitude = sqrt( x * x  + y * y ).
-        lv_tan = y / ( x + magnitude ).
-        arctan = 2 * atan( lv_tan ).
+        lv_tan = y / x.
+        arctan = atan( lv_tan ). " + 2 * N * c_pi.
+      ENDIF.
+      result = lcl_lisp_new=>real( value = arctan
+                                   iv_exact = abap_false ).
+    ENDMETHOD.
+
+    METHOD complex_log.
+      DATA magnitude_sqr TYPE f.
+
+      IF y = 0 AND x = 0.
+        ln_z = lcl_lisp_new=>rectangular( real = neg_inf ).
+        RETURN.
       ENDIF.
 
-      ln_z = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = log( magnitude ) / base
+      " log z = ln |z| + (arg z)i
+      magnitude_sqr = x * x  + y * y.
+      ln_z = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real( value = log( magnitude_sqr ) / 2
                                                                    iv_exact = abap_false )
-                                        imag = lcl_lisp_new=>real( value = arctan / base
-                                                                   iv_exact = abap_false ) ).
+                                        imag = arc_tan(  x = x
+                                                         y = y ) ).
     ENDMETHOD.
 
     METHOD number_to_string.
