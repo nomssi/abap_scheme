@@ -5,12 +5,12 @@
 *& Copy and paste this code into a type I (include) program
 *& MIT License (see below)
 *& Martin Ceronio, martin.ceronio@infosize.co.za June 2015
-*& Jacques Nomssi Nzali, www.informatik-dv.com April 2018
+*& Jacques Nomssi Nzali, nomssi@gmail.com April 2018 - April 2022
 *& Turtle Graphics placed under The Unlicense by Frederik Hudák
 *&---------------------------------------------------------------------*
 *  The MIT License (MIT)
 *
-*  Copyright (c) 2021 Jacques Nomssi Nzali
+*  Copyright (c) 2022 Jacques Nomssi Nzali
 *  Copyright (c) 2015 Martin Ceronio
 *
 *  Permission is hereby granted, free of charge, to any person obtaining a copy
