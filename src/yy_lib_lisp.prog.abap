@@ -448,11 +448,64 @@
     result = true.
   END-OF-DEFINITION.
 
+  CLASS lcl_error DEFINITION ABSTRACT.
+    PUBLIC SECTION.
+*     Utilities
+      METHODS to_string ABSTRACT RETURNING VALUE(str) TYPE string
+                        RAISING   lcx_lisp_exception.
+      " Errors
+      CLASS-METHODS throw IMPORTING message TYPE string
+                                    area    TYPE string DEFAULT c_area_eval
+                          RAISING   lcx_lisp_exception.
+      METHODS raise IMPORTING context TYPE string DEFAULT space
+                              message TYPE string
+                    RAISING   lcx_lisp_exception.
+
+      CLASS-METHODS incorrect_input IMPORTING operation TYPE string
+                                    RAISING   lcx_lisp_exception.
+
+      CLASS-METHODS invalid_identifier IMPORTING value TYPE string
+                                       RAISING   lcx_lisp_exception.
+
+      METHODS raise_index IMPORTING field TYPE string OPTIONAL
+                                    operation TYPE string
+                          RAISING   lcx_lisp_exception.
+      CLASS-METHODS throw_no_number IMPORTING message TYPE string
+                                    RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
+      METHODS raise_nan IMPORTING operation TYPE string
+                        RAISING   lcx_lisp_exception.
+
+      METHODS raise_type IMPORTING expected TYPE string
+                                   operation TYPE string
+                         RAISING   lcx_lisp_exception.
+
+      METHODS raise_invalid_number IMPORTING operation TYPE string
+                                   RAISING   lcx_lisp_exception.
+
+      METHODS no_complex IMPORTING operation TYPE string
+                         RAISING   lcx_lisp_exception.
+
+      METHODS no_integer IMPORTING operation TYPE string
+                         RAISING   lcx_lisp_exception.
+
+      CLASS-METHODS radix_throw IMPORTING message TYPE string
+                                RAISING   lcx_lisp_radix.
+
+      METHODS raise_pair IMPORTING context TYPE string
+                         RAISING   lcx_lisp_exception.
+      METHODS raise_port IMPORTING operation TYPE string
+                         RAISING   lcx_lisp_exception.
+
+      METHODS error_not_a_list IMPORTING context TYPE string DEFAULT space
+                               RAISING   lcx_lisp_exception.
+    PRIVATE SECTION.
+  ENDCLASS.
+
 * Single element that will capture cons cells, atoms etc.
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp DEFINITION
 *----------------------------------------------------------------------*
-  CLASS lcl_lisp DEFINITION CREATE PROTECTED FRIENDS lcl_lisp_new.
+  CLASS lcl_lisp DEFINITION INHERITING FROM lcl_error CREATE PROTECTED FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
       TYPES tt_element TYPE STANDARD TABLE OF REF TO lcl_lisp WITH DEFAULT KEY.
       " Symbolic expression (S-expression)
@@ -491,8 +544,8 @@
       DATA environment TYPE REF TO lcl_lisp_environment.
 
 *     Utilities
-      METHODS to_string RETURNING VALUE(str) TYPE string
-                        RAISING   lcx_lisp_exception.
+      METHODS to_string REDEFINITION.
+
       METHODS to_text RETURNING VALUE(str) TYPE string
                       RAISING   lcx_lisp_exception.
       METHODS to_number IMPORTING operation TYPE string
@@ -532,48 +585,6 @@
                      RAISING   lcx_lisp_exception.
 
       " Errors
-      CLASS-METHODS throw IMPORTING message TYPE string
-                                    area    TYPE string DEFAULT c_area_eval
-                          RAISING   lcx_lisp_exception.
-      METHODS raise IMPORTING context TYPE string DEFAULT space
-                              message TYPE string
-                    RAISING   lcx_lisp_exception.
-
-      CLASS-METHODS incorrect_input IMPORTING operation TYPE string
-                                    RAISING   lcx_lisp_exception.
-
-      METHODS raise_index IMPORTING field TYPE string OPTIONAL
-                                    operation TYPE string
-                          RAISING   lcx_lisp_exception.
-      CLASS-METHODS throw_no_number IMPORTING message TYPE string
-                                    RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
-      METHODS raise_nan IMPORTING operation TYPE string
-                        RAISING   lcx_lisp_exception.
-
-      METHODS raise_type IMPORTING expected TYPE string
-                                   operation TYPE string
-                         RAISING   lcx_lisp_exception.
-
-      METHODS raise_invalid_number IMPORTING operation TYPE string
-                                   RAISING   lcx_lisp_exception.
-
-      METHODS no_complex IMPORTING operation TYPE string
-                         RAISING   lcx_lisp_exception.
-
-      METHODS no_integer IMPORTING operation TYPE string
-                         RAISING   lcx_lisp_exception.
-
-      CLASS-METHODS radix_throw IMPORTING message TYPE string
-                                RAISING   lcx_lisp_radix.
-
-      METHODS raise_pair IMPORTING context TYPE string
-                         RAISING   lcx_lisp_exception.
-      METHODS raise_port IMPORTING operation TYPE string
-                         RAISING   lcx_lisp_exception.
-
-      METHODS error_not_a_list IMPORTING context TYPE string DEFAULT space
-                               RAISING   lcx_lisp_exception.
-
       METHODS assert_last_param IMPORTING operation TYPE string
                                 RAISING lcx_lisp_exception.
 
@@ -968,7 +979,7 @@
         TRY.
             den = num MOD den.
           CATCH cx_sy_arithmetic_error INTO DATA(lx_error).
-            lcl_lisp=>throw( lx_error->get_text( ) ).
+            throw( lx_error->get_text( ) ).
         ENDTRY.
         num = lv_save.
       ENDWHILE.
@@ -1088,13 +1099,13 @@
       DATA lo_ptr TYPE REF TO lcl_lisp.
 
       IF params IS NOT BOUND.
-        lcl_lisp=>incorrect_input( operation ).
+        incorrect_input( operation ).
       ELSE.
         lo_ptr = params.
       ENDIF.
 
       IF arity_min LT 0 AND lo_ptr->type EQ type_pair.
-         lcl_lisp=>throw( `No arguments allowed in ` && operation ).
+         throw( `No arguments allowed in ` && operation ).
       ENDIF.
 
       DO arity_min TIMES.
@@ -1115,15 +1126,15 @@
             ENDIF.
           WHEN OTHERS.
         ENDCASE.
-        lcl_lisp=>incorrect_input( operation ).
+        incorrect_input( operation ).
       ENDDO.
 
       IF arity_max GT 0 AND lo_ptr NE null.
         CASE arity_max.
           WHEN 1.
-            lcl_lisp=>throw( operation && ` expects only one argument` ).
+            throw( operation && ` expects only one argument` ).
           WHEN OTHERS.
-            lcl_lisp=>throw( `too many arguments in ` && operation ).
+            throw( `too many arguments in ` && operation ).
         ENDCASE.
       ENDIF.
     ENDMETHOD.
@@ -1179,7 +1190,7 @@
         CASE lo_arg->type.
           WHEN type_pair OR type_null.          " Do we have a proper list?
 
-            WHILE lo_var NE lcl_lisp=>null.     " Null would mean no parameters to map
+            WHILE lo_var NE null.     " Null would mean no parameters to map
 
               IF lo_var->type EQ type_symbol.
                " dotted pair after fixed number of parameters, to be bound to a variable number of arguments
@@ -1188,7 +1199,7 @@
               ENDIF.
 
               " Part of the list with fixed number of parameters
-              IF lo_arg = lcl_lisp=>null.         " Premature end of arguments
+              IF lo_arg = null.         " Premature end of arguments
                 EXIT.
               ENDIF.
 
@@ -1198,7 +1209,7 @@
               lo_arg = lcl_lisp=>null.
             ENDWHILE.
 
-            IF lo_arg EQ lcl_lisp=>null AND lo_var EQ lcl_lisp=>null.  " Correct number of arguments
+            IF lo_arg EQ null AND lo_var EQ null.  " Correct number of arguments
               result = lo_lambda.
               RETURN.
             ENDIF.
@@ -1212,7 +1223,7 @@
 
       ENDLOOP.
 
-      lcl_lisp=>throw( `no clause matching the arguments` ).
+      throw( `no clause matching the arguments` ).
 
     ENDMETHOD.
 
@@ -2348,7 +2359,7 @@
 
       METHODS unbound_symbol IMPORTING symbol TYPE any
                              RAISING   lcx_lisp_exception.
-      METHODS base_environment.
+      METHODS top_level_environment.
 
     PRIVATE SECTION.
       METHODS load_syntax.
@@ -2391,7 +2402,7 @@
 
     METHOD make_top_level.
       env = clone( io_outer ).
-      env->base_environment( ).
+      env->top_level_environment( ).
       env->top_level = abap_true.
     ENDMETHOD.
 
@@ -9983,7 +9994,7 @@
         list->car->raise_type( expected = `string`
                                operation = operation ).
       ENDIF.
-*     Optional radix
+      " Optional radix
       IF list->cdr IS BOUND AND list->cdr NE nil.
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
@@ -10520,7 +10531,6 @@
     METHOD proc_lcm.
 *     non-negative least common multiple of the arguments
       DATA lo_ptr TYPE REF TO lcl_lisp.
-      DATA lo_number TYPE REF TO lcl_lisp_number.
       DATA lv_exact TYPE tv_flag.
 
       DATA lo_rat TYPE REF TO lcl_lisp_rational.
@@ -10528,12 +10538,24 @@
 
       DATA carry TYPE tv_real.
       DATA lv_lcm TYPE tv_real VALUE 1.
+      DATA lv_denom TYPE tv_real.
+      DATA denom TYPE tv_real VALUE 1.
       lv_exact = abap_true.
 
       IF list NE nil.
 
-        lo_number = list->car->to_number( operation ).
+        DATA(lo_number) = list->car->to_number( operation ).
         lv_lcm = lo_number->get_rational( operation ).
+        IF abs( lv_lcm ) LT 1.
+          IF lo_number->type = type_rational.
+            lo_rat = CAST #( lo_number ) .
+            denom = lo_rat->denominator.
+            lv_lcm = lo_rat->int.
+          ELSE.
+            denom = 1 / lv_lcm.
+            lv_lcm = 1.
+          ENDIF.
+        ENDIF.
         lv_exact = lo_number->exact.
 
         lo_ptr = list->cdr.
@@ -10547,11 +10569,24 @@
             ENDIF.
             lv_exact = lo_number->exact.
           ENDIF.
-          lv_lcm = lv_lcm * carry / lcl_lisp_rational=>gcd( n = carry d = lv_lcm ).
+          IF abs( carry ) LT 1.
+            IF lo_number->type = type_rational.
+              lo_rat = CAST #( lo_number ).
+              carry = lo_rat->int.
+              lv_denom = lo_rat->denominator.
+            ELSE.
+              lv_denom = 1 / carry.
+              carry = 1.
+            ENDIF.
+            denom = lcl_lisp_rational=>gcd( n = lv_denom
+                                            d = denom ).
+          ENDIF.
+          lv_lcm = lv_lcm * carry / lcl_lisp_rational=>gcd( n = carry
+                                                            d = lv_lcm ).
           lo_ptr = lo_ptr->cdr.
         ENDWHILE.
       ENDIF.
-      result = lcl_lisp_new=>real_number( value = abs( lv_lcm )
+      result = lcl_lisp_new=>real_number( value = abs( lv_lcm / denom )
                                           iv_exact = lv_exact ).
     ENDMETHOD.
 
@@ -12747,7 +12782,10 @@
     ENDMETHOD.
 
     METHOD load_list.
-*     Compatibility
+*     Pairs and lists
+      procedure( symbol = 'list?'   value = 'PROC_IS_LIST' min = 1 max = 1 ).
+      procedure( symbol = 'pair?'   value = 'PROC_IS_PAIR' min = 1 max = 1 ).
+
       procedure( symbol = 'empty?'  value   = 'PROC_NILP' ).
       procedure( symbol = 'first'   value   = 'PROC_CAR' min = 1 max = 1 ).
       procedure( symbol = 'rest'    value   = 'PROC_CDR' min = 1 max = 1 ).
@@ -12787,7 +12825,15 @@
     ENDMETHOD.
 
     METHOD load_numbers.
+      " Numerical types, exactness, operators
       procedure( symbol = 'number?'   value = 'PROC_IS_NUMBER' min = 1 max = 1 ).
+      procedure( symbol = 'exact-integer?' value = 'PROC_IS_EXACT_INTEGER' min = 1 max = 1 ).
+      procedure( symbol = 'integer?'    value = 'PROC_IS_INTEGER' min = 1 max = 1 ).
+      procedure( symbol = 'complex?'    value = 'PROC_IS_COMPLEX' min = 1 max = 1 ).
+      procedure( symbol = 'real?'       value = 'PROC_IS_REAL' min = 1 max = 1 ).
+      procedure( symbol = 'rational?'   value = 'PROC_IS_RATIONAL' min = 1 max = 1 ).
+      procedure( symbol = 'exact?'      value = 'PROC_IS_EXACT' min = 1 max = 1 ).
+      procedure( symbol = 'inexact?'    value = 'PROC_IS_INEXACT' min = 1 max = 1 ).
 
       procedure( symbol = 'exact'     value = 'PROC_TO_EXACT' min = 1 max = 1 ).
       procedure( symbol = 'inexact'   value = 'PROC_TO_INEXACT' min = 1 max = 1 ).
@@ -12814,6 +12860,8 @@
       procedure( symbol = 'imag-part'        value = 'PROC_IMAG_PART' min = 1 max = 1 ).
       procedure( symbol = 'magnitude'        value = 'PROC_MAGNITUDE' min = 1 max = 1 ).
       procedure( symbol = 'angle'            value = 'PROC_ANGLE' min = 1 max = 1 ).
+
+      load_math( ).
     ENDMETHOD.
 
     METHOD load_math.
@@ -13010,7 +13058,7 @@
       procedure( symbol = 'eof-object?'         value = 'PROC_IS_EOF_OBJECT' min = 1 max = 1 ).
     ENDMETHOD.
 
-    METHOD base_environment.
+    METHOD top_level_environment.
       " Create symbols for nil, true and false values
       set( symbol = 'nil' element = lcl_lisp=>null ).
       set( symbol = '#f'  element = lcl_lisp=>true ).
@@ -13019,15 +13067,15 @@
       load_syntax( ).
       load_delayed_evaluation( ).
 
-      " Procedures
-      define_value( symbol = 'apply'        type = type_primitive value   = 'apply' ).
-      define_value( symbol = 'for-each'     type = type_primitive value   = 'for-each' ).
-      define_value( symbol = 'map'          type = type_primitive value   = 'map' ).
+      " control features
+      define_value( symbol = 'apply'    type = type_primitive value   = 'apply' ).
+      define_value( symbol = 'for-each' type = type_primitive value   = 'for-each' ).
+      define_value( symbol = 'map'      type = type_primitive value   = 'map' ).
 
       procedure( symbol = 'call-with-current-continuation' value = 'PROC_CALL_CC' ).
       procedure( symbol = 'call/cc'                        value = 'PROC_CALL_CC' ).
 
-*     Add native functions to environment
+      " Add native functions to environment
       procedure( symbol = '+'      value = 'PROC_ADD' ).
       procedure( symbol = '-'      value = 'PROC_SUBTRACT' min = 1 ).
       procedure( symbol = '*'      value = 'PROC_MULTIPLY' ).
@@ -13035,6 +13083,7 @@
 
       procedure( symbol = 'values' value = 'PROC_VALUES' min = 1 ).
 
+     " equivalence predicates
       procedure( symbol = '>'      value = 'PROC_GT' min = 2 ).
       procedure( symbol = '>='     value = 'PROC_GTE' min = 2 ).
       procedure( symbol = '<'      value = 'PROC_LT' min = 2 ).
@@ -13065,14 +13114,6 @@
       procedure( symbol = 'char?'       value = 'PROC_IS_CHAR' min = 1 max = 1 ).
       procedure( symbol = 'hash?'       value = 'PROC_IS_HASH' min = 1 max = 1 ).
 
-      procedure( symbol = 'exact-integer?' value = 'PROC_IS_EXACT_INTEGER' min = 1 max = 1 ).
-
-      procedure( symbol = 'integer?'    value = 'PROC_IS_INTEGER' min = 1 max = 1 ).
-      procedure( symbol = 'complex?'    value = 'PROC_IS_COMPLEX' min = 1 max = 1 ).
-      procedure( symbol = 'real?'       value = 'PROC_IS_REAL' min = 1 max = 1 ).
-      procedure( symbol = 'rational?'   value = 'PROC_IS_RATIONAL' min = 1 max = 1 ).
-      procedure( symbol = 'list?'       value = 'PROC_IS_LIST' min = 1 max = 1 ).
-      procedure( symbol = 'pair?'       value = 'PROC_IS_PAIR' min = 1 max = 1 ).
       procedure( symbol = 'vector?'     value = 'PROC_IS_VECTOR' min = 1 max = 1 ).
       procedure( symbol = 'bytevector?' value = 'PROC_IS_BYTEVECTOR' min = 1 max = 1 ).
       procedure( symbol = 'boolean?'    value = 'PROC_IS_BOOLEAN' min = 1 max = 1 ).
@@ -13082,10 +13123,8 @@
       procedure( symbol = 'symbol=?'    value = 'PROC_SYMBOL_LIST_IS_EQUAL' min = 1 ).
       procedure( symbol = 'port?'       value = 'PROC_IS_PORT' min = 1 max = 1 ).
       procedure( symbol = 'boolean=?'   value = 'PROC_BOOLEAN_LIST_IS_EQUAL' min = 1 ).
-      procedure( symbol = 'exact?'      value = 'PROC_IS_EXACT' min = 1 max = 1 ).
-      procedure( symbol = 'inexact?'    value = 'PROC_IS_INEXACT' min = 1 max = 1 ).
 
-*     Format
+*     input/ouptut
       procedure( symbol = 'newline'     value = 'PROC_NEWLINE' max = 1 ).
       procedure( symbol = 'display'     value = 'PROC_DISPLAY' min = 1 max = 2 ).
 
@@ -13112,7 +13151,6 @@
 
       load_strings( ).
       load_numbers( ).
-      load_math( ).
 
       procedure( symbol = 'rationalize' value = 'PROC_RATIONALIZE' min = 2 max = 2 ).
 
@@ -13145,6 +13183,7 @@
 
       load_turtles( ).
 
+      " System interface
       DATA lr_ref TYPE REF TO data.
 *     Define a value in the environment for SYST
       GET REFERENCE OF syst INTO lr_ref.
@@ -13184,6 +13223,86 @@
     ENDMETHOD.
 
   ENDCLASS.                    "lcl_lisp_profiler IMPLEMENTATION
+
+
+  CLASS lcl_error IMPLEMENTATION.
+
+    METHOD throw.
+      RAISE EXCEPTION TYPE lcx_lisp_exception
+        EXPORTING
+          message = message
+          area    = area.
+    ENDMETHOD.
+
+    METHOD radix_throw.
+      RAISE EXCEPTION TYPE lcx_lisp_radix
+        EXPORTING
+          message = message.
+    ENDMETHOD.
+
+    METHOD raise.
+      throw( context && to_string( ) && message ).
+    ENDMETHOD.
+
+    METHOD raise_type.
+      raise( | is not a { expected } in { operation }| ).
+    ENDMETHOD.
+
+    METHOD raise_index.
+      throw( to_string( ) && ` ` && field && |must be a non-negative integer in { operation }| ).
+    ENDMETHOD.
+
+    METHOD invalid_identifier.
+      throw( |Identifier { value } not valid.| ).
+    ENDMETHOD.
+
+    METHOD incorrect_input.
+      throw( |Incorrect input in { operation }| ).
+    ENDMETHOD.
+
+    METHOD raise_nan.
+      raise_type( expected = `number`
+                  operation = operation ).
+    ENDMETHOD.
+
+    METHOD raise_port.
+      raise_type( expected = `port`
+                  operation = operation ).
+    ENDMETHOD.
+
+    METHOD raise_pair.
+      throw( context && |: {  to_string( ) } is not a pair| ).
+    ENDMETHOD.
+
+    METHOD raise_invalid_number.
+      raise( | invalid number in { operation }| ).
+    ENDMETHOD.
+
+    METHOD no_integer.
+      raise( | is not an integer in { operation }| ).
+    ENDMETHOD.
+
+    METHOD no_complex.
+      raise( | complex number not allowed in { operation }| ).
+    ENDMETHOD.
+
+    METHOD throw_no_number.
+      DATA lx_no_number TYPE REF TO cx_sy_conversion_no_number.
+
+      CREATE OBJECT lx_no_number
+        EXPORTING
+          textid = '995DB739AB5CE919E10000000A11447B'
+          value  = message.   " The argument #D cannot be interpreted as a number
+      "throw( lx_no_number->get_text( ) ).
+      RAISE EXCEPTION lx_no_number.
+    ENDMETHOD.
+
+    METHOD error_not_a_list.
+      raise( context = context && `: `
+             message = ` is not a proper list` ).
+    ENDMETHOD.
+
+  ENDCLASS.
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp IMPLEMENTATION
@@ -13467,7 +13586,7 @@
       lv_parens = abap_true.
       WHILE lo_elem IS BOUND AND lo_elem NE null.
 
-*       Quasiquoting output (quasiquote x) is displayed as `x without parenthesis
+        " Quasiquoting output (quasiquote x) is displayed as `x without parenthesis
         lv_skip = abap_false.
         IF lv_first EQ abap_true AND lo_elem->type EQ type_pair.
           lv_first = abap_false.
@@ -13488,7 +13607,7 @@
           ENDIF.
 
           IF lo_elem = lo_fast.
-*           Circular list
+            " Circular list
             ADD 1 TO lv_shared.
             WHILE lo_elem->cdr NE lo_fast.
               lv_str = lv_str && lv_separator && lo_elem->car->to_string( ).
@@ -13516,7 +13635,7 @@
       IF lv_parens EQ abap_true.
         str = |{ c_open_paren }{ lv_str }{ c_close_paren }|.
       ELSE.
-*       Quasiquoting output
+       " Quasiquoting output
         str = lv_str.
       ENDIF.
 
@@ -13711,80 +13830,9 @@
                                                          ev_exact = ev_exact ).
     ENDMETHOD.
 
-    METHOD throw.
-      RAISE EXCEPTION TYPE lcx_lisp_exception
-        EXPORTING
-          message = message
-          area    = area.
-    ENDMETHOD.
-
-    METHOD radix_throw.
-      RAISE EXCEPTION TYPE lcx_lisp_radix
-        EXPORTING
-          message = message.
-    ENDMETHOD.
-
-    METHOD raise.
-      throw( context && to_string( ) && message ).
-    ENDMETHOD.
-
-    METHOD raise_type.
-      raise( | is not a { expected } in { operation }| ).
-    ENDMETHOD.
-
-    METHOD raise_index.
-      throw( to_string( ) && ` ` && field && |must be a non-negative integer in { operation }| ).
-    ENDMETHOD.
-
-    METHOD incorrect_input.
-      throw( |Incorrect input in { operation }| ).
-    ENDMETHOD.
-
-    METHOD raise_nan.
-      raise_type( expected = `number`
-                  operation = operation ).
-    ENDMETHOD.
-
-    METHOD raise_port.
-      raise_type( expected = `port`
-                  operation = operation ).
-    ENDMETHOD.
-
-    METHOD raise_pair.
-      throw( context && |: {  to_string( ) } is not a pair| ).
-    ENDMETHOD.
-
-    METHOD raise_invalid_number.
-      raise( | invalid number in { operation }| ).
-    ENDMETHOD.
-
-    METHOD no_integer.
-      raise( | is not an integer in { operation }| ).
-    ENDMETHOD.
-
-    METHOD no_complex.
-      raise( | complex number not allowed in { operation }| ).
-    ENDMETHOD.
-
-    METHOD throw_no_number.
-      DATA lx_no_number TYPE REF TO cx_sy_conversion_no_number.
-
-      CREATE OBJECT lx_no_number
-        EXPORTING
-          textid = '995DB739AB5CE919E10000000A11447B'
-          value  = message.   " The argument #D cannot be interpreted as a number
-      "throw( lx_no_number->get_text( ) ).
-      RAISE EXCEPTION lx_no_number.
-    ENDMETHOD.
-
     METHOD assert_last_param.
       CHECK cdr NE null.
       raise( | Parameter mismatch in { operation }| ).
-    ENDMETHOD.
-
-    METHOD error_not_a_list.
-      raise( context = context && `: `
-             message = ` is not a proper list` ).
     ENDMETHOD.
 
     METHOD is_eof.
@@ -14288,7 +14336,7 @@
                 lv_escape_hex_mode = abap_false.
                 CLEAR lv_escape_char.
               ELSE.
-                lcl_lisp=>throw( |Identifier { value } not valid.| ).
+                lcl_lisp=>invalid_identifier( value ).
               ENDIF.
             WHEN c_semi_colon.
               IF lv_escape_hex_mode = abap_true.
@@ -14303,7 +14351,7 @@
 
             WHEN c_vertical_line.
               IF lv_index NE lv_len_1.      "|2|s  len = 4, len_1 = 3
-                lcl_lisp=>throw( |Identifier { value } not valid.| ).
+                lcl_lisp=>invalid_identifier( value ).
               ENDIF.
             WHEN OTHERS.
               IF lv_escape_mode EQ abap_true.
@@ -14348,7 +14396,7 @@
                             index = index ).
           RETURN.
         ELSE.
-          lcl_lisp=>throw( |Identifier { value } not valid.| ).
+          lcl_lisp=>invalid_identifier( value ).
         ENDIF.
 
       ELSE.
@@ -14366,7 +14414,7 @@
           "##TO DO
         ELSE.
           " if not peculiar identifier
-          lcl_lisp=>throw( |Identifier { value } not valid.| ).
+          lcl_lisp=>invalid_identifier( value ).
         ENDIF.
         ro_elem = symbol( value = value
                           index = index ).
@@ -14390,7 +14438,7 @@
         ELSEIF lv_char CO c_lisp_splicing.
           " special subsequent
         ELSE.
-          lcl_lisp=>throw( |Identifier { value } not valid.| ).
+          lcl_lisp=>invalid_identifier( value ).
         ENDIF.
       ENDDO.
       ro_elem = symbol( value = value
@@ -16502,6 +16550,7 @@
       DATA lv_digit TYPE i.
       DATA lv_real TYPE tv_real.
       DATA lv_radix_error TYPE tv_flag VALUE abap_false.
+      DATA lv_inexact_radix_error TYPE tv_flag VALUE abap_false.
 
       CASE type.
         WHEN type_integer.
@@ -16530,7 +16579,7 @@
           ENDCASE.
 
         WHEN type_real.
-          lv_radix_error = xsdbool( iv_radix NE 10 ).
+          lv_inexact_radix_error = xsdbool( iv_radix NE 10 ).
           DATA(lo_real) = CAST lcl_lisp_real( me ).
           IF lo_real->infnan EQ abap_false.
             lv_real = lo_real->real.
@@ -16544,7 +16593,7 @@
           ENDIF.
 
         WHEN type_rational.
-          lv_radix_error = xsdbool( iv_radix NE 10 ).
+          lv_inexact_radix_error = xsdbool( iv_radix NE 10 ).
           DATA(lo_rat) = CAST lcl_lisp_rational( me ).
           IF lo_rat->exact EQ abap_false AND lo_rat->denominator NE 0.
             lv_real = lo_rat->to_real( ).
@@ -16580,6 +16629,9 @@
       str = condense( str ).
       IF lv_radix_error EQ abap_true.
         throw( |Radix { iv_radix } not supported in number->string| ) ##NO_TEXT.
+      ENDIF.
+      IF lv_inexact_radix_error EQ abap_true.
+        throw( |Radix { iv_radix } for inexact number not supported in number->string| ) ##NO_TEXT.
       ENDIF.
 
     ENDMETHOD.
@@ -17243,7 +17295,6 @@
     METHOD copy.
       " bytevector-copy!
       DATA lv_end TYPE tv_index.
-      DATA(lv_start) = start + 1.           " from is Inclusive
 
       IF end IS INITIAL.
         lv_end = lines( io_from->bytes ).   " to is Exclusive
@@ -17252,6 +17303,7 @@
       ENDIF.
 
       DATA(lv_at) = at + 1.
+      DATA(lv_start) = start + 1.           " from is Inclusive
       DATA(lv_max) = lv_end - lv_start + lv_at.
 
       DATA(lv_idx) = lv_start.
@@ -17266,12 +17318,10 @@
     ENDMETHOD.
 
     METHOD is_equal.
-      DATA lo_u8 TYPE REF TO lcl_lisp_bytevector.
-
       result = abap_false.
       CHECK io_elem->type EQ type_bytevector.
 
-      lo_u8 ?= io_elem.
+      DATA(lo_u8) = CAST lcl_lisp_bytevector( io_elem ).
       CHECK bytes = lo_u8->bytes.
 
       result = abap_true.

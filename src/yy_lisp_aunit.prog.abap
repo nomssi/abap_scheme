@@ -2260,6 +2260,8 @@
        METHODS gcd_1 FOR TESTING.
        METHODS gcd_2 FOR TESTING.
        METHODS lcm_1 FOR TESTING.
+       METHODS lcm_2 FOR TESTING.
+       METHODS lcm_3 FOR TESTING.
 
        METHODS to_exact_1 FOR TESTING.
        METHODS to_exact_2 FOR TESTING.
@@ -2577,9 +2579,21 @@
                expected = |288| ).
        scheme( code = |(lcm 32.0 -36)|
                expected = |288.0| ).   " inexact
+     ENDMETHOD.
+                      "lcm_1
+     METHOD lcm_2.
+       scheme( code = |(lcm 1/2 15)|
+               expected = |15| ).
+       scheme( code = |(lcm 0.5 15)|
+               expected = |15.0| ).
+     ENDMETHOD.
+
+     METHOD lcm_3.
+       scheme( code = |(lcm 3/4 1/6)|
+               expected = |3/2| ).
        scheme( code = |(lcm 1/2 2/3)|
                expected = |2| ).
-     ENDMETHOD.                    "lcm_1
+     ENDMETHOD.
 
      METHOD to_exact_1.
        scheme( code = '(exact 53)'
@@ -2935,6 +2949,7 @@
        METHODS math_exp FOR TESTING.
        METHODS math_expt FOR TESTING.
        METHODS math_expt_1 FOR TESTING.
+       METHODS math_expt_2 FOR TESTING.
        METHODS math_sqrt FOR TESTING.
        METHODS math_int_sqrt FOR TESTING.
        METHODS math_square FOR TESTING.
@@ -3379,6 +3394,11 @@
        one_parameter( code =  '(exp 2 10)'
                        operation  = 'exp' ) ##literal.
      ENDMETHOD.                    "math_expt_1
+
+     METHOD math_expt_2.
+       scheme( code = '(expt -1 1/9223372036854775807)'
+               expected = '1.0' ).
+     ENDMETHOD.                    "math_expt_2
 
      METHOD math_sqrt.
        scheme_argument( code =  '(sqrt)'
