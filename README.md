@@ -2,7 +2,7 @@
 [![Language: ABAP](https://img.shields.io/badge/Language-ABAP-blue.svg?style=flat)](https://www.sap.com/developer/topics/abap-platform.html)
 [![License: MIT](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat)](https://opensource.org/licenses/MIT)
 
-- is an interpreter for Scheme, a Lisp dialect with exceptionally clear and simple semantics
+- is an interpreter for Scheme, a Lisp dialect with exceptionally clear and concise semantics and a focus on functional programming
 - provides a SAP GUI based workbench for Scheme
 - is written in, and can be called from ABAP
 
@@ -69,8 +69,10 @@ S-expression for (* 2 (+ 3 4)) | workbench view
 Class `lcl_lisp_interpreter` evaluates your Scheme code in a string `code`, using either method `eval_repl( code )` which throws an exception on errors, or method `eval_source( code )` catches exception:
 
 ```ABAP
-      DATA(response) = NEW lcl_lisp_interpreter( )->eval_source( code ).
+      DATA(response) = NEW lcl_lisp_interpreter( io_port = port 
+                                                 ii_log = log )->eval_source( code ).
 ```
+`port` is a buffered port that can allow input or output. `log` implements a simple logging interface with 2 methods, put( ) and get( ).
 #### Access to ABAP Fields
 For a [dynamic IF statement](https://blogs.sap.com/2016/02/29/dynamic-if-condition/)
      `( PLAAB = '02' ) and ( DELKZ = 'BB') and ( LIFNR > '' ) and ( PLUMI = '-')` 
