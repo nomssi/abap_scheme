@@ -41,8 +41,8 @@
 
   TYPES tv_real TYPE decfloat34.  " floating point data type
 
-"  TYPES tv_int TYPE int4.         " integer data type int4, use int8 and max_int8 if available
-"  CONSTANTS c_max_int TYPE tv_int VALUE cl_abap_math=>max_int4.          "  cl_abap_math=>max_int8.
+  "  TYPES tv_int TYPE int4.         " integer data type int4, use int8 and max_int8 if available
+  "  CONSTANTS c_max_int TYPE tv_int VALUE cl_abap_math=>max_int4.          "  cl_abap_math=>max_int8.
 
   TYPES tv_int TYPE int8.
   CONSTANTS c_max_int TYPE tv_int VALUE cl_abap_math=>max_int8.
@@ -105,10 +105,10 @@
     c_undefined      TYPE string VALUE '<undefined>'.
 
   CONSTANTS:
-    c_error_message         TYPE string VALUE 'Error in processing' ##NO_TEXT,
-    c_error_unexpected_end  TYPE string VALUE 'Unexpected end' ##NO_TEXT,
-    c_error_eval            TYPE string VALUE 'EVAL( ) came up empty-handed' ##NO_TEXT,
-    c_error_no_exp_in_body  TYPE string VALUE 'no expression in body' ##NO_TEXT.
+    c_error_message        TYPE string VALUE 'Error in processing' ##NO_TEXT,
+    c_error_unexpected_end TYPE string VALUE 'Unexpected end' ##NO_TEXT,
+    c_error_eval           TYPE string VALUE 'EVAL( ) came up empty-handed' ##NO_TEXT,
+    c_error_no_exp_in_body TYPE string VALUE 'no expression in body' ##NO_TEXT.
 
   CONSTANTS:
     c_area_eval  TYPE string VALUE `Eval` ##NO_TEXT,
@@ -148,16 +148,16 @@
     c_exponent_marker      TYPE tv_char VALUE `E`,
     c_exponent_marker_long TYPE string VALUE `eEsSfFdDlL`,
 
-    c_imaginary_marker TYPE tv_char VALUE 'I',
-    c_imaginary_output TYPE tv_char VALUE `i`,
-    c_complex_polar    TYPE tv_char VALUE '@'.
+    c_imaginary_marker     TYPE tv_char VALUE 'I',
+    c_imaginary_output     TYPE tv_char VALUE `i`,
+    c_complex_polar        TYPE tv_char VALUE '@'.
 
   CONSTANTS:
-    c_sign_zero TYPE tv_sign VALUE space,
+    c_sign_zero     TYPE tv_sign VALUE space,
     c_sign_positive TYPE tv_sign VALUE c_plus_sign,
     c_sign_negative TYPE tv_sign VALUE c_minus_sign,
-    c_sign_pos_nan TYPE tv_sign VALUE '?+',
-    c_sign_neg_nan TYPE tv_sign VALUE '?-'.
+    c_sign_pos_nan  TYPE tv_sign VALUE '?+',
+    c_sign_neg_nan  TYPE tv_sign VALUE '?-'.
 
   CONSTANTS:
     c_lisp_pos_zero TYPE string VALUE '+0.0',
@@ -271,6 +271,8 @@
 
   CLASS lcl_demo_output DEFINITION.
     PUBLIC SECTION.
+      CLASS-DATA go_out TYPE REF TO lcl_demo_output.
+
       METHODS constructor IMPORTING out TYPE REF TO if_demo_output.
       METHODS write IMPORTING iv_text TYPE any.
       METHODS display.
@@ -278,10 +280,6 @@
     PRIVATE SECTION.
       DATA out TYPE REF TO if_demo_output.
   ENDCLASS.
-
-  DATA gv_lisp_trace TYPE tv_flag VALUE abap_false ##NEEDED.
-  DATA go_out TYPE REF TO lcl_demo_output.
-
 
   CLASS lcl_demo_output IMPLEMENTATION.
 
@@ -380,7 +378,7 @@
 * Macro that implements the logic for the comparison native
 * procedures, where only the comparison operator differs
   DEFINE _comparison.
-     " The predicates are required to be transitive, so we must convert inexact numbers to exact
+    " The predicates are required to be transitive, so we must convert inexact numbers to exact
     " currently not transitive !? --------------------------------
     result = false.
     DATA(other) = list->car->to_number( operation )->get_state( operation ).
@@ -452,7 +450,7 @@
     PUBLIC SECTION.
 *     Utilities
       METHODS to_string ABSTRACT RETURNING VALUE(str) TYPE string
-                        RAISING   lcx_lisp_exception.
+                                 RAISING   lcx_lisp_exception.
       " Errors
       CLASS-METHODS throw IMPORTING message TYPE string
                                     area    TYPE string DEFAULT c_area_eval
@@ -467,7 +465,7 @@
       CLASS-METHODS invalid_identifier IMPORTING value TYPE string
                                        RAISING   lcx_lisp_exception.
 
-      METHODS raise_index IMPORTING field TYPE string OPTIONAL
+      METHODS raise_index IMPORTING field     TYPE string OPTIONAL
                                     operation TYPE string
                           RAISING   lcx_lisp_exception.
       CLASS-METHODS throw_no_number IMPORTING message TYPE string
@@ -475,7 +473,7 @@
       METHODS raise_nan IMPORTING operation TYPE string
                         RAISING   lcx_lisp_exception.
 
-      METHODS raise_type IMPORTING expected TYPE string
+      METHODS raise_type IMPORTING expected  TYPE string
                                    operation TYPE string
                          RAISING   lcx_lisp_exception.
 
@@ -523,7 +521,7 @@
 
       CLASS-METHODS class_constructor.
 
-      CLASS-DATA null        TYPE REF TO  lcl_lisp READ-ONLY.
+      CLASS-DATA null       TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA false      TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA true       TYPE REF TO  lcl_lisp READ-ONLY.
       CLASS-DATA undefined  TYPE REF TO  lcl_lisp READ-ONLY.
@@ -548,15 +546,15 @@
 
       METHODS to_text RETURNING VALUE(str) TYPE string
                       RAISING   lcx_lisp_exception.
-      METHODS to_number IMPORTING operation TYPE string
+      METHODS to_number IMPORTING operation     TYPE string
                         RETURNING VALUE(number) TYPE REF TO lcl_lisp_number
                         RAISING   lcx_lisp_exception.
-      METHODS get_integer IMPORTING operation  TYPE string
-                          EXPORTING ev_int TYPE tv_int
-                                    ev_exact TYPE tv_flag
+      METHODS get_integer IMPORTING operation TYPE string
+                          EXPORTING ev_int    TYPE tv_int
+                                    ev_exact  TYPE tv_flag
                           RAISING   lcx_lisp_exception.
 
-      METHODS new_number_iterator IMPORTING iv_operation TYPE string OPTIONAL
+      METHODS new_number_iterator IMPORTING iv_operation   TYPE string OPTIONAL
                                   RETURNING VALUE(ro_iter) TYPE REF TO lcl_lisp_number_iterator
                                   RAISING   lcx_lisp_exception.
 
@@ -580,13 +578,13 @@
       METHODS is_eof RETURNING VALUE(flag) TYPE tv_flag.
       METHODS is_procedure RETURNING VALUE(result) TYPE tv_flag.
       METHODS is_number RETURNING VALUE(result) TYPE tv_flag.
-      METHODS is_nan IMPORTING operation TYPE string DEFAULT `nan?`
+      METHODS is_nan IMPORTING operation   TYPE string DEFAULT `nan?`
                      RETURNING VALUE(flag) TYPE tv_flag
                      RAISING   lcx_lisp_exception.
 
       " Errors
       METHODS assert_last_param IMPORTING operation TYPE string
-                                RAISING lcx_lisp_exception.
+                                RAISING   lcx_lisp_exception.
 
     PROTECTED SECTION.
       METHODS constructor IMPORTING type TYPE tv_type.
@@ -689,13 +687,13 @@
 
       METHODS get_integer REDEFINITION.
 
-      METHODS complex_to_real IMPORTING operation      TYPE string OPTIONAL
-                              EXPORTING ev_real TYPE tv_real
-                                        ev_imag TYPE tv_real
+      METHODS complex_to_real IMPORTING operation TYPE string OPTIONAL
+                              EXPORTING ev_real   TYPE tv_real
+                                        ev_imag   TYPE tv_real
                               RAISING   lcx_lisp_exception.
 
-      CLASS-METHODS get_real IMPORTING self TYPE ts_number
-                                       operation TYPE string OPTIONAL
+      CLASS-METHODS get_real IMPORTING self           TYPE ts_number
+                                       operation      TYPE string OPTIONAL
                              RETURNING VALUE(rv_real) TYPE tv_real
                              RAISING   lcx_lisp_exception.
 
@@ -703,12 +701,12 @@
                                RETURNING VALUE(str) TYPE string
                                RAISING   lcx_lisp_exception.
 
-      METHODS get_number_info IMPORTING operation TYPE string
+      METHODS get_number_info IMPORTING operation      TYPE string
                               RETURNING VALUE(rs_info) TYPE ts_number
                               RAISING   lcx_lisp_exception.
       CLASS-METHODS set_sign CHANGING cs_info TYPE ts_number.
 
-      METHODS get_state IMPORTING operation TYPE string OPTIONAL
+      METHODS get_state IMPORTING operation    TYPE string OPTIONAL
                         RETURNING VALUE(state) TYPE ts_result
                         RAISING   lcx_lisp_exception.
 
@@ -716,7 +714,7 @@
                                  RETURNING VALUE(rdprec) TYPE tv_real.
 
       " Arithmetic
-      METHODS norm IMPORTING operation TYPE string
+      METHODS norm IMPORTING operation  TYPE string
                    RETURNING VALUE(num) TYPE REF TO lcl_lisp_number.
       METHODS square RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
                      RAISING   lcx_lisp_exception.
@@ -725,57 +723,57 @@
                   RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
                   RAISING   lcx_lisp_exception.
 
-      METHODS divide IMPORTING other        TYPE REF TO lcl_lisp_number
+      METHODS divide IMPORTING other         TYPE REF TO lcl_lisp_number
                      RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
                      RAISING   lcx_lisp_exception.
 
-      METHODS substract IMPORTING other        TYPE REF TO lcl_lisp_number
+      METHODS substract IMPORTING other         TYPE REF TO lcl_lisp_number
                         RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
                         RAISING   lcx_lisp_exception.
 
-      METHODS negative IMPORTING number TYPE ts_number
+      METHODS negative IMPORTING number     TYPE ts_number
                        RETURNING VALUE(res) TYPE ts_number.
 
-      METHODS neg_sign IMPORTING number TYPE ts_result
+      METHODS neg_sign IMPORTING number     TYPE ts_result
                        RETURNING VALUE(res) TYPE ts_result.
 
-      METHODS add_complex IMPORTING first TYPE ts_result
-                                    second TYPE ts_result
-                                    operation TYPE string
+      METHODS add_complex IMPORTING first         TYPE ts_result
+                                    second        TYPE ts_result
+                                    operation     TYPE string
                           RETURNING VALUE(result) TYPE ts_result
                           RAISING   lcx_lisp_exception.
 
-      METHODS add_real IMPORTING self  TYPE ts_number
-                                 other TYPE ts_number
-                                 operation TYPE string
+      METHODS add_real IMPORTING self          TYPE ts_number
+                                 other         TYPE ts_number
+                                 operation     TYPE string
                        RETURNING VALUE(number) TYPE ts_number
                        RAISING   lcx_lisp_exception.
 
-      METHODS multiply_real IMPORTING self  TYPE ts_number
-                                      other TYPE ts_number
-                                      operation TYPE string
+      METHODS multiply_real IMPORTING self          TYPE ts_number
+                                      other         TYPE ts_number
+                                      operation     TYPE string
                             RETURNING VALUE(number) TYPE ts_number
                             RAISING   lcx_lisp_exception.
-      METHODS divide_real IMPORTING self  TYPE ts_number
-                                    other TYPE ts_number
-                                    operation TYPE string
+      METHODS divide_real IMPORTING self          TYPE ts_number
+                                    other         TYPE ts_number
+                                    operation     TYPE string
                           RETURNING VALUE(number) TYPE ts_number
                           RAISING   lcx_lisp_exception.
 
-      METHODS product IMPORTING first TYPE ts_result
-                                second TYPE ts_result
-                                operation TYPE string
+      METHODS product IMPORTING first         TYPE ts_result
+                                second        TYPE ts_result
+                                operation     TYPE string
                       RETURNING VALUE(result) TYPE ts_result
                       RAISING   lcx_lisp_exception.
 
-      METHODS quotient IMPORTING numerator TYPE ts_result
-                                 denominator TYPE ts_result
-                                 operation TYPE string
+      METHODS quotient IMPORTING numerator     TYPE ts_result
+                                 denominator   TYPE ts_result
+                                 operation     TYPE string
                        RETURNING VALUE(result) TYPE ts_result
                        RAISING   lcx_lisp_exception.
 
-      CLASS-METHODS arc_tan IMPORTING x TYPE tv_real
-                                      y TYPE tv_real
+      CLASS-METHODS arc_tan IMPORTING x             TYPE tv_real
+                                      y             TYPE tv_real
                             RETURNING VALUE(result) TYPE REF TO lcl_lisp_number.
 
       CLASS-METHODS complex_log IMPORTING x           TYPE tv_real
@@ -993,8 +991,8 @@
     PUBLIC SECTION.
       DATA real TYPE tv_real READ-ONLY.
 
-      METHODS to_rational EXPORTING ev_nummer TYPE tv_int
-                                    ev_denom TYPE tv_int
+      METHODS to_rational EXPORTING ev_nummer          TYPE tv_int
+                                    ev_denom           TYPE tv_int
                           RETURNING VALUE(is_rational) TYPE tv_flag.
       METHODS float_eq IMPORTING iv_real       TYPE tv_real
                        RETURNING VALUE(result) TYPE tv_flag.
@@ -1072,15 +1070,17 @@
   CLASS lcl_lisp_native DEFINITION INHERITING FROM lcl_lisp FRIENDS lcl_lisp_new.
     PUBLIC SECTION.
       METHODS constructor IMPORTING value     TYPE any
-                                    arity_min TYPE tv_int OPTIONAL
-                                    arity_max TYPE tv_byte OPTIONAL
-                                    RAISING   lcx_lisp_exception.
-      METHODS check_arity IMPORTING params TYPE REF TO lcl_lisp
+                                    arity_min TYPE tv_int
+                                    arity_max TYPE tv_byte
+                                    arity_ret TYPE tv_byte
+                          RAISING   lcx_lisp_exception.
+      METHODS check_arity IMPORTING params    TYPE REF TO lcl_lisp
                                     operation TYPE string
                           RAISING   lcx_lisp_exception.
     PROTECTED SECTION.
       DATA arity_min TYPE tv_int.
       DATA arity_max TYPE tv_byte.
+      DATA arity_ret TYPE tv_byte.
   ENDCLASS.
 
   CLASS lcl_lisp_native IMPLEMENTATION.
@@ -1090,6 +1090,7 @@
       me->value = value.
       me->arity_min = arity_min.
       me->arity_max = arity_max.
+      me->arity_ret = arity_ret.
       IF arity_max GT 0 AND arity_max LT arity_min.
         throw( |Arity error in definition of procedure { value } | ).
       ENDIF.
@@ -1105,7 +1106,7 @@
       ENDIF.
 
       IF arity_min LT 0 AND lo_ptr->type EQ type_pair.
-         throw( `No arguments allowed in ` && operation ).
+        throw( `No arguments allowed in ` && operation ).
       ENDIF.
 
       DO arity_min TIMES.
@@ -1129,7 +1130,7 @@
         incorrect_input( operation ).
       ENDDO.
 
-      IF arity_max GT 0 AND lo_ptr NE null.
+      IF arity_max GT 0 AND lo_ptr->type NE type_null.
         CASE arity_max.
           WHEN 1.
             throw( operation && ` expects only one argument` ).
@@ -1190,16 +1191,16 @@
         CASE lo_arg->type.
           WHEN type_pair OR type_null.          " Do we have a proper list?
 
-            WHILE lo_var NE null.     " Null would mean no parameters to map
+            WHILE lo_var->type NE type_null.    " Null would mean no parameters to map
 
               IF lo_var->type EQ type_symbol.
-               " dotted pair after fixed number of parameters, to be bound to a variable number of arguments
+                " dotted pair after fixed number of parameters, to be bound to a variable number of arguments
                 result = lo_lambda.
                 RETURN.
               ENDIF.
 
               " Part of the list with fixed number of parameters
-              IF lo_arg = null.         " Premature end of arguments
+              IF lo_arg->type = type_null.       " Premature end of arguments
                 EXIT.
               ENDIF.
 
@@ -1209,7 +1210,7 @@
               lo_arg = lcl_lisp=>null.
             ENDWHILE.
 
-            IF lo_arg EQ null AND lo_var EQ null.  " Correct number of arguments
+            IF lo_arg->type EQ type_null AND lo_var->type EQ type_null.  " Correct number of arguments
               result = lo_lambda.
               RETURN.
             ENDIF.
@@ -1294,7 +1295,7 @@
                    RETURNING VALUE(match)      TYPE tv_flag
                    RAISING   lcx_lisp_exception.
     METHODS: bookmark,
-             backtrack.
+      backtrack.
     DATA state TYPE ts_stream_state.
   ENDINTERFACE.
 
@@ -1308,7 +1309,7 @@
   ENDINTERFACE.
 
   INTERFACE lif_binary_input_port.
-    METHODS read_xstring IMPORTING k TYPE tv_index
+    METHODS read_xstring IMPORTING k               TYPE tv_index
                          RETURNING VALUE(rv_input) TYPE xstring.
     METHODS peek_u8 RETURNING VALUE(rv_int) TYPE tv_int.
     METHODS read_u8 RETURNING VALUE(rv_int) TYPE tv_int.
@@ -1561,10 +1562,11 @@
                                    iv_string      TYPE tv_flag DEFAULT abap_false
                          RETURNING VALUE(ro_port) TYPE REF TO lcl_lisp_port.
 
-      CLASS-METHODS native  IMPORTING value     TYPE any
-                                      arity_min TYPE tv_int
-                                      arity_max TYPE tv_byte
-                         RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
+      CLASS-METHODS native  IMPORTING value          TYPE any
+                                      arity_min      TYPE tv_int
+                                      arity_max      TYPE tv_byte
+                                      arity_ret      TYPE tv_byte
+                            RETURNING VALUE(ro_elem) TYPE REF TO lcl_lisp.
 
       CLASS-METHODS elem IMPORTING type           TYPE tv_type
                                    value          TYPE any OPTIONAL
@@ -1611,7 +1613,7 @@
       CLASS-METHODS case_lambda IMPORTING it_clauses       TYPE tt_lisp
                                 RETURNING VALUE(ro_lambda) TYPE REF TO lcl_lisp.
 
-      CLASS-METHODS function IMPORTING iv_function TYPE string
+      CLASS-METHODS function IMPORTING iv_function    TYPE string
                              RETURNING VALUE(ro_func) TYPE REF TO lcl_lisp_abapfunction
                              RAISING   lcx_lisp_exception.
 
@@ -1658,7 +1660,7 @@
 
       CLASS-METHODS match_initial IMPORTING initial      TYPE tv_char
                                   RETURNING VALUE(match) TYPE tv_flag.
-    "PROTECTED SECTION.
+      "PROTECTED SECTION.
 
       CLASS-METHODS binary IMPORTING value         TYPE csequence
                            RETURNING VALUE(rv_int) TYPE tv_int
@@ -1745,7 +1747,7 @@
 
     METHOD add.
       DATA(lo_value) = lcl_lisp_new=>cons( io_car = io_value ).
-      IF head = null.
+      IF head->type = type_null.
         head = last = lo_value.
       ELSE.
         last = last->cdr = lo_value.
@@ -2054,6 +2056,7 @@
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_lisp_iterator DEFINITION
+* an iterator for a Scheme-like linked list data structure.
 *----------------------------------------------------------------------*
   CLASS lcl_lisp_iterator DEFINITION CREATE PROTECTED FRIENDS lcl_lisp.
     PUBLIC SECTION.
@@ -2072,17 +2075,17 @@
     PUBLIC SECTION.
       METHODS next REDEFINITION.
       METHODS sum RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
-                  RAISING cx_dynamic_check.
+                  RAISING   cx_dynamic_check.
       METHODS diff RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
-                   RAISING cx_dynamic_check.
+                   RAISING   cx_dynamic_check.
       METHODS product RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
-                      RAISING cx_dynamic_check.
+                      RAISING   cx_dynamic_check.
       METHODS quotient RETURNING VALUE(result) TYPE REF TO lcl_lisp_number
-                       RAISING cx_dynamic_check.
+                       RAISING   cx_dynamic_check.
     PROTECTED SECTION.
       DATA operation TYPE string.
 
-      METHODS constructor IMPORTING io_elem TYPE REF TO lcl_lisp
+      METHODS constructor IMPORTING io_elem      TYPE REF TO lcl_lisp
                                     iv_operation TYPE string OPTIONAL
                           RAISING   lcx_lisp_exception.
   ENDCLASS.
@@ -2336,6 +2339,7 @@
                             value          TYPE string
                             min            TYPE tv_int OPTIONAL
                             max            TYPE tv_byte OPTIONAL
+                            ret            TYPE tv_byte DEFAULT 1
                   RETURNING VALUE(element) TYPE REF TO lcl_lisp,
         syntax IMPORTING symbol         TYPE string
                RETURNING VALUE(element) TYPE REF TO lcl_lisp.
@@ -2348,8 +2352,8 @@
       DATA parent TYPE REF TO lcl_lisp_environment.  " outer (parent) environment:
 
       TYPES: BEGIN OF ts_map,
-               symbol TYPE string,
-               value  TYPE REF TO lcl_lisp,
+               symbol    TYPE string,
+               value     TYPE REF TO lcl_lisp,
                arity_min TYPE tv_byte,
                arity_max TYPE tv_byte,
              END OF ts_map.
@@ -2499,7 +2503,7 @@
       DO strlen( iv_text ) TIMES.
         lif_stream~next_char( ).
       ENDDO.
-   ENDMETHOD.
+    ENDMETHOD.
 
   ENDCLASS.
 
@@ -2559,7 +2563,7 @@
       METHODS decode_escape RETURNING VALUE(pchar) TYPE tv_char
                             RAISING   lcx_lisp_exception.
       METHODS match_string RETURNING VALUE(element) TYPE REF TO lcl_lisp
-                           RAISING  lcx_lisp_exception.
+                           RAISING   lcx_lisp_exception.
       METHODS:
         parse_pair IMPORTING delim         TYPE tv_char DEFAULT c_open_paren
                    RETURNING VALUE(result) TYPE REF TO lcl_lisp
@@ -2594,12 +2598,12 @@
 
       METHODS read_real IMPORTING domain        TYPE csequence
                                   iv_exact_char TYPE tv_char
-                        RETURNING VALUE(elem) TYPE REF TO lcl_lisp_number
+                        RETURNING VALUE(elem)   TYPE REF TO lcl_lisp_number
                         RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
 
       METHODS read_complex IMPORTING domain        TYPE csequence
                                      iv_exact_char TYPE tv_char
-                           RETURNING VALUE(elem) TYPE REF TO lcl_lisp_number
+                           RETURNING VALUE(elem)   TYPE REF TO lcl_lisp_number
                            RAISING   lcx_lisp_exception cx_sy_conversion_no_number.
 
       METHODS read_suffix IMPORTING domain     TYPE csequence
@@ -2641,14 +2645,14 @@
       METHODS get_atom RETURNING VALUE(rv_val) TYPE string
                        RAISING   lcx_lisp_exception.
 
-      METHODS exactness IMPORTING iv_exact_char TYPE tv_char
+      METHODS exactness IMPORTING iv_exact_char   TYPE tv_char
                         RETURNING VALUE(rv_exact) TYPE tv_flag
                         RAISING   lcx_lisp_exception.
 
       METHODS match_token RETURNING VALUE(element) TYPE REF TO lcl_lisp
                           RAISING   lcx_lisp_exception.
 
-      METHODS number_match IMPORTING iv_text TYPE string
+      METHODS number_match IMPORTING iv_text      TYPE string
                            RETURNING VALUE(found) TYPE tv_flag
                            RAISING   lcx_lisp_exception.
 
@@ -2744,14 +2748,14 @@
       ENDWHILE.
     ENDMETHOD.
 
-    METHOD uInteger_radix.
+    METHOD uinteger_radix.
       IF mi_stream->state-char CN domain.
         lcl_lisp=>throw_no_number( `digit ` && mi_stream->state-char ).
       ENDIF.
-      uInt = radix_integer( domain ).
+      uint = radix_integer( domain ).
     ENDMETHOD.
 
-    METHOD radix_Integer.
+    METHOD radix_integer.
       DATA base TYPE i VALUE 10.
 
       CLEAR value.
@@ -2760,42 +2764,42 @@
 
       CASE domain.
         WHEN c_binary_digits.
-          value = lcl_lisp_new=>binary( uInt_str ).
+          value = lcl_lisp_new=>binary( uint_str ).
           base = 2.
         WHEN c_octal_digits.
-          value = lcl_lisp_new=>octal( uInt_str ).
+          value = lcl_lisp_new=>octal( uint_str ).
           base = 8.
         WHEN c_decimal_digits.
-          uInt = uInt_str.
+          uint = uint_str.
           base = 10.
           RETURN.
         WHEN c_hex_digits_long OR c_hex_digits.
-          value = lcl_lisp_new=>hex( uInt_str ).
+          value = lcl_lisp_new=>hex( uint_str ).
           base = 16.
       ENDCASE.
 
-      power = ipow( base = base exp = numofchar( uInt_str ) ).
-      uInt = value.
-      condense uInt.
+      power = ipow( base = base exp = numofchar( uint_str ) ).
+      uint = value.
+      CONDENSE uint.
     ENDMETHOD.
 
-    METHOD uInt_dec_radix. " floating-point number
+    METHOD uint_dec_radix. " floating-point number
       DATA lv_int TYPE tv_int.
       DATA lv_real TYPE tv_real.
       DATA lv_power TYPE tv_real.
 
-      uInt = radix_integer( EXPORTING domain = domain
+      uint = radix_integer( EXPORTING domain = domain
                             IMPORTING power = lv_power
                                       value = lv_int ).
       IF lv_power NE 1.
         " convert the floating point part to decimal
         lv_real = lv_int / lv_power.
-        uInt = lv_real.
-        condense uInt.
-        uInt = substring_after( val = uInt sub = c_lisp_dot ).
+        uint = lv_real.
+        CONDENSE uint.
+        uint = substring_after( val = uint sub = c_lisp_dot ).
       ENDIF.
 
-      uInt = uint && read_suffix( domain ).
+      uint = uint && read_suffix( domain ).
     ENDMETHOD.
 
     METHOD read_suffix. "  decimal only with radix 10
@@ -2816,17 +2820,17 @@
             str = str && c_minus_sign.
         ENDCASE.
 
-        DATA(uInt) = radix_integer( EXPORTING domain = domain
+        DATA(uint) = radix_integer( EXPORTING domain = domain
                                     IMPORTING power = lv_power
                                               value = lv_int ).
         IF lv_power NE 1.
           " convert the exponential part to decimal
           lv_real = lv_int * lv_power.
-          uInt = lv_real.
-          condense uInt.
+          uint = lv_real.
+          CONDENSE uint.
           throw( `Radix not supported in exponent` ).
         ENDIF.
-        str = str && uInt.
+        str = str && uint.
       ENDIF.
     ENDMETHOD.
 
@@ -2896,9 +2900,9 @@
       DATA pos_sep TYPE tv_char.
       DATA sep TYPE tv_char.
 
-      DATA uInt_str TYPE string.
-      DATA uDenom_str TYPE string.
-      DATA uReal_str TYPE string.
+      DATA uint_str TYPE string.
+      DATA udenom_str TYPE string.
+      DATA ureal_str TYPE string.
 
       DATA lv_denom TYPE tv_int.
       DATA lv_int TYPE tv_int.
@@ -2926,7 +2930,7 @@
           lv_exact = abap_false.
         ENDIF.
       ELSE.
-       " unsigned real
+        " unsigned real
         uint_str = neg_sep && uinteger_radix( domain ).
         IF mi_stream->state-ready EQ abap_true.
           CASE mi_stream->state-char.
@@ -3427,12 +3431,12 @@
       ENDIF.
 
       TRY.
-        " <Complex R>
-        " <prefix R> -> <radix R> <exactness> | <exactness> <radix R>
-        element = lcl_lisp_new=>read_complex( iv_radix = iv_radix
-                                              iv_radix_char = lv_radix_char
-                                              iv_exact_char = lv_exact_char
-                                              io_stream = me ).
+          " <Complex R>
+          " <prefix R> -> <radix R> <exactness> | <exactness> <radix R>
+          element = lcl_lisp_new=>read_complex( iv_radix = iv_radix
+                                                iv_radix_char = lv_radix_char
+                                                iv_exact_char = lv_exact_char
+                                                io_stream = me ).
         CATCH cx_sy_conversion_no_number INTO DATA(lx_error).
           lcl_lisp=>throw( lx_error->get_text( ) ).
       ENDTRY.
@@ -3487,7 +3491,7 @@
 
                 IF read_number( EXPORTING iv_peek_char = peek_char( )
                                 IMPORTING element = element ).
-                  "#EC EMPTY_IF_BRANCH
+                                                   "#EC EMPTY_IF_BRANCH
                 ELSEIF peek_bytevector( ).   " Bytevector constant #u8( ... )
                   next_char( ).              " skip #
                   next_char( ).              " skip u
@@ -3693,6 +3697,7 @@
 *----------------------------------------------------------------------*
   CLASS lcl_parser DEFINITION.
     PUBLIC SECTION.
+      CLASS-DATA gv_lisp_trace TYPE tv_flag VALUE abap_false ##NEEDED.
       METHODS
         parse IMPORTING iv_code         TYPE clike
               RETURNING VALUE(elements) TYPE lcl_lisp=>tt_element
@@ -4297,20 +4302,20 @@
                                RETURNING VALUE(result) TYPE REF TO lcl_lisp
                                RAISING   lcx_lisp_exception.
 
-      METHODS simplest_rational IMPORTING low TYPE REF TO lcl_lisp_number
-                                          high TYPE REF TO lcl_lisp_number
-                                          iv_exact TYPE tv_flag
+      METHODS simplest_rational IMPORTING low           TYPE REF TO lcl_lisp_number
+                                          high          TYPE REF TO lcl_lisp_number
+                                          iv_exact      TYPE tv_flag
                                 RETURNING VALUE(result) TYPE REF TO lcl_lisp
                                 RAISING   lcx_lisp_exception.
 
-      METHODS simplest_rational_internal IMPORTING x TYPE tv_real
-                                                   y TYPE tv_real
+      METHODS simplest_rational_internal IMPORTING x          TYPE tv_real
+                                                   y          TYPE tv_real
                                          RETURNING VALUE(num) TYPE ts_number
                                          RAISING   lcx_lisp_exception.
 
-      METHODS complex_sqrt IMPORTING x           TYPE numeric
-                                     y           TYPE numeric
-                                     iv_exact    TYPE tv_flag DEFAULT abap_false
+      METHODS complex_sqrt IMPORTING x             TYPE numeric
+                                     y             TYPE numeric
+                                     iv_exact      TYPE tv_flag DEFAULT abap_false
                            RETURNING VALUE(sqrt_z) TYPE REF TO lcl_lisp_number.
 
       METHODS unicode_digit_zero RETURNING VALUE(rt_zero) TYPE tt_digit.
@@ -4583,7 +4588,7 @@
 
           " Function shorthand (define (id arg ... ) body ...+)
         WHEN type_pair.
-          IF element->cdr EQ nil.
+          IF element->cdr->type EQ type_null.
             lo_head->raise( ` no expression in body` ).
           ENDIF.
           " define's function shorthand allows us to define a function by specifying a list as the
@@ -4631,7 +4636,7 @@
                             once = xsdbool( env NE environment ) ). " Internal definition => once!
 
         WHEN type_pair.
-          IF element->cdr EQ nil.
+          IF element IS BOUND AND element->cdr->type EQ type_null.
             lo_head->raise( | no expression in body| ).
           ENDIF.
           lo_params = eval( VALUE #( elem = element->cdr->car
@@ -4711,7 +4716,7 @@
       ADD 1 TO gensym_counter.
       lv_counter = lv_index = gensym_counter.
 
-      IF list NE nil AND list->car IS BOUND.
+      IF list->type NE type_null AND list->car IS BOUND.
         lo_opt = list->car.
       ENDIF.
 
@@ -4743,7 +4748,7 @@
       ENDIF.
 
       ro_head = nil.
-      CHECK io_list NE nil. " AND io_list->car NE nil.
+      CHECK io_list->type NE type_null. " AND io_list->car->type NE type_null.
 
       cont-env = environment.
       DATA(elem) = io_list.
@@ -4751,7 +4756,7 @@
       WHILE elem->type EQ type_pair.
         cont-elem = elem->car.
         lo_new = lcl_lisp_new=>cons( io_car = eval_ast( cont ) ).
-        IF ro_head = nil.
+        IF ro_head->type EQ type_null.
           lo_arg = ro_head = lo_new.
         ELSE.
           lo_arg = lo_arg->cdr = lo_new.
@@ -4759,7 +4764,7 @@
         elem = elem->cdr.
       ENDWHILE.
 
-      IF elem NE nil.  " _validate_tail
+      IF elem->type NE type_null.  " _validate_tail
         " if the last element in the list is not a cons cell, we cannot append
         io_list->error_not_a_list( space ).
       ENDIF.
@@ -4780,7 +4785,7 @@
       " Parameter io_list is list arg1 ... argn rest
 
       result = io_list.
-      CHECK lo_arg NE nil.
+      CHECK lo_arg->type NE type_null.
 
       " At least one argument = rest
       DATA(lo_new) = lcl_lisp_new=>cons( io_car = lo_proc ).
@@ -4800,7 +4805,7 @@
                                           env = environment ) ).
 
       " ##TO DO: check if circular lists are allowed
-      WHILE lo_rest->type EQ type_pair.  " e.g. NE nil
+      WHILE lo_rest->type EQ type_pair.  " e.g. NE type_null
         lo_new = lo_new->cdr = lcl_lisp_new=>box_quote( lo_rest->car ).
         lo_rest = lo_rest->cdr.
       ENDWHILE.
@@ -4842,7 +4847,7 @@
                                                env = environment ).
         DATA(lo_head) = lcl_lisp_new=>cons( io_car = eval( ls_cont ) ).
 *       create function call (proc list1[k] list2[k]... listn[k]); add result as k-th list element
-        IF result EQ nil. " 1st element of new list
+        IF result->type EQ type_null. " 1st element of new list
           lo_map = result = lo_head.
         ELSE.
           lo_map = lo_map->cdr = lo_head.
@@ -4902,7 +4907,7 @@
         " <init>
 
         lo_spec = lo_spec->cdr.
-        IF lo_spec NE nil.
+        IF lo_spec->type NE type_null.
           DATA(lo_init) = lo_spec->car.
           DATA(ls_cont) = VALUE ts_continuation( elem = lo_init
                                                  env = io_env ).
@@ -4910,11 +4915,11 @@
                        element = eval_ast( ls_cont )  " inits are evaluated in org. environment
                        once = abap_true ).
           lo_spec = lo_spec->cdr.
-          IF lo_spec NE nil.
+          IF lo_spec->type NE type_null.
 *           <step>
             DATA(lo_next) = lcl_lisp_new=>cons( io_car = lcl_lisp_new=>cons( io_car = lo_var
                                                                              io_cdr = lo_spec->car ) ).
-            IF eo_step EQ nil.  " first
+            IF eo_step->type EQ type_null.  " first
               eo_step = lo_next.
               DATA(lo_ptr) = eo_step.
             ELSE.
@@ -4975,18 +4980,18 @@
       DATA(lo_head) = cs_cont-elem.
       result = nil.
 
-      CHECK lo_head NE nil.
+      CHECK lo_head->type NE type_null.
 
       WHILE cs_cont-elem IS BOUND
         AND cs_cont-elem->type EQ type_pair
-        AND cs_cont-elem->cdr NE nil.  " Do not evaluate the last list element
+        AND cs_cont-elem->cdr->type NE type_null.  " Do not evaluate the last list element
 
         result = eval_ast( VALUE #( BASE cs_cont
                                     elem = cs_cont-elem->car ) ).
         cs_cont-elem = cs_cont-elem->cdr.
       ENDWHILE.
 
-      IF cs_cont-elem->cdr NE nil. " _validate_tail cs_cont-elem->cdr lo_head space.
+      IF cs_cont-elem->cdr->type NE type_null. " _validate_tail cs_cont-elem->cdr lo_head space.
         " if the last element in the list is not a cons cell, we cannot append
         lo_head->error_not_a_list( space ).
       ENDIF.
@@ -5028,7 +5033,7 @@
       ENDIF.
       lo_par = lcl_lisp_new=>cons( io_car = lo_ptr->car ).
 
-      IF lo_ptr->cdr IS BOUND AND lo_ptr->cdr NE nil.
+      IF lo_ptr->cdr IS BOUND AND lo_ptr->cdr->type NE type_null.
         lo_arg = lcl_lisp_new=>cons( io_car = lo_ptr->cdr->car ).
       ENDIF.
 
@@ -5036,15 +5041,15 @@
       eo_args = lo_arg.
 
       lo_ptr = io_head->cdr.
-      WHILE lo_ptr->type EQ type_pair. " IS BOUND AND lo_ptr NE nil.
+      WHILE lo_ptr->type EQ type_pair. " IS BOUND AND lo_ptr->type NE type_null.
         " Rest of list, pick head
         DATA(lo_first) = lo_ptr->car.
-        IF lo_first IS BOUND AND lo_first->car NE nil.
+        IF lo_first IS BOUND AND lo_first->car->type NE type_null.
           lo_par = lo_par->cdr = lcl_lisp_new=>cons( io_car = lo_first->car ).
         ENDIF.
 
         DATA(lo_second) = lo_first->cdr.
-        IF lo_second IS BOUND AND lo_second NE nil.
+        IF lo_second IS BOUND AND lo_second->type NE type_null.
           lo_arg = lo_arg->cdr = lcl_lisp_new=>cons( io_car = lo_second->car ).
         ENDIF.
 
@@ -5066,7 +5071,7 @@
 
       WHILE lo_args->has_next( ) AND lo_pars->has_next( ).
         DATA(lo_par) = lo_pars->next( ).
-        CHECK lo_par NE nil.        " Nil would mean no parameters to map
+        CHECK lo_par->type NE type_null.        " Nil would mean no parameters to map
         " Assign argument to its corresponding symbol in the newly created environment
         " NOTE: element of the argument list is evaluated before being defined in the environment
         io_env->set( symbol = lo_par->value
@@ -5099,13 +5104,13 @@
 
       lo_param = eval( VALUE #( elem =  lo_ptr->car
                                 env = io_env ) ).
-        IF lo_param->type EQ type_lambda.
-          lo_lambda ?= lo_param.
-          lv_parameter_object = lo_lambda->parameter_object.
-        ENDIF.
-        IF lv_parameter_object EQ abap_false.
-          lcl_lisp=>throw( c_missing_param_object ).
-        ENDIF.
+      IF lo_param->type EQ type_lambda.
+        lo_lambda ?= lo_param.
+        lv_parameter_object = lo_lambda->parameter_object.
+      ENDIF.
+      IF lv_parameter_object EQ abap_false.
+        lcl_lisp=>throw( c_missing_param_object ).
+      ENDIF.
 
       lo_par = lcl_lisp_new=>cons( io_car = lo_param ).
 
@@ -5117,19 +5122,19 @@
       lo_values = lo_val.
 
       lo_ptr = io_head->cdr.
-      WHILE lo_ptr->type EQ type_pair. " IS BOUND AND lo_ptr NE nil.
+      WHILE lo_ptr->type EQ type_pair. " IS BOUND AND lo_ptr->type NE type_null.
 *       Rest of list, pick head
         DATA(lo_first) = lo_ptr->car.
-        IF lo_first IS BOUND AND lo_first->car NE nil.
+        IF lo_first IS BOUND AND lo_first->car->type NE type_null.
           lo_param = eval( VALUE #( elem = lo_first->car
                                     env = io_env ) ).
-            IF lo_param->type EQ type_lambda.
-              lo_lambda ?= lo_param.
-              lv_parameter_object = lo_lambda->parameter_object.
-            ENDIF.
-            IF lv_parameter_object EQ abap_false.
-              lcl_lisp=>throw( c_missing_param_object ).
-            ENDIF.
+          IF lo_param->type EQ type_lambda.
+            lo_lambda ?= lo_param.
+            lv_parameter_object = lo_lambda->parameter_object.
+          ENDIF.
+          IF lv_parameter_object EQ abap_false.
+            lcl_lisp=>throw( c_missing_param_object ).
+          ENDIF.
           lo_par = lo_par->cdr = lcl_lisp_new=>cons( io_car = lo_param ).
         ENDIF.
 
@@ -5310,14 +5315,14 @@
     ENDMETHOD.
 
     DEFINE _tail_expression.
-      IF &1 NE nil.
+      IF &1->type NE type_null.
         cont-elem = &1->car.    " Tail context
         CONTINUE.
       ENDIF.
     END-OF-DEFINITION.
 
     DEFINE _tail_sequence.
-      IF cont-elem NE nil.
+      IF cont-elem->type NE type_null.
         result = eval_list_tco( CHANGING cs_cont = cont ).
         _tail_expression cont-elem.
       ELSEIF cont-env->top_level EQ abap_false.
@@ -5399,7 +5404,7 @@
               OR ( lo_first->type EQ type_symbol AND lo_first->value EQ c_eval_unquote ) )
               AND list_length( exp ) EQ 2.
 *           ((and (eq? (first = 'unquote) (= (length exp) 2))
-            IF NOT ( lo_ptr->cdr->type = type_pair AND lo_ptr->cdr->cdr = nil ).
+            IF NOT ( lo_ptr->cdr->type = type_pair AND lo_ptr->cdr->cdr->type EQ type_null ).
               lo_ptr->car->raise( | invalid form in { c_eval_unquote }| ).
             ENDIF.
 
@@ -5420,7 +5425,7 @@
           ELSEIF ( lo_first = lcl_lisp=>quasiquote
               OR ( lo_first->type EQ type_symbol AND lo_first->value EQ c_eval_quasiquote ) )
               AND list_length( exp ) EQ 2.
-            IF NOT ( lo_ptr->cdr->type = type_pair AND lo_ptr->cdr->cdr = nil ).
+            IF NOT ( lo_ptr->cdr->type = type_pair AND lo_ptr->cdr->cdr->type EQ type_null ).
               lo_ptr->car->raise( | invalid form in { c_eval_quasiquote }| ).
             ENDIF.
 *           (and (eq? (car exp) 'quasiquote) (= (length exp) 2))
@@ -5438,7 +5443,7 @@
 *           ((and (pair? (car exp))
 *                (eq? (caar exp) 'unquote-splicing)
 *                (= (length (car exp)) 2))
-            IF NOT ( lo_first->cdr->type = type_pair AND lo_first->cdr->cdr = nil ).
+            IF NOT ( lo_first->cdr->type = type_pair AND lo_first->cdr->cdr->type EQ type_null ).
               lo_first->car->raise( | invalid form in { c_eval_unquote_splicing }| ).
             ENDIF.
 
@@ -5531,13 +5536,13 @@
                 CASE operation.
 
                   WHEN c_eval_quote. " Literal expression: Return the argument to quote unevaluated
-                    IF lr_tail->cdr NE nil.
+                    IF lr_tail->cdr->type NE type_null.
                       throw( |quote can only take a single argument| ).
                     ENDIF.
                     result = lr_tail->car.
 
                   WHEN c_eval_quasiquote.
-                    IF lr_tail->cdr NE nil.
+                    IF lr_tail->cdr->type NE type_null.
                       throw( |quasiquote can only take a single argument| ).
                     ENDIF.
                     cont-elem = quasiquote( exp = lr_tail->car
@@ -5550,7 +5555,7 @@
 *                   Derived expression: Conditional (and <expression>* <tail expression>)
                     result = true.
                     DATA(lo_ptr) = lr_tail.
-                    WHILE result NE false AND lo_ptr IS BOUND AND lo_ptr NE nil AND lo_ptr->cdr NE nil.
+                    WHILE result NE false AND lo_ptr IS BOUND AND lo_ptr->type NE type_null AND lo_ptr->cdr->type NE type_null.
                       result = eval_ast( VALUE #( BASE cont
                                                   elem = lo_ptr->car ) ).
                       lo_ptr = lo_ptr->cdr.
@@ -5563,7 +5568,7 @@
 *                   Derived expression: Conditional (or <expression>* <tail expression>)
                     result = false.
                     lo_ptr = lr_tail.
-                    WHILE result EQ false AND lo_ptr IS BOUND AND lo_ptr NE nil AND lo_ptr->cdr NE nil.
+                    WHILE result EQ false AND lo_ptr IS BOUND AND lo_ptr->type NE type_null AND lo_ptr->cdr->type NE type_null.
                       result = eval_ast( VALUE #( BASE cont
                                                   elem = lo_ptr->car ) ).
                       lo_ptr = lo_ptr->cdr.
@@ -5599,7 +5604,7 @@
                         " clause matched, but continue to check if eventual 'else' clause is correctly specified last
                       ENDIF.
                     ENDWHILE.
-                    IF cont-elem EQ nil.
+                    IF cont-elem->type EQ type_null.
                       result = lo_test.
                     ELSEIF cont-elem->car->value = c_lisp_then.
                       cont-elem = lcl_lisp_new=>cons( io_car = cont-elem->cdr->car
@@ -5649,12 +5654,11 @@
                       cont-elem = lr_tail->cdr->car. " Tail context
                       CONTINUE.
 
-                    ELSEIF lr_tail->cdr->cdr = nil.
+                    ELSEIF lr_tail->cdr->cdr IS NOT BOUND.
+                      lcl_lisp=>incorrect_input( operation ).
+                    ELSEIF lr_tail->cdr->cdr->type = type_null.
                       result = lcl_lisp=>undefined.
                     ELSE.
-                      IF lr_tail->cdr->cdr IS NOT BOUND.
-                        lcl_lisp=>incorrect_input( operation ).
-                      ENDIF.
 
                       cont-elem = lr_tail->cdr->cdr->car. " Tail context
                       CONTINUE.
@@ -5680,7 +5684,7 @@
                   WHEN 'begin'.
                     cont-elem = lr_tail.
 *                    _tail_sequence.
-                    IF cont-elem NE nil.
+                    IF cont-elem->type NE type_null.
                       result = eval_list_tco( CHANGING cs_cont = cont ).
                       _tail_expression cont-elem.
                     ELSE.  " empty (begin) ?
@@ -5744,7 +5748,7 @@
                       APPEND lo_ptr TO lt_clauses.
                       lo_clause = lo_clause->cdr.
                     ENDWHILE.
-                    IF lo_clause NE nil.
+                    IF lo_clause->type NE type_null.
                       throw( `Invalid case-lambda clause` ).
                     ENDIF.
                     result = lcl_lisp_new=>case_lambda( lt_clauses ).
@@ -5795,7 +5799,7 @@
 
                     ENDDO.
 
-                    IF cont-elem EQ nil.
+                    IF cont-elem->type EQ type_null.
                       result = nil.
                     ELSE.
                       _tail_sequence.
@@ -5822,7 +5826,7 @@
                       lcl_lisp=>incorrect_input( operation ).
                     ENDIF.
 
-                    IF lr_tail EQ nil.
+                    IF lr_tail->type EQ type_null.
                       throw( `case: no clause` ).
                     ENDIF.
 
@@ -5836,10 +5840,10 @@
                         lcl_lisp=>incorrect_input( lr_head->value ).
                       ENDIF.
 
-                      WHILE lo_datum NE nil.
+                      WHILE lo_datum->type NE type_null.
 
                         IF lo_datum->value EQ c_lisp_else.
-                          IF lr_tail->cdr NE nil.
+                          IF lr_tail->cdr->type NE type_null.
                             throw( `case: else must be the last clause` ).
                           ENDIF.
                           cont-elem = lo_clause->cdr.
@@ -5860,7 +5864,7 @@
                       lr_tail = lr_tail->cdr.
                     ENDWHILE.
 
-                    IF cont-elem EQ nil.
+                    IF cont-elem->type EQ type_null.
                       result = nil.
 
                     ELSEIF cont-elem->car->value = c_lisp_then.
@@ -5992,7 +5996,7 @@
                     " not implemented: for now, try to skip library code
                     IF lr_tail IS BOUND.
                       cont-elem = lr_tail->cdr.
-                      IF cont-elem NE nil.
+                      IF cont-elem->type NE type_null.
                         result = eval_list_tco( CHANGING cs_cont = cont ).
                         _tail_expression cont-elem.
                       ELSE.  " empty (library) ?
@@ -6035,7 +6039,7 @@
                     lo_proc = eval_ast( VALUE #( BASE cont
                                                       elem = lr_head ) ).
                     IF gv_lisp_trace EQ abap_true.
-                      go_out->write( |call { lo_proc->value } { lo_proc->to_string( ) } param { lr_tail->to_string( ) }| ).
+                      lcl_demo_output=>go_out->write( |call { lo_proc->value } { lo_proc->to_string( ) } param { lr_tail->to_string( ) }| ).
                     ENDIF.
 
                     CASE lo_proc->type.
@@ -6118,7 +6122,7 @@
 *       Circular references
         result->set_shared_structure( ).
         IF gv_lisp_trace EQ abap_true.
-          go_out->write( |=> { result->to_string( ) }| ).
+          lcl_demo_output=>go_out->write( |=> { result->to_string( ) }| ).
         ENDIF.
 
         operation = caller_operation.
@@ -6142,8 +6146,8 @@
           ELSE.
             li_port ?= proc_current_output_port( nil ).
           ENDIF.
-      CATCH cx_root INTO DATA(lx_error). "#EC NEED_CX_ROOT
-        throw( lx_error->get_text( ) ).
+        CATCH cx_root INTO DATA(lx_error).            "#EC NEED_CX_ROOT
+          throw( lx_error->get_text( ) ).
       ENDTRY.
 
       li_port->write( io_elem ).
@@ -6164,8 +6168,8 @@
           ELSE.
             li_port ?= proc_current_output_port( nil ).
           ENDIF.
-      CATCH cx_root INTO DATA(lx_error). "#EC NEED_CX_ROOT
-        throw( lx_error->get_text( ) ).
+        CATCH cx_root INTO DATA(lx_error).            "#EC NEED_CX_ROOT
+          throw( lx_error->get_text( ) ).
       ENDTRY.
 
       IF io_elem IS NOT BOUND.
@@ -6193,8 +6197,8 @@
           ELSE.
             li_port ?= proc_current_output_port( nil ).
           ENDIF.
-      CATCH cx_root INTO DATA(lx_error). "#EC NEED_CX_ROOT
-        throw( lx_error->get_text( ) ).
+        CATCH cx_root INTO DATA(lx_error).            "#EC NEED_CX_ROOT
+          throw( lx_error->get_text( ) ).
       ENDTRY.
 
       li_port->display( io_elem ).
@@ -6215,8 +6219,8 @@
           ELSE.
             li_port ?= proc_current_input_port( nil ).
           ENDIF.
-      CATCH cx_root INTO DATA(lx_error). "#EC NEED_CX_ROOT
-        throw( lx_error->get_text( ) ).
+        CATCH cx_root INTO DATA(lx_error).            "#EC NEED_CX_ROOT
+          throw( lx_error->get_text( ) ).
       ENDTRY.
 
       result = lcl_lisp_new=>integer( li_port->read_u8( ) ).
@@ -6338,7 +6342,7 @@
     METHOD eval_source.
       TRY.
           response = eval_repl( code ).
-        CATCH cx_root INTO DATA(lx_root). "#EC NEED_CX_ROOT
+        CATCH cx_root INTO DATA(lx_root).             "#EC NEED_CX_ROOT
           response = lx_root->get_text( ).
       ENDTRY.
     ENDMETHOD.                    "eval_source
@@ -6377,7 +6381,7 @@
             gi_log->put( lo_element ).
           ENDLOOP.
           response = gi_log->get( ).
-        CATCH cx_root INTO DATA(lx_root). "#EC NEED_CX_ROOT
+        CATCH cx_root INTO DATA(lx_root).             "#EC NEED_CX_ROOT
           response = lx_root->get_text( ).
       ENDTRY.
     ENDMETHOD.
@@ -6391,19 +6395,19 @@
 
 *     No arguments: return nil
       result = list.
-      CHECK list NE nil.
+      CHECK list->type NE type_null.
 
 *     One argument: return argument
       result = list->car.
 
-      CHECK list->cdr NE nil.
+      CHECK list->cdr->type NE type_null.
 
       DATA(lo_iter) = list->new_iterator( ).
       WHILE lo_iter->has_next( ).
 
 *       copy first list, reassign result
         DATA(first) = lo_iter->next( ).
-        CHECK first NE nil.
+        CHECK first->type NE type_null.
 
         IF first->type = type_pair.
           result = lcl_lisp_new=>cons( io_car = first->car ).
@@ -6416,7 +6420,7 @@
             lo_arg = lo_arg->cdr.
           ENDWHILE.
 
-          IF lo_arg NE nil.
+          IF lo_arg->type NE type_null.
             lo_last = lo_last->cdr = lo_arg.
           ENDIF.
 
@@ -6430,13 +6434,13 @@
 
 *     Append next list
       WHILE lo_iter->has_next( ).
-        IF lo_arg NE nil.  " _validate_tail lo_arg first `append`.
+        IF lo_arg->type NE type_null.  " _validate_tail lo_arg first `append`.
 *           if the last element in the list is not a cons cell, we cannot append
           first->error_not_a_list( operation ).
         ENDIF.
 
         first = lo_arg = lo_iter->next( ).
-        CHECK first NE nil.
+        CHECK first->type NE type_null.
 
 *       ##TO DO: Check for circular list
 *       Append lo_arg to result, from last element on
@@ -6445,7 +6449,7 @@
           lo_arg = lo_arg->cdr.
         ENDWHILE.
 
-        CHECK lo_arg NE nil.
+        CHECK lo_arg->type NE type_null.
         lo_last = lo_last->cdr = lo_arg.
 
       ENDWHILE.
@@ -6481,7 +6485,7 @@
       ENDIF.
 
       CLEAR rt_table.
-      CHECK io_head NE nil.
+      CHECK io_head->type NE type_null.
 
 *     build internal table of list interators
       DATA(iter) = io_head->new_iterator( ).
@@ -6490,7 +6494,7 @@
         DATA(ls_cont) = VALUE ts_continuation( elem = iter->next( )
                                                env = environment ).
         DATA(lo_next) = eval( ls_cont ).
-        IF lo_next = nil.  " if any list is empty, the table is empty
+        IF lo_next->type EQ type_null.  " if any list is empty, the table is empty
           CLEAR rt_table.
           RETURN.
         ENDIF.
@@ -6505,7 +6509,7 @@
       DATA(lo_next) = lcl_lisp_new=>cons( io_car = io_proc ).
       result = lo_next.
       LOOP AT ct_list ASSIGNING FIELD-SYMBOL(<lo_list>).
-        IF <lo_list> EQ nil.
+        IF <lo_list>->type EQ type_null.
           ev_has_next = abap_false.
           result = nil.
           RETURN.
@@ -6514,7 +6518,7 @@
           lo_next = lo_next->cdr = lcl_lisp_new=>box_quote( <lo_list>->car ).
           <lo_list> = <lo_list>->cdr.
         ENDIF.
-        CHECK <lo_list> EQ nil.
+        CHECK <lo_list>->type EQ type_null.
         ev_has_next = abap_false.
       ENDLOOP.
     ENDMETHOD.
@@ -6524,7 +6528,7 @@
 *     be of any type. Appends the second param to the first.
 
 *     But if the last element in the list is not a cons cell, we cannot append
-      IF list->car EQ nil.
+      IF list->car->type EQ type_null.
         result = list->cdr->car.
       ELSE.
 *       Get to last element in list - this can make APPEND expensive, like LENGTH
@@ -6533,7 +6537,7 @@
           list->error_not_a_list( operation ).
         ENDIF.
 
-        WHILE lo_last->cdr IS BOUND AND lo_last->cdr NE nil.
+        WHILE lo_last->cdr IS BOUND AND lo_last->cdr->type NE type_null.
           lo_last = lo_last->cdr.
         ENDWHILE.
 
@@ -6605,17 +6609,30 @@
       ENDIF.
     ENDMETHOD.                    "proc_cons
 
+*    DEFINE _execute_cxxr.
+*      DATA(lo_arg) = list.
+*      IF lo_arg->type NE type_pair.
+*        lo_arg->raise_pair( operation ).
+*      ENDIF.
+*      lo_arg = list->car.
+*      IF lo_arg->type NE type_pair.
+*        lo_arg->raise_pair( operation ).
+*      ENDIF.
+*
+*      lo_arg = lo_arg->&1.
+*      IF lo_arg->type NE type_pair.
+*        lo_arg->raise_pair( operation ).
+*      ENDIF.
+*    END-OF-DEFINITION.
+
     DEFINE _execute_cxxr.
       DATA(lo_arg) = list.
-      IF lo_arg->type NE type_pair.
-        lo_arg->raise_pair( operation ).
+      IF lo_arg->type EQ type_pair.
+        lo_arg = list->car.
+        IF lo_arg->type EQ type_pair.
+          lo_arg = lo_arg->&1.
+        ENDIF.
       ENDIF.
-      lo_arg = list->car.
-      IF lo_arg->type NE type_pair.
-        lo_arg->raise_pair( operation ).
-      ENDIF.
-
-      lo_arg = lo_arg->&1.
       IF lo_arg->type NE type_pair.
         lo_arg->raise_pair( operation ).
       ENDIF.
@@ -6801,7 +6818,7 @@
 *       be equal to the slow pointer. That fact justifies this implementation.
         RETURN.
       ENDWHILE.
-      CHECK lo_fast NE nil.
+      CHECK lo_fast->type NE type_null.
 *     If the last item is not a cons cell, return an error
       list->error_not_a_list( operation ).
     ENDMETHOD.
@@ -6836,12 +6853,12 @@
     ENDMETHOD.
 
     METHOD proc_list.
-     " The items given to us are already in a list and evaluated; we just need to return the head
+      " The items given to us are already in a list and evaluated; we just need to return the head
       result = list.
     ENDMETHOD.                    "proc_list
 
     METHOD proc_nilp.
-      result = COND #( WHEN list->car = nil THEN true ELSE false ).
+      result = COND #( WHEN list->car->type EQ type_null THEN true ELSE false ).
     ENDMETHOD.                    "proc_nilp
 
     METHOD proc_make_list.
@@ -6856,7 +6873,7 @@
       k = CAST lcl_lisp_integer( list->car )->int.
       CHECK k GT 0.
 
-      IF list->cdr EQ nil.
+      IF list->cdr->type EQ type_null.
         DATA(lo_default) = nil.
       ELSE.
         lo_default = list->cdr->car.
@@ -6892,7 +6909,7 @@
       ENDIF.
       result = list.
 
-      IF k EQ 0 AND list EQ nil.
+      IF k EQ 0 AND list->type EQ type_null.
         RETURN.
       ENDIF.
       IF list->cdr IS NOT BOUND.
@@ -6929,7 +6946,7 @@
         lcl_lisp=>incorrect_input( operation ).
       ENDIF.
 
-      IF list->cdr NE nil.
+      IF list->cdr->type NE type_null.
         DATA(lo_start) = list->cdr->car.
         IF lo_start IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
@@ -6941,7 +6958,7 @@
         IF list->cdr->cdr IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ENDIF.
-        IF list->cdr->cdr NE nil.
+        IF list->cdr->cdr->type NE type_null.
           DATA(lo_step) = list->cdr->cdr->car.
           IF lo_step IS NOT BOUND.
             lcl_lisp=>incorrect_input( operation ).
@@ -7058,7 +7075,7 @@
       ENDIF.
 
       DATA(lo_obj) = list->cdr->cdr.
-      IF lo_obj NE nil.
+      IF lo_obj->type NE type_null.
         lo_obj = lo_obj->car.
       ENDIF.
 
@@ -7084,7 +7101,7 @@
       IF lo_ptr IS NOT BOUND.
         lcl_lisp=>incorrect_input( operation ).
       ENDIF.
-      IF lo_ptr NE nil.
+      IF lo_ptr->type NE type_null.
         IF lo_ptr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF lo_ptr->car->type NE type_integer OR CAST lcl_lisp_integer( lo_ptr->car )->int LT 0.
@@ -7098,7 +7115,7 @@
         IF lo_ptr IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ENDIF.
-        IF lo_ptr NE nil.
+        IF lo_ptr->type NE type_null.
           IF lo_ptr->car IS NOT BOUND.
             lcl_lisp=>incorrect_input( operation ).
           ELSEIF lo_ptr->car->type NE type_integer OR CAST lcl_lisp_integer( lo_ptr->car )->int LT 0.
@@ -7137,7 +7154,7 @@
       IF list->cdr IS NOT BOUND.
         lcl_lisp=>incorrect_input( operation ).
       ENDIF.
-      IF list->cdr NE nil.
+      IF list->cdr->type NE type_null.
         DATA(lo_start) = list->cdr->car.
         IF lo_start IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
@@ -7150,7 +7167,7 @@
         IF list->cdr->cdr IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ENDIF.
-        IF list->cdr->cdr NE nil.
+        IF list->cdr->cdr->type NE type_null.
           DATA(lo_end) = list->cdr->cdr->car.
           IF lo_end IS NOT BOUND.
             lcl_lisp=>incorrect_input( operation ).
@@ -7263,7 +7280,7 @@
         ENDIF.
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
-      IF lo_ptr NE nil.
+      IF lo_ptr->type NE type_null.
         lo_ptr->car->raise_type( expected = `bytevector`
                                  operation = operation ).
       ENDIF.
@@ -7322,7 +7339,7 @@
       lv_start = 0.
       lv_end = lines( lo_u8->bytes ).
 
-      IF list->cdr IS BOUND AND list->cdr NE nil.
+      IF list->cdr IS BOUND AND list->cdr->type NE type_null.
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF list->cdr->car->type NE type_integer OR CAST lcl_lisp_integer( list->cdr->car )->int LT 0.
@@ -7333,7 +7350,7 @@
 
         IF list->cdr->cdr IS BOUND.
           DATA(lo_last) = list->cdr->cdr.
-          IF lo_last NE nil.
+          IF lo_last->type NE type_null.
             IF lo_last->car IS NOT BOUND.
               lcl_lisp=>incorrect_input( operation ).
             ELSEIF lo_last->car->type NE type_integer OR CAST lcl_lisp_integer( lo_last->car )->int LT 0.
@@ -7370,7 +7387,7 @@
       lv_start = 0.
       lv_end = numofchar( lo_string->value ).
 
-      IF list->cdr IS BOUND AND list->cdr NE nil.
+      IF list->cdr IS BOUND AND list->cdr->type NE type_null.
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF list->cdr->car->type NE type_integer OR CAST lcl_lisp_integer( list->cdr->car )->int LT 0.
@@ -7381,7 +7398,7 @@
 
         IF list->cdr->cdr IS BOUND.
           DATA(lo_last) = list->cdr->cdr.
-          IF lo_last NE nil.
+          IF lo_last->type NE type_null.
             IF lo_last->car IS NOT BOUND.
               lcl_lisp=>incorrect_input( operation ).
             ELSEIF lo_last->car->type NE type_integer OR CAST lcl_lisp_integer( lo_last->car )->int LT 0.
@@ -7419,7 +7436,7 @@
       lv_start = 0.
       lv_end = lines( lo_u8->bytes ).
 
-      IF list->cdr IS BOUND AND list->cdr NE nil.
+      IF list->cdr IS BOUND AND list->cdr->type NE type_null.
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF list->cdr->car->type NE type_integer OR CAST lcl_lisp_integer( list->cdr->car )->int LT 0.
@@ -7431,7 +7448,7 @@
 
         IF list->cdr->cdr IS BOUND.
           DATA(lo_last) = list->cdr->cdr.
-          IF lo_last NE nil.
+          IF lo_last->type NE type_null.
             IF lo_last->car IS NOT BOUND.
               lcl_lisp=>incorrect_input( operation ).
             ELSEIF lo_last->car->type NE type_integer OR CAST lcl_lisp_integer( lo_last->car )->int LT 0.
@@ -7494,7 +7511,7 @@
       lv_start = 0.
       lv_end = lines( lo_u8_from->bytes ) - 1.
       lo_ptr = lo_ptr->cdr.
-      IF lo_ptr IS BOUND AND lo_ptr NE nil.
+      IF lo_ptr IS BOUND AND lo_ptr->type NE type_null.
         IF lo_ptr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF lo_ptr->car->type NE type_integer OR CAST lcl_lisp_integer( lo_ptr->car )->int LT 0.
@@ -7504,7 +7521,7 @@
         lv_start = CAST lcl_lisp_integer( lo_ptr->car )->int.
 
         lo_ptr = lo_ptr->cdr.
-        IF lo_ptr IS BOUND AND lo_ptr NE nil.
+        IF lo_ptr IS BOUND AND lo_ptr->type NE type_null.
           IF lo_ptr->car IS NOT BOUND.
             lcl_lisp=>incorrect_input( operation ).
           ELSEIF lo_ptr->car->type NE type_integer OR CAST lcl_lisp_integer( lo_ptr->car )->int LT 0.
@@ -7536,11 +7553,11 @@
     METHOD proc_memq.
       result = false.
 
-      CHECK list->cdr NE nil.
+      CHECK list->cdr->type NE type_null.
 
       DATA(lo_sublist) = list->cdr->car.
       DATA(lo_item) = list->car.
-      WHILE lo_sublist NE nil AND lo_sublist->car->type EQ lo_item->type.
+      WHILE lo_sublist->type NE type_null AND lo_sublist->car->type EQ lo_item->type.
 
         CASE lo_item->type.
           WHEN type_integer  " number
@@ -7583,7 +7600,7 @@
         ENDIF.
         lo_rest = lo_rest->cdr.
       ENDWHILE.
-*      CHECK lo_rest NE nil.
+*      CHECK lo_rest->type NE type_null.
 *      list->error_not_a_list( ).
     ENDMETHOD.
 
@@ -7604,7 +7621,7 @@
         ENDIF.
         lo_rest = lo_rest->cdr.
       ENDWHILE.
-*      CHECK lo_rest NE nil.
+*      CHECK lo_rest->type NE type_null.
 *      list->error_not_a_list( ).
     ENDMETHOD.
 
@@ -7636,7 +7653,7 @@
     METHOD proc_assq.
       result = false.
 
-      CHECK list->cdr NE nil.
+      CHECK list->cdr->type NE type_null.
 
       DATA(lo_sublist) = list->cdr->car.
       DATA(lo_key) = list->car.
@@ -7837,7 +7854,7 @@
                 RETURN.
             ENDCASE.
           ENDIF.
-        when type_complex.
+        WHEN type_complex.
           IF NOT num->is_exact_zero( state-imag_part ).
             num->no_complex( operation ).
           ENDIF.
@@ -7860,7 +7877,7 @@
                 RETURN.
             ENDCASE.
           ENDIF.
-        when type_complex.
+        WHEN type_complex.
           IF NOT num->is_exact_zero( state-imag_part ).
             num->no_complex( operation ).
           ENDIF.
@@ -7931,7 +7948,7 @@
         lcl_lisp=>incorrect_input( operation ).
       ENDIF.
 
-      WHILE lo_ptr NE nil.
+      WHILE lo_ptr->type NE type_null.
         IF lo_ptr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ENDIF.
@@ -8012,7 +8029,7 @@
       DATA(lo_ptr) = list.
       DATA(lo_slow) = list.
 
-      WHILE lo_ptr->cdr NE nil.
+      WHILE lo_ptr->cdr->type NE type_null.
         DATA(lo_next) = lo_ptr->cdr->car.
         IF lo_next IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
@@ -8027,7 +8044,7 @@
         lo_ptr = lo_ptr->cdr.
         lo_slow = lo_slow->cdr.
 
-        CHECK lo_ptr->cdr NE nil.
+        CHECK lo_ptr->cdr->type NE type_null.
         lo_next = lo_ptr->cdr->car.
         IF lo_next IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
@@ -8257,7 +8274,7 @@
         lv_ref = lo_test->value.
         lo_arg = lo_arg->cdr.
       ENDIF.
-      IF lo_test EQ nil OR lo_arg EQ nil.
+      IF lo_test->type EQ type_null OR lo_arg->type EQ type_null.
         throw( |symbol=? missing symbol argument in { lo_arg->car->to_string( ) }| ).
       ENDIF.
 
@@ -8268,10 +8285,10 @@
         lo_arg = lo_arg->cdr.
       ENDWHILE.
 
-      IF lo_arg NE nil.
+      IF lo_arg->type NE type_null.
         throw( |symbol=? wrong argument { lo_arg->car->to_string( ) }| ).
       ENDIF.
-      CHECK lo_arg = nil.
+      CHECK lo_arg->type EQ type_null.
       result = true.
 
     ENDMETHOD.
@@ -8319,7 +8336,7 @@
         RETURN.
       ENDWHILE.
 
-      CHECK lo_ptr EQ nil.
+      CHECK lo_ptr->type EQ type_null.
 *     the last element of a list must be nil
       result = true.
     ENDMETHOD.                    "proc_is_list
@@ -8336,7 +8353,7 @@
         lo_test = lo_arg->car.
         lo_arg = lo_arg->cdr.
       ENDIF.
-      IF lo_test EQ nil.
+      IF lo_test->type EQ type_null.
         throw( |boolean=? missing boolean argument in { lo_arg->car->to_string( ) }| ).
       ENDIF.
 
@@ -8347,10 +8364,10 @@
         lo_arg = lo_arg->cdr.
       ENDWHILE.
 
-      IF lo_arg NE nil.
+      IF lo_arg->type NE type_null.
         throw( |boolean=? wrong argument { lo_arg->car->to_string( ) }| ).
       ENDIF.
-      CHECK lo_arg = nil.
+      CHECK lo_arg->type EQ type_null.
       result = true.
     ENDMETHOD.
 
@@ -8373,7 +8390,7 @@
         lo_arg = lo_arg->cdr.
       ENDWHILE.
 
-      CHECK lo_arg EQ nil.
+      CHECK lo_arg->type EQ type_null.
       result = true.
     ENDMETHOD.                    "proc_is_alist
 
@@ -8623,27 +8640,27 @@
           DATA(lo_number) = list->car->to_number( operation ).
           DATA(number) = lo_number->get_state( operation ).
 
-            a = x = lo_number->get_real( self = number-real_part
-                                         operation = operation ).
-            IF number-imag_part-sign = c_sign_zero.
-              result = lcl_lisp_new=>real( value = asin( a )
-                                           iv_exact = number-exact ).
-            ELSE.
-              "sin^-1 z = -i log(iz + sqrt(1 - z^2))
-              DATA z TYPE REF TO lcl_lisp_complex.
-              DATA y TYPE tv_real.
-
-              y = lo_number->get_real( self = number-imag_part
+          a = x = lo_number->get_real( self = number-real_part
                                        operation = operation ).
-              z ?= complex_sqrt( x = 1 - x * x + y * y
-                                 y = - 2 * x * y ).
-              z ?= z->complex_log( x = z->zreal->to_real( ) - y
-                                   y = z->zimag->to_real( ) + x ).
+          IF number-imag_part-sign = c_sign_zero.
+            result = lcl_lisp_new=>real( value = asin( a )
+                                         iv_exact = number-exact ).
+          ELSE.
+            "sin^-1 z = -i log(iz + sqrt(1 - z^2))
+            DATA z TYPE REF TO lcl_lisp_complex.
+            DATA y TYPE tv_real.
 
-              result = lcl_lisp_new=>rectangular( real = z->zimag
-                                                  imag = lcl_lisp_new=>real( value = - z->zreal->to_real( )
-                                                                             iv_exact = lo_number->exact ) ) .
-            ENDIF.
+            y = lo_number->get_real( self = number-imag_part
+                                     operation = operation ).
+            z ?= complex_sqrt( x = 1 - x * x + y * y
+                               y = - 2 * x * y ).
+            z ?= z->complex_log( x = z->zreal->to_real( ) - y
+                                 y = z->zimag->to_real( ) + x ).
+
+            result = lcl_lisp_new=>rectangular( real = z->zimag
+                                                imag = lcl_lisp_new=>real( value = - z->zreal->to_real( )
+                                                                           iv_exact = lo_number->exact ) ) .
+          ENDIF.
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
       ENDTRY.
@@ -8659,27 +8676,27 @@
           DATA(lo_number) = list->car->to_number( operation ).
           DATA(number) = lo_number->get_state( operation ).
 
-            a = x = lo_number->get_real( self = number-real_part
-                                         operation = operation ).
-            IF number-imag_part-sign = c_sign_zero.
-              result = lcl_lisp_new=>real( value = acos( a )
-                                           iv_exact = lo_number->exact ).
-            ELSE.
-              "cos^-1 z = -i log( z + i sqrt( 1 - z^2 ) )
-              DATA z TYPE REF TO lcl_lisp_complex.
-
-              y = lo_number->get_real( self = number-imag_part
+          a = x = lo_number->get_real( self = number-real_part
                                        operation = operation ).
-              z ?= complex_sqrt( x = 1 - x * x + y * y
-                                 y = - 2 * x * y ).
+          IF number-imag_part-sign = c_sign_zero.
+            result = lcl_lisp_new=>real( value = acos( a )
+                                         iv_exact = lo_number->exact ).
+          ELSE.
+            "cos^-1 z = -i log( z + i sqrt( 1 - z^2 ) )
+            DATA z TYPE REF TO lcl_lisp_complex.
 
-              z ?= z->complex_log( x = x - z->zimag->to_real( )
-                                   y = y + z->zreal->to_real( ) ).
+            y = lo_number->get_real( self = number-imag_part
+                                     operation = operation ).
+            z ?= complex_sqrt( x = 1 - x * x + y * y
+                               y = - 2 * x * y ).
 
-              result = lcl_lisp_new=>rectangular( real = z->zimag
-                                                  imag = lcl_lisp_new=>real( value = - z->zreal->to_real( )
-                                                                             iv_exact = lo_number->exact ) ) .
-            ENDIF.
+            z ?= z->complex_log( x = x - z->zimag->to_real( )
+                                 y = y + z->zreal->to_real( ) ).
+
+            result = lcl_lisp_new=>rectangular( real = z->zimag
+                                                imag = lcl_lisp_new=>real( value = - z->zreal->to_real( )
+                                                                           iv_exact = lo_number->exact ) ) .
+          ENDIF.
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
       ENDTRY.
@@ -8699,7 +8716,7 @@
       TRY.
           lo_y = list->car->to_number( operation ).
           DATA(y_state) = lo_y->get_state( operation ).
-           "##TO DO Add checks for NaN and Inf
+          "##TO DO Add checks for NaN and Inf
 
           IF list->cdr->car IS BOUND.
             IF y_state-infnan EQ abap_true.
@@ -8981,6 +8998,14 @@
                       WHEN lcl_lisp_number=>inf OR lcl_lisp_number=>neg_inf.
                         result = lo_z2.
                       WHEN OTHERS.
+                        IF num-sign EQ c_sign_negative AND exp1 < 1.
+                          " x ^y = e ^ ( y ln x )
+*                          result = lcl_lisp_complex=>complex_log( x = base1
+*                                                                  y = 0 ).
+                          throw( '(expt x y): Invalid argument > complex result not implemented yet' ).
+                          RETURN.
+                        ENDIF.
+
                         result = lcl_lisp_new=>real_number( value = base1 ** exp1
                                                             iv_exact = lv_exact ).
                     ENDCASE.
@@ -9005,27 +9030,27 @@
           DATA(lo_number) = list->car->to_number( operation ).
           DATA(number) = lo_number->get_state( operation ).
 
-            x = lo_number->get_real( self = number-real_part
-                                     operation = operation ).
-            lv_exact = lo_number->exact.
-            exp_real = exp( x ).
-            IF number-imag_part-sign = c_sign_zero.
-              result = lcl_lisp_new=>real_number( value = exp_real
-                                                  iv_exact = lv_exact ).
-            ELSE.
-              DATA siny TYPE f.
-              DATA cosy TYPE f.
-              DATA b TYPE f.
+          x = lo_number->get_real( self = number-real_part
+                                   operation = operation ).
+          lv_exact = lo_number->exact.
+          exp_real = exp( x ).
+          IF number-imag_part-sign = c_sign_zero.
+            result = lcl_lisp_new=>real_number( value = exp_real
+                                                iv_exact = lv_exact ).
+          ELSE.
+            DATA siny TYPE f.
+            DATA cosy TYPE f.
+            DATA b TYPE f.
 
-              b = lo_number->get_real( self = number-imag_part
-                                       operation = operation ).
-              siny = sin( b ).
-              cosy = cos( b ).
-              result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real_number( value = exp_real * cosy
-                                                                                    iv_exact = lv_exact )
-                                                  imag = lcl_lisp_new=>real_number( value = exp_real * siny
-                                                                                   iv_exact = lv_exact ) ).
-            ENDIF.
+            b = lo_number->get_real( self = number-imag_part
+                                     operation = operation ).
+            siny = sin( b ).
+            cosy = cos( b ).
+            result = lcl_lisp_new=>rectangular( real = lcl_lisp_new=>real_number( value = exp_real * cosy
+                                                                                  iv_exact = lv_exact )
+                                                imag = lcl_lisp_new=>real_number( value = exp_real * siny
+                                                                                 iv_exact = lv_exact ) ).
+          ENDIF.
         CATCH cx_sy_arithmetic_error cx_sy_conversion_no_number INTO DATA(lx_error).
           throw( lx_error->get_text( ) ).
       ENDTRY.
@@ -9169,9 +9194,9 @@
 
       result = nil.
       TRY.
-           list->car->get_integer( EXPORTING operation = operation
-                                   IMPORTING ev_int = lv_int
-                                             ev_exact = lv_exact ).
+          list->car->get_integer( EXPORTING operation = operation
+                                  IMPORTING ev_int = lv_int
+                                            ev_exact = lv_exact ).
           IF lv_exact EQ abap_false OR lv_int LT 0.
             list->car->raise_index( operation ).
           ELSEIF lv_int GT 1.
@@ -9628,15 +9653,15 @@
     ENDMETHOD.
 
     METHOD simplest_rational_internal.
-     " assumes 0 < X < Y
-     DATA fx TYPE tv_int.
-     DATA fy TYPE tv_int.
+      " assumes 0 < X < Y
+      DATA fx TYPE tv_int.
+      DATA fy TYPE tv_int.
 
-     fx = floor( x ).
-     fy = floor( y ).
+      fx = floor( x ).
+      fy = floor( y ).
 
-     num-subtype = type_rational.
-     num-denom = 1.
+      num-subtype = type_rational.
+      num-denom = 1.
 
       IF fx >= x.
         num-nummer = fx.
@@ -9669,9 +9694,9 @@
         is_rational = abap_false.
 
         CASE low->type.
-        WHEN type_rational
-          OR type_integer.
-          is_rational = abap_true.
+          WHEN type_rational
+            OR type_integer.
+            is_rational = abap_true.
 *        WHEN type_real.
 *          lo_real ?= low.
 *          IF lo_real->infnan EQ abap_false.
@@ -9721,9 +9746,9 @@
       ELSE.
         list->car->raise_nan( operation ) ##NO_TEXT.
       ENDIF.
-" https://small.r7rs.org/wiki/RationalizeDefinition/
-" This implementation of rationalize is taken from the IEEE Scheme standard, which is not freely available.
-" The code is by Alan Bawden, and the theory is from Hardy and Wright's Introduction to the Theory of Numbers, 5th edition (1979).
+      " https://small.r7rs.org/wiki/RationalizeDefinition/
+      " This implementation of rationalize is taken from the IEEE Scheme standard, which is not freely available.
+      " The code is by Alan Bawden, and the theory is from Hardy and Wright's Introduction to the Theory of Numbers, 5th edition (1979).
       result = simplest_rational( low = num->substract( delta )   " x - e
                                   high = num->add( delta )        " x + e
                                   iv_exact = num->exact ).
@@ -9953,11 +9978,11 @@
       IF list->cdr IS NOT BOUND.
         lcl_lisp=>incorrect_input( operation ).
       ENDIF.
-      IF list->cdr NE nil.
+      IF list->cdr->type NE type_null.
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF list->cdr->car->type NE type_integer.
-            list->cdr->car->no_integer( operation ) ##NO_TEXT.
+          list->cdr->car->no_integer( operation ) ##NO_TEXT.
         ENDIF.
         lv_radix = CAST lcl_lisp_integer( list->cdr->car )->int.
       ENDIF.
@@ -9995,7 +10020,7 @@
                                operation = operation ).
       ENDIF.
       " Optional radix
-      IF list->cdr IS BOUND AND list->cdr NE nil.
+      IF list->cdr IS BOUND AND list->cdr->type NE type_null.
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF list->cdr->car->type NE type_integer.
@@ -10080,7 +10105,7 @@
           ENDIF.
 
           result = read_from( NEW lcl_input_port_to_stream( li_port ) ).
-        CATCH cx_root INTO DATA(lx_error). "#EC NEED_CX_ROOT
+        CATCH cx_root INTO DATA(lx_error).            "#EC NEED_CX_ROOT
           throw( lx_error->get_text( ) ).
       ENDTRY.
     ENDMETHOD.
@@ -10100,8 +10125,8 @@
             li_port ?= proc_current_input_port( nil ).
           ENDIF.
           result = lcl_lisp_new=>char( li_port->read_char( ) ).
-      CATCH cx_root INTO DATA(lx_error). "#EC NEED_CX_ROOT
-        throw( lx_error->get_text( ) ).
+        CATCH cx_root INTO DATA(lx_error).            "#EC NEED_CX_ROOT
+          throw( lx_error->get_text( ) ).
       ENDTRY.
     ENDMETHOD.
 
@@ -10136,8 +10161,8 @@
           ELSE.
             li_port ?= proc_current_input_port( nil ).
           ENDIF.
-      CATCH cx_root INTO DATA(lx_error). "#EC NEED_CX_ROOT
-        throw( lx_error->get_text( ) ).
+        CATCH cx_root INTO DATA(lx_error).            "#EC NEED_CX_ROOT
+          throw( lx_error->get_text( ) ).
       ENDTRY.
 
       result = lcl_lisp_new=>char( li_port->peek_char( ) ).
@@ -10158,8 +10183,8 @@
           ELSE.
             li_port ?= proc_current_input_port( nil ).
           ENDIF.
-      CATCH cx_root INTO DATA(lx_error). "#EC NEED_CX_ROOT
-        throw( lx_error->get_text( ) ).
+        CATCH cx_root INTO DATA(lx_error).            "#EC NEED_CX_ROOT
+          throw( lx_error->get_text( ) ).
       ENDTRY.
 
       result = lcl_lisp_new=>char( li_port->peek_u8( ) ).
@@ -10179,8 +10204,8 @@
           ELSE.
             li_port ?= proc_current_input_port( nil ).
           ENDIF.
-      CATCH cx_root INTO DATA(lx_error). "#EC NEED_CX_ROOT
-        throw( lx_error->get_text( ) ).
+        CATCH cx_root INTO DATA(lx_error).            "#EC NEED_CX_ROOT
+          throw( lx_error->get_text( ) ).
       ENDTRY.
 
       IF li_port->is_u8_ready( ).
@@ -10205,8 +10230,8 @@
           ELSE.
             li_port ?= proc_current_input_port( nil ).
           ENDIF.
-      CATCH cx_root INTO DATA(lx_error). "#EC NEED_CX_ROOT
-        throw( lx_error->get_text( ) ).
+        CATCH cx_root INTO DATA(lx_error).            "#EC NEED_CX_ROOT
+          throw( lx_error->get_text( ) ).
       ENDTRY.
 
       IF li_port->is_char_ready( ).
@@ -10225,7 +10250,7 @@
         lv_text = lv_text && lo_ptr->car->value+0(1).
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
-      IF lo_ptr NE nil.
+      IF lo_ptr->type NE type_null.
         lo_ptr->raise_type( expected = `list of char`
                             operation = operation ).
       ENDIF.
@@ -10244,7 +10269,7 @@
       ENDIF.
       lv_len = CAST lcl_lisp_integer( list->car )->int.
 
-      IF list->cdr NE nil.
+      IF list->cdr->type NE type_null.
         DATA(lo_char) = list->cdr->car.
         "_validate_char lo_char.
         IF lo_char IS NOT BOUND.
@@ -10274,7 +10299,7 @@
                                operation = operation ).
       ENDIF.
 
-      IF list->cdr NE nil.
+      IF list->cdr->type NE type_null.
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF list->cdr->car->type NE type_integer.
@@ -10285,7 +10310,7 @@
         IF list->cdr->cdr IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ENDIF.
-        IF list->cdr->cdr NE nil.
+        IF list->cdr->cdr->type NE type_null.
           IF list->cdr->cdr->car IS NOT BOUND.
             lcl_lisp=>incorrect_input( operation ).
           ELSEIF list->cdr->cdr->car->type NE type_integer.
@@ -10338,20 +10363,20 @@
       ENDIF.
 
 *     lv_text = substring( val = list->car->value off = lv_start len = lv_len ).
-      IF list->cdr EQ nil.
+      IF list->cdr->type EQ type_null.
         lv_text = list->car->value.
       ELSE.
         IF list->cdr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ELSEIF list->cdr->car->type NE type_integer.
-          list->cdr->car->no_Integer( `string->copy start` ) ##NO_TEXT.
+          list->cdr->car->no_integer( `string->copy start` ) ##NO_TEXT.
         ENDIF.
         lv_start = CAST lcl_lisp_integer( list->cdr->car )->int.
 
         IF list->cdr->cdr IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ENDIF.
-        IF list->cdr->cdr NE nil.
+        IF list->cdr->cdr->type NE type_null.
           IF list->cdr->cdr->car IS NOT BOUND.
             lcl_lisp=>incorrect_input( operation ).
           ELSEIF list->cdr->cdr->car->type NE type_integer.
@@ -10451,7 +10476,7 @@
         lv_text = lv_text && lo_ptr->car->value+0(1).
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
-      IF lo_ptr NE nil.
+      IF lo_ptr->type NE type_null.
         lo_ptr->raise_type( expected = `list of char`
                             operation = operation ).
       ENDIF.
@@ -10486,7 +10511,7 @@
         lv_text = lv_text && lo_ptr->car->value.
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
-      IF lo_ptr NE nil.
+      IF lo_ptr->type NE type_null.
         lo_ptr->car->raise_type( expected = `string`
                                  operation = operation ).
       ENDIF.
@@ -10506,7 +10531,7 @@
       DATA lv_gcd TYPE tv_real VALUE 0.
       lv_exact = abap_true.
 
-      IF list NE nil.
+      IF list->type NE type_null.
 
         lo_number = list->car->to_number( operation ).
         lv_gcd = lo_number->get_rational( operation ).
@@ -10542,7 +10567,7 @@
       DATA denom TYPE tv_real VALUE 1.
       lv_exact = abap_true.
 
-      IF list NE nil.
+      IF list->type NE type_null.
 
         DATA(lo_number) = list->car->to_number( operation ).
         lv_lcm = lo_number->get_rational( operation ).
@@ -10775,11 +10800,11 @@
       lo_init = list->car.
 
       DATA(lo_ptr) = list->cdr.
-      IF lo_ptr NE nil.
+      IF lo_ptr->type NE type_null.
         IF lo_ptr->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( operation ).
         ENDIF.
-        IF lo_ptr->cdr NE nil.
+        IF lo_ptr->cdr->type NE type_null.
           throw( |unexpected parameter { lo_ptr->cdr->to_string( ) } in make-parameter| ).
         ENDIF.
 
@@ -11035,28 +11060,28 @@
 
       lo_test = nil.
       IF lo_arg->type EQ type_pair AND lo_arg->car->type EQ &4.
-        lo_test = lo_arg->car.
-        lv_ref = &2( lo_test ).
-        lo_arg = lo_arg->cdr.
+      lo_test = lo_arg->car.
+      lv_ref = &2( lo_test ).
+      lo_arg = lo_arg->cdr.
       ENDIF.
-      IF lo_test EQ nil OR lo_arg EQ nil.
-        throw( |{ operation } missing argument| ).
+      IF lo_test->type EQ type_null OR lo_arg->type EQ type_null.
+      throw( |{ operation } missing argument| ).
       ENDIF.
 
       WHILE lo_arg->type EQ type_pair AND lo_arg->car->type EQ &4.
-        lv_test = &2( lo_arg->car ).
-        IF lv_ref &1 lv_test.
-          lv_ref = lv_test.
-        ELSE.
-          RETURN.
-        ENDIF.
-        lo_arg = lo_arg->cdr.
+      lv_test = &2( lo_arg->car ).
+      IF lv_ref &1 lv_test.
+      lv_ref = lv_test.
+      ELSE.
+      RETURN.
+      ENDIF.
+      lo_arg = lo_arg->cdr.
       ENDWHILE.
 
-      IF lo_arg NE nil.
-        throw( |{ operation } wrong argument in { lo_arg->car->to_string( ) }| ).
+      IF lo_arg->type NE type_null.
+      throw( |{ operation } wrong argument in { lo_arg->car->to_string( ) }| ).
       ENDIF.
-      CHECK lo_arg = nil.
+      CHECK lo_arg->type EQ type_null.
       result = true.
     END-OF-DEFINITION.
 
@@ -11093,7 +11118,7 @@
         lv_ref = char_to_integer( lo_test ).
         lo_arg = lo_arg->cdr.
       ENDIF.
-      IF lo_test EQ nil OR lo_arg EQ nil.
+      IF lo_test->type EQ type_null OR lo_arg->type EQ type_null.
         throw( |{ operation } missing argument| ).
       ENDIF.
 
@@ -11107,10 +11132,10 @@
         lo_arg = lo_arg->cdr.
       ENDWHILE.
 
-      IF lo_arg NE nil.
+      IF lo_arg->type NE type_null.
         throw( |{ operation } wrong argument in { lo_arg->car->to_string( ) }| ).
       ENDIF.
-      CHECK lo_arg = nil.
+      CHECK lo_arg->type EQ type_null.
       result = true.
     ENDMETHOD.
 
@@ -11131,7 +11156,7 @@
     ENDMETHOD.
 
     METHOD proc_char_ci_list_is_eq.
-      _proc_char_ci_list_compare EQ .
+      _proc_char_ci_list_compare eq .
     ENDMETHOD.
 
     METHOD proc_char_ci_list_is_lt.
@@ -11152,7 +11177,7 @@
 
 *----- String
     METHOD proc_string_list_is_eq.
-      _proc_string_list_compare  EQ .
+      _proc_string_list_compare  eq .
     ENDMETHOD.
 
     METHOD proc_string_list_is_lt.
@@ -11174,7 +11199,7 @@
 *----- String CI
 
     METHOD proc_string_ci_list_is_eq.
-      _proc_string_ci_list_compare  EQ .
+      _proc_string_ci_list_compare  eq .
     ENDMETHOD.
 
     METHOD proc_string_ci_list_is_lt.
@@ -11212,7 +11237,7 @@
 
       IF list->car->type EQ type_integer.
 *        TRY.
-            lv_int = CAST lcl_lisp_integer( list->car )->int.
+        lv_int = CAST lcl_lisp_integer( list->car )->int.
 *        CATCH cx_sy_conversion_overflow.
 *           " The standard expects the exact integer range between 0 an #xD7FF
 *           " pr between #xE000 and #x10FFFF.
@@ -11341,7 +11366,7 @@
     METHOD proc_abap_data.
       DATA lo_result TYPE REF TO lcl_lisp_data.
 
-      IF list->car = nil OR ( list->car->type NE type_string
+      IF list->car->type EQ type_null OR ( list->car->type NE type_string
                             AND list->car->type NE type_symbol ).
         throw( |ab-data: String or symbol required as name of type| ).
       ENDIF.
@@ -11365,7 +11390,7 @@
       lo_result ?= result.
       CREATE DATA lo_result->data TYPE (list->car->value).
 *     Set value if supplied as second parameter
-      IF list->cdr NE nil.
+      IF list->cdr->type NE type_null.
         FIELD-SYMBOLS <data> TYPE any.
         ASSIGN lo_result->data->* TO <data>.
         element_to_data(
@@ -11391,7 +11416,7 @@
       result = lo_result = lcl_lisp_new=>table( ).
       CREATE DATA lo_result->data TYPE TABLE OF (list->car->value).
 *     Set value if supplied as second parameter
-      IF list->cdr NE nil.
+      IF list->cdr->type NE type_null.
         FIELD-SYMBOLS <data> TYPE any.
         ASSIGN lo_result->data->* TO <data>.
         element_to_data( EXPORTING element = list->cdr->car
@@ -11437,7 +11462,7 @@
       TRY.
           ASSIGN lo_ref->data->* TO <data>.
           result = data_to_element( <data> ).
-        CATCH cx_root INTO DATA(lx_root). "#EC NEED_CX_ROOT
+        CATCH cx_root INTO DATA(lx_root).             "#EC NEED_CX_ROOT
           throw( |Mapping error: { lx_root->get_text( ) }| ).
       ENDTRY.
     ENDMETHOD.                    "proc_abap_get_value
@@ -11458,7 +11483,7 @@
               element = list->cdr->car
             CHANGING
               data    = <data> ).
-        CATCH cx_root INTO DATA(lx_root). "#EC NEED_CX_ROOT
+        CATCH cx_root INTO DATA(lx_root).             "#EC NEED_CX_ROOT
           throw( |Mapping error: { lx_root->get_text( ) }| ).
       ENDTRY.
       result = nil. "TODO: What should we return here?
@@ -11474,7 +11499,7 @@
       TRY.
           lo_func ?= list->car.
           result = lo_func->call( list->car ).
-        CATCH cx_root INTO DATA(lx_root). "#EC NEED_CX_ROOT
+        CATCH cx_root INTO DATA(lx_root).             "#EC NEED_CX_ROOT
           throw( |Function call error: { lx_root->get_text( ) }| ).
       ENDTRY.
     ENDMETHOD.                    "proc_abap_function_call
@@ -11513,7 +11538,7 @@
             cl_abap_typedescr=>describe_by_data_ref( lo_ref->data )->kind = cl_abap_typedescr=>kind_elem.
 *           Elementary type; can return the value without mapping
             DATA(lr_data) = lo_ref->data.
-          ELSEIF list->cdr = nil.
+          ELSEIF list->cdr->type EQ type_null.
 *           Could short-cut here and provide the value right away
             throw( |ab-get: Complex type requires identifier for lookup| ).
           ELSE.
@@ -11552,7 +11577,7 @@
 *       Elementary type; can return the value without mapping
         lr_target = lo_ref->data.
         lo_source = list->cdr->car.  "Value to set is data ref from second argument
-      ELSEIF list->cdr = nil.
+      ELSEIF list->cdr->type EQ type_null.
         throw( |ab-set: Complex type requires identifier for lookup| ).
       ELSE.
         lr_target = get_element( list ).
@@ -11682,14 +11707,15 @@
           ASSIGN line->* TO <line>.
 
           DATA(lr_conscell) = element. "Set pointer to start of list
-          WHILE lr_conscell NE nil.
+          WHILE lr_conscell->type NE type_null.
             element_to_data( EXPORTING element = lr_conscell->car
                              CHANGING data    = <line> ).
 *            Append or insert, depending on table type (what is assigned)
             IF <sotab> IS ASSIGNED.
               INSERT <line> INTO TABLE <sotab>.
             ELSE.
-              APPEND <line> TO <sttab>.
+              "APPEND <line> TO <sttab>.
+              INSERT <line> INTO TABLE <sttab>.
             ENDIF.
             CLEAR <line>.
             lr_conscell = lr_conscell->cdr.
@@ -11713,7 +11739,7 @@
               lr_conscell = lr_conscell->cdr.
             ENDIF.
 *           Don't map nil values
-            CHECK lr_conscell->car NE nil.
+            CHECK lr_conscell->car->type NE type_null.
 
             element_to_data( EXPORTING element = lr_conscell->car
                              CHANGING data    = <field> ).
@@ -11740,7 +11766,7 @@
       FIELD-SYMBOLS <value> TYPE any.
       FIELD-SYMBOLS <struct> TYPE any.
 
-      IF identifier = nil OR
+      IF identifier->type EQ type_null OR
         ( identifier->type NE type_string AND identifier->type NE type_symbol ).
         throw( `ab-get: String or symbol required to access structure field` ).
       ENDIF.
@@ -12151,18 +12177,18 @@
 *        turtles : turtles?
       theta = list->car->to_number( operation )->get_rational( operation ).
 
-          IF list->cdr->car->type NE type_abap_turtle.
-            list->cdr->car->raise_type( expected = `turtle`
-                                        operation = operation ).
-          ENDIF.
-          DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
-          lo_turtles ?= list->cdr->car.
+      IF list->cdr->car->type NE type_abap_turtle.
+        list->cdr->car->raise_type( expected = `turtle`
+                                    operation = operation ).
+      ENDIF.
+      DATA lo_turtles TYPE REF TO lcl_lisp_turtle.
+      lo_turtles ?= list->cdr->car.
 
-          DATA(angle) = ( lo_turtles->turtle->position-angle + theta ) MOD 360.
-          lo_turtles->turtle->set_position( VALUE #( x = lo_turtles->turtle->position-x
-                                                     y = lo_turtles->turtle->position-y
-                                                     angle = angle ) ).
-          result = lo_turtles.
+      DATA(angle) = ( lo_turtles->turtle->position-angle + theta ) MOD 360.
+      lo_turtles->turtle->set_position( VALUE #( x = lo_turtles->turtle->position-x
+                                                 y = lo_turtles->turtle->position-y
+                                                 angle = angle ) ).
+      result = lo_turtles.
     ENDMETHOD.
 
     METHOD proc_turtle_turn_radians. "turn/radians
@@ -12453,7 +12479,7 @@
     METHOD get_function_parameter.
 *     Get function parameter by name
 *     IDENTIFIER -> Lisp element, string or symbol or index, to identify subcomponent of value
-      IF identifier = null OR
+      IF identifier->type = type_null OR
         ( identifier->type NE type_string AND identifier->type NE type_symbol ).
         throw( `ab-get: String or symbol required to access function parameter` ).
       ENDIF.
@@ -12604,7 +12630,8 @@
     METHOD procedure.
       element = lcl_lisp_new=>native( value = value
                                       arity_min = min   " parameters for min., max. number of arguments
-                                      arity_max = max ).
+                                      arity_max = max
+                                      arity_ret = ret ).
       set( symbol = symbol
            element = element ).
     ENDMETHOD.
@@ -12638,7 +12665,7 @@
           " local environment used to detect (invalid) duplicate variable usage
           DATA(local) = lcl_lisp_env_factory=>clone( me ).
 
-          WHILE lo_var NE lcl_lisp=>null.         " Nil would mean no parameters to map
+          WHILE lo_var->type NE type_null.         " Nil would mean no parameters to map
 
             IF lo_var->type EQ type_symbol.
               " dotted pair after fixed number of parameters, to be bound to a variable number of arguments
@@ -12868,22 +12895,22 @@
 *     Math
       procedure( symbol = 'abs'   value = 'PROC_ABS' min = 1 max = 1 ).
       procedure( symbol = 'square'             value = 'PROC_SQUARE' min = 1 max = 1 ).
-      procedure( symbol = 'exact-integer-sqrt' value = 'PROC_INT_SQRT' min = 1 max = 1 ).
+      procedure( symbol = 'exact-integer-sqrt' value = 'PROC_INT_SQRT' min = 1 max = 1 ret = 2 ).
 
-      procedure( symbol = 'floor/'             value = 'PROC_FLOOR_NEW' min = 2 max = 2 ).
+      procedure( symbol = 'floor/'             value = 'PROC_FLOOR_NEW' min = 2 max = 2 ret = 2 ).
       procedure( symbol = 'floor-quotient'     value = 'PROC_FLOOR_QUOTIENT' min = 2 max = 2 ).
       procedure( symbol = 'floor-remainder'    value = 'PROC_FLOOR_REMAINDER' min = 2 max = 2 ).
-      procedure( symbol = 'truncate/'          value = 'PROC_TRUNCATE_NEW' min = 2 max = 2 ).
+      procedure( symbol = 'truncate/'          value = 'PROC_TRUNCATE_NEW' min = 2 max = 2 ret = 2 ).
       procedure( symbol = 'truncate-quotient'  value = 'PROC_TRUNC_QUOTIENT' min = 2 max = 2 ).
       procedure( symbol = 'truncate-remainder' value = 'PROC_TRUNC_REMAINDER' min = 2 max = 2 ).
 
-      procedure( symbol = 'round/'              value = 'PROC_ROUND_NEW' min = 2 max = 2 ).
+      procedure( symbol = 'round/'              value = 'PROC_ROUND_NEW' min = 2 max = 2 ret = 2 ).
       procedure( symbol = 'round-quotient'      value = 'PROC_ROUND_QUOTIENT' min = 2 max = 2 ).
       procedure( symbol = 'round-remainder'     value = 'PROC_ROUND_REMAINDER' min = 2 max = 2 ).
-      procedure( symbol = 'euclidean/'          value = 'PROC_EUCLIDEAN_NEW' min = 2 max = 2 ).
+      procedure( symbol = 'euclidean/'          value = 'PROC_EUCLIDEAN_NEW' min = 2 max = 2 ret = 2 ).
       procedure( symbol = 'euclidean-quotient'  value = 'PROC_EUCLIDEAN_QUOTIENT' min = 2 max = 2 ).
       procedure( symbol = 'euclidean-remainder' value = 'PROC_EUCLIDEAN_REMAINDER' min = 2 max = 2 ).
-      procedure( symbol = 'balanced/ '          value = 'PROC_BALANCED_NEW' min = 2 max = 2 ).
+      procedure( symbol = 'balanced/ '          value = 'PROC_BALANCED_NEW' min = 2 max = 2 ret = 2 ).
       procedure( symbol = 'balanced-quotient'   value = 'PROC_BALANCED_QUOTIENT' min = 2 max = 2 ).
       procedure( symbol = 'balanced-remainder'  value = 'PROC_BALANCED_REMAINDER' min = 2 max = 2 ).
 
@@ -13081,9 +13108,9 @@
       procedure( symbol = '*'      value = 'PROC_MULTIPLY' ).
       procedure( symbol = '/'      value = 'PROC_DIVIDE' min = 1 ).
 
-      procedure( symbol = 'values' value = 'PROC_VALUES' min = 1 ).
+      procedure( symbol = 'values' value = 'PROC_VALUES' min = 1 max = 0 ret = 0 ).
 
-     " equivalence predicates
+      " equivalence predicates
       procedure( symbol = '>'      value = 'PROC_GT' min = 2 ).
       procedure( symbol = '>='     value = 'PROC_GTE' min = 2 ).
       procedure( symbol = '<'      value = 'PROC_LT' min = 2 ).
@@ -13198,6 +13225,11 @@
 *----------------------------------------------------------------------*
   CLASS lcl_lisp_profiler DEFINITION INHERITING FROM lcl_lisp_interpreter.
     PUBLIC SECTION.
+      CLASS-METHODS create IMPORTING io_port       TYPE REF TO lcl_lisp_port
+                                     ii_log        TYPE REF TO lif_log
+                                     io_env        TYPE REF TO lcl_lisp_environment
+                                     iv_trace      TYPE abap_boolean
+                           RETURNING VALUE(ro_int) TYPE REF TO lcl_lisp_profiler.
       METHODS eval_repl REDEFINITION.
       DATA runtime TYPE i READ-ONLY.
     PRIVATE SECTION.
@@ -13208,6 +13240,15 @@
 *       CLASS lcl_lisp_profiler IMPLEMENTATION
 *----------------------------------------------------------------------*
   CLASS lcl_lisp_profiler IMPLEMENTATION.
+
+    METHOD create.
+      CREATE OBJECT ro_int
+        EXPORTING
+          io_port = io_port
+          ii_log  = ii_log.
+      ro_int->env = io_env.
+      ro_int->gv_lisp_trace = iv_trace.
+    ENDMETHOD.
 
     METHOD eval_repl.
       DATA(lv_start_time) = read_time( ).
@@ -13343,7 +13384,7 @@
 *     Object a and Object b are both #t or both #f or both the empty list.
       IF ( me EQ true AND b EQ true )
         OR ( me EQ false AND b EQ false )
-        OR ( me EQ null AND b EQ null ).
+        OR ( me->type EQ type_null AND b->type EQ type_null ).
         result = abap_true.
         RETURN.
       ENDIF.
@@ -13414,7 +13455,7 @@
       ENDIF.
       result = abap_false.
 
-      IF comp NE null.
+      IF comp->type NE type_null.
         DATA(lo_lambda) = comp->car.
         DATA(lo_env) = lo_lambda->environment.
         IF lo_env IS NOT BOUND.
@@ -13554,7 +13595,7 @@
       lo_values ?= me.
       lo_elem = lo_values->head.
 
-      WHILE lo_elem IS BOUND AND lo_elem NE null.
+      WHILE lo_elem IS BOUND AND lo_elem->type NE type_null.
         IF lo_elem->car IS NOT BOUND.
           lcl_lisp=>incorrect_input( 'values->string' ).
         ENDIF.
@@ -13584,7 +13625,7 @@
       lo_fast = cdr.
 
       lv_parens = abap_true.
-      WHILE lo_elem IS BOUND AND lo_elem NE null.
+      WHILE lo_elem IS BOUND AND lo_elem->type NE type_null.
 
         " Quasiquoting output (quasiquote x) is displayed as `x without parenthesis
         lv_skip = abap_false.
@@ -13635,7 +13676,7 @@
       IF lv_parens EQ abap_true.
         str = |{ c_open_paren }{ lv_str }{ c_close_paren }|.
       ELSE.
-       " Quasiquoting output
+        " Quasiquoting output
         str = lv_str.
       ENDIF.
 
@@ -13803,7 +13844,7 @@
       IF type EQ type_values.
         lo_head = CAST lcl_lisp_values( me )->head.
 
-        IF lo_head IS BOUND AND lo_head NE null.
+        IF lo_head IS BOUND AND lo_head->type NE type_null.
           IF lo_head->car IS NOT BOUND.
             lcl_lisp=>incorrect_input( operation ).
           ENDIF.
@@ -13831,7 +13872,7 @@
     ENDMETHOD.
 
     METHOD assert_last_param.
-      CHECK cdr NE null.
+      CHECK cdr->type NE type_null.
       raise( | Parameter mismatch in { operation }| ).
     ENDMETHOD.
 
@@ -14053,7 +14094,8 @@
     METHOD native.
       ro_elem = NEW lcl_lisp_native( value = value
                                      arity_min = arity_min
-                                     arity_max = arity_max ).
+                                     arity_max = arity_max
+                                     arity_ret = arity_ret ).
     ENDMETHOD.
 
     METHOD string.
@@ -14098,9 +14140,9 @@
       xword = value.
       TRY.
           lv_int = xword.
-      CATCH cx_sy_conversion_overflow.
-         " Only happens with the EOF char that cannot be  input manually:
-         " ignore the exception, the data is still copied
+        CATCH cx_sy_conversion_overflow.
+          " Only happens with the EOF char that cannot be  input manually:
+          " ignore the exception, the data is still copied
       ENDTRY.
 
       ASSIGN lv_int TO <xword> CASTING.
@@ -14248,23 +14290,23 @@
       " +i, -i and <infnan> are parsed as number, not as peculiar identifier
       IF initial CO c_explicit_sign.
         "1) Check Imaginary +I, -I
-          IF len GE 2.
-            CASE lv_upcase+0(2).
-              WHEN c_lisp_pos_img        " Plus Imaginary_marker
-                OR c_lisp_neg_img.        " Neg. Imaginary_marker
-                check_as_number = abap_true.
-            ENDCASE.
-          ENDIF.
+        IF len GE 2.
+          CASE lv_upcase+0(2).
+            WHEN c_lisp_pos_img        " Plus Imaginary_marker
+              OR c_lisp_neg_img.        " Neg. Imaginary_marker
+              check_as_number = abap_true.
+          ENDCASE.
+        ENDIF.
         "2) Check InfNan
-          IF check_as_number EQ abap_false AND len GE 6.
-            CASE lv_upcase+0(6).
-              WHEN c_lisp_pos_inf        " Plus Infinity / Imaginary Pos. Infinity
-                OR c_lisp_neg_inf        " Neg. Infinity / Imaginary Neg. Infinity
-                OR c_lisp_pos_nan        " Pos. Not a Number / Imaginary Pos. Not a Number
-                OR c_lisp_neg_nan.       " Neg. Not a Number / Imaginary Neg. Not a Number
-                check_as_number = abap_true.
-            ENDCASE.
-          ENDIF.
+        IF check_as_number EQ abap_false AND len GE 6.
+          CASE lv_upcase+0(6).
+            WHEN c_lisp_pos_inf        " Plus Infinity / Imaginary Pos. Infinity
+              OR c_lisp_neg_inf        " Neg. Infinity / Imaginary Neg. Infinity
+              OR c_lisp_pos_nan        " Pos. Not a Number / Imaginary Pos. Not a Number
+              OR c_lisp_neg_nan.       " Neg. Not a Number / Imaginary Neg. Not a Number
+              check_as_number = abap_true.
+          ENDCASE.
+        ENDIF.
         "3) Check Imaginary InfNan - already covered by 2)
       ENDIF.
 
@@ -14500,39 +14542,39 @@
           lv_exact = iv_exact.
 
           IF iv_exact IS NOT SUPPLIED OR iv_exact EQ abap_true.
-              " check integer?
+            " check integer?
+            TRY.
+                lv_nummer_str = value.
+
+                IF lv_nummer_str NA c_pattern_inexact OR iv_exact EQ abap_true.
+                  lv_int = EXACT tv_int( lv_real ).
+
+                  ro_elem = integer( value = lv_int
+                                     iv_exact = abap_true ).
+                  RETURN.
+                ENDIF.
+              CATCH cx_sy_conversion_error ##NO_HANDLER.
+            ENDTRY.
+
+            " check rational?
+            IF lv_nummer_str CA c_pattern_inexact AND iv_exact EQ abap_true.
+
+              DATA lv_int_str TYPE string.
+              DATA lv_dec_str TYPE string.
+
+              SPLIT lv_nummer_str AT c_lisp_dot INTO lv_int_str lv_dec_str.
+              lv_int_str = lv_int_str && lv_dec_str.
               TRY.
-                  lv_nummer_str = value.
-
-                  IF lv_nummer_str NA c_pattern_inexact OR iv_exact EQ abap_true.
-                    lv_int = EXACT tv_int( lv_real ).
-
-                    ro_elem = integer( value = lv_int
-                                       iv_exact = abap_true ).
-                    RETURN.
-                  ENDIF.
-                CATCH cx_sy_conversion_error ##NO_HANDLER.
+                  lv_int = lv_int_str.
+                  lv_denom = ipow( base = 10 exp = numofchar( lv_dec_str ) ).
+                  ro_elem = rational( nummer = lv_int
+                                      denom = lv_denom
+                                      iv_exact = iv_exact ).
+                  RETURN.
+                CATCH cx_sy_conversion_overflow cx_sy_conversion_no_number.
+                  lv_exact = abap_false.      " force inexact
               ENDTRY.
-
-              " check rational?
-              IF lv_nummer_str CA c_pattern_inexact AND iv_exact EQ abap_true.
-
-                DATA lv_int_str TYPE string.
-                DATA lv_dec_str TYPE string.
-
-                SPLIT lv_nummer_str AT c_lisp_dot INTO lv_int_str lv_dec_str.
-                lv_int_str = lv_int_str && lv_dec_str.
-                TRY.
-                    lv_int = lv_int_str.
-                    lv_denom = ipow( base = 10 exp = numofchar( lv_dec_str ) ).
-                    ro_elem = rational( nummer = lv_int
-                                        denom = lv_denom
-                                        iv_exact = iv_exact ).
-                    RETURN.
-                  CATCH cx_sy_conversion_overflow cx_sy_conversion_no_number.
-                    lv_exact = abap_false.      " force inexact
-                ENDTRY.
-              ENDIF.
+            ENDIF.
 
           ENDIF.
 
@@ -15291,7 +15333,7 @@
         WHEN type_real.
           rv_real = num-real.
           IF num-infnan EQ abap_true.
-           throw( `Invalid rational type in ` && operation ).
+            throw( `Invalid rational type in ` && operation ).
           ENDIF.
 
         WHEN OTHERS.
@@ -15301,8 +15343,8 @@
     ENDMETHOD.
 
     METHOD add_real.
-     " Operations returning NaN are +Inf.0 + -Inf.0 and -Inf.0 + +Inf.0
-     " and the equivalent subtractions -Inf.0 - -Inf.0 and +Inf.0 - +Inf.0
+      " Operations returning NaN are +Inf.0 + -Inf.0 and -Inf.0 + +Inf.0
+      " and the equivalent subtractions -Inf.0 - -Inf.0 and +Inf.0 - +Inf.0
       DATA lv_gcd TYPE tv_int.
 
       number = self.
@@ -15365,8 +15407,8 @@
                   DATA(lv_denom_gcd) = lcl_lisp_rational=>gcd( n = self-denom
                                                                d = other-denom ).
                   IF lv_denom_gcd GT 1.
-                    DATA(lv_self_denom) = self-denom div lv_denom_gcd.
-                    number-nummer = self-nummer * other-denom div lv_denom_gcd
+                    DATA(lv_self_denom) = self-denom DIV lv_denom_gcd.
+                    number-nummer = self-nummer * other-denom DIV lv_denom_gcd
                                   + other-nummer * lv_self_denom.
                     number-denom = lv_self_denom * other-denom.
                   ELSE.
@@ -15400,9 +15442,9 @@
               number-subtype = type_real.
             ELSEIF ( self-ref EQ inf AND other-ref = neg_inf )
                 OR ( self-ref = neg_inf AND other-ref = inf ).
-                " special case: +inf.0 -inf.0 -> NaN
-                number-ref = nan.
-            "ELSE. " keep value for other InfNan + InfNan case
+              " special case: +inf.0 -inf.0 -> NaN
+              number-ref = nan.
+              "ELSE. " keep value for other InfNan + InfNan case
             ENDIF.
 
           ELSE.
@@ -15782,12 +15824,12 @@
 *
 *        ENDCASE.
 *
-     ELSE.
+      ELSE.
 
-      CASE other-subtype.
-        WHEN type_integer.
-          CASE self-subtype.
-            WHEN type_integer.  " Integer / Integer
+        CASE other-subtype.
+          WHEN type_integer.
+            CASE self-subtype.
+              WHEN type_integer.  " Integer / Integer
                 TRY.
                     number-nummer = self-int.
                     number-denom = other-int.
@@ -15798,7 +15840,7 @@
                     number-exact = abap_false.
                 ENDTRY.
 
-            WHEN type_rational. " Rational / Integer
+              WHEN type_rational. " Rational / Integer
                 TRY.
                     number-denom = self-denom * other-int.
                     number-subtype = type_rational.
@@ -15808,52 +15850,52 @@
                     number-exact = abap_false.
                 ENDTRY.
 
-            WHEN type_real.    " Real / Integer
+              WHEN type_real.    " Real / Integer
                 IF self-infnan EQ abap_false.
                   number-real = self-real / other-int.
                 ELSEIF other-int LT 0.
                   number-ref = self-ref->negative_infnan( ).
                 ENDIF.
-          ENDCASE.
+            ENDCASE.
 
-        WHEN type_rational.
-          CASE self-subtype.
-            WHEN type_integer.  " Integer / Rational
-              TRY.
-                  number-nummer = self-int * other-denom.
-                  number-denom = other-nummer.
-                  number-subtype = type_rational.
-                CATCH cx_sy_arithmetic_overflow.
-                  number-real = self-int / other-nummer * other-denom.
-                  number-subtype = type_real.
-                  number-exact = abap_false.
-              ENDTRY.
+          WHEN type_rational.
+            CASE self-subtype.
+              WHEN type_integer.  " Integer / Rational
+                TRY.
+                    number-nummer = self-int * other-denom.
+                    number-denom = other-nummer.
+                    number-subtype = type_rational.
+                  CATCH cx_sy_arithmetic_overflow.
+                    number-real = self-int / other-nummer * other-denom.
+                    number-subtype = type_real.
+                    number-exact = abap_false.
+                ENDTRY.
 
-            WHEN type_rational. " Rational / Rational
-              TRY.
-                  number-nummer = self-nummer * other-denom.
-                  number-denom = self-denom * other-nummer.
-                CATCH cx_sy_arithmetic_overflow.
-                  number-real = self-nummer / self-denom * other-denom / other-nummer.
-                  number-subtype = type_real.
-                  number-exact = abap_false.
-              ENDTRY.
+              WHEN type_rational. " Rational / Rational
+                TRY.
+                    number-nummer = self-nummer * other-denom.
+                    number-denom = self-denom * other-nummer.
+                  CATCH cx_sy_arithmetic_overflow.
+                    number-real = self-nummer / self-denom * other-denom / other-nummer.
+                    number-subtype = type_real.
+                    number-exact = abap_false.
+                ENDTRY.
 
-            WHEN type_real.     " Real / Rational
-              IF self-infnan EQ abap_false.
-                number-real = self-real * other-denom / other-nummer.
-              ELSE.
-                " Sonderfall (* 0.0 +Inf.0)
-                IF other-nummer EQ 0 AND ( self-ref = inf OR self-ref EQ neg_inf ).
-                  number-ref = nan.
-                ELSEIF other-nummer LT 0.
-                  number-ref = self-ref->negative_infnan( ).
+              WHEN type_real.     " Real / Rational
+                IF self-infnan EQ abap_false.
+                  number-real = self-real * other-denom / other-nummer.
+                ELSE.
+                  " Sonderfall (* 0.0 +Inf.0)
+                  IF other-nummer EQ 0 AND ( self-ref = inf OR self-ref EQ neg_inf ).
+                    number-ref = nan.
+                  ELSEIF other-nummer LT 0.
+                    number-ref = self-ref->negative_infnan( ).
+                  ENDIF.
                 ENDIF.
-              ENDIF.
-              number-subtype = type_real.
-          ENDCASE.
+                number-subtype = type_real.
+            ENDCASE.
 
-        WHEN type_real.
+          WHEN type_real.
 *          CASE self-sign.
 *            WHEN c_sign_zero.     " number <-- self = 0
 *            WHEN c_sign_negative.
@@ -15866,155 +15908,37 @@
 *
 *          ENDCASE.
 
-          CASE self-subtype.
-            WHEN type_integer.  " Integer / Real
-              IF other-infnan EQ abap_true.
-                number-infnan = abap_false.
+            CASE self-subtype.
+              WHEN type_integer.  " Integer / Real
+                IF other-infnan EQ abap_true.
+                  number-infnan = abap_false.
 
 
-                IF self-int EQ 0.   " 0 / Inf.0 , 0 / -Inf,  0 / Nan
-                  " real 0 or Nan
-                  CASE other-ref.
-                    WHEN inf OR neg_inf.
-                      number-real = 0.
-                      number-exact = abap_true.
-                      number-ref = zero.
-                    WHEN nan OR neg_nan.      " 0 / Nan -> NaN
-                      number-ref = other-ref.
-                      number-infnan = abap_true.
-                  ENDCASE.
-
-                ELSEIF self-int LT 0. " -1 / Inf, -1 / NaN
-                  CASE other-ref.
-                    WHEN inf.
-                      number-real = 0.
-                      number-ref = pos_zero.
-                    WHEN neg_inf.
-                      number-real = 0.
-                      number-ref = neg_zero.
-                    WHEN nan OR neg_nan.
-                      number-ref = other-ref->negative_infnan( ).
-                      number-infnan = abap_true.
-                  ENDCASE.
-
-                ELSE. " 1 / Inf, 1 / NaN
-                  CASE other-ref.
-                    WHEN inf OR neg_inf.
-                      number-real = 0.
-                      number-ref = pos_zero.
-                    WHEN nan OR neg_nan.
-                      number-ref = other-ref->negative_infnan( ).
-                      number-infnan = abap_true.
-                  ENDCASE.
-
-                ENDIF.
-              ELSE.
-                number-real = self-int / other-real.
-              ENDIF.
-              number-subtype = type_real.
-
-            WHEN type_rational.  " Rational / Real
-              IF other-infnan EQ abap_true.
-                number-infnan = abap_false.
-
-                IF self-nummer EQ 0.   " 0 / Inf.0 , 0 / -Inf,  0 / +Nan, 0 / Nan
-                  " real 0 or Nan
-                  CASE other-ref.
-                    WHEN inf OR neg_inf.
-                      number-real = 0.
-                      number-ref = zero.
-                    WHEN nan OR neg_nan.      " 0 / Nan -> NaN
-                      number-ref = other-ref.
-                      number-infnan = abap_true.
-                  ENDCASE.
-
-                ELSEIF self-nummer LT 0. " -1 / Inf, -1 / NaN
-                  CASE other-ref.
-                    WHEN inf.
-                      number-real = 0.
-                      number-ref = pos_zero.
-                    WHEN neg_inf.
-                      number-real = 0.
-                      number-ref = neg_zero.
-                    WHEN nan OR neg_nan.
-                      number-ref = other-ref->negative_infnan( ).
-                      number-infnan = abap_true.
-                  ENDCASE.
-
-                ELSE. " 1 / Inf, 1 / NaN
-                  CASE other-ref.
-                    WHEN inf OR neg_inf.
-                      number-real = 0.
-                      number-ref = pos_zero.
-                    WHEN nan OR neg_nan.
-                      number-ref = other-ref->negative_infnan( ).
-                      number-infnan = abap_true.
-                  ENDCASE.
-
-                ENDIF.
-              ELSE.
-                number-real = self-nummer / self-denom / other-real.
-              ENDIF.
-              number-subtype = type_real.
-
-            WHEN type_real. " Real / Real
-              IF other-infnan EQ abap_true.
-                IF number-infnan = abap_false.
-
-                  IF self-real EQ 0.   " 0 / Inf.0 , 0 / -Inf,  0 / Nan
-                    IF self-exact EQ abap_true.
-                      IF other-ref EQ inf OR other-ref EQ neg_inf.
+                  IF self-int EQ 0.   " 0 / Inf.0 , 0 / -Inf,  0 / Nan
+                    " real 0 or Nan
+                    CASE other-ref.
+                      WHEN inf OR neg_inf.
                         number-real = 0.
+                        number-exact = abap_true.
                         number-ref = zero.
-                      ELSE.
+                      WHEN nan OR neg_nan.      " 0 / Nan -> NaN
                         number-ref = other-ref.
-                      ENDIF.
-                    ELSE.
-                      " real 0 or Nan
-                      CASE other-ref.
-                        WHEN inf.
-                          number-real = 0.
-                          number-ref = pos_zero.
-                        WHEN neg_inf.
-                          number-real = 0.
-                          number-ref = neg_zero.
-                        WHEN nan OR neg_nan.      " 0 / Nan -> NaN
-                          number-ref = other-ref.
-                          number-infnan = abap_true.
-                      ENDCASE.
-                    ENDIF.
+                        number-infnan = abap_true.
+                    ENDCASE.
 
-                  ELSEIF self-nummer LT 0. " -1 / Inf, -1 / NaN
-                    IF self-exact EQ abap_true.
-                      CASE other-ref.
-                        WHEN inf.
-                          number-real = 0.
-                          number-ref = neg_zero.
+                  ELSEIF self-int LT 0. " -1 / Inf, -1 / NaN
+                    CASE other-ref.
+                      WHEN inf.
+                        number-real = 0.
+                        number-ref = pos_zero.
+                      WHEN neg_inf.
+                        number-real = 0.
+                        number-ref = neg_zero.
+                      WHEN nan OR neg_nan.
+                        number-ref = other-ref->negative_infnan( ).
+                        number-infnan = abap_true.
+                    ENDCASE.
 
-                        WHEN neg_inf.
-                          number-real = 0.
-                          number-ref = pos_zero.
-
-                        WHEN nan.
-                          number-ref = neg_nan.
-
-                        WHEN neg_nan.
-                          number-ref = nan.
-
-                      ENDCASE.
-                    ELSE.
-                      CASE other-ref.
-                        WHEN inf.
-                          number-real = 0.
-                          number-ref = pos_zero.
-                        WHEN neg_inf.
-                          number-real = 0.
-                          number-ref = neg_zero.
-                        WHEN nan OR neg_nan.
-                          number-ref = other-ref->negative_infnan( ).
-                          number-infnan = abap_true.
-                      ENDCASE.
-                    ENDIF.
                   ELSE. " 1 / Inf, 1 / NaN
                     CASE other-ref.
                       WHEN inf OR neg_inf.
@@ -16026,42 +15950,160 @@
                     ENDCASE.
 
                   ENDIF.
-                ELSE.  " Inf / NaN  div. Inf / Nan
-
-                  CASE self-ref.
-                    WHEN inf OR nan.
-                      CASE other-ref.
-                        WHEN inf OR nan.
-                          number-ref = nan.
-
-                        WHEN neg_inf OR neg_nan.
-                          number-ref = neg_nan.
-                      ENDCASE.
-
-                    WHEN neg_inf OR neg_nan.
-                      CASE other-ref.
-                        WHEN inf OR nan.
-                          number-ref = neg_nan.
-
-                        WHEN neg_inf OR neg_nan.
-                          number-ref = nan.
-                      ENDCASE.
-                  ENDCASE.
-
-                  number-infnan = abap_true.
-
+                ELSE.
+                  number-real = self-int / other-real.
                 ENDIF.
-              ELSE.
-                number-real = self-real / other-real.
-              ENDIF.
-              number-subtype = type_real.
+                number-subtype = type_real.
 
-            WHEN OTHERS.
-              raise_nan( operation ).  "assert violation - Not a Number
-          ENDCASE.
-          number-subtype = type_real.
+              WHEN type_rational.  " Rational / Real
+                IF other-infnan EQ abap_true.
+                  number-infnan = abap_false.
 
-      ENDCASE.
+                  IF self-nummer EQ 0.   " 0 / Inf.0 , 0 / -Inf,  0 / +Nan, 0 / Nan
+                    " real 0 or Nan
+                    CASE other-ref.
+                      WHEN inf OR neg_inf.
+                        number-real = 0.
+                        number-ref = zero.
+                      WHEN nan OR neg_nan.      " 0 / Nan -> NaN
+                        number-ref = other-ref.
+                        number-infnan = abap_true.
+                    ENDCASE.
+
+                  ELSEIF self-nummer LT 0. " -1 / Inf, -1 / NaN
+                    CASE other-ref.
+                      WHEN inf.
+                        number-real = 0.
+                        number-ref = pos_zero.
+                      WHEN neg_inf.
+                        number-real = 0.
+                        number-ref = neg_zero.
+                      WHEN nan OR neg_nan.
+                        number-ref = other-ref->negative_infnan( ).
+                        number-infnan = abap_true.
+                    ENDCASE.
+
+                  ELSE. " 1 / Inf, 1 / NaN
+                    CASE other-ref.
+                      WHEN inf OR neg_inf.
+                        number-real = 0.
+                        number-ref = pos_zero.
+                      WHEN nan OR neg_nan.
+                        number-ref = other-ref->negative_infnan( ).
+                        number-infnan = abap_true.
+                    ENDCASE.
+
+                  ENDIF.
+                ELSE.
+                  number-real = self-nummer / self-denom / other-real.
+                ENDIF.
+                number-subtype = type_real.
+
+              WHEN type_real. " Real / Real
+                IF other-infnan EQ abap_true.
+                  IF number-infnan = abap_false.
+
+                    IF self-real EQ 0.   " 0 / Inf.0 , 0 / -Inf,  0 / Nan
+                      IF self-exact EQ abap_true.
+                        IF other-ref EQ inf OR other-ref EQ neg_inf.
+                          number-real = 0.
+                          number-ref = zero.
+                        ELSE.
+                          number-ref = other-ref.
+                        ENDIF.
+                      ELSE.
+                        " real 0 or Nan
+                        CASE other-ref.
+                          WHEN inf.
+                            number-real = 0.
+                            number-ref = pos_zero.
+                          WHEN neg_inf.
+                            number-real = 0.
+                            number-ref = neg_zero.
+                          WHEN nan OR neg_nan.      " 0 / Nan -> NaN
+                            number-ref = other-ref.
+                            number-infnan = abap_true.
+                        ENDCASE.
+                      ENDIF.
+
+                    ELSEIF self-nummer LT 0. " -1 / Inf, -1 / NaN
+                      IF self-exact EQ abap_true.
+                        CASE other-ref.
+                          WHEN inf.
+                            number-real = 0.
+                            number-ref = neg_zero.
+
+                          WHEN neg_inf.
+                            number-real = 0.
+                            number-ref = pos_zero.
+
+                          WHEN nan.
+                            number-ref = neg_nan.
+
+                          WHEN neg_nan.
+                            number-ref = nan.
+
+                        ENDCASE.
+                      ELSE.
+                        CASE other-ref.
+                          WHEN inf.
+                            number-real = 0.
+                            number-ref = pos_zero.
+                          WHEN neg_inf.
+                            number-real = 0.
+                            number-ref = neg_zero.
+                          WHEN nan OR neg_nan.
+                            number-ref = other-ref->negative_infnan( ).
+                            number-infnan = abap_true.
+                        ENDCASE.
+                      ENDIF.
+                    ELSE. " 1 / Inf, 1 / NaN
+                      CASE other-ref.
+                        WHEN inf OR neg_inf.
+                          number-real = 0.
+                          number-ref = pos_zero.
+                        WHEN nan OR neg_nan.
+                          number-ref = other-ref->negative_infnan( ).
+                          number-infnan = abap_true.
+                      ENDCASE.
+
+                    ENDIF.
+                  ELSE.  " Inf / NaN  div. Inf / Nan
+
+                    CASE self-ref.
+                      WHEN inf OR nan.
+                        CASE other-ref.
+                          WHEN inf OR nan.
+                            number-ref = nan.
+
+                          WHEN neg_inf OR neg_nan.
+                            number-ref = neg_nan.
+                        ENDCASE.
+
+                      WHEN neg_inf OR neg_nan.
+                        CASE other-ref.
+                          WHEN inf OR nan.
+                            number-ref = neg_nan.
+
+                          WHEN neg_inf OR neg_nan.
+                            number-ref = nan.
+                        ENDCASE.
+                    ENDCASE.
+
+                    number-infnan = abap_true.
+
+                  ENDIF.
+                ELSE.
+                  number-real = self-real / other-real.
+                ENDIF.
+                number-subtype = type_real.
+
+              WHEN OTHERS.
+                raise_nan( operation ).  "assert violation - Not a Number
+            ENDCASE.
+            number-subtype = type_real.
+
+        ENDCASE.
       ENDIF.
 
       IF number-subtype = type_rational.
@@ -16503,7 +16545,7 @@
       DATA lv_tan TYPE f.
 
       IF y = 0.
-        IF x = 0.
+        IF x = 0.  " Given a point (x, y); if x and y are 0, return -inf
           result = lcl_lisp_number=>neg_inf.
           RETURN.
         ELSEIF x GT 0.
@@ -16518,9 +16560,12 @@
           arctan = - c_pi / 2.
         ENDIF.
       ELSE.
+        " If neither x nor y is 0, calculate the arc-tangent of the point
         lv_tan = y / x.
         arctan = atan( lv_tan ). " + 2 * N * c_pi.
       ENDIF.
+
+      " Wrap the result in an instance of lcl_lisp_new and return it
       result = lcl_lisp_new=>real( value = arctan
                                    iv_exact = abap_false ).
     ENDMETHOD.
@@ -16556,6 +16601,7 @@
         WHEN type_integer.
           DATA(lo_int) = CAST lcl_lisp_integer( me ).
 
+          " Convert the integer to a string representation in the specified radix
           CASE iv_radix.
             WHEN 10.
               lv_real = lo_int->int.
@@ -16578,6 +16624,7 @@
               lv_radix_error = abap_true.
           ENDCASE.
 
+          " Repeat the process for other types of numbers
         WHEN type_real.
           lv_inexact_radix_error = xsdbool( iv_radix NE 10 ).
           DATA(lo_real) = CAST lcl_lisp_real( me ).
@@ -16805,7 +16852,7 @@
         ELSE.
           lo_norm = norm( operation ).
           IF lo_norm->infnan EQ abap_true.
-             lv_angle = c_pi.
+            lv_angle = c_pi.
           ELSE.
             magnitude = lo_norm->to_real( operation ).
             lv_tan = imaginary_part / real_part.
@@ -16903,7 +16950,7 @@
       IF list IS NOT BOUND OR list->car IS NOT BOUND.
         incorrect_input( 'hash-get' ).
       ENDIF.
-      IF list->car = null.
+      IF list->car->type = type_null.
         throw( |hash-get requires a key to access an element| ).
       ENDIF.
 
@@ -16939,7 +16986,7 @@
       LOOP AT hash INTO DATA(ls_entry).
         DATA(lo_last) = lcl_lisp_new=>cons( io_car = lcl_lisp_new=>symbol( ls_entry-key ) ).
 
-        IF result EQ null.
+        IF result->type EQ type_null.
           result = lo_ptr = lo_last.
         ELSE.
           lo_ptr = lo_ptr->cdr = lo_last.
@@ -16975,7 +17022,7 @@
       DATA lt_vector TYPE tt_lisp.
 
       DATA(lo_ptr) = io_list.
-      WHILE lo_ptr NE null.
+      WHILE lo_ptr->type NE type_null.
         APPEND lo_ptr->car TO lt_vector.
         lo_ptr = lo_ptr->cdr.
       ENDWHILE.
@@ -17078,7 +17125,7 @@
 
     METHOD to_string.
       DATA(lo_list) = to_list( ).
-      IF lo_list EQ null.
+      IF lo_list->type EQ type_null.
         str = |#()|.
       ELSE.
         str = |#{ lo_list->to_string( ) }|.
@@ -17141,7 +17188,7 @@
       DATA lv_int TYPE tv_int.
 
       DATA(lo_ptr) = io_list.
-      WHILE lo_ptr NE null.
+      WHILE lo_ptr->type NE type_null.
         " validate byte
         IF lo_ptr->car IS NOT BOUND.
           incorrect_input( `bytevector` ).

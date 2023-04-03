@@ -1425,7 +1425,7 @@
 
      METHOD setup.
        mo_port ?= lcl_lisp_new=>port(
-           iv_port_type =  c_port_textual
+           iv_port_type = c_port_textual
            iv_buffered = abap_true
            iv_input  = abap_false
            iv_output = abap_true

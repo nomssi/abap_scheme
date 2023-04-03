@@ -15,13 +15,11 @@
    </VSEOCLASS>
    <DESCRIPTIONS>
     <SEOCOMPOTX>
-     <CLSNAME>ZCL_LISP_SHM_ROOT</CLSNAME>
      <CMPNAME>LOAD</CMPNAME>
      <LANGU>E</LANGU>
      <DESCRIPT>Save Information for Personalization</DESCRIPT>
     </SEOCOMPOTX>
     <SEOCOMPOTX>
-     <CLSNAME>ZCL_LISP_SHM_ROOT</CLSNAME>
      <CMPNAME>SAVE</CMPNAME>
      <LANGU>E</LANGU>
      <DESCRIPT>Retrieve Information for Personalization</DESCRIPT>

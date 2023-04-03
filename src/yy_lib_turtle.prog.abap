@@ -854,7 +854,7 @@ CLASS lcl_turtle_svg IMPLEMENTATION.
 
   METHOD polygon.
     DATA(point_data) = REDUCE string(
-      INIT res = ||
+      INIT res = ``
       FOR point IN params-points
       NEXT res = res && |{ point-x },{ point-y } | ).
 
@@ -865,7 +865,7 @@ CLASS lcl_turtle_svg IMPLEMENTATION.
 
   METHOD polyline.
     DATA(point_data) = REDUCE string(
-      INIT res = ||
+      INIT res = ``
       FOR point IN params-points
       NEXT res = res && |{ point-x },{ point-y } | ).
 
